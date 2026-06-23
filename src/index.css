@@ -1,0 +1,90 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer utilities {
+  .animate-fadeIn {
+    animation: fadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* High Density Custom Design Theme Overrides */
+body {
+  background-color: #f8fafc;
+  color: #1e293b;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+/* Thin modern high-density scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.3);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.5);
+}
+
+/* High Density Card and Utility Classes */
+.hd-card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem; /* 12px rounded-xl */
+  box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
+  transition: all 0.15s ease;
+}
+
+.dark .hd-card {
+  background-color: #131b2e;
+  border-color: #1e293b;
+  box-shadow: none;
+}
+
+.hd-border {
+  border-color: #e2e8f0;
+}
+
+.dark .hd-border {
+  border-color: #1e293b;
+}
+
+.hd-bg-sidebar {
+  background-color: #ffffff;
+}
+
+.dark .hd-bg-sidebar {
+  background-color: #0f172a;
+}
+
+.hd-bg-app {
+  background-color: #f8fafc;
+}
+
+.dark .hd-bg-app {
+  background-color: #0b0f19;
+}
+
