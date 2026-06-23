@@ -14,7 +14,15 @@ import {
   Info,
   Database,
   Server,
-  RefreshCw
+  RefreshCw,
+  Code2,
+  Shield,
+  BookOpen,
+  ChevronDown,
+  ChevronUp,
+  Terminal,
+  Copy,
+  Check
 } from 'lucide-react';
 import { SystemSettings } from '../types';
 
@@ -32,6 +40,15 @@ export default function SettingsView({ settings, onUpdateSettings, isDarkMode, t
   const [successMsg, setSuccessMsg] = useState('');
   const [dbStatus, setDbStatus] = useState<any>(null);
   const [dbLoading, setDbLoading] = useState(true);
+  const [apiDocOpen, setApiDocOpen] = useState(false);
+  const [tosOpen, setTosOpen] = useState(false);
+  const [copiedText, setCopiedText] = useState<string | null>(null);
+
+  const handleCopy = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedText(label);
+    setTimeout(() => setCopiedText(null), 2000);
+  };
 
   useEffect(() => {
     fetchDbStatus();
@@ -328,6 +345,243 @@ export default function SettingsView({ settings, onUpdateSettings, isDarkMode, t
         </div>
 
       </form>
+
+      {/* API Reference & Terms of Service */}
+      <div className="space-y-6 pt-6 border-t border-slate-800/20">
+        
+        {/* Interactive API Documentation Panel */}
+        <div className={`p-6 rounded-2xl border transition-all duration-300 ${isDarkMode ? 'bg-slate-900/40 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
+          <button
+            type="button"
+            onClick={() => setApiDocOpen(!apiDocOpen)}
+            className="w-full flex items-center justify-between text-left cursor-pointer focus:outline-none"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-blue-500/10 text-blue-500">
+                <Code2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className={`font-extrabold text-sm ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
+                  API Developer Documentation
+                </h3>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  Integrate your internal workflows directly with Auditor Pro's PostgreSQL backend.
+                </p>
+              </div>
+            </div>
+            <div className={`p-1 rounded-lg ${isDarkMode ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-600'}`}>
+              {apiDocOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </div>
+          </button>
+
+          {apiDocOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              className="mt-6 pt-6 border-t border-slate-800/40 space-y-6"
+            >
+              {/* Authenticated Context Banner */}
+              <div className="p-4 rounded-xl bg-violet-500/10 border border-violet-500/20 text-xs text-violet-400 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div>
+                  <span className="font-extrabold uppercase text-[9px] tracking-widest block text-violet-300 mb-1">Authorization Protocol</span>
+                  All requests must carry your Firebase ID token in the bearer header. Ensure HTTPS is enforced.
+                </div>
+                <div className="font-mono text-[10px] p-1.5 rounded bg-slate-950 border border-slate-800 shrink-0 select-all">
+                  Authorization: Bearer &lt;ID_TOKEN&gt;
+                </div>
+              </div>
+
+              {/* Endpoint Table */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                  <Terminal className="w-3.5 h-3.5 text-blue-500" /> Core Endpoints
+                </h4>
+                <div className={`overflow-x-auto rounded-xl border ${isDarkMode ? 'border-slate-800 bg-slate-950/40' : 'border-slate-200 bg-slate-50'}`}>
+                  <table className="w-full text-[11px] text-left border-collapse">
+                    <thead>
+                      <tr className={`border-b ${isDarkMode ? 'border-slate-800 bg-slate-900/40' : 'border-slate-200 bg-slate-100/60'}`}>
+                        <th className="p-3 font-extrabold text-slate-400 uppercase tracking-widest text-[9px]">Method</th>
+                        <th className="p-3 font-extrabold text-slate-400 uppercase tracking-widest text-[9px]">Route</th>
+                        <th className="p-3 font-extrabold text-slate-400 uppercase tracking-widest text-[9px]">Description</th>
+                        <th className="p-3 font-extrabold text-slate-400 uppercase tracking-widest text-[9px] text-right">Payload</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/40 font-medium">
+                      <tr>
+                        <td className="p-3"><span className="px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 font-mono rounded font-bold">GET</span></td>
+                        <td className="p-3 font-mono text-slate-300">/api/sql/status</td>
+                        <td className="p-3 text-slate-400">Fetch DB health metrics and counts. No auth header required for diagnostics.</td>
+                        <td className="p-3 text-right font-mono text-slate-500">None</td>
+                      </tr>
+                      <tr>
+                        <td className="p-3"><span className="px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 font-mono rounded font-bold">GET</span></td>
+                        <td className="p-3 font-mono text-slate-300">/api/sql/files</td>
+                        <td className="p-3 text-slate-400">Retrieves all audited datasets and cleaning reports linked to your tenancy.</td>
+                        <td className="p-3 text-right font-mono text-slate-500">None</td>
+                      </tr>
+                      <tr>
+                        <td className="p-3"><span className="px-1.5 py-0.5 bg-blue-500/10 text-blue-400 font-mono rounded font-bold">POST</span></td>
+                        <td className="p-3 font-mono text-slate-300">/api/sql/sync-file</td>
+                        <td className="p-3 text-slate-400">Pushes or upserts audited spreadsheets to PostgreSQL. Syncs raw cells, compliance scores, and flags.</td>
+                        <td className="p-3 text-right"><span className="px-1.5 py-0.5 bg-slate-900 text-slate-400 font-mono rounded font-bold text-[9px]">JSON</span></td>
+                      </tr>
+                      <tr>
+                        <td className="p-3"><span className="px-1.5 py-0.5 bg-blue-500/10 text-blue-400 font-mono rounded font-bold">POST</span></td>
+                        <td className="p-3 font-mono text-slate-300">/api/sql/sync-activity</td>
+                        <td className="p-3 text-slate-400">Logs key actions to the shared compliance history timeline for accountability audits.</td>
+                        <td className="p-3 text-right"><span className="px-1.5 py-0.5 bg-slate-900 text-slate-400 font-mono rounded font-bold text-[9px]">JSON</span></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Developer Snippets */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                
+                {/* Curl Box */}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                      <Terminal className="w-3.5 h-3.5 text-slate-500" /> CLI Query Sample (cURL)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(`curl -X GET "${window.location.origin}/api/sql/status"`, 'curl')}
+                      className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-all cursor-pointer flex items-center gap-1 text-[9px]"
+                    >
+                      {copiedText === 'curl' ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedText === 'curl' ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
+                  <pre className={`p-3.5 rounded-xl text-[10px] font-mono leading-relaxed overflow-x-auto select-all ${isDarkMode ? 'bg-slate-950 border border-slate-800/80 text-slate-300' : 'bg-slate-100 border border-slate-200 text-slate-800'}`}>
+                    {`curl -X GET "${window.location.origin}/api/sql/status"`}
+                  </pre>
+                </div>
+
+                {/* Node Box */}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                      <Terminal className="w-3.5 h-3.5 text-slate-500" /> Javascript SDK fetch
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(`const fetchStatus = async () => {\n  const res = await fetch(\`/api/sql/status\`);\n  const stats = await res.json();\n  console.log(stats);\n};`, 'js')}
+                      className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-all cursor-pointer flex items-center gap-1 text-[9px]"
+                    >
+                      {copiedText === 'js' ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedText === 'js' ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
+                  <pre className={`p-3.5 rounded-xl text-[10px] font-mono leading-relaxed overflow-x-auto select-all ${isDarkMode ? 'bg-slate-950 border border-slate-800/80 text-slate-300' : 'bg-slate-100 border border-slate-200 text-slate-800'}`}>
+{`const fetchStatus = async () => {
+  const res = await fetch(\`/api/sql/status\`);
+  const stats = await res.json();
+  console.log(stats);
+};`}
+                  </pre>
+                </div>
+
+              </div>
+
+            </motion.div>
+          )}
+        </div>
+
+        {/* Terms of Service & Privacy Policy Panel */}
+        <div className={`p-6 rounded-2xl border transition-all duration-300 ${isDarkMode ? 'bg-slate-900/40 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
+          <button
+            type="button"
+            onClick={() => setTosOpen(!tosOpen)}
+            className="w-full flex items-center justify-between text-left cursor-pointer focus:outline-none"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-500">
+                <Shield className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className={`font-extrabold text-sm ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
+                  Terms of Service & Data Governance
+                </h3>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  Understand how Auditor Pro protects your dataset privacy, ownership rights, and AI processing limits.
+                </p>
+              </div>
+            </div>
+            <div className={`p-1 rounded-lg ${isDarkMode ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-600'}`}>
+              {tosOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </div>
+          </button>
+
+          {tosOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              className="mt-6 pt-6 border-t border-slate-800/40 space-y-6 text-xs text-slate-400 leading-relaxed"
+            >
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* Terms of Use */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 font-bold text-slate-200">
+                    <BookOpen className="w-4 h-4 text-emerald-500" />
+                    <span>Terms of Service</span>
+                  </div>
+                  
+                  <div className="space-y-3 font-medium text-[11px]">
+                    <div>
+                      <span className="text-slate-300 block font-bold mb-0.5">1. Acceptance & Authorization Parameters</span>
+                      By accessing the Auditor Pro spreadsheet hygiene pipeline, you authorize our platform to programmatically map structural cell models to a secure Google Cloud SQL PostgreSQL backend.
+                    </div>
+                    <div>
+                      <span className="text-slate-300 block font-bold mb-0.5">2. User Ownership Rights</span>
+                      We acknowledge that all CSV datasets, customized heuristics, structural schemas, data rows, and exported reports remain 100% the intellectual property and exclusive custody of the tenant.
+                    </div>
+                    <div>
+                      <span className="text-slate-300 block font-bold mb-0.5">3. Regulatory Advisory & Disclaimers</span>
+                      Suggestive remarks, formatting warnings, and compliance scores are generated for administrative diagnostics. These are suggestive recommendations and do not constitute legal or formal accounting audit certifications.
+                    </div>
+                  </div>
+                </div>
+
+                {/* Data Privacy */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 font-bold text-slate-200">
+                    <Shield className="w-4 h-4 text-emerald-500" />
+                    <span>Data Governance & Privacy</span>
+                  </div>
+
+                  <div className="space-y-3 font-medium text-[11px]">
+                    <div>
+                      <span className="text-slate-300 block font-bold mb-0.5">1. No Model Re-Training</span>
+                      Any spreadsheet row evaluation performed using Google Gemini is completed via a private secure API session. Your custom datasets are never persistent-stored for LLM training or distributed model tuning.
+                    </div>
+                    <div>
+                      <span className="text-slate-300 block font-bold mb-0.5">2. Safe Storage Encapsulation</span>
+                      All database storage resides on custom Cloud SQL infrastructure with row-level ownership protections tied to your verified Firebase Authentication UID token.
+                    </div>
+                    <div>
+                      <span className="text-slate-300 block font-bold mb-0.5">3. Account Cessation Guarantee</span>
+                      Upon tenant account termination, all registered records, audit files, system timeline logs, and activity items linked to the unique workspace are completely purged from the active Postgres datastore.
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Verified Badge */}
+              <div className={`p-3 rounded-xl border flex items-center justify-between text-[10px] ${isDarkMode ? 'bg-slate-950/40 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                <span>Last Updated: June 2026 • Auditor Pro Regulatory & Dev Operations</span>
+                <span className="font-extrabold uppercase text-[9px] tracking-widest px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-mono">Verified Compliant</span>
+              </div>
+
+            </motion.div>
+          )}
+        </div>
+
+      </div>
     </div>
   );
 }
