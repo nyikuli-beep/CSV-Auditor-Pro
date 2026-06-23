@@ -150,6 +150,26 @@ export default function App() {
         }
         
         setUser({ email: fUser.email || `${fUser.uid}@demo.com`, role: userRole });
+        
+        // Sync user profile to Postgres
+        try {
+          const idToken = await fUser.getIdToken();
+          await fetch('/api/sql/sync-user', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${idToken}`
+            },
+            body: JSON.stringify({
+              name: fUser.displayName || fUser.email?.split('@')[0] || 'Sarah Jenkins',
+              email: fUser.email || `${fUser.uid}@demo.com`,
+              role: userRole
+            })
+          });
+        } catch (dbErr) {
+          console.error("Error syncing user to Postgres on login:", dbErr);
+        }
+
         setView('workspace');
       } else {
         setFirebaseUser(null);
@@ -257,6 +277,31 @@ export default function App() {
 
   const accentClass = getAccentColorClass();
 
+  // Helper to sync mutations with our secure PostgreSQL Cloud SQL database
+  const syncToPostgres = async (path: string, method: 'POST' | 'GET', body?: any) => {
+    if (!firebaseUser) return null;
+    try {
+      const token = await firebaseUser.getIdToken();
+      const options: RequestInit = {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      };
+      if (body) {
+        options.body = JSON.stringify(body);
+      }
+      const res = await fetch(`/api/sql/${path}`, options);
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (err) {
+      console.error(`Postgres sync failed for ${path}:`, err);
+    }
+    return null;
+  };
+
   // Handle successful registration/auth
   const handleAuthSuccess = async (userInfo: { name: string; email: string; role: 'Owner' | 'Admin' | 'Editor' | 'Viewer' }) => {
     // If we've authenticated in Firebase, onAuthStateChanged handles routing
@@ -288,6 +333,7 @@ export default function App() {
     };
     try {
       await setDoc(doc(db, 'activities', activationLog.id), activationLog);
+      await syncToPostgres('sync-activity', 'POST', activationLog);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `activities/${activationLog.id}`);
     }
@@ -315,6 +361,7 @@ export default function App() {
 
     try {
       await setDoc(doc(db, 'files', fileId), fileToUpload);
+      await syncToPostgres('sync-file', 'POST', fileToUpload);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `files/${fileId}`);
     }
@@ -331,6 +378,7 @@ export default function App() {
     };
     try {
       await setDoc(doc(db, 'activities', uploadLog.id), uploadLog);
+      await syncToPostgres('sync-activity', 'POST', uploadLog);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `activities/${uploadLog.id}`);
     }
@@ -340,6 +388,7 @@ export default function App() {
   const handleUpdateFile = async (updatedFile: CSVFile) => {
     try {
       await setDoc(doc(db, 'files', updatedFile.id), updatedFile);
+      await syncToPostgres('sync-file', 'POST', updatedFile);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `files/${updatedFile.id}`);
     }
@@ -353,6 +402,7 @@ export default function App() {
     };
     try {
       await setDoc(doc(db, 'activities', cleanLog.id), cleanLog);
+      await syncToPostgres('sync-activity', 'POST', cleanLog);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `activities/${cleanLog.id}`);
     }
@@ -362,6 +412,7 @@ export default function App() {
   const handleInviteMember = async (newMember: TeamMember) => {
     try {
       await setDoc(doc(db, 'members', newMember.id), newMember);
+      await syncToPostgres('sync-member', 'POST', newMember);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `members/${newMember.id}`);
     }
@@ -375,6 +426,7 @@ export default function App() {
     };
     try {
       await setDoc(doc(db, 'activities', inviteLog.id), inviteLog);
+      await syncToPostgres('sync-activity', 'POST', inviteLog);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `activities/${inviteLog.id}`);
     }

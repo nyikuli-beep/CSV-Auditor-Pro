@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
   Settings, 
@@ -11,7 +11,10 @@ import {
   CheckCircle2, 
   AlertTriangle,
   Mail,
-  Info
+  Info,
+  Database,
+  Server,
+  RefreshCw
 } from 'lucide-react';
 import { SystemSettings } from '../types';
 
@@ -27,6 +30,26 @@ export default function SettingsView({ settings, onUpdateSettings, isDarkMode, t
   const [tempApiKey, setTempApiKey] = useState(settings.apiKey || '••••••••••••••••••••••••••••••••');
   const [showKey, setShowKey] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [dbStatus, setDbStatus] = useState<any>(null);
+  const [dbLoading, setDbLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDbStatus();
+  }, []);
+
+  const fetchDbStatus = () => {
+    setDbLoading(true);
+    fetch('/api/sql/status')
+      .then(res => res.json())
+      .then(data => {
+        setDbStatus(data);
+        setDbLoading(false);
+      })
+      .catch(err => {
+        console.error("Error fetching db status:", err);
+        setDbLoading(false);
+      });
+  };
 
   const saveSettings = (e: React.FormEvent) => {
     e.preventDefault();
@@ -155,6 +178,70 @@ export default function SettingsView({ settings, onUpdateSettings, isDarkMode, t
                 </select>
               </div>
             </div>
+          </div>
+
+          {/* Database Connection Status (Cloud SQL) */}
+          <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-bold text-sm uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                <Database className="w-4 h-4 text-emerald-500" /> Database Integration
+              </h3>
+              <button
+                type="button"
+                onClick={fetchDbStatus}
+                disabled={dbLoading}
+                className="p-1.5 rounded-lg border border-slate-800/60 hover:bg-slate-800/20 text-slate-400 transition-all cursor-pointer"
+                title="Refresh Status"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${dbLoading ? 'animate-spin text-emerald-500' : ''}`} />
+              </button>
+            </div>
+
+            {dbLoading ? (
+              <div className="py-4 flex justify-center items-center gap-2 text-xs text-slate-400">
+                <div className="w-4 h-4 border-2 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin"></div>
+                <span>Checking connectivity...</span>
+              </div>
+            ) : dbStatus?.status === 'online' ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-xs p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span className="font-semibold text-emerald-400">Cloud SQL (PostgreSQL)</span>
+                  </div>
+                  <span className="text-[10px] font-mono text-emerald-500 uppercase font-bold">Connected</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+                  <div className={`p-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
+                    <span className="text-slate-400 block text-[9px] uppercase tracking-wider mb-0.5">Ingested Datasets</span>
+                    <span className="text-xs font-extrabold text-slate-200">{dbStatus.metrics?.totalFiles ?? 0} files</span>
+                  </div>
+                  <div className={`p-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
+                    <span className="text-slate-400 block text-[9px] uppercase tracking-wider mb-0.5">Audit Activities</span>
+                    <span className="text-xs font-extrabold text-slate-200">{dbStatus.metrics?.totalActivities ?? 0} rows</span>
+                  </div>
+                  <div className={`p-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
+                    <span className="text-slate-400 block text-[9px] uppercase tracking-wider mb-0.5">Synced Members</span>
+                    <span className="text-xs font-extrabold text-slate-200">{dbStatus.metrics?.totalMembers ?? 0} users</span>
+                  </div>
+                  <div className={`p-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
+                    <span className="text-slate-400 block text-[9px] uppercase tracking-wider mb-0.5">Instance Region</span>
+                    <span className="text-xs font-extrabold text-slate-200">europe-west2</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex flex-col gap-2">
+                <div className="flex items-center gap-2 font-bold">
+                  <AlertTriangle className="w-4 h-4 text-red-500 animate-bounce" />
+                  <span>Database Link Inactive</span>
+                </div>
+                <p className="text-[10px] text-slate-400 leading-normal">
+                  {dbStatus?.error || 'Failed to communicate with PostgreSQL instance. Verify your .env setup.'}
+                </p>
+              </div>
+            )}
           </div>
         </div>
 

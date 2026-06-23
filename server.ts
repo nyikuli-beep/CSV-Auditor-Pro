@@ -4,6 +4,13 @@ import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 
+// Database imports
+import { db } from './src/db/index.ts';
+import { users, files, activities, members } from './src/db/schema.ts';
+import { getOrCreateUser } from './src/db/users.ts';
+import { requireAuth, AuthRequest } from './src/middleware/auth.ts';
+import { eq, desc } from 'drizzle-orm';
+
 // Load environmental keys
 dotenv.config();
 
@@ -11,6 +18,213 @@ const app = express();
 const PORT = 3000;
 
 app.use(express.json());
+
+// --- SECURE CLOUD SQL DATABASE APIS ---
+
+// 1. Connection diagnostics check
+app.get('/api/sql/status', async (req, res) => {
+  try {
+    // Run a quick SELECT 1 to verify database connectivity
+    await db.execute(sql`SELECT 1;`);
+    
+    // Fetch counts from all tables as dynamic metrics
+    const userCountResult = await db.select({ count: sql<number>`count(*)::int` }).from(users);
+    const fileCountResult = await db.select({ count: sql<number>`count(*)::int` }).from(files);
+    const activityCountResult = await db.select({ count: sql<number>`count(*)::int` }).from(activities);
+    const memberCountResult = await db.select({ count: sql<number>`count(*)::int` }).from(members);
+
+    res.json({
+      status: 'online',
+      provider: 'Cloud SQL (PostgreSQL)',
+      connection: 'healthy',
+      metrics: {
+        totalUsers: userCountResult[0]?.count || 0,
+        totalFiles: fileCountResult[0]?.count || 0,
+        totalActivities: activityCountResult[0]?.count || 0,
+        totalMembers: memberCountResult[0]?.count || 0,
+      }
+    });
+  } catch (err: any) {
+    console.error('Cloud SQL health check failed:', err);
+    res.status(500).json({
+      status: 'error',
+      provider: 'Cloud SQL (PostgreSQL)',
+      connection: 'failed',
+      error: err.message || 'Could not connect to database.'
+    });
+  }
+});
+
+// Helper for sql templating to avoid needing another import
+import { sql } from 'drizzle-orm';
+
+// 2. Synchronize current User profile
+app.post('/api/sql/sync-user', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { name, email, role } = req.body;
+    const uid = req.user?.uid;
+    if (!uid || !email) {
+      res.status(400).json({ error: 'Missing required profile payload' });
+      return;
+    }
+
+    const dbUser = await getOrCreateUser(uid, email, name, role);
+    res.json({ success: true, user: dbUser });
+  } catch (err: any) {
+    console.error('Error syncing user to Postgres:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 3. Sync files to Postgres
+app.post('/api/sql/sync-file', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const fileData = req.body;
+    const uid = req.user?.uid;
+
+    if (!uid || !fileData.id || !fileData.name) {
+      res.status(400).json({ error: 'Missing unique file properties' });
+      return;
+    }
+
+    // Upsert files to ensure safety under concurrency
+    await db.insert(files)
+      .values({
+        id: fileData.id,
+        name: fileData.name,
+        size: fileData.size || 0,
+        uploadedAt: fileData.uploadedAt || new Date().toISOString(),
+        status: fileData.status || 'pending',
+        score: fileData.score ?? 100,
+        headers: fileData.headers || [],
+        rows: fileData.rows || [],
+        cleanedRows: fileData.cleanedRows || null,
+        ownerId: uid,
+        issues: fileData.issues || [],
+      })
+      .onConflictDoUpdate({
+        target: files.id,
+        set: {
+          name: fileData.name,
+          size: fileData.size || 0,
+          status: fileData.status || 'pending',
+          score: fileData.score ?? 100,
+          headers: fileData.headers || [],
+          rows: fileData.rows || [],
+          cleanedRows: fileData.cleanedRows || null,
+          issues: fileData.issues || [],
+        }
+      });
+
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('Error syncing file to Postgres:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 4. Retrieve files for the authenticated user
+app.get('/api/sql/files', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const uid = req.user?.uid;
+    if (!uid) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const userFiles = await db.select().from(files).where(eq(files.ownerId, uid));
+    res.json(userFiles);
+  } catch (err: any) {
+    console.error('Error fetching files from Postgres:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 5. Sync activity timeline
+app.post('/api/sql/sync-activity', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const act = req.body;
+    const uid = req.user?.uid;
+
+    if (!uid || !act.id || !act.action) {
+      res.status(400).json({ error: 'Missing activity log attributes' });
+      return;
+    }
+
+    await db.insert(activities)
+      .values({
+        id: act.id,
+        userId: uid,
+        userName: act.userName || 'Unknown User',
+        action: act.action,
+        timestamp: act.timestamp || new Date().toISOString(),
+        fileName: act.fileName || null,
+      })
+      .onConflictDoNothing();
+
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('Error syncing activity to Postgres:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 6. Fetch activities list
+app.get('/api/sql/activities', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const userActivities = await db.select().from(activities).limit(35);
+    res.json(userActivities);
+  } catch (err: any) {
+    console.error('Error fetching activities from Postgres:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 7. Sync team member
+app.post('/api/sql/sync-member', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const member = req.body;
+    if (!member.id || !member.email) {
+      res.status(400).json({ error: 'Missing member parameters' });
+      return;
+    }
+
+    await db.insert(members)
+      .values({
+        id: member.id,
+        name: member.name || member.email.split('@')[0],
+        email: member.email,
+        role: member.role || 'Admin',
+        status: member.status || 'invited',
+        avatar: member.avatar || null,
+      })
+      .onConflictDoUpdate({
+        target: members.id,
+        set: {
+          name: member.name || member.email.split('@')[0],
+          email: member.email,
+          role: member.role || 'Admin',
+          status: member.status || 'invited',
+        }
+      });
+
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('Error syncing member to Postgres:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 8. Fetch team members
+app.get('/api/sql/members', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const allMembers = await db.select().from(members);
+    res.json(allMembers);
+  } catch (err: any) {
+    console.error('Error fetching members from Postgres:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Initialize Gemini client lazily to avoid crash if variable is omitted during boot
 let aiClient: GoogleGenAI | null = null;
