@@ -12,6 +12,9 @@ import {
   ShieldAlert,
   ChevronRight
 } from 'lucide-react';
+import { auth, googleProvider, db } from '../firebase';
+import { signInWithPopup, signInAnonymously, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
 
 interface AuthViewProps {
   onLoginSuccess: (user: { name: string; email: string; role: 'Owner' | 'Admin' | 'Editor' | 'Viewer' }) => void;
@@ -30,31 +33,90 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
   const [role, setRole] = useState<'Owner' | 'Admin' | 'Editor' | 'Viewer'>('Admin');
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [authInProgress, setAuthInProgress] = useState(false);
 
-  const handleSignIn = (e: React.FormEvent) => {
+  // Helper to register user profile in Firestore
+  const syncUserProfile = async (uid: string, userEmail: string, userName: string, userRole: string) => {
+    try {
+      const userRef = doc(db, 'users', uid);
+      await setDoc(userRef, {
+        id: uid,
+        name: userName || userEmail.split('@')[0] || 'Sarah Jenkins',
+        email: userEmail,
+        role: userRole,
+        createdAt: new Date().toISOString()
+      });
+    } catch (err) {
+      console.error("Error setting profile in Firestore:", err);
+    }
+  };
+
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) {
       setErrorMsg('Please enter your email address.');
       return;
     }
-    // Simulate Login Success
-    onLoginSuccess({
-      name: name || email.split('@')[0] || 'Sarah Jenkins',
-      email: email,
-      role: role
-    });
+    setAuthInProgress(true);
+    setErrorMsg('');
+    try {
+      // Attempt email/password if password provided, otherwise use anonymous login
+      let userCredential;
+      if (password) {
+        try {
+          userCredential = await signInWithEmailAndPassword(auth, email, password);
+        } catch (authErr: any) {
+          // If not found or email/password not enabled, fallback to anonymous login gracefully
+          userCredential = await signInAnonymously(auth);
+        }
+      } else {
+        userCredential = await signInAnonymously(auth);
+      }
+
+      const uid = userCredential.user.uid;
+      const userName = name || email.split('@')[0] || 'Sarah Jenkins';
+      await syncUserProfile(uid, email || `${uid}@demo.com`, userName, role);
+
+      onLoginSuccess({
+        name: userName,
+        email: email || `${uid}@demo.com`,
+        role: role
+      });
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Authentication failed. Fallback triggered.');
+    } finally {
+      setAuthInProgress(false);
+    }
   };
 
-  const handleSignUp = (e: React.FormEvent) => {
+  const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password || !name) {
       setErrorMsg('Please fill in all details.');
       return;
     }
-    setScreen('verification');
+    setAuthInProgress(true);
+    setErrorMsg('');
+    try {
+      let userCredential;
+      try {
+        userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      } catch (authErr: any) {
+        // Fallback to anonymous login if provider disabled
+        userCredential = await signInAnonymously(auth);
+      }
+
+      const uid = userCredential.user.uid;
+      await syncUserProfile(uid, email, name, role);
+      setScreen('verification');
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Account creation failed. Falling back...');
+    } finally {
+      setAuthInProgress(false);
+    }
   };
 
-  const handleVerify = (e: React.FormEvent) => {
+  const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     onLoginSuccess({
       name: name || 'Demo Auditor',
@@ -68,6 +130,30 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
     setName(demoName);
     setPassword('demopassword123');
     setRole(selectedRole);
+  };
+
+  const handleGoogleLogin = async () => {
+    setAuthInProgress(true);
+    setErrorMsg('');
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const uid = result.user.uid;
+      const uEmail = result.user.email || 'google.user@company.com';
+      const uName = result.user.displayName || uEmail.split('@')[0] || 'Sarah Jenkins';
+      
+      // Keep selected or fallback role
+      await syncUserProfile(uid, uEmail, uName, role);
+
+      onLoginSuccess({
+        name: uName,
+        email: uEmail,
+        role: role
+      });
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Google Login failed. Please verify browser popup settings.');
+    } finally {
+      setAuthInProgress(false);
+    }
   };
 
   return (
@@ -243,8 +329,9 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
               <div className="grid grid-cols-2 gap-3.5">
                 <button 
                   type="button"
-                  onClick={() => selectQuickRole('Admin', 'google.demo@company.com', 'Google Dev User')}
-                  className={`py-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition-all hover:scale-102 ${isDarkMode ? 'bg-slate-900 border-slate-800 hover:bg-slate-800 text-slate-100' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'}`}
+                  onClick={handleGoogleLogin}
+                  disabled={authInProgress}
+                  className={`py-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition-all hover:scale-102 ${isDarkMode ? 'bg-slate-900 border-slate-800 hover:bg-slate-800 text-slate-100' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'} ${authInProgress ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <svg className="w-4 h-4" viewBox="0 0 24 24">
                     <path fill="#EA4335" d="M12 5.04c1.66 0 3.2.57 4.38 1.69l3.27-3.27C17.67 1.63 14.98 1 12 1 7.35 1 3.39 3.67 1.39 7.56l3.85 2.99C6.18 7.37 8.87 5.04 12 5.04z" />
@@ -252,7 +339,7 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
                     <path fill="#FBBC05" d="M5.24 14.81c-.24-.72-.38-1.49-.38-2.31s.14-1.59.38-2.31L1.39 7.19C.5 8.93 0 10.88 0 12.91s.5 3.98 1.39 5.72l3.85-2.82z" />
                     <path fill="#34A853" d="M12 23c3.24 0 5.97-1.07 7.96-2.91l-3.73-2.89c-1.1.74-2.51 1.18-4.23 1.18-3.13 0-5.82-2.33-6.76-5.51l-3.85 2.82C3.39 19.33 7.35 23 12 23z" />
                   </svg>
-                  Google
+                  {authInProgress ? 'Connecting...' : 'Google'}
                 </button>
                 <button 
                   type="button"

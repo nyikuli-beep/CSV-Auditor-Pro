@@ -25,6 +25,7 @@ export interface CSVFile {
   rows: Record<string, string>[];
   issues: AuditIssue[];
   cleanedRows?: Record<string, string>[];
+  ownerId?: string;
 }
 
 export interface TeamMember {

@@ -1,0 +1,144 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with role details and account metadata.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique auth UID of the user."
+        },
+        "name": {
+          "type": "string",
+          "description": "Full display name of the user."
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the user."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["Owner", "Admin", "Editor", "Viewer"],
+          "description": "SaaS authorization tier."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp indicating registration date."
+        }
+      },
+      "required": ["id", "name", "email", "role"]
+    },
+    "CSVFile": {
+      "title": "CSVFile",
+      "description": "Audit file details including headers, data rows, and flagged compliance issues.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "size": {
+          "type": "number"
+        },
+        "uploadedAt": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "auditing", "completed", "failed"]
+        },
+        "score": {
+          "type": "number"
+        },
+        "headers": {
+          "type": "array"
+        },
+        "rows": {
+          "type": "array"
+        },
+        "cleanedRows": {
+          "type": "array"
+        },
+        "ownerId": {
+          "type": "string"
+        },
+        "issues": {
+          "type": "array"
+        }
+      },
+      "required": ["id", "name", "size", "uploadedAt", "status", "score", "headers", "rows", "ownerId", "issues"]
+    },
+    "AuditActivity": {
+      "title": "AuditActivity",
+      "description": "A single entry in the tenant workspace real-time activity timeline feed.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "userName": {
+          "type": "string"
+        },
+        "action": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string"
+        },
+        "fileName": {
+          "type": "string"
+        }
+      },
+      "required": ["id", "userId", "userName", "action", "timestamp"]
+    },
+    "TeamMember": {
+      "title": "TeamMember",
+      "description": "A colleague or invited tenancy collaborator.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["Owner", "Admin", "Editor", "Viewer"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "invited"]
+        }
+      },
+      "required": ["id", "name", "email", "role", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User specific configuration profiles and tenancy roles."
+    },
+    "/files/{fileId}": {
+      "schema": "CSVFile",
+      "description": "A ledger of audited spreadsheets with row and issue tracking."
+    },
+    "/activities/{activityId}": {
+      "schema": "AuditActivity",
+      "description": "Real-time ledger of actions executed across the workspace."
+    },
+    "/members/{memberId}": {
+      "schema": "TeamMember",
+      "description": "Shared list of invited colleagues in the tenancy segment."
+    }
+  }
+}

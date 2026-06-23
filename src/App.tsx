@@ -45,6 +45,22 @@ import TeamCollaboration from './components/TeamCollaboration';
 import SettingsView from './components/SettingsView';
 import AdminPanel from './components/AdminPanel';
 
+// Import Firebase integration
+import { auth, db, OperationType, handleFirestoreError } from './firebase';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { 
+  collection, 
+  doc, 
+  setDoc, 
+  getDoc,
+  deleteDoc,
+  onSnapshot, 
+  query, 
+  where, 
+  orderBy, 
+  limit 
+} from 'firebase/firestore';
+
 export default function App() {
   // Global View State: 'landing' | 'auth' | 'workspace'
   const [view, setView] = useState<'landing' | 'auth' | 'workspace'>('landing');
@@ -54,17 +70,19 @@ export default function App() {
   
   // Session / Persona State
   const [user, setUser] = useState<{ email: string; role: string } | null>(null);
+  const [firebaseUser, setFirebaseUser] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
   
   // Theme Toggle (Default to high-density light mode)
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
 
   // Files Registry (Initial mock messy CSV loaded by default)
-  const [files, setFiles] = useState<CSVFile[]>([SAMPLE_MESSY_FILE]);
+  const [files, setFiles] = useState<CSVFile[]>([]);
   const [activeFileIndex, setActiveFileIndex] = useState<number>(0);
 
   // Collaboration registry
-  const [members, setMembers] = useState<TeamMember[]>(TEAM_MEMBERS);
-  const [activities, setActivities] = useState<AuditActivity[]>(AUDIT_ACTIVITIES);
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [activities, setActivities] = useState<AuditActivity[]>([]);
 
   // Chat message stack
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
@@ -104,6 +122,129 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // Monitor auth state changes
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (fUser) => {
+      setAuthLoading(true);
+      if (fUser) {
+        setFirebaseUser(fUser);
+        
+        // Fetch or create user doc
+        const userRef = doc(db, 'users', fUser.uid);
+        let userRole = 'Owner';
+        try {
+          const userSnap = await getDoc(userRef);
+          if (userSnap.exists()) {
+            userRole = userSnap.data().role || 'Owner';
+          } else {
+            const newProfile = {
+              id: fUser.uid,
+              name: fUser.displayName || fUser.email?.split('@')[0] || 'Sarah Jenkins',
+              email: fUser.email || `${fUser.uid}@demo.com`,
+              role: 'Owner'
+            };
+            await setDoc(userRef, newProfile);
+          }
+        } catch (err) {
+          console.error("Error loading profile from Firestore:", err);
+        }
+        
+        setUser({ email: fUser.email || `${fUser.uid}@demo.com`, role: userRole });
+        setView('workspace');
+      } else {
+        setFirebaseUser(null);
+        setUser(null);
+        setView('landing');
+      }
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Sync collections in real-time
+  useEffect(() => {
+    if (!firebaseUser) return;
+
+    // 1. Files snapshot
+    const filesQuery = query(collection(db, 'files'), where('ownerId', '==', firebaseUser.uid));
+    const unsubscribeFiles = onSnapshot(filesQuery, async (snapshot) => {
+      const filesList: CSVFile[] = [];
+      snapshot.forEach((docSnap) => {
+        filesList.push(docSnap.data() as CSVFile);
+      });
+
+      if (filesList.length === 0) {
+        try {
+          const seedFile: CSVFile = {
+            ...SAMPLE_MESSY_FILE,
+            id: 'file-active',
+            ownerId: firebaseUser.uid
+          };
+          await setDoc(doc(db, 'files', 'file-active'), seedFile);
+        } catch (err) {
+          handleFirestoreError(err, OperationType.WRITE, 'files/file-active');
+        }
+      } else {
+        // Sort files by uploadedAt string or timestamp
+        setFiles(filesList);
+      }
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, 'files');
+    });
+
+    // 2. Team snapshot
+    const membersQuery = collection(db, 'members');
+    const unsubscribeMembers = onSnapshot(membersQuery, async (snapshot) => {
+      const membersList: TeamMember[] = [];
+      snapshot.forEach((docSnap) => {
+        membersList.push(docSnap.data() as TeamMember);
+      });
+
+      if (membersList.length === 0) {
+        try {
+          for (const m of TEAM_MEMBERS) {
+            await setDoc(doc(db, 'members', m.id), m);
+          }
+        } catch (err) {
+          handleFirestoreError(err, OperationType.WRITE, 'members');
+        }
+      } else {
+        setMembers(membersList);
+      }
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, 'members');
+    });
+
+    // 3. Activities snapshot
+    const activitiesQuery = query(collection(db, 'activities'), limit(25));
+    const unsubscribeActivities = onSnapshot(activitiesQuery, async (snapshot) => {
+      const activitiesList: AuditActivity[] = [];
+      snapshot.forEach((docSnap) => {
+        activitiesList.push(docSnap.data() as AuditActivity);
+      });
+
+      if (activitiesList.length === 0) {
+        try {
+          for (const act of AUDIT_ACTIVITIES) {
+            await setDoc(doc(db, 'activities', act.id), act);
+          }
+        } catch (err) {
+          handleFirestoreError(err, OperationType.WRITE, 'activities');
+        }
+      } else {
+        setActivities(activitiesList.sort((a, b) => b.id.localeCompare(a.id)));
+      }
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, 'activities');
+    });
+
+    return () => {
+      unsubscribeFiles();
+      unsubscribeMembers();
+      unsubscribeActivities();
+    };
+  }, [firebaseUser]);
+
   // Map accents to Tailwind classes
   const getAccentColorClass = () => {
     switch (settings.accentColor) {
@@ -116,8 +257,23 @@ export default function App() {
 
   const accentClass = getAccentColorClass();
 
-    // Handle successful registration/auth
-  const handleAuthSuccess = (userInfo: { name: string; email: string; role: 'Owner' | 'Admin' | 'Editor' | 'Viewer' }) => {
+  // Handle successful registration/auth
+  const handleAuthSuccess = async (userInfo: { name: string; email: string; role: 'Owner' | 'Admin' | 'Editor' | 'Viewer' }) => {
+    // If we've authenticated in Firebase, onAuthStateChanged handles routing
+    if (firebaseUser) {
+      try {
+        const userRef = doc(db, 'users', firebaseUser.uid);
+        await setDoc(userRef, {
+          id: firebaseUser.uid,
+          name: userInfo.name,
+          email: userInfo.email,
+          role: userInfo.role,
+          createdAt: new Date().toISOString()
+        });
+      } catch (err) {
+        console.error("Error setting user profile in Firestore:", err);
+      }
+    }
     setUser({ email: userInfo.email, role: userInfo.role });
     setView('workspace');
     setActiveTab('dashboard');
@@ -125,64 +281,105 @@ export default function App() {
     // Prepend user activation activity log
     const activationLog: AuditActivity = {
       id: `act-${Date.now()}`,
-      userId: 'usr-sarah',
+      userId: firebaseUser?.uid || 'usr-sarah',
       userName: userInfo.name,
       action: 'Authenticated to workspace segment',
       timestamp: 'Just now'
     };
-    setActivities([activationLog, ...activities]);
+    try {
+      await setDoc(doc(db, 'activities', activationLog.id), activationLog);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `activities/${activationLog.id}`);
+    }
   };
 
   // Log Out Sequence
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.error("Error signing out:", err);
+    }
     setUser(null);
     setView('landing');
   };
 
   // Add newly uploaded CSV to registry
-  const handleNewFileUpload = (newFile: CSVFile) => {
-    setFiles(prev => [newFile, ...prev]);
+  const handleNewFileUpload = async (newFile: CSVFile) => {
+    const fileId = newFile.id || `file-${Date.now()}`;
+    const fileToUpload: CSVFile = {
+      ...newFile,
+      id: fileId,
+      ownerId: firebaseUser?.uid || 'usr-sarah'
+    };
+
+    try {
+      await setDoc(doc(db, 'files', fileId), fileToUpload);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `files/${fileId}`);
+    }
+
     setActiveFileIndex(0);
     setActiveTab('results'); // Switch directly to inspect warnings
 
     const uploadLog: AuditActivity = {
       id: `act-${Date.now()}`,
-      userId: 'usr-sarah',
+      userId: firebaseUser?.uid || 'usr-sarah',
       userName: user?.email || 'Sarah Jenkins',
       action: `Uploaded & ingested new dataset "${newFile.name}"`,
       timestamp: 'Just now'
     };
-    setActivities([uploadLog, ...activities]);
+    try {
+      await setDoc(doc(db, 'activities', uploadLog.id), uploadLog);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `activities/${uploadLog.id}`);
+    }
   };
 
   // Update file row values post cleaning
-  const handleUpdateFile = (updatedFile: CSVFile) => {
-    const updated = [...files];
-    updated[activeFileIndex] = updatedFile;
-    setFiles(updated);
+  const handleUpdateFile = async (updatedFile: CSVFile) => {
+    try {
+      await setDoc(doc(db, 'files', updatedFile.id), updatedFile);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `files/${updatedFile.id}`);
+    }
 
     const cleanLog: AuditActivity = {
       id: `act-${Date.now()}`,
-      userId: 'usr-sarah',
+      userId: firebaseUser?.uid || 'usr-sarah',
       userName: user?.email || 'Sarah Jenkins',
       action: `Executed data hygiene algorithms on "${updatedFile.name}"`,
       timestamp: 'Just now'
     };
-    setActivities([cleanLog, ...activities]);
+    try {
+      await setDoc(doc(db, 'activities', cleanLog.id), cleanLog);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `activities/${cleanLog.id}`);
+    }
   };
 
   // Invite user to group workspace
-  const handleInviteMember = (newMember: TeamMember) => {
-    setMembers([...members, newMember]);
+  const handleInviteMember = async (newMember: TeamMember) => {
+    try {
+      await setDoc(doc(db, 'members', newMember.id), newMember);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `members/${newMember.id}`);
+    }
+
     const inviteLog: AuditActivity = {
       id: `act-${Date.now()}`,
-      userId: 'usr-sarah',
+      userId: firebaseUser?.uid || 'usr-sarah',
       userName: user?.email || 'Sarah Jenkins',
       action: `Dispatched tenancy invitation to ${newMember.email}`,
       timestamp: 'Just now'
     };
-    setActivities([inviteLog, ...activities]);
+    try {
+      await setDoc(doc(db, 'activities', inviteLog.id), inviteLog);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `activities/${inviteLog.id}`);
+    }
   };
+
 
   // Dispatch prompt context to full-stack backend
   const handleSendChatMessage = async (msgContent: string) => {
