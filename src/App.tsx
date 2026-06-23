@@ -75,6 +75,7 @@ export default function App() {
   
   // Theme Toggle (Default to high-density light mode)
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
 
   // Files Registry (Initial mock messy CSV loaded by default)
   const [files, setFiles] = useState<CSVFile[]>([]);
@@ -531,6 +532,130 @@ export default function App() {
       {view === 'workspace' && (
         <div className="flex min-h-screen">
           
+          {/* Mobile Drawer Backdrop Overlay */}
+          <AnimatePresence>
+            {mobileMenuOpen && (
+              <>
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 0.5 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="fixed inset-0 bg-black z-40 md:hidden"
+                />
+                
+                <motion.aside 
+                  initial={{ x: '-100%' }}
+                  animate={{ x: 0 }}
+                  exit={{ x: '-100%' }}
+                  transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+                  className={`fixed inset-y-0 left-0 w-64 z-50 p-5 flex flex-col justify-between md:hidden shadow-2xl ${isDarkMode ? 'bg-[#0f172a] border-r border-slate-800 text-slate-100' : 'bg-white border-r border-slate-200 text-[#1E293B]'}`}
+                >
+                  <div className="space-y-6">
+                    {/* Brand with Close Trigger */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white shrink-0 shadow-sm">
+                          <FileSpreadsheet className="w-4.5 h-4.5" />
+                        </div>
+                        <div>
+                          <h2 className={`font-bold text-sm tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Auditor Pro</h2>
+                          <span className="text-[9px] text-slate-400 block font-bold tracking-wider">WORKSPACE LEVEL</span>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => setMobileMenuOpen(false)}
+                        className={`p-1.5 rounded-lg border cursor-pointer transition-all ${isDarkMode ? 'bg-slate-900 border-slate-800 hover:bg-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'}`}
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Mapped Active File Miniature Gauge */}
+                    {activeFile && (
+                      <div className={`p-3.5 rounded-xl border space-y-2 text-xs text-left ${isDarkMode ? 'bg-[#1e293b]/40 border-slate-800/80' : 'bg-slate-50 border-slate-200/80'}`}>
+                        <div className="flex justify-between items-center">
+                          <span className={`font-bold block max-w-[125px] truncate ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`} title={activeFile.name}>
+                            {activeFile.name}
+                          </span>
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${isDarkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-700'}`}>{activeFile.rows.length} rows</span>
+                        </div>
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="text-slate-400 font-semibold">Integrity rating:</span>
+                          <span className={`font-black ${activeFile.score > 80 ? 'text-emerald-500' : 'text-amber-500'}`}>{activeFile.score}%</span>
+                        </div>
+                        <div className={`w-full h-1 rounded-full ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`}>
+                          <div className={`h-full rounded-full ${activeFile.score > 80 ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${activeFile.score}%` }}></div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Mobile Navigation Tabs Stack */}
+                    <nav className="space-y-1">
+                      {[
+                        { id: 'dashboard', label: 'Dashboard Home', icon: BarChart3 },
+                        { id: 'upload', label: 'Upload Center', icon: Upload },
+                        { id: 'results', label: 'Audit Findings', icon: Sparkles, badge: activeFile ? activeFile.issues.length : 0 },
+                        { id: 'clean', label: 'Hygiene Workspace', icon: Trash2 },
+                        { id: 'insights', label: 'AI Intelligence', icon: MessageSquare },
+                        { id: 'reports', label: 'Branded Reports', icon: FileText },
+                        { id: 'history', label: 'File Archive', icon: History },
+                        { id: 'team', label: 'Team Tenancy', icon: Users },
+                        ...(user?.role === 'Admin' || user?.role === 'Owner' ? [{ id: 'admin', label: 'Admin Panel', icon: Lock }] : []),
+                        { id: 'settings', label: 'API & settings', icon: Settings }
+                      ].map((tab) => {
+                        const Icon = tab.icon;
+                        const isActive = activeTab === tab.id;
+                        return (
+                          <button
+                            key={tab.id}
+                            onClick={() => {
+                              setActiveTab(tab.id);
+                              setMobileMenuOpen(false);
+                            }}
+                            className={`w-full px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between transition-all cursor-pointer ${isActive ? isDarkMode ? 'bg-[#1e293b]/80 text-blue-400 font-bold border-l-2 border-blue-500 pl-2.5' : 'bg-blue-50/80 text-blue-700 font-bold border-l-2 border-blue-600 pl-2.5' : isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800/40' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+                          >
+                            <span className="flex items-center gap-2.5">
+                              <Icon className={`w-4 h-4 ${isActive ? 'text-blue-500' : ''}`} />
+                              <span>{tab.label}</span>
+                            </span>
+                            {tab.badge !== undefined && tab.badge > 0 && (
+                              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-rose-500 text-white font-mono shrink-0">
+                                {tab.badge}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </nav>
+                  </div>
+
+                  {/* Mobile Logout Panel */}
+                  <div className="pt-6 border-t border-slate-900/80">
+                    <div className="flex items-center gap-3 mb-4 text-xs text-left">
+                      <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-[10px] text-white">
+                        {user?.email ? user.email.slice(0, 2).toUpperCase() : 'ME'}
+                      </div>
+                      <div className="min-w-0">
+                        <span className="font-bold block truncate max-w-[110px]">{user?.email || 'sarah@Jenkins.com'}</span>
+                        <span className="text-[9px] text-slate-500 block font-mono font-bold uppercase">{user?.role || 'Owner'}</span>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        handleLogout();
+                        setMobileMenuOpen(false);
+                      }}
+                      className="w-full py-2.5 rounded-xl border border-slate-800 text-xs font-bold text-slate-400 hover:text-slate-100 hover:bg-slate-900/60 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <LogOut className="w-3.5 h-3.5" /> Logout Session
+                    </button>
+                  </div>
+                </motion.aside>
+              </>
+            )}
+          </AnimatePresence>
+          
           {/* Left Navigation Sidebar */}
           <aside className={`w-64 border-r hidden md:flex flex-col justify-between p-5 shrink-0 ${isDarkMode ? 'bg-[#0f172a] border-slate-800' : 'bg-white border-slate-200'}`}>
             <div className="space-y-6">
@@ -629,9 +754,12 @@ export default function App() {
             {/* Top Workspace Header */}
             <header className={`h-14 px-6 border-b flex items-center justify-between gap-4 shrink-0 ${isDarkMode ? 'bg-[#0f172a] border-slate-800' : 'bg-white border-slate-200'}`}>
               <div className="flex items-center gap-4">
-                <div className="md:hidden p-1.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">
+                <button 
+                  onClick={() => setMobileMenuOpen(true)}
+                  className={`md:hidden p-1.5 rounded cursor-pointer transition-all ${isDarkMode ? 'bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                >
                   <Menu className="w-4 h-4" />
-                </div>
+                </button>
                 <div className="flex items-center gap-2.5">
                   <h2 className={`text-sm md:text-base font-semibold ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
                     {activeTab === 'dashboard' && 'Main Workspace'}
