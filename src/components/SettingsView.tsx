@@ -44,6 +44,13 @@ export default function SettingsView({ settings, onUpdateSettings, isDarkMode, t
   const [tosOpen, setTosOpen] = useState(false);
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
+  // Google Search Console (GSC) Verification State
+  const [metaCode, setMetaCode] = useState('');
+  const [fileName, setFileName] = useState('');
+  const [fileContent, setFileContent] = useState('');
+  const [gscLoading, setGscLoading] = useState(false);
+  const [gscSuccessMsg, setGscSuccessMsg] = useState('');
+
   const handleCopy = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     setCopiedText(label);
@@ -52,19 +59,75 @@ export default function SettingsView({ settings, onUpdateSettings, isDarkMode, t
 
   useEffect(() => {
     fetchDbStatus();
+    fetchGscSettings();
   }, []);
 
-  const fetchDbStatus = () => {
+  const fetchGscSettings = (retries = 3, delay = 1000) => {
+    fetch('/api/gsc/settings')
+      .then(res => {
+        if (!res.ok) throw new Error(`GSC HTTP error! Status: ${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+        if (data) {
+          setMetaCode(data.metaCode || '');
+          setFileName(data.fileName || '');
+          setFileContent(data.fileContent || '');
+        }
+      })
+      .catch(err => {
+        console.warn(`Error fetching GSC settings (retries left: ${retries}):`, err);
+        if (retries > 0) {
+          setTimeout(() => fetchGscSettings(retries - 1, delay * 1.5), delay);
+        } else {
+          console.error("Failed to fetch GSC settings after all retries:", err);
+        }
+      });
+  };
+
+  const handleGscSave = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    setGscLoading(true);
+    setGscSuccessMsg('');
+    try {
+      const res = await fetch('/api/gsc/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ metaCode, fileName, fileContent })
+      });
+      if (res.ok) {
+        setGscSuccessMsg('Google Search Console configuration saved and live deployed!');
+        setTimeout(() => setGscSuccessMsg(''), 3500);
+      } else {
+        console.error('Failed to save GSC settings');
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setGscLoading(false);
+    }
+  };
+
+  const fetchDbStatus = (retries = 3, delay = 1000) => {
     setDbLoading(true);
     fetch('/api/sql/status')
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`DB Status HTTP error! Status: ${res.status}`);
+        return res.json();
+      })
       .then(data => {
         setDbStatus(data);
         setDbLoading(false);
       })
       .catch(err => {
-        console.error("Error fetching db status:", err);
-        setDbLoading(false);
+        console.warn(`Error fetching db status (retries left: ${retries}):`, err);
+        if (retries > 0) {
+          setTimeout(() => fetchDbStatus(retries - 1, delay * 1.5), delay);
+        } else {
+          console.error("Failed to fetch DB status after all retries:", err);
+          setDbStatus({ status: 'error', error: 'Database link momentarily offline. Please click refresh to try again.' });
+          setDbLoading(false);
+        }
       });
   };
 
@@ -332,6 +395,98 @@ export default function SettingsView({ settings, onUpdateSettings, isDarkMode, t
                   <span className="text-[10px] text-slate-400">Receive notification digests when commentators tag you on a row annotation.</span>
                 </div>
               </label>
+            </div>
+          </div>
+
+          {/* Google Search Console Verification */}
+          <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
+            <h3 className="font-bold text-sm uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-2">
+              <Globe className="w-4 h-4 text-blue-500" /> Search Console Verification
+            </h3>
+            
+            <div className="space-y-4">
+              <p className="text-[10px] leading-relaxed text-slate-400">
+                Verify your app on Google Search Console using HTML Meta Tag or dynamic HTML File verification.
+              </p>
+
+              {gscSuccessMsg && (
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] flex items-center gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 animate-pulse" />
+                  <span>{gscSuccessMsg}</span>
+                </div>
+              )}
+
+              {/* Meta Tag Code */}
+              <div className="space-y-1">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Method A: HTML Meta Tag Content Code
+                </label>
+                <input 
+                  type="text"
+                  value={metaCode}
+                  onChange={(e) => setMetaCode(e.target.value)}
+                  placeholder="e.g. google1234567890abcdef" 
+                  className={`w-full px-3 py-2 rounded-xl text-xs border focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-950'}`}
+                />
+                <span className="text-[9px] text-slate-500 block">
+                  Places verification meta tag in your document header.
+                </span>
+              </div>
+
+              <div className="border-t border-slate-800/40 my-3"></div>
+
+              {/* Dynamic HTML File serving */}
+              <div className="space-y-3">
+                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Method B: Dynamic HTML File
+                </span>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase">
+                      Verification Filename
+                    </label>
+                    <input 
+                      type="text"
+                      value={fileName}
+                      onChange={(e) => setFileName(e.target.value)}
+                      placeholder="e.g. google1234567890.html" 
+                      className={`w-full px-3 py-1.5 rounded-lg text-xs border focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-950'}`}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase">
+                      File Content
+                    </label>
+                    <input 
+                      type="text"
+                      value={fileContent}
+                      onChange={(e) => setFileContent(e.target.value)}
+                      placeholder="e.g. google-site-verification: google1234567890.html" 
+                      className={`w-full px-3 py-1.5 rounded-lg text-xs border focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-950'}`}
+                    />
+                  </div>
+                </div>
+                <span className="text-[9px] text-slate-500 block">
+                  Dynamically responds with verification details when requested.
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleGscSave}
+                disabled={gscLoading}
+                className="w-full mt-2 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-55 rounded-xl cursor-pointer transition-all flex items-center justify-center gap-1.5 shadow-md"
+              >
+                {gscLoading ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <span>Save & Deploy Search Console Verification</span>
+                )}
+              </button>
             </div>
           </div>
 

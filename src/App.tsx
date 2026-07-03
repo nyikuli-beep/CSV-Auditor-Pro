@@ -246,8 +246,13 @@ export default function App() {
 
       if (activitiesList.length === 0) {
         try {
+          const currentUid = firebaseUser?.uid || auth.currentUser?.uid;
           for (const act of AUDIT_ACTIVITIES) {
-            await setDoc(doc(db, 'activities', act.id), act);
+            const seedAct = {
+              ...act,
+              userId: currentUid || act.userId
+            };
+            await setDoc(doc(db, 'activities', act.id), seedAct);
           }
         } catch (err) {
           handleFirestoreError(err, OperationType.WRITE, 'activities');
@@ -306,11 +311,12 @@ export default function App() {
   // Handle successful registration/auth
   const handleAuthSuccess = async (userInfo: { name: string; email: string; role: 'Owner' | 'Admin' | 'Editor' | 'Viewer' }) => {
     // If we've authenticated in Firebase, onAuthStateChanged handles routing
-    if (firebaseUser) {
+    const activeUser = firebaseUser || auth.currentUser;
+    if (activeUser) {
       try {
-        const userRef = doc(db, 'users', firebaseUser.uid);
+        const userRef = doc(db, 'users', activeUser.uid);
         await setDoc(userRef, {
-          id: firebaseUser.uid,
+          id: activeUser.uid,
           name: userInfo.name,
           email: userInfo.email,
           role: userInfo.role,
@@ -327,7 +333,7 @@ export default function App() {
     // Prepend user activation activity log
     const activationLog: AuditActivity = {
       id: `act-${Date.now()}`,
-      userId: firebaseUser?.uid || 'usr-sarah',
+      userId: activeUser?.uid || 'usr-sarah',
       userName: userInfo.name,
       action: 'Authenticated to workspace segment',
       timestamp: 'Just now'
@@ -372,7 +378,7 @@ export default function App() {
 
     const uploadLog: AuditActivity = {
       id: `act-${Date.now()}`,
-      userId: firebaseUser?.uid || 'usr-sarah',
+      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-sarah',
       userName: user?.email || 'Sarah Jenkins',
       action: `Uploaded & ingested new dataset "${newFile.name}"`,
       timestamp: 'Just now'
@@ -396,7 +402,7 @@ export default function App() {
 
     const cleanLog: AuditActivity = {
       id: `act-${Date.now()}`,
-      userId: firebaseUser?.uid || 'usr-sarah',
+      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-sarah',
       userName: user?.email || 'Sarah Jenkins',
       action: `Executed data hygiene algorithms on "${updatedFile.name}"`,
       timestamp: 'Just now'
@@ -420,7 +426,7 @@ export default function App() {
 
     const inviteLog: AuditActivity = {
       id: `act-${Date.now()}`,
-      userId: firebaseUser?.uid || 'usr-sarah',
+      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-sarah',
       userName: user?.email || 'Sarah Jenkins',
       action: `Dispatched tenancy invitation to ${newMember.email}`,
       timestamp: 'Just now'
@@ -920,10 +926,17 @@ export default function App() {
             {/* Custom High Density Footer */}
             <footer className={`mt-auto border-t px-6 py-3.5 flex items-center justify-between text-[9px] font-bold uppercase tracking-widest shrink-0 ${isDarkMode ? 'bg-[#0f172a] border-slate-800 text-slate-500' : 'bg-white border-slate-200 text-slate-400'}`}>
               <div>&copy; 2026 CSV Auditor Pro Inc.</div>
-              <div className="flex gap-6">
-                <a href="#" className="hover:text-blue-500 transition-colors">API Documentation</a>
-                <a href="#" className="hover:text-blue-500 transition-colors">Terms of Service</a>
-                <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Status: Operational</span>
+              <div className="flex items-center gap-4 sm:gap-6">
+                <div className="flex gap-3 sm:gap-4 border-r border-slate-300 dark:border-slate-800 pr-4 sm:pr-6">
+                  <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="hover:text-blue-500 transition-colors">Twitter</a>
+                  <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="hover:text-blue-500 transition-colors">GitHub</a>
+                  <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="hover:text-blue-500 transition-colors">LinkedIn</a>
+                </div>
+                <div className="flex gap-4 sm:gap-6">
+                  <button onClick={() => setActiveTab('settings')} className="hover:text-blue-500 transition-colors uppercase cursor-pointer">API Documentation</button>
+                  <button onClick={() => setActiveTab('settings')} className="hover:text-blue-500 transition-colors uppercase cursor-pointer">Terms of Service</button>
+                  <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Status: Operational</span>
+                </div>
               </div>
             </footer>
           </main>

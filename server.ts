@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
@@ -321,6 +322,61 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', api: 'online', database: 'connected' });
 });
 
+// --- GOOGLE SEARCH CONSOLE VERIFICATION SERVICES ---
+
+// GET Search Console Config
+app.get('/api/gsc/settings', (req, res) => {
+  try {
+    const configPath = path.join(process.cwd(), 'gsc-config.json');
+    if (fs.existsSync(configPath)) {
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      res.json(config);
+    } else {
+      res.json({ metaCode: '', fileName: '', fileContent: '' });
+    }
+  } catch (e: any) {
+    console.error('Error reading GSC config:', e);
+    res.status(500).json({ error: 'Failed to read GSC config' });
+  }
+});
+
+// POST Search Console Config
+app.post('/api/gsc/settings', (req, res) => {
+  try {
+    const { metaCode, fileName, fileContent } = req.body;
+    const config = {
+      metaCode: metaCode || '',
+      fileName: fileName || '',
+      fileContent: fileContent || ''
+    };
+    const configPath = path.join(process.cwd(), 'gsc-config.json');
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+    res.json({ success: true, config });
+  } catch (e: any) {
+    console.error('Error writing GSC config:', e);
+    res.status(500).json({ error: 'Failed to write GSC config' });
+  }
+});
+
+// Serve HTML File Verification route dynamically
+app.get('/google*.html', (req, res) => {
+  const requestedFile = req.path.substring(1); // e.g. "google1234567890.html"
+  try {
+    const configPath = path.join(process.cwd(), 'gsc-config.json');
+    if (fs.existsSync(configPath)) {
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      if (config.fileName === requestedFile) {
+        res.setHeader('Content-Type', 'text/html');
+        res.send(config.fileContent || `google-site-verification: ${requestedFile}`);
+        return;
+      }
+    }
+  } catch (e) {
+    console.error('Error serving GSC HTML file:', e);
+  }
+  res.status(404).send('Not Found');
+});
+
 // Vite middleware integration for full-stack build patterns
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
@@ -331,6 +387,32 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
+    
+    // Intercept Root URL to inject GSC Meta-Tag dynamically on production
+    app.get('/', (req, res, next) => {
+      const indexPath = path.join(distPath, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        let html = fs.readFileSync(indexPath, 'utf8');
+        try {
+          const configPath = path.join(process.cwd(), 'gsc-config.json');
+          if (fs.existsSync(configPath)) {
+            const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+            if (config.metaCode) {
+              html = html.replace(
+                '<head>',
+                `<head>\n    <meta name="google-site-verification" content="${config.metaCode}" />`
+              );
+            }
+          }
+        } catch (e) {
+          console.error('Error injecting GSC meta tag on server:', e);
+        }
+        res.send(html);
+      } else {
+        next();
+      }
+    });
+
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));

@@ -472,9 +472,9 @@ export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, acc
         <div className="max-w-7xl mx-auto px-6 mt-12 pt-6 border-t border-slate-900/10 dark:border-slate-900 flex flex-col sm:flex-row items-center justify-between text-xs">
           <span>&copy; {new Date().getFullYear()} CSV Auditor Pro. All rights reserved.</span>
           <div className="flex gap-6 mt-4 sm:mt-0">
-            <a href="#" className="hover:text-blue-500 transition-colors">Twitter</a>
-            <a href="#" className="hover:text-blue-500 transition-colors">GitHub</a>
-            <a href="#" className="hover:text-blue-500 transition-colors">LinkedIn</a>
+            <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="hover:text-blue-500 transition-colors">Twitter</a>
+            <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="hover:text-blue-500 transition-colors">GitHub</a>
+            <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="hover:text-blue-500 transition-colors">LinkedIn</a>
           </div>
         </div>
       </footer>

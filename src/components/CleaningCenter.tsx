@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
   FileSpreadsheet, 
@@ -13,7 +13,11 @@ import {
   ArrowLeft, 
   ChevronRight,
   Filter,
-  Sparkles
+  Sparkles,
+  Printer,
+  X,
+  Columns,
+  Download
 } from 'lucide-react';
 import { CSVFile, AuditIssue } from '../types';
 
@@ -33,6 +37,22 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
   const [history, setHistory] = useState<Record<string, string>[][]>(activeFile ? [activeFile.rows] : []);
   const [historyIndex, setHistoryIndex] = useState(0);
   const [appliedSteps, setAppliedSteps] = useState<string[]>([]);
+
+  // Print Modal Configuration State
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [printTitle, setPrintTitle] = useState(activeFile ? `CSV Auditor Report: ${activeFile.name}` : 'CSV Auditor Report');
+  const [printOrientation, setPrintOrientation] = useState<'landscape' | 'portrait'>('landscape');
+  const [printRowsFilter, setPrintRowsFilter] = useState<'all' | 'modified'>('all');
+  const [printTheme, setPrintTheme] = useState<'classic' | 'emerald' | 'minimalist'>('classic');
+  const [selectedPrintColumns, setSelectedPrintColumns] = useState<string[]>(activeFile ? activeFile.headers : []);
+  const [printLimit, setPrintLimit] = useState<number>(50);
+
+  useEffect(() => {
+    if (activeFile) {
+      setSelectedPrintColumns(activeFile.headers);
+      setPrintTitle(`CSV Auditor Report: ${activeFile.name}`);
+    }
+  }, [activeFile]);
 
   if (!activeFile) {
     return (
@@ -165,6 +185,295 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
     return originalRow[column] !== val;
   };
 
+  const handleDownloadCSV = () => {
+    if (!activeFile) return;
+
+    // Convert headers to CSV row
+    const headersRow = activeFile.headers.map(h => {
+      const escaped = h.replace(/"/g, '""');
+      return `"${escaped}"`;
+    }).join(',');
+
+    // Convert each row in currentRows to a CSV row
+    const rowsData = currentRows.map(row => {
+      return activeFile.headers.map(header => {
+        const value = row[header] !== undefined ? String(row[header]) : '';
+        const escaped = value.replace(/"/g, '""');
+        return `"${escaped}"`;
+      }).join(',');
+    });
+
+    const csvContent = [headersRow, ...rowsData].join('\n');
+
+    // Create a Blob and download it programmatically
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    const baseName = activeFile.name.replace(/\.csv$/i, '');
+    link.setAttribute('download', `${baseName}_cleaned.csv`);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCompiledPrint = () => {
+    // Create transient hidden iframe to trigger a perfect clean print context
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'absolute';
+    iframe.style.top = '-9999px';
+    iframe.style.left = '-9999px';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document || iframe.contentDocument;
+    if (!doc) return;
+
+    // Resolve Theme-Specific styles
+    let primaryHeaderBg = '#f1f5f9';
+    let primaryHeaderColor = '#334155';
+    let primaryBorderColor = '#cbd5e1';
+    let primaryTitleColor = '#0f172a';
+    let brandAccentColor = '#10b981';
+    let pageBgColor = '#ffffff';
+    let textPrimaryColor = '#1e293b';
+
+    if (printTheme === 'emerald') {
+      primaryHeaderBg = '#ecfdf5';
+      primaryHeaderColor = '#047857';
+      primaryBorderColor = '#a7f3d0';
+      primaryTitleColor = '#064e3b';
+      brandAccentColor = '#10b981';
+    } else if (printTheme === 'minimalist') {
+      primaryHeaderBg = '#1e293b';
+      primaryHeaderColor = '#cbd5e1';
+      primaryBorderColor = '#334155';
+      primaryTitleColor = '#f8fafc';
+      brandAccentColor = '#3b82f6';
+      pageBgColor = '#0b0f19';
+      textPrimaryColor = '#f1f5f9';
+    }
+
+    // Render table headers and cells with matching visual updates
+    const tableHeaders = selectedPrintColumns.map(h => `
+      <th style="padding: 10px 8px; border: 1px solid ${primaryBorderColor}; background-color: ${primaryHeaderBg}; font-weight: 700; text-align: left; font-size: 11px; color: ${primaryHeaderColor}; font-family: monospace;">
+        ${h}
+      </th>
+    `).join('');
+
+    const printableRows = currentRows.filter((_, rIdx) => {
+      if (printRowsFilter === 'modified') {
+        return selectedPrintColumns.some(col => isValueModified(rIdx, col, currentRows[rIdx][col]));
+      }
+      return true;
+    }).slice(0, printLimit);
+
+    const tableRows = printableRows.map((row, rIdx) => {
+      const cells = selectedPrintColumns.map(col => {
+        const val = row[col] || '';
+        const isModified = isValueModified(rIdx, col, val);
+        const isFilledVal = isModified && (val === 'Uncategorized' || val === '0.00');
+        
+        let cellBg = pageBgColor;
+        let cellColor = textPrimaryColor;
+        let cellFontWeight = 'normal';
+
+        if (isFilledVal) {
+          cellBg = printTheme === 'minimalist' ? '#065f46' : '#ecfdf5';
+          cellColor = printTheme === 'minimalist' ? '#34d399' : '#047857';
+          cellFontWeight = 'bold';
+        } else if (isModified) {
+          cellBg = printTheme === 'minimalist' ? '#78350f' : '#fffbeb';
+          cellColor = printTheme === 'minimalist' ? '#fbbf24' : '#b45309';
+          cellFontWeight = 'bold';
+        }
+
+        return `
+          <td style="padding: 8px; border: 1px solid ${primaryBorderColor}; font-size: 10px; font-family: monospace; background-color: ${cellBg}; color: ${cellColor}; font-weight: ${cellFontWeight};">
+            ${val === '' ? '<span style="color: #ef4444; font-style: italic; opacity: 0.6;">empty</span>' : val}
+          </td>
+        `;
+      }).join('');
+
+      return `
+        <tr>
+          <td style="padding: 8px; border: 1px solid ${primaryBorderColor}; font-size: 10px; font-family: monospace; font-weight: bold; background-color: ${primaryHeaderBg}; color: ${primaryHeaderColor}; text-align: center;">
+            ${rIdx + 2}
+          </td>
+          ${cells}
+        </tr>
+      `;
+    }).join('');
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${printTitle}</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+            body {
+              font-family: 'Inter', -apple-system, sans-serif;
+              color: ${textPrimaryColor};
+              padding: 30px;
+              margin: 0;
+              background-color: ${pageBgColor};
+            }
+            .header-container {
+              border-bottom: 3px solid ${brandAccentColor};
+              padding-bottom: 16px;
+              margin-bottom: 24px;
+            }
+            .title {
+              font-size: 22px;
+              font-weight: 800;
+              color: ${primaryTitleColor};
+              margin: 0 0 6px 0;
+              letter-spacing: -0.025em;
+            }
+            .subtitle {
+              font-size: 12px;
+              color: #64748b;
+              margin: 0;
+            }
+            .meta-grid {
+              display: grid;
+              grid-template-columns: repeat(4, 1fr);
+              gap: 16px;
+              background-color: ${printTheme === 'minimalist' ? '#1e293b' : '#f8fafc'};
+              border: 1px solid ${primaryBorderColor};
+              border-radius: 8px;
+              padding: 12px 16px;
+              margin-top: 16px;
+            }
+            .meta-item {
+              display: flex;
+              flex-direction: column;
+            }
+            .meta-label {
+              font-size: 9px;
+              font-weight: bold;
+              text-transform: uppercase;
+              color: #94a3b8;
+              letter-spacing: 0.05em;
+              margin-bottom: 4px;
+            }
+            .meta-value {
+              font-size: 12px;
+              font-weight: 600;
+              color: ${printTheme === 'minimalist' ? '#f1f5f9' : '#334155'};
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 10px;
+            }
+            .legend {
+              display: flex;
+              gap: 16px;
+              margin-top: 24px;
+              font-size: 10px;
+              color: #64748b;
+              font-weight: 500;
+            }
+            .legend-item {
+              display: flex;
+              align-items: center;
+              gap: 6px;
+            }
+            .legend-color {
+              width: 12px;
+              height: 12px;
+              border-radius: 3px;
+              border: 1px solid ${primaryBorderColor};
+            }
+            @media print {
+              body {
+                padding: 0;
+                background-color: #ffffff !important;
+                color: #000000 !important;
+              }
+              .no-print {
+                display: none;
+              }
+              @page {
+                size: ${printOrientation};
+                margin: 12mm;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header-container">
+            <h1 class="title">${printTitle}</h1>
+            <p class="subtitle">Cleaned & Restructured Transformed Dataset Report</p>
+            
+            <div class="meta-grid">
+              <div class="meta-item">
+                <span class="meta-label">Dataset Filename</span>
+                <span class="meta-value">${activeFile.name}</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-value" style="color: ${brandAccentColor}; font-weight: 800;">${activeFile.score}% Compliance</span>
+                <span class="meta-label">Data Quality Index</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">Record Count</span>
+                <span class="meta-value">${printableRows.length} Rows</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">Date Audited & Printed</span>
+                <span class="meta-value">${new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="padding: 10px 8px; border: 1px solid ${primaryBorderColor}; background-color: ${primaryHeaderBg}; font-weight: 700; font-size: 11px; text-align: center; color: ${primaryHeaderColor}; width: 45px;">Row</th>
+                ${tableHeaders}
+              </tr>
+            </thead>
+            <tbody>
+              ${tableRows}
+            </tbody>
+          </table>
+
+          <div class="legend">
+            <div class="legend-item">
+              <div class="legend-color" style="background-color: ${printTheme === 'minimalist' ? '#78350f' : '#fffbeb'}; border-color: ${primaryBorderColor};"></div>
+              <span>Modified Cells (capitalization / date formatting / custom rule transformations)</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color" style="background-color: ${printTheme === 'minimalist' ? '#065f46' : '#ecfdf5'}; border-color: ${primaryBorderColor};"></div>
+              <span>Imputed / Filled Values (empty fields fixed with custom placeholders)</span>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    doc.open();
+    doc.write(htmlContent);
+    doc.close();
+
+    // Give iframe short delay to load fonts and styles, then fire print dialog
+    setTimeout(() => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      // Safely garbage-collect the temporary print iframe
+      setTimeout(() => {
+        document.body.removeChild(iframe);
+      }, 2000);
+    }, 500);
+  };
+
   return (
     <div className="space-y-8 animate-fadeIn">
       {/* Header */}
@@ -288,14 +597,42 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
         {/* Live Preview Before vs After Comparison table */}
         <div className="lg:col-span-8 space-y-6">
           <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
               <div>
                 <h3 className="font-bold text-base">Live Dataset Preview</h3>
                 <p className="text-xs text-slate-400 mt-0.5">Rows updated with active rules are highlighted in yellow/green.</p>
               </div>
-              <span className={`text-[10px] px-2.5 py-1 rounded font-bold uppercase tracking-wider ${isDarkMode ? 'bg-slate-950 text-slate-300' : 'bg-slate-100 text-slate-700'}`}>
-                {currentRows.length} Rows remaining
-              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleDownloadCSV}
+                  id="btn-download-csv"
+                  className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    isDarkMode 
+                      ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-900 hover:border-slate-700' 
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:shadow-xs'
+                  }`}
+                >
+                  <Download className="w-3.5 h-3.5 text-emerald-500" />
+                  Download CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsPrintModalOpen(true)}
+                  id="btn-print-cleaned-csv"
+                  className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    isDarkMode 
+                      ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-900 hover:border-slate-700' 
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:shadow-xs'
+                  }`}
+                >
+                  <Printer className="w-3.5 h-3.5 text-blue-500" />
+                  Print Cleaned Sheet
+                </button>
+                <span className={`text-[10px] px-2.5 py-2 rounded font-bold uppercase tracking-wider ${isDarkMode ? 'bg-slate-950 text-slate-300' : 'bg-slate-100 text-slate-700'}`}>
+                  {currentRows.length} Rows remaining
+                </span>
+              </div>
             </div>
 
             {/* Responsive Comparison Table Container */}
@@ -351,6 +688,332 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
           </div>
         </div>
       </div>
+
+      {/* Print & Compliance Export Modal */}
+      {isPrintModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-fadeIn">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className={`w-full max-w-5xl h-[85vh] flex flex-col rounded-2xl border shadow-2xl overflow-hidden ${
+              isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
+            }`}
+          >
+            {/* Modal Header */}
+            <div className={`p-4 border-b flex items-center justify-between shrink-0 ${
+              isDarkMode ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-200'
+            }`}>
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-blue-500/10 text-blue-500 rounded-xl">
+                  <Printer className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm tracking-tight">Print & Compliance Export Workbench</h3>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Customize layouts, select target columns, and compile audit records.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPrintModalOpen(false)}
+                className="p-1.5 rounded-lg transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body: Two-column layout (Settings & Live Preview) */}
+            <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
+              
+              {/* Left Panel: Settings Options */}
+              <div className={`w-full md:w-[380px] p-5 overflow-y-auto border-r flex flex-col gap-5 ${
+                isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'
+              }`}>
+                
+                {/* Setting: Title */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 block">Report Document Title</label>
+                  <input
+                    type="text"
+                    value={printTitle}
+                    onChange={(e) => setPrintTitle(e.target.value)}
+                    className={`w-full px-3 py-2 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all ${
+                      isDarkMode ? 'bg-slate-950 border-slate-800 border text-slate-200' : 'bg-slate-50 border-slate-200 border text-slate-800'
+                    }`}
+                    placeholder="Enter report title..."
+                  />
+                </div>
+
+                {/* Setting: Orientation & Theme in a row */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 block">Page Orientation</label>
+                    <select
+                      value={printOrientation}
+                      onChange={(e: any) => setPrintOrientation(e.target.value)}
+                      className={`w-full px-2.5 py-2 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all ${
+                        isDarkMode ? 'bg-slate-950 border-slate-800 border text-slate-200' : 'bg-slate-50 border-slate-200 border text-slate-800'
+                      }`}
+                    >
+                      <option value="landscape">Landscape ↔</option>
+                      <option value="portrait">Portrait ↕</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 block">Visual Theme</label>
+                    <select
+                      value={printTheme}
+                      onChange={(e: any) => setPrintTheme(e.target.value)}
+                      className={`w-full px-2.5 py-2 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all ${
+                        isDarkMode ? 'bg-slate-950 border-slate-800 border text-slate-200' : 'bg-slate-50 border-slate-200 border text-slate-800'
+                      }`}
+                    >
+                      <option value="classic">Classic Clean</option>
+                      <option value="emerald">Emerald Ledger</option>
+                      <option value="minimalist">Minimalist Dark</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Setting: Row Filters & Limits */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 block">Filter Row Scope</label>
+                    <select
+                      value={printRowsFilter}
+                      onChange={(e: any) => setPrintRowsFilter(e.target.value)}
+                      className={`w-full px-2.5 py-2 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all ${
+                        isDarkMode ? 'bg-slate-950 border-slate-800 border text-slate-200' : 'bg-slate-50 border-slate-200 border text-slate-800'
+                      }`}
+                    >
+                      <option value="all">All Rows</option>
+                      <option value="modified">Only Modified</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 block">Rows Count Limit</label>
+                    <select
+                      value={printLimit}
+                      onChange={(e) => setPrintLimit(Number(e.target.value))}
+                      className={`w-full px-2.5 py-2 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all ${
+                        isDarkMode ? 'bg-slate-950 border-slate-800 border text-slate-200' : 'bg-slate-50 border-slate-200 border text-slate-800'
+                      }`}
+                    >
+                      <option value={10}>Top 10 rows</option>
+                      <option value={25}>Top 25 rows</option>
+                      <option value={50}>Top 50 rows</option>
+                      <option value={100}>Top 100 rows</option>
+                      <option value={1000}>All rows</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Column Selector checkboxes */}
+                <div className="space-y-2 flex-1 flex flex-col min-h-0">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 flex items-center gap-1">
+                      <Columns className="w-3.5 h-3.5" /> Target Columns ({selectedPrintColumns.length})
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPrintColumns(activeFile.headers)}
+                        className="text-[9px] font-extrabold text-blue-500 hover:underline cursor-pointer"
+                      >
+                        Select All
+                      </button>
+                      <span className="text-[9px] text-slate-600">|</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPrintColumns([activeFile.headers[0] || ''])}
+                        className="text-[9px] font-extrabold text-rose-500 hover:underline cursor-pointer"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className={`flex-1 overflow-y-auto p-2 rounded-xl border text-[11px] font-medium space-y-1.5 ${
+                    isDarkMode ? 'bg-slate-950/60 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    {activeFile.headers.map(header => {
+                      const isChecked = selectedPrintColumns.includes(header);
+                      return (
+                        <label
+                          key={header}
+                          className={`flex items-center gap-2 p-1.5 rounded-lg cursor-pointer transition-colors ${
+                            isChecked 
+                              ? isDarkMode ? 'bg-slate-800/40 text-slate-200' : 'bg-white text-slate-800 shadow-xs'
+                              : 'text-slate-400 hover:bg-slate-800/20'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {
+                              if (isChecked) {
+                                setSelectedPrintColumns(prev => prev.filter(h => h !== header));
+                              } else {
+                                setSelectedPrintColumns(prev => [...prev, header]);
+                              }
+                            }}
+                            className="rounded text-blue-500 focus:ring-blue-500 cursor-pointer"
+                          />
+                          <span className="font-mono truncate">{header}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Right Panel: Live Sheet Preview */}
+              <div className={`flex-1 p-6 overflow-y-auto flex flex-col gap-4 ${
+                isDarkMode ? 'bg-slate-950/40' : 'bg-slate-100/60'
+              }`}>
+                <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 block">Print Preview Sheet View</span>
+                
+                <div className={`p-6 rounded-2xl shadow-md border overflow-x-auto ${
+                  printTheme === 'minimalist' 
+                    ? 'bg-slate-950 border-slate-800 text-slate-300' 
+                    : printTheme === 'emerald'
+                      ? 'bg-emerald-500/5 border-emerald-500/20 text-slate-800 dark:text-slate-200'
+                      : 'bg-white border-slate-200 text-slate-800 shadow-xs'
+                }`}>
+                  
+                  {/* Document Title header block */}
+                  <div className={`border-b pb-4 mb-5 ${
+                    printTheme === 'emerald' ? 'border-emerald-500/30' : printTheme === 'minimalist' ? 'border-slate-800' : 'border-slate-200'
+                  }`}>
+                    <h4 className={`text-base font-extrabold ${printTheme === 'minimalist' ? 'text-white' : 'text-slate-950 dark:text-slate-100'}`}>{printTitle}</h4>
+                    <p className="text-[10px] text-slate-400 mt-1">Cleaned & Transformed Dataset Report</p>
+                    
+                    {/* Micro Metadata block */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-lg p-2.5 text-[9px]">
+                      <div>
+                        <span className="text-slate-400 block font-bold uppercase tracking-wider">FILE</span>
+                        <span className="font-bold truncate max-w-full block text-slate-600 dark:text-slate-300">{activeFile.name}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block font-bold uppercase tracking-wider">QUALITY INDEX</span>
+                        <span className="font-bold text-emerald-500">{activeFile.score}% Compliance</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block font-bold uppercase tracking-wider">RECORDS</span>
+                        <span className="font-bold text-slate-600 dark:text-slate-300">{Math.min(printLimit, currentRows.length)} Row(s)</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block font-bold uppercase tracking-wider">ORIENTATION</span>
+                        <span className="font-bold capitalize text-slate-600 dark:text-slate-300">{printOrientation}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Dynamic Table Preview */}
+                  <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800/80">
+                    <table className="w-full text-[10px] text-left border-collapse">
+                      <thead>
+                        <tr className={`border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40`}>
+                          <th className="p-2 font-bold text-slate-400 text-center w-10">Row</th>
+                          {selectedPrintColumns.map(h => (
+                            <th key={h} className="p-2 font-bold text-slate-500 dark:text-slate-400 font-mono">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-900">
+                        {currentRows
+                          .filter((_, rIdx) => {
+                            if (printRowsFilter === 'modified') {
+                              return selectedPrintColumns.some(col => isValueModified(rIdx, col, currentRows[rIdx][col]));
+                            }
+                            return true;
+                          })
+                          .slice(0, Math.min(10, printLimit)) // Limit preview to top 10 for render speed
+                          .map((row, rIdx) => (
+                            <tr key={rIdx}>
+                              <td className="p-2 text-center text-slate-400 font-bold bg-slate-50/50 dark:bg-slate-900/20">{rIdx + 2}</td>
+                              {selectedPrintColumns.map(col => {
+                                const val = row[col] || '';
+                                const isModified = isValueModified(rIdx, col, val);
+                                const isImputed = isModified && (val === 'Uncategorized' || val === '0.00');
+                                
+                                let cellBg = '';
+                                if (isImputed) {
+                                  cellBg = 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold';
+                                } else if (isModified) {
+                                  cellBg = 'bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold';
+                                }
+
+                                return (
+                                  <td key={col} className={`p-2 font-mono whitespace-nowrap ${cellBg}`}>
+                                    {val === '' ? <span className="text-rose-500 italic opacity-60">empty</span> : val}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        {currentRows.length > 10 && printLimit > 10 && (
+                          <tr>
+                            <td colSpan={selectedPrintColumns.length + 1} className="p-2 text-center text-[9px] text-slate-400 italic bg-slate-50/20">
+                              ... and {Math.min(printLimit, currentRows.length) - 10} more rows compiled for document output
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Legend Block */}
+                  <div className="flex gap-4 mt-4 text-[9px] text-slate-400 font-semibold justify-end">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded bg-amber-500/10 border border-amber-500/30"></span>
+                      <span>Modified Cell</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded bg-emerald-500/10 border border-emerald-500/30"></span>
+                      <span>Imputed / Restructured Cell</span>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+            </div>
+
+            {/* Modal Footer actions */}
+            <div className={`p-4 border-t flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 ${
+              isDarkMode ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-200'
+            }`}>
+              <div className="text-[10px] text-slate-400 text-center sm:text-left">
+                <span>💡 <strong>Sandbox Tip:</strong> If print blocks inside AI Studio preview, open the app in a new tab to download/print.</span>
+              </div>
+              <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+                <button
+                  type="button"
+                  onClick={() => setIsPrintModalOpen(false)}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    isDarkMode ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCompiledPrint}
+                  className={`px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-md flex items-center gap-1.5 hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer ${accentClass}`}
+                >
+                  <Printer className="w-4 h-4" />
+                  Compile & Print Report
+                </button>
+              </div>
+            </div>
+
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }
