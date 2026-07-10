@@ -13,7 +13,8 @@ import {
   ShieldAlert, 
   ArrowRight,
   RefreshCw,
-  Search
+  Search,
+  Download
 } from 'lucide-react';
 import { CSVFile, AuditIssue, Severity, IssueType } from '../types';
 
@@ -30,6 +31,7 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
   const [expandedIssue, setExpandedIssue] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState<string | null>(null);
   const [aiExplanations, setAiExplanations] = useState<Record<string, string>>({});
+  const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
 
   if (!activeFile) {
     return (
@@ -59,6 +61,93 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
   const criticalCount = activeFile.issues.filter(i => i.severity === 'critical' && i.status === 'open').length;
   const warningCount = activeFile.issues.filter(i => i.severity === 'warning' && i.status === 'open').length;
   const infoCount = activeFile.issues.filter(i => i.severity === 'info' && i.status === 'open').length;
+
+  const affectedRowNumbers = new Set<number>();
+  filteredIssues.forEach(issue => {
+    if (issue.row !== undefined) {
+      affectedRowNumbers.add(issue.row);
+    }
+  });
+  const affectedRowsCount = affectedRowNumbers.size;
+
+  const downloadBlob = (csvContent: string, defaultFileName: string) => {
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', defaultFileName);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportFullDataset = () => {
+    const rows = activeFile.cleanedRows || activeFile.rows;
+    const headersRow = activeFile.headers.map(h => `"${h.replace(/"/g, '""')}"`).join(',');
+    const rowsData = rows.map(row => {
+      return activeFile.headers.map(header => {
+        const val = row[header] !== undefined ? String(row[header]) : '';
+        return `"${val.replace(/"/g, '""')}"`;
+      }).join(',');
+    });
+    const csvContent = [headersRow, ...rowsData].join('\n');
+    const baseName = activeFile.name.replace(/\.csv$/i, '');
+    const suffix = activeFile.cleanedRows ? '_cleaned' : '_audited';
+    downloadBlob(csvContent, `${baseName}${suffix}.csv`);
+    setExportDropdownOpen(false);
+  };
+
+  const exportFilteredDataset = () => {
+    const rows = activeFile.cleanedRows || activeFile.rows;
+
+    const filteredRows = rows.filter((row, idx) => {
+      const humanRowIndex = idx + 2; // matches humanRowIndex (1-indexed, starting after headers)
+      return affectedRowNumbers.has(humanRowIndex);
+    });
+
+    const headersRow = activeFile.headers.map(h => `"${h.replace(/"/g, '""')}"`).join(',');
+    const rowsData = filteredRows.map(row => {
+      return activeFile.headers.map(header => {
+        const val = row[header] !== undefined ? String(row[header]) : '';
+        return `"${val.replace(/"/g, '""')}"`;
+      }).join(',');
+    });
+    const csvContent = [headersRow, ...rowsData].join('\n');
+    const baseName = activeFile.name.replace(/\.csv$/i, '');
+    
+    let suffix = '_filtered';
+    if (severityFilter !== 'all') suffix += `_${severityFilter}`;
+    if (typeFilter !== 'all') suffix += `_${typeFilter}`;
+
+    downloadBlob(csvContent, `${baseName}${suffix}.csv`);
+    setExportDropdownOpen(false);
+  };
+
+  const exportFindingsReport = () => {
+    const reportHeaders = ['Issue ID', 'Type', 'Column', 'Row', 'Value', 'Severity', 'Description', 'Suggestion', 'Status'];
+    const headersRow = reportHeaders.map(h => `"${h}"`).join(',');
+    
+    const rowsData = filteredIssues.map(issue => {
+      return [
+        issue.id,
+        issue.type,
+        issue.column,
+        issue.row ? String(issue.row) : '',
+        issue.value ? String(issue.value) : '',
+        issue.severity,
+        issue.description,
+        issue.suggestion,
+        issue.status
+      ].map(val => `"${val.replace(/"/g, '""')}"`).join(',');
+    });
+
+    const csvContent = [headersRow, ...rowsData].join('\n');
+    const baseName = activeFile.name.replace(/\.csv$/i, '');
+    downloadBlob(csvContent, `${baseName}_audit_findings.csv`);
+    setExportDropdownOpen(false);
+  };
 
   const getSeverityBadge = (severity: Severity) => {
     switch (severity) {
@@ -213,7 +302,7 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-5 mb-6 border-slate-800/80">
           <h3 className="font-bold text-base flex items-center gap-2"><Filter className="w-4 h-4 text-blue-500" /> Compliance Findings ({filteredIssues.length})</h3>
           
-          <div className="flex flex-wrap gap-2 text-xs">
+          <div className="flex flex-wrap gap-2 text-xs items-center">
             {/* Severity Filter */}
             <select 
               value={severityFilter} 
@@ -238,6 +327,109 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
               <option value="invalid_format">Formats</option>
               <option value="outlier">Outliers</option>
             </select>
+
+            {/* Export Dropdown Button */}
+            <div className="relative">
+              <button
+                type="button"
+                id="audit-results-export-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setExportDropdownOpen(!exportDropdownOpen);
+                }}
+                className={`px-3 py-1.5 rounded-lg border font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  isDarkMode 
+                    ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-900 hover:border-slate-700' 
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:shadow-xs'
+                }`}
+              >
+                <Download className="w-3.5 h-3.5 text-blue-500" />
+                <span>Export Data</span>
+                <ChevronDown className="w-3 h-3 ml-0.5 text-slate-500" />
+              </button>
+
+              {exportDropdownOpen && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-10 cursor-default" 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExportDropdownOpen(false);
+                    }}
+                  />
+                  <div className={`absolute right-0 mt-2 w-72 rounded-xl border shadow-2xl z-20 py-2 animate-fadeIn ${
+                    isDarkMode 
+                      ? 'bg-slate-950 border-slate-800 text-slate-200' 
+                      : 'bg-white border-slate-200 text-slate-800'
+                  }`}>
+                    <div className="px-3 py-1.5 border-b border-slate-800/40 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      Export Configurations
+                    </div>
+                    
+                    {/* Option 1: Full Cleaned/Audited CSV */}
+                    <button
+                      type="button"
+                      id="export-option-full"
+                      onClick={exportFullDataset}
+                      className={`w-full px-3 py-2 text-left transition-colors flex items-start gap-2.5 cursor-pointer ${
+                        isDarkMode ? 'hover:bg-slate-900' : 'hover:bg-slate-50'
+                      }`}
+                    >
+                      <FileSpreadsheet className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-bold text-xs block">Full Dataset ({activeFile.cleanedRows ? 'Cleaned' : 'Audited'})</span>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">
+                          Download all {activeFile.cleanedRows ? activeFile.cleanedRows.length : activeFile.rows.length} rows as a new CSV file.
+                        </span>
+                      </div>
+                    </button>
+
+                    {/* Option 2: Filtered Dataset */}
+                    <button
+                      type="button"
+                      id="export-option-filtered"
+                      onClick={exportFilteredDataset}
+                      disabled={severityFilter === 'all' && typeFilter === 'all'}
+                      className={`w-full px-3 py-2 text-left transition-colors flex items-start gap-2.5 cursor-pointer ${
+                        severityFilter === 'all' && typeFilter === 'all'
+                          ? 'opacity-40 cursor-not-allowed'
+                          : isDarkMode ? 'hover:bg-slate-900' : 'hover:bg-slate-50'
+                      }`}
+                    >
+                      <Filter className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-bold text-xs block">Filtered Rows Only</span>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">
+                          {severityFilter === 'all' && typeFilter === 'all'
+                            ? 'Select a severity or type filter to export subset.'
+                            : `Download only the ${affectedRowsCount} rows matching active filters.`}
+                        </span>
+                      </div>
+                    </button>
+
+                    <div className="border-t border-slate-800/40 my-1"></div>
+
+                    {/* Option 3: Audit Report */}
+                    <button
+                      type="button"
+                      id="export-option-report"
+                      onClick={exportFindingsReport}
+                      className={`w-full px-3 py-2 text-left transition-colors flex items-start gap-2.5 cursor-pointer ${
+                        isDarkMode ? 'hover:bg-slate-900' : 'hover:bg-slate-50'
+                      }`}
+                    >
+                      <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-bold text-xs block">Compliance Issues List</span>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">
+                          Download a spreadsheet of the {filteredIssues.length} found compliance issues.
+                        </span>
+                      </div>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 

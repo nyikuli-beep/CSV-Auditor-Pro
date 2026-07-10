@@ -1,4 +1,14 @@
+import { useMemo } from 'react';
 import { CSVFile, AuditActivity } from '../types';
+import { 
+  ResponsiveContainer, 
+  AreaChart, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip 
+} from 'recharts';
 import { 
   FileCheck, 
   ShieldAlert, 
@@ -24,6 +34,90 @@ interface DashboardHomeProps {
 }
 
 export default function DashboardHome({ files, activeFile, activities, onNavigate, isDarkMode, accentClass }: DashboardHomeProps) {
+  // Formulate data points for the last 30 days
+  const trendData = useMemo(() => {
+    // Base historical audits over last 30 days
+    const baseAudits = [
+      { name: 'marketing_leads_raw.csv', date: '06-12', score: 45, errors: 28 },
+      { name: 'ngo_donors_v1.csv', date: '06-16', score: 58, errors: 19 },
+      { name: 'payroll_temp_unclean.csv', date: '06-20', score: 72, errors: 11 },
+      { name: 'Company_Q2_Transactions_Messy.csv', date: '06-23', score: 68, errors: 12 },
+      { name: 'office_supplies_invent.csv', date: '06-28', score: 84, errors: 6 },
+      { name: 'billing_statement_q2.csv', date: '07-02', score: 91, errors: 4 },
+      { name: 'employee_roster_final.csv', date: '07-08', score: 97, errors: 1 },
+    ];
+
+    // Map any files that are currently uploaded and completed/failed
+    const userAudits = files
+      .filter(f => f.status === 'completed' || f.status === 'failed')
+      .map(f => {
+        let displayDate = '07-10';
+        try {
+          if (f.uploadedAt) {
+            const parts = f.uploadedAt.split(' ');
+            if (parts[0]) {
+              const dateParts = parts[0].split('-');
+              if (dateParts.length === 3) {
+                displayDate = `${dateParts[1]}-${dateParts[2]}`; // MM-DD
+              } else if (parts[0].includes('/')) {
+                const datePartsSlash = parts[0].split('/');
+                if (datePartsSlash.length === 3) {
+                  displayDate = `${datePartsSlash[1]}-${datePartsSlash[0]}`;
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.error(e);
+        }
+
+        return {
+          name: f.name,
+          date: displayDate,
+          score: f.status === 'failed' ? 0 : f.score,
+          errors: f.issues ? f.issues.filter(i => i.status === 'open').length : 0,
+          id: f.id
+        };
+      });
+
+    // Merge them: filter out base audits that have the same name as user uploaded files
+    const userFileNames = new Set(userAudits.map(u => u.name));
+    const cleanBaseAudits = baseAudits.filter(b => !userFileNames.has(b.name));
+
+    const combined = [...cleanBaseAudits, ...userAudits];
+
+    // Sort by date (MM-DD)
+    return combined.sort((a, b) => a.date.localeCompare(b.date));
+  }, [files]);
+
+  // Custom Tooltip for recharts
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className={`p-3 rounded-xl border shadow-xl text-xs leading-relaxed ${
+          isDarkMode 
+            ? 'bg-slate-950 border-slate-800 text-slate-100' 
+            : 'bg-white border-slate-200 text-slate-900'
+        }`}>
+          <p className="font-bold truncate max-w-[180px] mb-1 text-slate-400 text-[10px] uppercase tracking-wider">{data.name}</p>
+          <p className="font-mono text-[9px] text-slate-500 mb-2">Audit Date: {data.date}</p>
+          <div className="space-y-1">
+            <div className="flex justify-between items-center gap-4">
+              <span className="flex items-center gap-1 text-slate-400 font-medium"><span className="w-2 h-2 rounded-full bg-blue-500"></span>Hygiene Score:</span>
+              <span className="font-bold text-blue-500">{data.score}%</span>
+            </div>
+            <div className="flex justify-between items-center gap-4">
+              <span className="flex items-center gap-1 text-slate-400 font-medium"><span className="w-2 h-2 rounded-full bg-rose-500"></span>Anomalies:</span>
+              <span className="font-bold text-rose-500">{data.errors}</span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
   const totalAuditedFiles = files.length;
   const completedAudits = files.filter(f => f.status === 'completed').length;
   
@@ -128,58 +222,89 @@ export default function DashboardHome({ files, activeFile, activities, onNavigat
         {/* Analytics Box */}
         <div className={`lg:col-span-8 p-4 rounded-xl border flex flex-col justify-between ${isDarkMode ? 'bg-[#131b2e] border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
           <div>
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 mb-4">
               <div>
-                <h3 className={`font-bold text-sm ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Corporate Quality Scoring</h3>
-                <p className="text-xs text-slate-400 mt-0.5">Historical trend of sheet standards over the past 6 months.</p>
+                <h3 className={`font-bold text-sm ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>30-Day Audit Trend</h3>
+                <p className="text-xs text-slate-400 mt-0.5">Average data hygiene scores vs error trends per file audit.</p>
               </div>
-              <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'}`}>This Year</span>
+              
+              <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-wider">
+                <div className="flex items-center gap-1.5 text-blue-500">
+                  <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                  Score (%)
+                </div>
+                <div className="flex items-center gap-1.5 text-rose-500">
+                  <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                  Anomalies
+                </div>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'}`}>Last 30 Days</span>
+              </div>
             </div>
 
-            {/* Glowing Custom Area Chart SVG */}
-            <div className="h-52 relative w-full pr-4">
-              <svg viewBox="0 0 500 200" className="w-full h-full overflow-visible">
-                <defs>
-                  <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.25"/>
-                    <stop offset="100%" stopColor="#3B82F6" stopOpacity="0.0"/>
-                  </linearGradient>
-                </defs>
-                {/* Horizontal Grid lines */}
-                <line x1="0" y1="20" x2="500" y2="20" stroke={isDarkMode ? "#1e293b" : "#f1f5f9"} strokeWidth="1" />
-                <line x1="0" y1="70" x2="500" y2="70" stroke={isDarkMode ? "#1e293b" : "#f1f5f9"} strokeWidth="1" />
-                <line x1="0" y1="120" x2="500" y2="120" stroke={isDarkMode ? "#1e293b" : "#f1f5f9"} strokeWidth="1" />
-                <line x1="0" y1="170" x2="500" y2="170" stroke={isDarkMode ? "#1e293b" : "#f1f5f9"} strokeWidth="1" />
-
-                {/* Main Score Line Path */}
-                <path 
-                  d="M 10 160 C 100 130, 150 145, 200 90 C 250 60, 320 85, 400 45 L 490 35 L 490 200 L 10 200 Z" 
-                  fill="url(#areaGrad)" 
-                />
-                <path 
-                  d="M 10 160 C 100 130, 150 145, 200 90 C 250 60, 320 85, 400 45 L 490 35" 
-                  fill="none" 
-                  stroke="#3B82F6" 
-                  strokeWidth="3" 
-                  strokeLinecap="round"
-                />
-
-                {/* Glowing Highlight Dots */}
-                <circle cx="200" cy="90" r="5" fill="#3B82F6" stroke={isDarkMode ? "#131b2e" : "#ffffff"} strokeWidth="1.5" className="animate-pulse" />
-                <circle cx="490" cy="35" r="5" fill="#10B981" stroke={isDarkMode ? "#131b2e" : "#ffffff"} strokeWidth="1.5" />
-
-                {/* X Axis Labels */}
-                <text x="10" y="195" fill="#94a3b8" fontSize="9" fontFamily="monospace">JAN</text>
-                <text x="100" y="195" fill="#94a3b8" fontSize="9" fontFamily="monospace">FEB</text>
-                <text x="200" y="195" fill="#94a3b8" fontSize="9" fontFamily="monospace">MAR</text>
-                <text x="300" y="195" fill="#94a3b8" fontSize="9" fontFamily="monospace">APR</text>
-                <text x="400" y="195" fill="#94a3b8" fontSize="9" fontFamily="monospace">MAY</text>
-                <text x="470" y="195" fill="#94a3b8" fontSize="9" fontFamily="monospace">JUN</text>
-
-                {/* Y Axis Labels */}
-                <text x="475" y="15" fill="#10B981" fontSize="9" fontWeight="bold">98%</text>
-                <text x="185" y="75" fill="#3B82F6" fontSize="9" fontWeight="bold">75%</text>
-              </svg>
+            {/* Recharts Area and Line Dual Axis Chart */}
+            <div className="h-56 relative w-full mt-2 select-none">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={trendData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="scoreGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#3B82F6" stopOpacity={isDarkMode ? 0.25 : 0.15}/>
+                      <stop offset="100%" stopColor="#3B82F6" stopOpacity="0.0"/>
+                    </linearGradient>
+                    <linearGradient id="errorGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#F43F5E" stopOpacity={isDarkMode ? 0.1 : 0.05}/>
+                      <stop offset="100%" stopColor="#F43F5E" stopOpacity="0.0"/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid 
+                    strokeDasharray="3 3" 
+                    vertical={false} 
+                    stroke={isDarkMode ? "rgba(30, 41, 59, 0.5)" : "rgba(226, 232, 240, 0.8)"} 
+                  />
+                  <XAxis 
+                    dataKey="date" 
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fill: isDarkMode ? '#64748b' : '#94a3b8', fontSize: 10, fontFamily: 'monospace' }}
+                  />
+                  <YAxis 
+                    yAxisId="left"
+                    domain={[0, 100]}
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fill: isDarkMode ? '#64748b' : '#94a3b8', fontSize: 10, fontFamily: 'monospace' }}
+                  />
+                  <YAxis 
+                    yAxisId="right"
+                    orientation="right"
+                    domain={[0, 'auto']}
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fill: isDarkMode ? '#64748b' : '#94a3b8', fontSize: 10, fontFamily: 'monospace' }}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Area 
+                    yAxisId="left"
+                    type="monotone" 
+                    dataKey="score" 
+                    stroke="#3B82F6" 
+                    strokeWidth={2.5} 
+                    fillOpacity={1} 
+                    fill="url(#scoreGrad)" 
+                    name="Hygiene Score"
+                  />
+                  <Area 
+                    yAxisId="right"
+                    type="monotone" 
+                    dataKey="errors" 
+                    stroke="#F43F5E" 
+                    strokeWidth={1.5} 
+                    strokeDasharray="4 4"
+                    fillOpacity={1} 
+                    fill="url(#errorGrad)" 
+                    name="Anomalies Found"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
           </div>
           
