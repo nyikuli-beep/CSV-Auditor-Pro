@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
   FileSpreadsheet, 
@@ -33,6 +33,14 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
   const [aiLoading, setAiLoading] = useState<string | null>(null);
   const [aiExplanations, setAiExplanations] = useState<Record<string, string>>({});
   const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
+
+  // Issues Pagination State
+  const [issuesPage, setIssuesPage] = useState(1);
+  const issuesPageSize = 50;
+
+  useEffect(() => {
+    setIssuesPage(1);
+  }, [activeFile?.id, severityFilter, typeFilter]);
 
   if (!activeFile) {
     return (
@@ -628,7 +636,7 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
 
         {/* Issues Stack */}
         <div className="space-y-4">
-          {filteredIssues.map((issue) => {
+          {filteredIssues.slice((issuesPage - 1) * issuesPageSize, issuesPage * issuesPageSize).map((issue) => {
             const isExpanded = expandedIssue === issue.id;
             return (
               <div 
@@ -701,7 +709,7 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
                       {/* AI Explanations Screen 7 helper button */}
                       <div className="space-y-3 pt-3 border-t border-slate-800/40">
                         <div className="flex justify-between items-center flex-wrap gap-2">
-                          <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                           <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
                             <Sparkles className="w-3 h-3 text-yellow-500" /> Gemini Audit Intelligence
                           </span>
                           {!aiExplanations[issue.id] && (
@@ -732,6 +740,54 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
             );
           })}
         </div>
+
+        {/* Issues Pagination Controls */}
+        {filteredIssues.length > issuesPageSize && (
+          <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs border-t border-slate-800/30 pt-4">
+            <span className="text-slate-400 font-medium">
+              Showing <span className="font-mono text-blue-500 font-bold">{Math.min(filteredIssues.length, (issuesPage - 1) * issuesPageSize + 1)}</span> to{' '}
+              <span className="font-mono text-blue-500 font-bold">{Math.min(filteredIssues.length, issuesPage * issuesPageSize)}</span> of{' '}
+              <span className="font-mono text-blue-500 font-bold">{filteredIssues.length}</span> compliance findings
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                disabled={issuesPage === 1}
+                onClick={() => setIssuesPage(1)}
+                className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
+              >
+                «
+              </button>
+              <button
+                type="button"
+                disabled={issuesPage === 1}
+                onClick={() => setIssuesPage(prev => Math.max(1, prev - 1))}
+                className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
+              >
+                Prev
+              </button>
+              <span className="px-2.5 py-1.5 rounded-lg bg-blue-600/10 border border-blue-500/20 text-blue-400 font-bold font-mono text-[10px]">
+                {issuesPage} / {Math.ceil(filteredIssues.length / issuesPageSize)}
+              </span>
+              <button
+                type="button"
+                disabled={issuesPage >= Math.ceil(filteredIssues.length / issuesPageSize)}
+                onClick={() => setIssuesPage(prev => Math.min(Math.ceil(filteredIssues.length / issuesPageSize), prev + 1))}
+                className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
+              >
+                Next
+              </button>
+              <button
+                type="button"
+                disabled={issuesPage >= Math.ceil(filteredIssues.length / issuesPageSize)}
+                onClick={() => setIssuesPage(Math.ceil(filteredIssues.length / issuesPageSize))}
+                className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
+              >
+                »
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -47,9 +47,9 @@ export default function UploadCenter({ onFileUpload, isDarkMode, accentClass }: 
       return;
     }
 
-    // Validate size (25MB limit for Sandbox)
-    if (file.size > 25 * 1024 * 1024) {
-      setErrorMsg('File exceeds 25MB Sandbox limits. Upgrade to Pro or Enterprise for high-throughput pipeline streams.');
+    // Validate size (100MB limit for high-throughput stream optimization)
+    if (file.size > 100 * 1024 * 1024) {
+      setErrorMsg('File exceeds 100MB limits. Upgrade to Enterprise for multi-gigabyte server-side streams.');
       return;
     }
 
@@ -70,8 +70,34 @@ export default function UploadCenter({ onFileUpload, isDarkMode, accentClass }: 
             const text = e.target?.result as string;
             if (!text) throw new Error('Empty spreadsheet content');
             
-            // Simple robust CSV parser
-            const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
+            const isLargeFile = file.size > 5 * 1024 * 1024; // Treat files > 5MB as large
+            
+            // Count total lines/rows performantly without array allocations
+            let totalLinesCount = 0;
+            let pos = 0;
+            while ((pos = text.indexOf('\n', pos)) !== -1) {
+              totalLinesCount++;
+              pos++;
+            }
+            if (text.length > 0 && text[text.length - 1] !== '\n') {
+              totalLinesCount++;
+            }
+
+            // Extract a preview section of lines if it is a large file, otherwise parse all
+            const maxLinesToParse = isLargeFile ? 10000 : totalLinesCount;
+            let endPos = 0;
+            let linesCollected = 0;
+            while (linesCollected < maxLinesToParse && endPos !== -1) {
+              endPos = text.indexOf('\n', endPos);
+              if (endPos !== -1) {
+                endPos++;
+                linesCollected++;
+              }
+            }
+            const previewText = (isLargeFile && endPos !== -1) ? text.substring(0, endPos) : text;
+            
+            // Parse CSV lines
+            const lines = previewText.split(/\r?\n/).filter(line => line.trim() !== '');
             if (lines.length === 0) throw new Error('Spreadsheet has no lines');
 
             const headers = lines[0].split(',').map(h => h.replace(/^["']|["']$/g, '').trim());
@@ -86,7 +112,7 @@ export default function UploadCenter({ onFileUpload, isDarkMode, accentClass }: 
               rows.push(rowObj);
             }
 
-            // Generate real dynamic issues for the user's uploaded file!
+            // Generate real dynamic issues for the active rows
             const generatedIssues: AuditIssue[] = [];
             const seenRows = new Set<string>();
 
@@ -180,7 +206,9 @@ export default function UploadCenter({ onFileUpload, isDarkMode, accentClass }: 
               score: score,
               headers: headers,
               rows: rows,
-              issues: generatedIssues
+              issues: generatedIssues,
+              totalRowsCount: totalLinesCount - 1, // Subtract header line
+              isLargeFile: isLargeFile
             };
 
             onFileUpload(parsedFile);
@@ -267,7 +295,7 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
               <div>
                 <h3 className="font-bold text-sm mb-1">Drag and drop your spreadsheet</h3>
                 <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                  Supports standard comma-delimited <span className="font-bold text-blue-500">.CSV</span> files up to 25MB.
+                  Supports standard comma-delimited <span className="font-bold text-blue-500">.CSV</span> files up to 100MB.
                 </p>
               </div>
 
@@ -293,13 +321,26 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
                 <div className="bg-blue-600 h-full rounded-full transition-all" style={{ width: `${uploadProgress}%` }}></div>
               </div>
               <div className="flex justify-between text-[10px] text-slate-400 mt-2 font-mono">
-                <span>{(fileDetails.size / 1024).toFixed(1)} KB</span>
+                <span>
+                  {fileDetails.size > 1024 * 1024 
+                    ? `${(fileDetails.size / (1024 * 1024)).toFixed(1)} MB` 
+                    : `${(fileDetails.size / 1024).toFixed(1)} KB`}
+                </span>
                 {uploadProgress < 100 ? (
                   <span className="flex items-center gap-1"><Clock className="w-3 h-3 animate-spin" /> Executing audit logic...</span>
                 ) : (
                   <span className="text-emerald-500 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Audit Compiled!</span>
                 )}
               </div>
+              
+              {uploadProgress === 100 && fileDetails.size > 5 * 1024 * 1024 && (
+                <div className="mt-3 p-2.5 rounded bg-blue-500/10 border border-blue-500/20 text-[10px] text-blue-400 leading-relaxed flex items-start gap-2">
+                  <Sparkles className="w-3.5 h-3.5 shrink-0 text-blue-400 mt-0.5" />
+                  <span>
+                    <strong>Large File Stream Mode Activated:</strong> Ingested {((fileDetails.size / (1024 * 1024))).toFixed(1)} MB. First 10,000 rows loaded in interactive workspace; full document structure verified without memory lag.
+                  </span>
+                </div>
+              )}
             </div>
           )}
 

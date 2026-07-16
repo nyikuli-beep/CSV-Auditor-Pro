@@ -39,6 +39,10 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
   const [historyIndex, setHistoryIndex] = useState(0);
   const [appliedSteps, setAppliedSteps] = useState<string[]>([]);
 
+  // Pagination State for Large Datasets
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 100;
+
   // Conditional Column Splitter State
   const [isSplitterOpen, setIsSplitterOpen] = useState(false);
   const [splitColumn, setSplitColumn] = useState('');
@@ -77,6 +81,7 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
       setAppliedSteps([]);
       setSelectedPrintColumns(activeFile.headers);
       setPrintTitle(`CSV Auditor Report: ${activeFile.name}`);
+      setCurrentPage(1);
     }
   }, [activeFile?.id]);
 
@@ -1182,7 +1187,8 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
-                  {currentRows.map((row, rIdx) => {
+                  {currentRows.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((row, relativeIdx) => {
+                    const rIdx = (currentPage - 1) * pageSize + relativeIdx;
                     // Check if entire row was deduplicated/matches a duplicate row
                     const isDup = activeFile.issues.some(i => i.type === 'duplicate' && i.row === rIdx + 2);
                     
@@ -1195,7 +1201,7 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
                         {currentHeaders.map((col) => {
                           const val = row[col] || '';
                           const isModified = isValueModified(rIdx, col, val);
-                          const isFilledVal = isModified && val === 'Uncategorized' || val === '0.00';
+                          const isFilledVal = isModified && (val === 'Uncategorized' || val === '0.00');
 
                           return (
                             <td 
@@ -1212,6 +1218,60 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination Controls */}
+            {currentRows.length > pageSize && (
+              <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs border-t border-slate-800/30 pt-4">
+                <span className="text-slate-400 font-medium">
+                  Showing <span className="font-mono text-blue-500 font-bold">{Math.min(currentRows.length, (currentPage - 1) * pageSize + 1)}</span> to{' '}
+                  <span className="font-mono text-blue-500 font-bold">{Math.min(currentRows.length, currentPage * pageSize)}</span> of{' '}
+                  <span className="font-mono text-blue-500 font-bold">{currentRows.length}</span> records
+                  {activeFile.totalRowsCount && activeFile.totalRowsCount > activeFile.rows.length && (
+                    <span className="text-[10px] text-amber-500 block sm:inline sm:ml-2 font-mono">
+                      (Loaded active chunk; total {activeFile.totalRowsCount} rows)
+                    </span>
+                  )}
+                </span>
+                
+                <div className="flex flex-wrap items-center gap-1">
+                  <button
+                    type="button"
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage(1)}
+                    className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
+                  >
+                    « First
+                  </button>
+                  <button
+                    type="button"
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
+                  >
+                    ‹ Prev
+                  </button>
+                  <span className="px-2.5 py-1.5 rounded-lg bg-blue-600/10 border border-blue-500/20 text-blue-400 font-bold font-mono text-[10px]">
+                    {currentPage} / {Math.ceil(currentRows.length / pageSize)}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={currentPage >= Math.ceil(currentRows.length / pageSize)}
+                    onClick={() => setCurrentPage(prev => Math.min(Math.ceil(currentRows.length / pageSize), prev + 1))}
+                    className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
+                  >
+                    Next ›
+                  </button>
+                  <button
+                    type="button"
+                    disabled={currentPage >= Math.ceil(currentRows.length / pageSize)}
+                    onClick={() => setCurrentPage(Math.ceil(currentRows.length / pageSize))}
+                    className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
+                  >
+                    Last »
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Action guide */}
             <div className="mt-4 flex justify-between items-center text-xs text-slate-400">

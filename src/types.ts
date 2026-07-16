@@ -26,6 +26,8 @@ export interface CSVFile {
   issues: AuditIssue[];
   cleanedRows?: Record<string, string>[];
   ownerId?: string;
+  totalRowsCount?: number;
+  isLargeFile?: boolean;
 }
 
 export interface TeamMember {

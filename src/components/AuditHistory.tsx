@@ -153,7 +153,11 @@ export default function AuditHistory({ files, onSelectFile, onNavigate, isDarkMo
                     <span>{file.name}</span>
                   </td>
                   <td className="p-4 text-slate-400 font-mono text-[10px]">{file.uploadedAt}</td>
-                  <td className="p-4 text-slate-400 font-mono text-[10px]">{(file.size / 1024).toFixed(1)} KB</td>
+                  <td className="p-4 text-slate-400 font-mono text-[10px]">
+                    {file.size > 1024 * 1024 
+                      ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 
+                      : `${(file.size / 1024).toFixed(1)} KB`}
+                  </td>
                   <td className="p-4">
                     {file.status === 'completed' ? (
                       <div className="flex items-center gap-2">

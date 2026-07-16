@@ -340,7 +340,11 @@ export default function DashboardHome({ files, activeFile, activities, onNavigat
                     )}
                   </div>
                   <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono">
-                    <span>{(file.size / 1024).toFixed(1)} KB</span>
+                    <span>
+                      {file.size > 1024 * 1024 
+                        ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 
+                        : `${(file.size / 1024).toFixed(1)} KB`}
+                    </span>
                     <span>{file.uploadedAt.split(' ')[0]}</span>
                   </div>
                 </div>
