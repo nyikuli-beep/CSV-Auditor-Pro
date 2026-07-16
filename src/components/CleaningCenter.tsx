@@ -35,8 +35,29 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
   
   // History state for Undo/Redo
   const [history, setHistory] = useState<Record<string, string>[][]>(activeFile ? [activeFile.rows] : []);
+  const [headersHistory, setHeadersHistory] = useState<string[][]>(activeFile ? [activeFile.headers] : []);
   const [historyIndex, setHistoryIndex] = useState(0);
   const [appliedSteps, setAppliedSteps] = useState<string[]>([]);
+
+  // Conditional Column Splitter State
+  const [isSplitterOpen, setIsSplitterOpen] = useState(false);
+  const [splitColumn, setSplitColumn] = useState('');
+  const [splitDelimiter, setSplitDelimiter] = useState('space');
+  const [customDelimiter, setCustomDelimiter] = useState('');
+  const [splitCondition, setSplitCondition] = useState('always');
+  const [splitColNames, setSplitColNames] = useState('');
+
+  // Smart Validation Engine State
+  const [isValidationOpen, setIsValidationOpen] = useState(false);
+  const [validateColumn, setValidateColumn] = useState('');
+  const [validationRule, setValidationRule] = useState('email');
+  const [minVal, setMinVal] = useState('');
+  const [maxVal, setMaxVal] = useState('');
+  const [minLen, setMinLen] = useState('');
+  const [maxLen, setMaxLen] = useState('');
+  const [customSubstring, setCustomSubstring] = useState('');
+  const [validationFailAction, setValidationFailAction] = useState('flag');
+  const [validationFallback, setValidationFallback] = useState('');
 
   // Print Modal Configuration State
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
@@ -47,12 +68,17 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
   const [selectedPrintColumns, setSelectedPrintColumns] = useState<string[]>(activeFile ? activeFile.headers : []);
   const [printLimit, setPrintLimit] = useState<number>(50);
 
+  // Sync state and clean history upon activating a different file
   useEffect(() => {
     if (activeFile) {
+      setHistory([activeFile.rows]);
+      setHeadersHistory([activeFile.headers]);
+      setHistoryIndex(0);
+      setAppliedSteps([]);
       setSelectedPrintColumns(activeFile.headers);
       setPrintTitle(`CSV Auditor Report: ${activeFile.name}`);
     }
-  }, [activeFile]);
+  }, [activeFile?.id]);
 
   if (!activeFile) {
     return (
@@ -73,11 +99,18 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
   }
 
   const currentRows = history[historyIndex] || activeFile.rows;
+  const currentHeaders = headersHistory[historyIndex] || activeFile.headers;
 
-  const pushState = (newRows: Record<string, string>[], stepLabel: string) => {
+  const pushState = (newRows: Record<string, string>[], stepLabel: string, newHeaders?: string[]) => {
+    const nextHeaders = newHeaders || currentHeaders;
     const newHistory = history.slice(0, historyIndex + 1);
     newHistory.push(newRows);
     setHistory(newHistory);
+
+    const newHeadersHistory = headersHistory.slice(0, historyIndex + 1);
+    newHeadersHistory.push(nextHeaders);
+    setHeadersHistory(newHeadersHistory);
+
     setHistoryIndex(newHistory.length - 1);
     setAppliedSteps(prev => [...prev.slice(0, historyIndex), stepLabel]);
 
@@ -85,26 +118,33 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
     onUpdateFile({
       ...activeFile,
       cleanedRows: newRows,
+      headers: nextHeaders,
       score: Math.min(100, activeFile.score + 5) // Boost score upon cleaning
     });
   };
 
   const handleUndo = () => {
     if (historyIndex > 0) {
+      const prevRows = history[historyIndex - 1];
+      const prevHeaders = headersHistory[historyIndex - 1];
       setHistoryIndex(prev => prev - 1);
       onUpdateFile({
         ...activeFile,
-        cleanedRows: history[historyIndex - 1]
+        cleanedRows: prevRows,
+        headers: prevHeaders
       });
     }
   };
 
   const handleRedo = () => {
     if (historyIndex < history.length - 1) {
+      const nextRows = history[historyIndex + 1];
+      const nextHeaders = headersHistory[historyIndex + 1];
       setHistoryIndex(prev => prev + 1);
       onUpdateFile({
         ...activeFile,
-        cleanedRows: history[historyIndex + 1]
+        cleanedRows: nextRows,
+        headers: nextHeaders
       });
     }
   };
@@ -178,6 +218,197 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
     pushState(cleaned, "Standardized capitalization on columns (Sentence/Upper Case).");
   };
 
+  const runColumnSplitter = () => {
+    if (!splitColumn) return;
+    
+    // Determine delimiter character
+    let delim = ' ';
+    if (splitDelimiter === 'comma') delim = ',';
+    else if (splitDelimiter === 'dash') delim = '-';
+    else if (splitDelimiter === 'slash') delim = '/';
+    else if (splitDelimiter === 'semicolon') delim = ';';
+    else if (splitDelimiter === 'custom') delim = customDelimiter || ' ';
+
+    // Generate new column headers.
+    // Let's inspect the data to find the maximum number of parts split.
+    let maxParts = 2;
+    currentRows.forEach(row => {
+      const val = row[splitColumn] || '';
+      const parts = val.split(delim);
+      if (parts.length > maxParts) {
+        maxParts = parts.length;
+      }
+    });
+
+    // Custom column names
+    let newHeadersList: string[] = [];
+    if (splitColNames.trim()) {
+      newHeadersList = splitColNames.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    
+    // Ensure we have names for all parts up to maxParts
+    const finalNewHeaders: string[] = [];
+    for (let i = 0; i < maxParts; i++) {
+      if (newHeadersList[i]) {
+        finalNewHeaders.push(newHeadersList[i]);
+      } else {
+        finalNewHeaders.push(`${splitColumn}_part${i + 1}`);
+      }
+    }
+
+    // Now split the rows
+    const cleaned = currentRows.map(row => {
+      const updated = { ...row };
+      const val = row[splitColumn] || '';
+      
+      // Check condition
+      let shouldSplit = true;
+      if (splitCondition === 'contains') {
+        shouldSplit = val.includes(delim);
+      }
+
+      if (shouldSplit) {
+        const parts = val.split(delim);
+        finalNewHeaders.forEach((newCol, index) => {
+          updated[newCol] = parts[index] !== undefined ? parts[index].trim() : '';
+        });
+      } else {
+        // If condition not met, populate the first part with original, others empty
+        finalNewHeaders.forEach((newCol, index) => {
+          updated[newCol] = index === 0 ? val : '';
+        });
+      }
+      return updated;
+    });
+
+    // Add new headers to headers array, right after the original splitColumn, or at the end
+    const colIndex = currentHeaders.indexOf(splitColumn);
+    const updatedHeaders = [...currentHeaders];
+    if (colIndex !== -1) {
+      updatedHeaders.splice(colIndex + 1, 0, ...finalNewHeaders);
+    } else {
+      updatedHeaders.push(...finalNewHeaders);
+    }
+
+    pushState(
+      cleaned,
+      `Split column "${splitColumn}" by "${splitDelimiter === 'custom' ? customDelimiter : splitDelimiter}" into: ${finalNewHeaders.join(', ')}.`,
+      updatedHeaders
+    );
+
+    // Auto-select new split columns in print modal
+    setSelectedPrintColumns(prev => [...prev, ...finalNewHeaders]);
+
+    // Reset fields
+    setSplitColNames('');
+  };
+
+  const runValidationRule = () => {
+    if (!validateColumn) return;
+
+    let flagCount = 0;
+    let coerceCount = 0;
+    const newIssues: AuditIssue[] = [...activeFile.issues];
+
+    const cleaned = currentRows.map((row, index) => {
+      const updated = { ...row };
+      const val = (row[validateColumn] || '').trim();
+      let isValid = true;
+      let failureMsg = '';
+
+      if (validationRule === 'email') {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        isValid = emailRegex.test(val);
+        failureMsg = `Invalid email formatting: "${val}"`;
+      } else if (validationRule === 'numeric') {
+        const num = Number(val);
+        const isNum = !isNaN(num) && val !== '';
+        let minCheck = true;
+        let maxCheck = true;
+        if (minVal !== '') {
+          minCheck = isNum && num >= Number(minVal);
+        }
+        if (maxVal !== '') {
+          maxCheck = isNum && num <= Number(maxVal);
+        }
+        isValid = isNum && minCheck && maxCheck;
+        failureMsg = `Value "${val}" is not in numeric range [${minVal || '-∞'}, ${maxVal || '+∞'}]`;
+      } else if (validationRule === 'length') {
+        const len = val.length;
+        let minCheck = true;
+        let maxCheck = true;
+        if (minLen !== '') {
+          minCheck = len >= Number(minLen);
+        }
+        if (maxLen !== '') {
+          maxCheck = len <= Number(maxLen);
+        }
+        isValid = minCheck && maxCheck;
+        failureMsg = `Value length (${len}) violates bounds [${minLen || '0'}, ${maxLen || '∞'}]`;
+      } else if (validationRule === 'required') {
+        isValid = val !== '';
+        failureMsg = `Required field is empty`;
+      } else if (validationRule === 'substring') {
+        isValid = val.toLowerCase().includes(customSubstring.toLowerCase());
+        failureMsg = `Value "${val}" does not contain substring "${customSubstring}"`;
+      }
+
+      if (!isValid) {
+        if (validationFailAction === 'flag') {
+          flagCount++;
+          // Add a new issue to the file's issue logs
+          const issueId = `validation-${validateColumn}-${index}-${Date.now()}`;
+          const issue: AuditIssue = {
+            id: issueId,
+            type: 'invalid_format',
+            column: validateColumn,
+            row: index + 2,
+            value: val,
+            severity: 'warning',
+            description: `${failureMsg} on row ${index + 2}.`,
+            suggestion: `Double check entry or apply automated coercion fallbacks.`,
+            status: 'open'
+          };
+          newIssues.push(issue);
+        } else if (validationFailAction === 'nullify') {
+          coerceCount++;
+          updated[validateColumn] = '';
+        } else if (validationFailAction === 'fallback') {
+          coerceCount++;
+          updated[validateColumn] = validationFallback;
+        }
+      }
+
+      return updated;
+    });
+
+    let message = '';
+    if (validationFailAction === 'flag') {
+      message = `Validated column "${validateColumn}": Flagged ${flagCount} record(s) violating the "${validationRule}" rule.`;
+    } else {
+      message = `Validated column "${validateColumn}": Cleansed ${coerceCount} record(s) violating the "${validationRule}" rule (Action: ${validationFailAction}).`;
+    }
+
+    // Update both history (rows) and activeFile issues
+    const newHistory = history.slice(0, historyIndex + 1);
+    newHistory.push(cleaned);
+    setHistory(newHistory);
+
+    const newHeadersHistory = headersHistory.slice(0, historyIndex + 1);
+    newHeadersHistory.push(currentHeaders);
+    setHeadersHistory(newHeadersHistory);
+
+    setHistoryIndex(newHistory.length - 1);
+    setAppliedSteps(prev => [...prev.slice(0, historyIndex), message]);
+
+    onUpdateFile({
+      ...activeFile,
+      cleanedRows: cleaned,
+      issues: newIssues,
+      score: Math.max(0, Math.min(100, activeFile.score + (coerceCount > 0 ? 8 : -2))) // Adjust score
+    });
+  };
+
   // Helper to check if a row value differs from original raw row (to highlight changes in preview)
   const isValueModified = (rowIndex: number, column: string, val: string) => {
     const originalRow = activeFile.rows[rowIndex];
@@ -189,14 +420,14 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
     if (!activeFile) return;
 
     // Convert headers to CSV row
-    const headersRow = activeFile.headers.map(h => {
+    const headersRow = currentHeaders.map(h => {
       const escaped = h.replace(/"/g, '""');
       return `"${escaped}"`;
     }).join(',');
 
     // Convert each row in currentRows to a CSV row
     const rowsData = currentRows.map(row => {
-      return activeFile.headers.map(header => {
+      return currentHeaders.map(header => {
         const value = row[header] !== undefined ? String(row[header]) : '';
         const escaped = value.replace(/"/g, '""');
         return `"${escaped}"`;
@@ -573,6 +804,310 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
                   <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Enforce uniform casing matching Sentence Case or uppercase country codes.</p>
                 </div>
               </button>
+
+              {/* Conditional Column Splitter Accordion */}
+              <div className={`rounded-xl border transition-all ${
+                isSplitterOpen 
+                  ? 'border-blue-500/40 bg-blue-500/5 shadow-xs' 
+                  : 'hover:bg-blue-500/5 hover:border-blue-500/30 border-slate-800/80 bg-slate-950/60'
+              }`}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSplitterOpen(!isSplitterOpen);
+                    setIsValidationOpen(false);
+                  }}
+                  disabled={isViewer}
+                  className="w-full p-4 text-left flex gap-3.5 items-start cursor-pointer group disabled:opacity-50"
+                >
+                  <div className="p-2 bg-blue-500/10 text-blue-500 rounded-lg group-hover:bg-blue-500/20">
+                    <Columns className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center">
+                      <h4 className="font-bold text-xs">Conditional Column Splitter</h4>
+                      <ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isSplitterOpen ? 'rotate-90 text-blue-400' : ''}`} />
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Divide a column into multiple sub-columns using delimiter rules conditionally.</p>
+                  </div>
+                </button>
+
+                {isSplitterOpen && (
+                  <div className={`p-4 border-t px-5 space-y-4 text-xs ${isDarkMode ? 'border-slate-800/80 text-slate-200' : 'border-slate-150 text-slate-700'}`}>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Target Column</label>
+                      <select
+                        value={splitColumn}
+                        onChange={(e) => setSplitColumn(e.target.value)}
+                        className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                          isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                        }`}
+                      >
+                        <option value="">-- Select Column --</option>
+                        {currentHeaders.map(h => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Split Delimiter</label>
+                        <select
+                          value={splitDelimiter}
+                          onChange={(e) => setSplitDelimiter(e.target.value)}
+                          className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                            isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                          }`}
+                        >
+                          <option value="space">Space (" ")</option>
+                          <option value="comma">Comma (",")</option>
+                          <option value="dash">Dash ("-")</option>
+                          <option value="slash">Slash ("/")</option>
+                          <option value="semicolon">Semicolon (";")</option>
+                          <option value="custom">Custom Text...</option>
+                        </select>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Condition</label>
+                        <select
+                          value={splitCondition}
+                          onChange={(e) => setSplitCondition(e.target.value)}
+                          className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                            isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                          }`}
+                        >
+                          <option value="always">Always Split</option>
+                          <option value="contains">If Delimiter Exists</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {splitDelimiter === 'custom' && (
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Custom Delimiter Character(s)</label>
+                        <input
+                          type="text"
+                          value={customDelimiter}
+                          onChange={(e) => setCustomDelimiter(e.target.value)}
+                          placeholder="e.g. @@ or |"
+                          className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                            isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                          }`}
+                        />
+                      </div>
+                    )}
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">New Column Names (Comma separated)</label>
+                      <input
+                        type="text"
+                        value={splitColNames}
+                        onChange={(e) => setSplitColNames(e.target.value)}
+                        placeholder="e.g. First Name, Last Name (Optional)"
+                        className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                          isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                        }`}
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={runColumnSplitter}
+                      disabled={!splitColumn}
+                      className={`w-full py-2 rounded-lg text-xs font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-1 shadow-md ${accentClass} disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                      <Sparkles className="w-3.5 h-3.5" /> Execute Column Split
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Column Validation Engine Accordion */}
+              <div className={`rounded-xl border transition-all ${
+                isValidationOpen 
+                  ? 'border-emerald-500/40 bg-emerald-500/5 shadow-xs' 
+                  : 'hover:bg-emerald-500/5 hover:border-emerald-500/30 border-slate-800/80 bg-slate-950/60'
+              }`}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsValidationOpen(!isValidationOpen);
+                    setIsSplitterOpen(false);
+                  }}
+                  disabled={isViewer}
+                  className="w-full p-4 text-left flex gap-3.5 items-start cursor-pointer group disabled:opacity-50"
+                >
+                  <div className="p-2 bg-emerald-500/10 text-emerald-500 rounded-lg group-hover:bg-emerald-500/20">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center">
+                      <h4 className="font-bold text-xs">Smart Validation Engine</h4>
+                      <ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isValidationOpen ? 'rotate-90 text-emerald-400' : ''}`} />
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Establish field assertions, flag formatting violations, or auto-coerce raw anomalies.</p>
+                  </div>
+                </button>
+
+                {isValidationOpen && (
+                  <div className={`p-4 border-t px-5 space-y-4 text-xs ${isDarkMode ? 'border-slate-800/80 text-slate-200' : 'border-slate-150 text-slate-700'}`}>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Target Column</label>
+                      <select
+                        value={validateColumn}
+                        onChange={(e) => setValidateColumn(e.target.value)}
+                        className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                          isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                        }`}
+                      >
+                        <option value="">-- Select Column --</option>
+                        {currentHeaders.map(h => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Validation Rule Assertion</label>
+                      <select
+                        value={validationRule}
+                        onChange={(e) => setValidationRule(e.target.value)}
+                        className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                          isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                        }`}
+                      >
+                        <option value="email">Valid Email Format</option>
+                        <option value="numeric">Numeric Range Constraint</option>
+                        <option value="length">Text Length Boundaries</option>
+                        <option value="required">Non-Empty (Required Field)</option>
+                        <option value="substring">Must Contain Substring</option>
+                      </select>
+                    </div>
+
+                    {validationRule === 'numeric' && (
+                      <div className="grid grid-cols-2 gap-3 animate-slideDown">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-slate-400 block">Min Value</label>
+                          <input
+                            type="number"
+                            value={minVal}
+                            onChange={(e) => setMinVal(e.target.value)}
+                            placeholder="-Infinity"
+                            className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                              isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                            }`}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-slate-400 block">Max Value</label>
+                          <input
+                            type="number"
+                            value={maxVal}
+                            onChange={(e) => setMaxVal(e.target.value)}
+                            placeholder="Infinity"
+                            className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                              isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                            }`}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {validationRule === 'length' && (
+                      <div className="grid grid-cols-2 gap-3 animate-slideDown">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-slate-400 block">Min Characters</label>
+                          <input
+                            type="number"
+                            value={minLen}
+                            onChange={(e) => setMinLen(e.target.value)}
+                            placeholder="0"
+                            className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                              isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                            }`}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-slate-400 block">Max Characters</label>
+                          <input
+                            type="number"
+                            value={maxLen}
+                            onChange={(e) => setMaxLen(e.target.value)}
+                            placeholder="Infinity"
+                            className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                              isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                            }`}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {validationRule === 'substring' && (
+                      <div className="space-y-1.5 animate-slideDown">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Substring Search Value</label>
+                        <input
+                          type="text"
+                          value={customSubstring}
+                          onChange={(e) => setCustomSubstring(e.target.value)}
+                          placeholder="e.g. USD, invoice, @company.com"
+                          className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                            isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                          }`}
+                        />
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">If Assertion Fails</label>
+                        <select
+                          value={validationFailAction}
+                          onChange={(e) => setValidationFailAction(e.target.value)}
+                          className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                            isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                          }`}
+                        >
+                          <option value="flag">Flag Issue & Report</option>
+                          <option value="nullify">Nullify/Clear Value</option>
+                          <option value="fallback">Replace with Fallback</option>
+                        </select>
+                      </div>
+
+                      {validationFailAction === 'fallback' ? (
+                        <div className="space-y-1.5 animate-slideDown">
+                          <label className="text-[10px] font-bold text-slate-400 block">Fallback Value</label>
+                          <input
+                            type="text"
+                            value={validationFallback}
+                            onChange={(e) => setValidationFallback(e.target.value)}
+                            placeholder="e.g. N/A or 0.00"
+                            className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                              isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                            }`}
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex items-end justify-center pb-1">
+                          <span className="text-[10px] text-slate-400 leading-relaxed font-mono italic">
+                            {validationFailAction === 'flag' ? 'Raises audit logs' : 'Clears messy cell'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={runValidationRule}
+                      disabled={!validateColumn}
+                      className={`w-full py-2 rounded-lg text-xs font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-1 shadow-md ${accentClass} disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Execute Validation Audit
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -641,7 +1176,7 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
                 <thead>
                   <tr className={`border-b ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
                     <th className="p-3.5 font-bold font-mono">Row</th>
-                    {activeFile.headers.map((header) => (
+                    {currentHeaders.map((header) => (
                       <th key={header} className="p-3.5 font-bold">{header}</th>
                     ))}
                   </tr>
@@ -657,7 +1192,7 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
                         className={`transition-colors hover:bg-slate-800/10 ${isDup ? 'opacity-70 border-l-2 border-rose-500 bg-rose-500/5' : ''}`}
                       >
                         <td className="p-3 text-slate-500">{rIdx + 2}</td>
-                        {activeFile.headers.map((col) => {
+                        {currentHeaders.map((col) => {
                           const val = row[col] || '';
                           const isModified = isValueModified(rIdx, col, val);
                           const isFilledVal = isModified && val === 'Uncategorized' || val === '0.00';
@@ -819,7 +1354,7 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
                     <div className="flex gap-2">
                       <button
                         type="button"
-                        onClick={() => setSelectedPrintColumns(activeFile.headers)}
+                        onClick={() => setSelectedPrintColumns(currentHeaders)}
                         className="text-[9px] font-extrabold text-blue-500 hover:underline cursor-pointer"
                       >
                         Select All
@@ -827,7 +1362,7 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
                       <span className="text-[9px] text-slate-600">|</span>
                       <button
                         type="button"
-                        onClick={() => setSelectedPrintColumns([activeFile.headers[0] || ''])}
+                        onClick={() => setSelectedPrintColumns([currentHeaders[0] || ''])}
                         className="text-[9px] font-extrabold text-rose-500 hover:underline cursor-pointer"
                       >
                         Clear
@@ -838,7 +1373,7 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
                   <div className={`flex-1 overflow-y-auto p-2 rounded-xl border text-[11px] font-medium space-y-1.5 ${
                     isDarkMode ? 'bg-slate-950/60 border-slate-800/80' : 'bg-slate-50 border-slate-200'
                   }`}>
-                    {activeFile.headers.map(header => {
+                    {currentHeaders.map(header => {
                       const isChecked = selectedPrintColumns.includes(header);
                       return (
                         <label
