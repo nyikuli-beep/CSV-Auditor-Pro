@@ -14,7 +14,11 @@ import {
   ArrowRight,
   RefreshCw,
   Search,
-  Download
+  Download,
+  BrainCircuit,
+  Sliders,
+  Activity,
+  HelpCircle
 } from 'lucide-react';
 import { CSVFile, AuditIssue, Severity, IssueType } from '../types';
 
@@ -38,9 +42,115 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
   const [issuesPage, setIssuesPage] = useState(1);
   const issuesPageSize = 50;
 
+  // Smart Outlier Audit State (Number of Standard Deviations)
+  const [outlierThreshold, setOutlierThreshold] = useState<number>(2.5);
+
   useEffect(() => {
     setIssuesPage(1);
-  }, [activeFile?.id, severityFilter, typeFilter]);
+  }, [activeFile?.id, severityFilter, typeFilter, outlierThreshold]);
+
+  // Dynamically calculate standard deviation metrics and outlier issues
+  const calculateNumericalStatsAndOutliers = (file: CSVFile | null, threshold: number) => {
+    if (!file) return { outlierIssues: [], columnStats: [] };
+
+    const rows = file.cleanedRows || file.rows;
+    const outlierIssues: AuditIssue[] = [];
+    const columnStats: { column: string; mean: number; stdDev: number; count: number; outliersCount: number }[] = [];
+
+    file.headers.forEach(header => {
+      const lower = header.toLowerCase();
+      // Check if mapped to Amount, or matches common numerical terms
+      const isNumericalName = 
+        lower.includes('amount') ||
+        lower.includes('budget') ||
+        lower.includes('price') ||
+        lower.includes('total') ||
+        lower.includes('cost') ||
+        lower.includes('fee') ||
+        lower.includes('quantity') ||
+        lower.includes('rate') ||
+        lower.includes('value') ||
+        (file.headerMappings && file.headerMappings[header] === 'Amount');
+
+      if (!isNumericalName) return;
+
+      const parsedValues: { val: number; raw: string; rowIdx: number }[] = [];
+      rows.forEach((row, idx) => {
+        const rawVal = row[header];
+        if (rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== '') {
+          // Extract numeric value safely
+          const clean = String(rawVal).replace(/[^0-9.-]/g, '');
+          const parsed = parseFloat(clean);
+          if (!isNaN(parsed)) {
+            parsedValues.push({ val: parsed, raw: String(rawVal), rowIdx: idx });
+          }
+        }
+      });
+
+      if (parsedValues.length < 3) return; // need enough samples
+
+      const mean = parsedValues.reduce((sum, pv) => sum + pv.val, 0) / parsedValues.length;
+      const variance = parsedValues.reduce((sum, pv) => sum + Math.pow(pv.val - mean, 2), 0) / parsedValues.length;
+      const stdDev = Math.sqrt(variance);
+
+      if (stdDev <= 0) return;
+
+      let columnOutliersCount = 0;
+      const tempIssues: AuditIssue[] = [];
+
+      parsedValues.forEach(pv => {
+        const zScore = Math.abs(pv.val - mean) / stdDev;
+        if (zScore > threshold) {
+          columnOutliersCount++;
+          tempIssues.push({
+            id: `stddev-outlier-${header}-${pv.rowIdx}`,
+            type: 'outlier',
+            severity: 'warning',
+            column: header,
+            row: pv.rowIdx + 2,
+            value: pv.raw,
+            description: `Smart Audit: Value "${pv.raw}" is a statistical outlier (${zScore.toFixed(2)} SDs from column average of ${mean.toFixed(2)}).`,
+            suggestion: `This transaction exceeds the compliance threshold of ${threshold} standard deviations. Consider correcting or verifying this entry.`,
+            status: 'open'
+          });
+        }
+      });
+
+      columnStats.push({ 
+        column: header, 
+        mean, 
+        stdDev, 
+        count: parsedValues.length,
+        outliersCount: columnOutliersCount
+      });
+
+      outlierIssues.push(...tempIssues);
+    });
+
+    return { outlierIssues, columnStats };
+  };
+
+  const { outlierIssues, columnStats } = calculateNumericalStatsAndOutliers(activeFile, outlierThreshold);
+
+  // Merge dynamic standard deviation outliers with base file issues.
+  // We replace previous static 'outlier' type issues, but carry over their 'resolved' status.
+  const getMergedIssues = (): AuditIssue[] => {
+    if (!activeFile) return [];
+    
+    const nonOutlierIssues = activeFile.issues.filter(i => i.type !== 'outlier');
+    
+    const processedOutliers = outlierIssues.map(outlier => {
+      const existing = activeFile.issues.find(i => i.id === outlier.id);
+      if (existing) {
+        return { ...outlier, status: existing.status };
+      }
+      return outlier;
+    });
+
+    return [...nonOutlierIssues, ...processedOutliers];
+  };
+
+  const mergedIssues = getMergedIssues();
 
   if (!activeFile) {
     return (
@@ -61,15 +171,15 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
   }
 
   // Filter issues
-  const filteredIssues = activeFile.issues.filter(issue => {
+  const filteredIssues = mergedIssues.filter(issue => {
     if (severityFilter !== 'all' && issue.severity !== severityFilter) return false;
     if (typeFilter !== 'all' && issue.type !== typeFilter) return false;
     return true;
   });
 
-  const criticalCount = activeFile.issues.filter(i => i.severity === 'critical' && i.status === 'open').length;
-  const warningCount = activeFile.issues.filter(i => i.severity === 'warning' && i.status === 'open').length;
-  const infoCount = activeFile.issues.filter(i => i.severity === 'info' && i.status === 'open').length;
+  const criticalCount = mergedIssues.filter(i => i.severity === 'critical' && i.status === 'open').length;
+  const warningCount = mergedIssues.filter(i => i.severity === 'warning' && i.status === 'open').length;
+  const infoCount = mergedIssues.filter(i => i.severity === 'info' && i.status === 'open').length;
 
   const affectedRowNumbers = new Set<number>();
   filteredIssues.forEach(issue => {
@@ -395,9 +505,14 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
     }
 
     // Mark issue as resolved
-    const updatedIssues = activeFile.issues.map(i => 
-      i.id === issue.id ? { ...i, status: 'resolved' as const } : i
-    );
+    let updatedIssues = [...activeFile.issues];
+    const index = updatedIssues.findIndex(i => i.id === issue.id);
+    if (index !== -1) {
+      updatedIssues[index] = { ...updatedIssues[index], status: 'resolved' as const };
+    } else {
+      // It is a dynamic standard-deviation outlier, add it directly as resolved so it is persisted
+      updatedIssues.push({ ...issue, status: 'resolved' as const });
+    }
 
     onUpdateFile({
       ...activeFile,
@@ -542,6 +657,26 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
                   )}
                 </div>
               </div>
+
+              {activeFile.headerMappings && Object.keys(activeFile.headerMappings).some(k => activeFile.headerMappings?.[k] !== 'None') && (
+                <div className="space-y-2 mt-4 pt-4 border-t border-slate-800/20">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">AI Canonical Column Mappings</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                    {Object.entries(activeFile.headerMappings).map(([col, canonical]) => {
+                      if (canonical === 'None') return null;
+                      return (
+                        <div key={col} className={`flex justify-between items-center text-xs px-2.5 py-1.5 rounded border ${isDarkMode ? 'bg-slate-950/40 border-slate-800/40' : 'bg-slate-50 border-slate-200'}`}>
+                          <span className={`font-semibold truncate max-w-[120px] ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`} title={col}>{col}</span>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="text-[9px] text-slate-500 font-mono">→</span>
+                            <span className="font-mono text-[9px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded font-bold truncate" title={canonical}>{canonical}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -681,6 +816,85 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
               )}
             </div>
           </div>
+        </div>
+
+        {/* Smart Outlier Dashboard Panel */}
+        <div className={`mb-6 p-5 rounded-2xl border ${isDarkMode ? 'bg-[#1e293b]/30 border-slate-800' : 'bg-slate-50 border-slate-200'} space-y-4`}>
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div className="flex items-center gap-2.5">
+              <span className="p-2 bg-violet-500/10 text-violet-400 rounded-xl"><BrainCircuit className="w-5 h-5 text-violet-500" /></span>
+              <div>
+                <h4 className="text-sm font-extrabold tracking-tight">Smart Statistical Outlier Audit</h4>
+                <p className={`text-[11px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Locate financial standard deviations and variance anomalies in mapped numerical columns.</p>
+              </div>
+            </div>
+            
+            {/* Slider to adjust standard deviation threshold */}
+            <div className="w-full md:w-72 space-y-1.5 shrink-0">
+              <div className="flex justify-between text-[11px] font-mono">
+                <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>Outlier Sensitivity</span>
+                <span className="text-violet-500 font-extrabold">{outlierThreshold.toFixed(1)} Standard Devs (σ)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-slate-400">Strict (1.5)</span>
+                <input
+                  type="range"
+                  min="1.5"
+                  max="4.0"
+                  step="0.1"
+                  value={outlierThreshold}
+                  onChange={(e) => {
+                    setOutlierThreshold(parseFloat(e.target.value));
+                    setIssuesPage(1);
+                  }}
+                  className="flex-1 h-1.5 rounded-lg appearance-none cursor-pointer accent-violet-500 bg-slate-200 dark:bg-slate-800"
+                />
+                <span className="text-[10px] text-slate-400">Relaxed (4.0)</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Table displaying calculated standard deviations per numerical column */}
+          {columnStats.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+              {columnStats.map((stat) => (
+                <div key={stat.column} className={`p-3.5 rounded-xl border flex flex-col justify-between ${isDarkMode ? 'bg-[#0f172a]/60 border-slate-800' : 'bg-white border-slate-200'}`}>
+                  <div className="flex justify-between items-start mb-2 gap-2">
+                    <span className={`font-extrabold text-xs truncate ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`} title={stat.column}>{stat.column}</span>
+                    <span className={`text-[9px] font-mono px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${stat.outliersCount > 0 ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                      {stat.outliersCount} {stat.outliersCount === 1 ? 'Outlier' : 'Outliers'}
+                    </span>
+                  </div>
+                  <div className={`grid grid-cols-3 gap-2 text-[10px] font-mono border-t pt-2.5 ${isDarkMode ? 'border-slate-800/60' : 'border-slate-100'}`}>
+                    <div>
+                      <span className="block text-slate-500 text-[8px] uppercase font-bold tracking-wider mb-0.5">Rows</span>
+                      <strong className={isDarkMode ? 'text-slate-300' : 'text-slate-700'}>{stat.count}</strong>
+                    </div>
+                    <div>
+                      <span className="block text-slate-500 text-[8px] uppercase font-bold tracking-wider mb-0.5">Mean</span>
+                      <strong className={isDarkMode ? 'text-slate-300' : 'text-slate-700'}>
+                        {stat.column.toLowerCase().includes('quantity') ? '' : '$'}
+                        {stat.mean.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="block text-slate-500 text-[8px] uppercase font-bold tracking-wider mb-0.5">Std Dev (σ)</span>
+                      <strong className={isDarkMode ? 'text-slate-300' : 'text-slate-700'}>
+                        {stat.column.toLowerCase().includes('quantity') ? '' : '$'}
+                        {stat.stdDev.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className={`p-4 rounded-xl border text-center text-xs ${isDarkMode ? 'bg-slate-900/20 border-slate-800 text-slate-400' : 'bg-slate-100/50 border-slate-200 text-slate-500'}`}>
+              <HelpCircle className="w-5 h-5 text-slate-500 mx-auto mb-1.5" />
+              <p className="font-semibold">No numerical columns mapped or detected</p>
+              <p className="text-[10px] text-slate-500 mt-0.5">Map your headers to "Amount" in the Upload Center or ensure header contains "Amount/Budget/Price" keywords to enable dynamic standard deviation analysis.</p>
+            </div>
+          )}
         </div>
 
         {/* Empty States */}

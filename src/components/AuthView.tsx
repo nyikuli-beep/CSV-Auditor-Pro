@@ -12,8 +12,8 @@ import {
   ShieldAlert,
   ChevronRight
 } from 'lucide-react';
-import { auth, googleProvider, db } from '../firebase';
-import { signInWithPopup, signInAnonymously, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { auth, googleProvider, db, setGmailAccessToken } from '../firebase';
+import { signInWithPopup, signInAnonymously, signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 
 interface AuthViewProps {
@@ -137,6 +137,11 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
     setErrorMsg('');
     try {
       const result = await signInWithPopup(auth, googleProvider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) {
+        setGmailAccessToken(credential.accessToken);
+      }
+      
       const uid = result.user.uid;
       const uEmail = result.user.email || 'google.user@company.com';
       const uName = result.user.displayName || uEmail.split('@')[0] || 'Sarah Jenkins';

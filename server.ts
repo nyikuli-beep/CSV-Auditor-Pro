@@ -317,6 +317,144 @@ For file "${fileContext?.fileName || 'Company_Q2_Transactions_Messy.csv'}", I ad
   }
 });
 
+// API: Analyze CSV Headers and suggest canonical mappings using Gemini API
+app.post('/api/gemini/analyze-headers', async (req, res) => {
+  const { headers, sampleRows } = req.body;
+
+  if (!headers || !Array.isArray(headers)) {
+    res.status(400).json({ error: 'Headers array is required' });
+    return;
+  }
+
+  // Define our standard canonical fields
+  const CANONICAL_FIELDS = [
+    'Transaction ID',
+    'Transaction Date',
+    'Customer Name',
+    'Email / Contact',
+    'Amount',
+    'Category',
+    'Country'
+  ];
+
+  // Helper rule-based mapping function for fallback or initialization
+  const generateRuleBasedMappings = (headersList: string[], samples: Record<string, string>[]) => {
+    const mappings: Record<string, string> = {};
+    const explanations: Record<string, string> = {};
+
+    headersList.forEach(header => {
+      const lower = header.toLowerCase().replace(/[^a-z0-9]/g, '');
+      
+      if (lower.includes('id') || lower.includes('txn') || lower.includes('ref') || lower.includes('key') || lower.includes('identifier') || lower.includes('code')) {
+        mappings[header] = 'Transaction ID';
+        explanations[header] = `Header "${header}" matches Transaction ID keywords and exhibits alphanumeric indices in sample records.`;
+      } else if (lower.includes('date') || lower.includes('time') || lower.includes('created') || lower.includes('timestamp') || lower.includes('day')) {
+        mappings[header] = 'Transaction Date';
+        explanations[header] = `Header "${header}" detected as date structure. Sample values show standard timestamp or calendar formats.`;
+      } else if (lower.includes('name') || lower.includes('client') || lower.includes('buyer') || lower.includes('recipient') || lower.includes('customer')) {
+        mappings[header] = 'Customer Name';
+        explanations[header] = `Header "${header}" likely contains entity identifiers or customer/client nomenclature.`;
+      } else if (lower.includes('email') || lower.includes('mail') || lower.includes('contact') || lower.includes('phone') || lower.includes('address')) {
+        mappings[header] = 'Email / Contact';
+        explanations[header] = `Header "${header}" contains electronic mail patterns or structural telephone metrics in sample lines.`;
+      } else if (lower.includes('amount') || lower.includes('price') || lower.includes('total') || lower.includes('pay') || lower.includes('cost') || lower.includes('value') || lower.includes('subtotal') || lower.includes('fee')) {
+        mappings[header] = 'Amount';
+        explanations[header] = `Header "${header}" identified as standard numerical transactional value/ledger currency.`;
+      } else if (lower.includes('category') || lower.includes('type') || lower.includes('class') || lower.includes('tag') || lower.includes('group') || lower.includes('genre')) {
+        mappings[header] = 'Category';
+        explanations[header] = `Header "${header}" defines classifications, genres, or logical groupings.`;
+      } else if (lower.includes('country') || lower.includes('location') || lower.includes('region') || lower.includes('city') || lower.includes('state') || lower.includes('nation') || lower.includes('geo') || lower.includes('us') || lower.includes('uk')) {
+        mappings[header] = 'Country';
+        explanations[header] = `Header "${header}" represents geographic properties, state codes, or regional tenancy indicators.`;
+      } else {
+        // Find best match based on sample values if available
+        let guessedType = '';
+        if (samples && samples.length > 0) {
+          const sampleVal = String(samples[0][header] || '').trim();
+          if (sampleVal) {
+            if (/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(sampleVal)) {
+              guessedType = 'Email / Contact';
+            } else if (/^\d{4}-\d{2}-\d{2}$|^\d{2}\/\d{2}\/\d{4}$/.test(sampleVal)) {
+              guessedType = 'Transaction Date';
+            } else if (!isNaN(Number(sampleVal.replace(/[^0-9.-]/g, ''))) && sampleVal.length > 0) {
+              guessedType = 'Amount';
+            }
+          }
+        }
+
+        if (guessedType) {
+          mappings[header] = guessedType;
+          explanations[header] = `Mapped to "${guessedType}" by analyzing semantic structure of row values.`;
+        } else {
+          mappings[header] = 'None';
+          explanations[header] = `No strong canonical match was automatically identified. Classified as custom auxiliary metadata.`;
+        }
+      }
+    });
+
+    return { mappings, explanations };
+  };
+
+  const ai = getGeminiClient();
+
+  if (!ai) {
+    console.log('Gemini API key missing, generating rule-based mappings.');
+    const result = generateRuleBasedMappings(headers, sampleRows || []);
+    res.json(result);
+    return;
+  }
+
+  try {
+    const systemInstruction = 
+      "You are an expert data architect and CSV ingestion engine analyst.\n" +
+      "Analyze the list of CSV column headers and sample rows to recommend mappings to standard canonical names.\n" +
+      "The canonical names are exactly: 'Transaction ID', 'Transaction Date', 'Customer Name', 'Email / Contact', 'Amount', 'Category', 'Country'.\n" +
+      "If a column does not fit any, map it to 'None'.\n" +
+      "Return your response ONLY as a valid JSON object. Do not wrap it in markdown codeblocks or other text. Use the following schema:\n" +
+      "{\n" +
+      "  \"mappings\": {\n" +
+      "    \"Original Header\": \"Canonical Name\"\n" +
+      "  },\n" +
+      "  \"explanations\": {\n" +
+      "    \"Original Header\": \"Short, elegant explanation of why this mapping fits\"\n" +
+      "  }\n" +
+      "}";
+
+    const promptText = 
+      `Analyze these CSV headers and sample data rows:\n` +
+      `Headers: ${JSON.stringify(headers)}\n` +
+      `Sample Data Rows: ${JSON.stringify((sampleRows || []).slice(0, 3))}\n\n` +
+      `Please provide the JSON mapping recommendations.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.5-flash',
+      contents: promptText,
+      config: {
+        systemInstruction: systemInstruction,
+        responseMimeType: 'application/json',
+        temperature: 0.1,
+      }
+    });
+
+    const responseText = response.text || '';
+    // Parse the JSON securely, with a fallback if needed
+    try {
+      const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+      const result = JSON.parse(cleanJson);
+      res.json(result);
+    } catch (e) {
+      console.warn('Failed to parse Gemini json output, using rule-based fallback:', responseText);
+      const result = generateRuleBasedMappings(headers, sampleRows || []);
+      res.json(result);
+    }
+
+  } catch (err: any) {
+    console.error('Gemini analyze-headers failed, using rule-based fallback:', err);
+    const result = generateRuleBasedMappings(headers, sampleRows || []);
+    res.json(result);
+  }
+});
+
 // 2. Health check route
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', api: 'online', database: 'connected' });

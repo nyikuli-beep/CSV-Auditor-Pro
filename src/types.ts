@@ -39,6 +39,8 @@ export interface CSVFile {
   totalRowsCount?: number;
   isLargeFile?: boolean;
   detectedMetadata?: DetectedFormatMetadata;
+  headerMappings?: Record<string, string>;
+  mappingExplanations?: Record<string, string>;
 }
 
 export interface TeamMember {

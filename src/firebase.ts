@@ -7,13 +7,48 @@ import firebaseConfig from '../firebase-applet-config.json';
 const app = initializeApp(firebaseConfig);
 
 // Initialize Firestore and Auth with long polling forced for secure sandboxed iframes
+const databaseId = (firebaseConfig as any).firestoreDatabaseId || 'ai-studio-18a06fb7-6d93-4f48-8713-9d60be376792';
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
-}, firebaseConfig.firestoreDatabaseId); /* CRITICAL: The app will break without this line */
+}, databaseId); /* CRITICAL: The app will break without this line */
 export const auth = getAuth(app);
 
 // Configure Auth Providers
 export const googleProvider = new GoogleAuthProvider();
+googleProvider.addScope('https://www.googleapis.com/auth/gmail.readonly');
+googleProvider.addScope('https://www.googleapis.com/auth/gmail.send');
+googleProvider.addScope('https://www.googleapis.com/auth/gmail.modify');
+googleProvider.addScope('https://www.googleapis.com/auth/gmail.compose');
+
+// In-memory cache for Google Access Token
+let cachedAccessToken: string | null = null;
+
+export const setGmailAccessToken = (token: string | null) => {
+  cachedAccessToken = token;
+};
+
+export const getGmailAccessToken = () => {
+  return cachedAccessToken;
+};
+
+export async function signInWithGoogleForGmail() {
+  const provider = new GoogleAuthProvider();
+  provider.addScope('https://www.googleapis.com/auth/gmail.readonly');
+  provider.addScope('https://www.googleapis.com/auth/gmail.send');
+  provider.addScope('https://www.googleapis.com/auth/gmail.modify');
+  provider.addScope('https://www.googleapis.com/auth/gmail.compose');
+  
+  const result = await signInWithPopup(auth, provider);
+  const credential = GoogleAuthProvider.credentialFromResult(result);
+  if (credential?.accessToken) {
+    cachedAccessToken = credential.accessToken;
+    return {
+      user: result.user,
+      accessToken: credential.accessToken
+    };
+  }
+  throw new Error('Failed to obtain Google Access Token');
+}
 
 // Error Handling Enum and Structure from Integration Skill
 export enum OperationType {

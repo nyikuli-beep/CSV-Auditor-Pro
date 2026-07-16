@@ -44,6 +44,7 @@ import AuditHistory from './components/AuditHistory';
 import TeamCollaboration from './components/TeamCollaboration';
 import SettingsView from './components/SettingsView';
 import AdminPanel from './components/AdminPanel';
+import GmailCenter from './components/GmailCenter';
 
 // Import Firebase integration
 import { auth, db, OperationType, handleFirestoreError } from './firebase';
@@ -439,6 +440,22 @@ export default function App() {
     }
   };
 
+  const handleAddNewActivity = async (actionText: string) => {
+    const newLog: AuditActivity = {
+      id: `act-${Date.now()}`,
+      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-sarah',
+      userName: user?.email || 'Sarah Jenkins',
+      action: actionText,
+      timestamp: 'Just now'
+    };
+    try {
+      await setDoc(doc(db, 'activities', newLog.id), newLog);
+      await syncToPostgres('sync-activity', 'POST', newLog);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `activities/${newLog.id}`);
+    }
+  };
+
 
   // Dispatch prompt context to full-stack backend
   const handleSendChatMessage = async (msgContent: string) => {
@@ -604,6 +621,7 @@ export default function App() {
                         { id: 'results', label: 'Audit Findings', icon: Sparkles, badge: activeFile ? activeFile.issues.length : 0 },
                         { id: 'clean', label: 'Hygiene Workspace', icon: Trash2 },
                         { id: 'insights', label: 'AI Intelligence', icon: MessageSquare },
+                        { id: 'gmail', label: 'Gmail Compliance', icon: Mail },
                         { id: 'reports', label: 'Branded Reports', icon: FileText },
                         { id: 'history', label: 'File Archive', icon: History },
                         { id: 'team', label: 'Team Tenancy', icon: Users },
@@ -704,6 +722,7 @@ export default function App() {
                   { id: 'results', label: 'Audit Findings', icon: Sparkles, badge: activeFile ? activeFile.issues.length : 0 },
                   { id: 'clean', label: 'Hygiene Workspace', icon: Trash2 },
                   { id: 'insights', label: 'AI Intelligence', icon: MessageSquare },
+                  { id: 'gmail', label: 'Gmail Compliance', icon: Mail },
                   { id: 'reports', label: 'Branded Reports', icon: FileText },
                   { id: 'history', label: 'File Archive', icon: History },
                   { id: 'team', label: 'Team Tenancy', icon: Users },
@@ -773,6 +792,7 @@ export default function App() {
                     {activeTab === 'results' && 'Audit Findings'}
                     {activeTab === 'clean' && 'Hygiene Laboratory'}
                     {activeTab === 'insights' && 'AI Intelligence Core'}
+                    {activeTab === 'gmail' && 'Gmail Compliance Hub'}
                     {activeTab === 'reports' && 'Branded PDF Reports'}
                     {activeTab === 'history' && 'File Archive Repository'}
                     {activeTab === 'team' && 'Tenancy Collaboration'}
@@ -872,6 +892,16 @@ export default function App() {
                       onSendMessage={handleSendChatMessage}
                       isDarkMode={isDarkMode}
                       accentClass={accentClass}
+                    />
+                  )}
+
+                  {activeTab === 'gmail' && (
+                    <GmailCenter 
+                      activeFile={activeFile}
+                      isDarkMode={isDarkMode}
+                      accentClass={accentClass}
+                      onNavigate={handleNavigateTab}
+                      onAddActivity={handleAddNewActivity}
                     />
                   )}
 
