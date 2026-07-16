@@ -467,25 +467,83 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
           </div>
         </div>
 
-        {/* Categories breakdown count cards */}
-        <div className="md:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-6 h-fit">
-          <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/40 border-slate-800/80' : 'bg-white border-slate-200'}`}>
-            <h4 className="text-xs font-bold text-rose-500 uppercase tracking-widest mb-2 flex items-center gap-1.5"><ShieldAlert className="w-4 h-4" /> Critical</h4>
-            <span className="text-3xl font-black">{criticalCount}</span>
-            <p className="text-[10px] text-slate-400 mt-2">Deduplication and integrity errors</p>
+        {/* Categories breakdown count cards & Profiler */}
+        <div className="md:col-span-7 flex flex-col justify-between gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 h-fit">
+            <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/40 border-slate-800/80' : 'bg-white border-slate-200'}`}>
+              <h4 className="text-xs font-bold text-rose-500 uppercase tracking-widest mb-2 flex items-center gap-1.5"><ShieldAlert className="w-4 h-4" /> Critical</h4>
+              <span className="text-3xl font-black">{criticalCount}</span>
+              <p className="text-[10px] text-slate-400 mt-2">Deduplication and integrity errors</p>
+            </div>
+
+            <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/40 border-slate-800/80' : 'bg-white border-slate-200'}`}>
+              <h4 className="text-xs font-bold text-amber-500 uppercase tracking-widest mb-2 flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> Warnings</h4>
+              <span className="text-3xl font-black">{warningCount}</span>
+              <p className="text-[10px] text-slate-400 mt-2">Formatting and statistical outliers</p>
+            </div>
+
+            <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/40 border-slate-800/80' : 'bg-white border-slate-200'}`}>
+              <h4 className="text-xs font-bold text-blue-500 uppercase tracking-widest mb-2 flex items-center gap-1.5"><Info className="w-4 h-4" /> Info</h4>
+              <span className="text-3xl font-black">{infoCount}</span>
+              <p className="text-[10px] text-slate-400 mt-2">Minor capitalization anomalies</p>
+            </div>
           </div>
 
-          <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/40 border-slate-800/80' : 'bg-white border-slate-200'}`}>
-            <h4 className="text-xs font-bold text-amber-500 uppercase tracking-widest mb-2 flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> Warnings</h4>
-            <span className="text-3xl font-black">{warningCount}</span>
-            <p className="text-[10px] text-slate-400 mt-2">Formatting and statistical outliers</p>
-          </div>
+          {/* Smart Format Profiler */}
+          {activeFile.detectedMetadata && (
+            <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/40 border-slate-800/80' : 'bg-white border-slate-200 shadow-xs'}`}>
+              <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-800/30">
+                <h4 className="text-xs font-bold text-blue-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-yellow-500" /> Ingestion Format Profile
+                </h4>
+                <span className="text-[9px] bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded font-bold font-mono">Auto-Detected</span>
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Date Formats */}
+                <div className="space-y-2">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Detected Date Columns</span>
+                  {Object.keys(activeFile.detectedMetadata.dateFormats).length > 0 ? (
+                    <div className="space-y-1.5 max-h-[120px] overflow-y-auto pr-1">
+                      {Object.entries(activeFile.detectedMetadata.dateFormats).map(([col, fmt]) => (
+                        <div key={col} className={`flex justify-between items-center text-xs px-2.5 py-1.5 rounded border ${isDarkMode ? 'bg-slate-950/40 border-slate-800/40' : 'bg-slate-50 border-slate-200'}`}>
+                          <span className="font-medium text-slate-300 truncate max-w-[120px]" title={col}>{col}</span>
+                          <span className="font-mono text-[9px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded font-bold">{fmt}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-slate-500 italic block">No standard date columns detected.</span>
+                  )}
+                </div>
 
-          <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/40 border-slate-800/80' : 'bg-white border-slate-200'}`}>
-            <h4 className="text-xs font-bold text-blue-500 uppercase tracking-widest mb-2 flex items-center gap-1.5"><Info className="w-4 h-4" /> Info</h4>
-            <span className="text-3xl font-black">{infoCount}</span>
-            <p className="text-[10px] text-slate-400 mt-2">Minor capitalization anomalies</p>
-          </div>
+                {/* Currency settings */}
+                <div className="space-y-2">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Detected Currency Columns</span>
+                  {activeFile.detectedMetadata.currencySettings.length > 0 ? (
+                    <div className="space-y-1.5 max-h-[120px] overflow-y-auto pr-1">
+                      {activeFile.detectedMetadata.currencySettings.map((set) => (
+                        <div key={set.column} className={`text-xs p-2 rounded border ${isDarkMode ? 'bg-slate-950/40 border-slate-800/40' : 'bg-slate-50 border-slate-200'} space-y-1`}>
+                          <div className="flex justify-between items-center">
+                            <span className="font-medium text-slate-300 truncate max-w-[120px]" title={set.column}>{set.column}</span>
+                            <span className="font-mono text-[9px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-bold">
+                              Symbol: {set.symbol || '$'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-[9px] text-slate-400 font-mono">
+                            <span>Decimals: <strong className="text-slate-200">{set.decimalSeparator || '.'}</strong></span>
+                            <span>Thousands: <strong className="text-slate-200">{set.thousandSeparator || ','}</strong></span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-slate-500 italic block">No standard financial columns detected.</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

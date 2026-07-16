@@ -12,6 +12,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { CSVFile, AuditIssue, Severity, IssueType } from '../types';
+import { detectCSVFormats } from '../lib/formatDetector';
 
 interface UploadCenterProps {
   onFileUpload: (newFile: CSVFile) => void;
@@ -112,6 +113,9 @@ export default function UploadCenter({ onFileUpload, isDarkMode, accentClass }: 
               rows.push(rowObj);
             }
 
+            // Auto-detect formats during ingestion
+            const detectedMetadata = detectCSVFormats(headers, rows);
+
             // Generate real dynamic issues for the active rows
             const generatedIssues: AuditIssue[] = [];
             const seenRows = new Set<string>();
@@ -172,9 +176,18 @@ export default function UploadCenter({ onFileUpload, isDarkMode, accentClass }: 
                     }
                   }
                   // Check date format
-                  if (h.toLowerCase().includes('date')) {
+                  if (h.toLowerCase().includes('date') || detectedMetadata.dateFormats[h]) {
+                    const expectedFormat = detectedMetadata.dateFormats[h] || 'YYYY-MM-DD';
                     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
                     if (!dateRegex.test(cellVal)) {
+                      let description = `Date "${cellVal}" does not follow YYYY-MM-DD standard format.`;
+                      let suggestion = 'Convert to standard ISO-8601 formatting.';
+
+                      if (expectedFormat !== 'YYYY-MM-DD') {
+                        description = `Date "${cellVal}" is in "${expectedFormat}" format. System standard is YYYY-MM-DD.`;
+                        suggestion = `Auto-standardize this column from "${expectedFormat}" during cleaning.`;
+                      }
+
                       generatedIssues.push({
                         id: `dynamic-issue-date-${rowIndex}-${h}`,
                         type: 'invalid_format',
@@ -182,8 +195,8 @@ export default function UploadCenter({ onFileUpload, isDarkMode, accentClass }: 
                         row: humanRowIndex,
                         value: cellVal,
                         severity: 'warning',
-                        description: `Date "${cellVal}" does not follow YYYY-MM-DD standard format.`,
-                        suggestion: 'Convert to standard ISO-8601 formatting.',
+                        description: description,
+                        suggestion: suggestion,
                         status: 'open'
                       });
                     }
@@ -208,7 +221,8 @@ export default function UploadCenter({ onFileUpload, isDarkMode, accentClass }: 
               rows: rows,
               issues: generatedIssues,
               totalRowsCount: totalLinesCount - 1, // Subtract header line
-              isLargeFile: isLargeFile
+              isLargeFile: isLargeFile,
+              detectedMetadata: detectedMetadata
             };
 
             onFileUpload(parsedFile);

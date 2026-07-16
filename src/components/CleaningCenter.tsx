@@ -63,6 +63,14 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
   const [validationFailAction, setValidationFailAction] = useState('flag');
   const [validationFallback, setValidationFallback] = useState('');
 
+  // Pattern Recognition & Sanitization Engine State
+  const [isPatternOpen, setIsPatternOpen] = useState(false);
+  const [patternColumn, setPatternColumn] = useState('');
+  const [patternPreset, setPatternPreset] = useState('email');
+  const [customRegex, setCustomRegex] = useState('');
+  const [patternAction, setPatternAction] = useState('remove'); // 'remove', 'extract', 'split'
+  const [newColName, setNewColName] = useState('');
+
   // Print Modal Configuration State
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [printTitle, setPrintTitle] = useState(activeFile ? `CSV Auditor Report: ${activeFile.name}` : 'CSV Auditor Report');
@@ -170,25 +178,86 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
   };
 
   const standardizeDates = () => {
+    const dateFormats = activeFile?.detectedMetadata?.dateFormats || {};
+    
     const cleaned = currentRows.map(row => {
       const updated = { ...row };
-      if (row.Date) {
-        // Standardize slashes like 04/06/2026 to 2026-06-04 or standard ISO
-        const raw = row.Date;
-        if (raw.includes('/')) {
-          const parts = raw.split('/');
+      
+      currentHeaders.forEach(col => {
+        const fmt = dateFormats[col];
+        // If it's explicitly detected as a date column or header name contains "date"
+        if (fmt || col.toLowerCase().includes('date')) {
+          const raw = (row[col] || '').trim();
+          if (!raw) return;
+          
+          // Try to standardize according to detected format, or fallback standardizing
+          // If it is already in YYYY-MM-DD format, skip
+          if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return;
+          
+          let parts: string[] = [];
+          if (raw.includes('/')) {
+            parts = raw.split('/');
+          } else if (raw.includes('-')) {
+            parts = raw.split('-');
+          } else if (raw.includes('.')) {
+            parts = raw.split('.');
+          }
+          
           if (parts.length === 3) {
-            // Check DD/MM/YYYY vs MM/DD/YYYY
-            const day = parts[0].padStart(2, '0');
-            const month = parts[1].padStart(2, '0');
-            const year = parts[2];
-            updated.Date = `${year}-${month}-${day}`;
+            let year = '';
+            let month = '';
+            let day = '';
+            
+            // If we have a detected format, let's use it to guide parsing!
+            const formatStr = fmt || 'MM/DD/YYYY';
+            const upperFmt = formatStr.toUpperCase();
+            
+            if (upperFmt.startsWith('YYYY')) {
+              year = parts[0];
+              month = parts[1];
+              day = parts[2];
+            } else if (upperFmt.startsWith('DD')) {
+              day = parts[0];
+              month = parts[1];
+              year = parts[2];
+            } else if (upperFmt.startsWith('MM')) {
+              month = parts[0];
+              day = parts[1];
+              year = parts[2];
+            } else {
+              // Fallback default logic if unknown format
+              const p0 = parseInt(parts[0]);
+              const p1 = parseInt(parts[1]);
+              year = parts[2];
+              if (p0 > 12) {
+                day = parts[0];
+                month = parts[1];
+              } else if (p1 > 12) {
+                day = parts[1];
+                month = parts[0];
+              } else {
+                month = parts[0];
+                day = parts[1];
+              }
+            }
+            
+            // Standardize length of year
+            if (year.length === 2) {
+              const yrNum = parseInt(year);
+              year = yrNum > 50 ? `19${year}` : `20${year}`;
+            }
+            
+            if (year && month && day) {
+              const mm = month.padStart(2, '0');
+              const dd = day.padStart(2, '0');
+              updated[col] = `${year}-${mm}-${dd}`;
+            }
           }
         }
-      }
+      });
       return updated;
     });
-    pushState(cleaned, "Standardized date formats to ISO YYYY-MM-DD.");
+    pushState(cleaned, "Standardized date formats to ISO YYYY-MM-DD using auto-detected metadata guidelines.");
   };
 
   const fillMissingValues = () => {
@@ -412,6 +481,120 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
       issues: newIssues,
       score: Math.max(0, Math.min(100, activeFile.score + (coerceCount > 0 ? 8 : -2))) // Adjust score
     });
+  };
+
+  const runPatternSanitization = () => {
+    if (!patternColumn) return;
+
+    let regex: RegExp;
+    let presetLabel = '';
+
+    const emailPattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+    const phonePattern = /(\+?\d{1,4}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g;
+    const digitPattern = /\d+/g;
+
+    if (patternPreset === 'email') {
+      regex = emailPattern;
+      presetLabel = 'Email Addresses';
+    } else if (patternPreset === 'phone') {
+      regex = phonePattern;
+      presetLabel = 'Phone Numbers';
+    } else if (patternPreset === 'digits') {
+      regex = digitPattern;
+      presetLabel = 'Digits/Numbers';
+    } else {
+      try {
+        regex = new RegExp(customRegex, 'g');
+        presetLabel = `Custom Pattern (/${customRegex}/)`;
+      } catch (err) {
+        alert("Invalid custom regular expression pattern. Please check your syntax.");
+        return;
+      }
+    }
+
+    let modifiedCount = 0;
+    const targetExtractCol = newColName.trim() || `${patternColumn}_extracted`;
+
+    const cleaned = currentRows.map((row) => {
+      const updated = { ...row };
+      const val = (row[patternColumn] || '').trim();
+      
+      if (!val) {
+        if (patternAction === 'split' || patternAction === 'extract') {
+          updated[targetExtractCol] = '';
+        }
+        return updated;
+      }
+
+      const matches = val.match(regex);
+      const matchedString = matches ? matches.join(', ') : '';
+
+      if (patternAction === 'remove') {
+        const remaining = val.replace(regex, '');
+        const cleanedVal = remaining
+          .replace(/\s+/g, ' ')
+          .replace(/^\s*[,.;:/|-]\s*|\s*[,.;:/|-]\s*$/g, '')
+          .replace(/\s*or\s*$/i, '')
+          .replace(/\s*and\s*$/i, '')
+          .trim();
+
+        if (cleanedVal !== val) {
+          modifiedCount++;
+          updated[patternColumn] = cleanedVal;
+        }
+      } else if (patternAction === 'extract') {
+        if (matchedString !== val) {
+          modifiedCount++;
+        }
+        updated[patternColumn] = matchedString;
+      } else if (patternAction === 'split') {
+        const remaining = val.replace(regex, '');
+        const cleanedVal = remaining
+          .replace(/\s+/g, ' ')
+          .replace(/^\s*[,.;:/|-]\s*|\s*[,.;:/|-]\s*$/g, '')
+          .replace(/\s*or\s*$/i, '')
+          .replace(/\s*and\s*$/i, '')
+          .trim();
+
+        if (matchedString || cleanedVal !== val) {
+          modifiedCount++;
+        }
+        
+        updated[patternColumn] = cleanedVal;
+        updated[targetExtractCol] = matchedString;
+      }
+
+      return updated;
+    });
+
+    let updatedHeaders = [...currentHeaders];
+    if (patternAction === 'split') {
+      const colIndex = currentHeaders.indexOf(patternColumn);
+      if (!currentHeaders.includes(targetExtractCol)) {
+        if (colIndex !== -1) {
+          updatedHeaders.splice(colIndex + 1, 0, targetExtractCol);
+        } else {
+          updatedHeaders.push(targetExtractCol);
+        }
+      }
+    }
+
+    let actionMsg = '';
+    if (patternAction === 'remove') {
+      actionMsg = `Removed recognized ${presetLabel} from column "${patternColumn}" (Sanitized ${modifiedCount} rows).`;
+    } else if (patternAction === 'extract') {
+      actionMsg = `Extracted/Isolated ${presetLabel} inside column "${patternColumn}" (Cleaned ${modifiedCount} rows).`;
+    } else if (patternAction === 'split') {
+      actionMsg = `Split & Sanitized "${patternColumn}": Removed ${presetLabel} and saved them to new column "${targetExtractCol}" (Processed ${modifiedCount} rows).`;
+    }
+
+    pushState(cleaned, actionMsg, updatedHeaders);
+
+    if (patternAction === 'split') {
+      setSelectedPrintColumns(prev => [...prev, targetExtractCol]);
+    }
+
+    setNewColName('');
   };
 
   // Helper to check if a row value differs from original raw row (to highlight changes in preview)
@@ -1109,6 +1292,127 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
                       className={`w-full py-2 rounded-lg text-xs font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-1 shadow-md ${accentClass} disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" /> Execute Validation Audit
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Pattern Recognition & Sanitization Engine Accordion */}
+              <div className={`rounded-xl border transition-all ${
+                isPatternOpen 
+                  ? 'border-indigo-500/40 bg-indigo-500/5 shadow-xs' 
+                  : 'hover:bg-indigo-500/5 hover:border-indigo-500/30 border-slate-800/80 bg-slate-950/60'
+              }`}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsPatternOpen(!isPatternOpen);
+                    setIsValidationOpen(false);
+                    setIsSplitterOpen(false);
+                  }}
+                  disabled={isViewer}
+                  className="w-full p-4 text-left flex gap-3.5 items-start cursor-pointer group disabled:opacity-50"
+                >
+                  <div className="p-2 bg-indigo-500/10 text-indigo-400 rounded-lg group-hover:bg-indigo-500/20">
+                    <Sparkles className="w-4 h-4 text-indigo-400" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center">
+                      <h4 className="font-bold text-xs">Pattern Sanitization Engine</h4>
+                      <ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isPatternOpen ? 'rotate-90 text-indigo-400' : ''}`} />
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Recognize nested patterns (Emails, Phones, Custom Regex) and isolate or split them into clean streams.</p>
+                  </div>
+                </button>
+
+                {isPatternOpen && (
+                  <div className={`p-4 border-t px-5 space-y-4 text-xs ${isDarkMode ? 'border-slate-800/80 text-slate-200' : 'border-slate-150 text-slate-700'}`}>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Target Column</label>
+                      <select
+                        value={patternColumn}
+                        onChange={(e) => setPatternColumn(e.target.value)}
+                        className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                          isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                        }`}
+                      >
+                        <option value="">-- Select Column --</option>
+                        {currentHeaders.map(h => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Pattern to Recognize</label>
+                      <select
+                        value={patternPreset}
+                        onChange={(e) => setPatternPreset(e.target.value)}
+                        className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                          isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                        }`}
+                      >
+                        <option value="email">Email Addresses (Regex)</option>
+                        <option value="phone">Phone Numbers (Regex)</option>
+                        <option value="digits">Numeric Digits (0-9 Only)</option>
+                        <option value="custom">Custom Regex Pattern...</option>
+                      </select>
+                    </div>
+
+                    {patternPreset === 'custom' && (
+                      <div className="space-y-1.5 animate-slideDown">
+                        <label className="text-[10px] font-bold text-slate-400 block">Custom Regular Expression</label>
+                        <input
+                          type="text"
+                          value={customRegex}
+                          onChange={(e) => setCustomRegex(e.target.value)}
+                          placeholder="e.g. [A-Z]{3}-\d{4}"
+                          className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                            isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                          }`}
+                        />
+                        <p className="text-[9px] text-slate-400">Specify regex body without slashes or flags (e.g., matching codes or IDs).</p>
+                      </div>
+                    )}
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Sanitization Action</label>
+                      <select
+                        value={patternAction}
+                        onChange={(e) => setPatternAction(e.target.value)}
+                        className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                          isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                        }`}
+                      >
+                        <option value="remove">Remove matched pattern (Keep remainder)</option>
+                        <option value="extract">Isolate matched pattern (Discard remainder)</option>
+                        <option value="split">Split stream (Move matched pattern to new column)</option>
+                      </select>
+                    </div>
+
+                    {patternAction === 'split' && (
+                      <div className="space-y-1.5 animate-slideDown">
+                        <label className="text-[10px] font-bold text-slate-400 block">New Extraction Column Name</label>
+                        <input
+                          type="text"
+                          value={newColName}
+                          onChange={(e) => setNewColName(e.target.value)}
+                          placeholder={patternColumn ? `${patternColumn}_extracted` : 'e.g. Extracted_Email'}
+                          className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                            isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                          }`}
+                        />
+                        <p className="text-[9px] text-slate-400">This column will capture the matched strings. The original column will keep the residual text.</p>
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={runPatternSanitization}
+                      disabled={!patternColumn || (patternPreset === 'custom' && !customRegex)}
+                      className={`w-full py-2.5 rounded-lg text-xs font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-yellow-300" /> Execute Pattern Sanitize
                     </button>
                   </div>
                 )}

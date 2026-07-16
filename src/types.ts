@@ -14,6 +14,16 @@ export interface AuditIssue {
   status: 'open' | 'ignored' | 'resolved';
 }
 
+export interface DetectedFormatMetadata {
+  dateFormats: Record<string, string>; // Maps column header to detected format
+  currencySettings: {
+    column: string;
+    symbol: string;
+    decimalSeparator: string;
+    thousandSeparator: string;
+  }[];
+}
+
 export interface CSVFile {
   id: string;
   name: string;
@@ -28,6 +38,7 @@ export interface CSVFile {
   ownerId?: string;
   totalRowsCount?: number;
   isLargeFile?: boolean;
+  detectedMetadata?: DetectedFormatMetadata;
 }
 
 export interface TeamMember {

@@ -2,17 +2,17 @@ import { CSVFile, TeamMember, AuditActivity, AuditIssue } from './types';
 
 // Messy transaction sample rows
 export const MESSY_ROWS: Record<string, string>[] = [
-  { Transaction_ID: 'TXN-1001', Date: '2026-06-01', Customer_Name: 'Acme Corp', Amount: '1250.00', Category: 'Software', Country: 'United States' },
-  { Transaction_ID: 'TXN-1002', Date: '2026-06-02', Customer_Name: 'Global Industries', Amount: '4500.50', Category: 'Hardware', Country: 'United Kingdom' },
-  { Transaction_ID: 'TXN-1001', Date: '2026-06-01', Customer_Name: 'Acme Corp', Amount: '1250.00', Category: 'Software', Country: 'United States' }, // Duplicate
-  { Transaction_ID: 'TXN-1003', Date: '2026-06-03', Customer_Name: 'Nesta Labs', Amount: '', Category: 'Consulting', Country: 'Canada' }, // Missing Amount
-  { Transaction_ID: 'TXN-1004', Date: '04/06/2026', Customer_Name: 'Hooli Inc', Amount: '350.00', Category: 'SaaS', Country: 'United States' }, // Inconsistent date format
-  { Transaction_ID: 'TXN-1005', Date: '2026-06-05', Customer_Name: 'Zenith Retail', Amount: '240.00', Category: 'software', Country: 'us' }, // Case issues
-  { Transaction_ID: 'TXN-1006', Date: '2026-06-08', Customer_Name: 'Initech SA', Amount: '1500000.00', Category: 'Acquisition', Country: 'Germany' }, // Outlier amount
-  { Transaction_ID: 'TXN-1007', Date: '2026-06-09', Customer_Name: 'E-Corp Ltd', Amount: '890.00', Category: '', Country: 'France' }, // Missing category
-  { Transaction_ID: 'TXN-1008', Date: '2026-06-10', Customer_Name: 'Tyrell Nexus', Amount: '-150.00', Category: 'Refund', Country: 'Japan' }, // Negative amount check (Warning/Info)
-  { Transaction_ID: 'TXN-1009', Date: '2026-06-11', Customer_Name: 'Stark Enterprises', Amount: '45000.00', Category: 'Security', Country: 'United States' },
-  { Transaction_ID: 'TXN-1010', Date: '2026-06-12', Customer_Name: 'Wayne Corp', Amount: '12500.00', Category: 'Security', Country: 'United States' },
+  { Transaction_ID: 'TXN-1001', Date: '2026-06-01', Customer_Name: 'Acme Corp', Amount: '1250.00', Category: 'Software', Country: 'United States', Contact_Info: '+1 (555) 019-2834 / sales@acme.com' },
+  { Transaction_ID: 'TXN-1002', Date: '2026-06-02', Customer_Name: 'Global Industries', Amount: '4500.50', Category: 'Hardware', Country: 'United Kingdom', Contact_Info: 'support@global.com' },
+  { Transaction_ID: 'TXN-1001', Date: '2026-06-01', Customer_Name: 'Acme Corp', Amount: '1250.00', Category: 'Software', Country: 'United States', Contact_Info: '+1 (555) 019-2834' }, // Duplicate
+  { Transaction_ID: 'TXN-1003', Date: '2026-06-03', Customer_Name: 'Nesta Labs', Amount: '', Category: 'Consulting', Country: 'Canada', Contact_Info: 'info@nesta.ca or 416-555-0199' }, // Missing Amount
+  { Transaction_ID: 'TXN-1004', Date: '04/06/2026', Customer_Name: 'Hooli Inc', Amount: '350.00', Category: 'SaaS', Country: 'United States', Contact_Info: 'gavin@hooli.com' }, // Inconsistent date format
+  { Transaction_ID: 'TXN-1005', Date: '2026-06-05', Customer_Name: 'Zenith Retail', Amount: '240.00', Category: 'software', Country: 'us', Contact_Info: '555-0122' }, // Case issues
+  { Transaction_ID: 'TXN-1006', Date: '2026-06-08', Customer_Name: 'Initech SA', Amount: '1500000.00', Category: 'Acquisition', Country: 'Germany', Contact_Info: 'lumberg@initech.com' }, // Outlier amount
+  { Transaction_ID: 'TXN-1007', Date: '2026-06-09', Customer_Name: 'E-Corp Ltd', Amount: '890.00', Category: '', Country: 'France', Contact_Info: 'contact@ecorp.net' }, // Missing category
+  { Transaction_ID: 'TXN-1008', Date: '2026-06-10', Customer_Name: 'Tyrell Nexus', Amount: '-150.00', Category: 'Refund', Country: 'Japan', Contact_Info: 'rachel@tyrell.jp' }, // Negative amount check (Warning/Info)
+  { Transaction_ID: 'TXN-1009', Date: '2026-06-11', Customer_Name: 'Stark Enterprises', Amount: '45000.00', Category: 'Security', Country: 'United States', Contact_Info: 'tony@stark.com / +1 (800) 555-0100' },
+  { Transaction_ID: 'TXN-1010', Date: '2026-06-12', Customer_Name: 'Wayne Corp', Amount: '12500.00', Category: 'Security', Country: 'United States', Contact_Info: 'bruce@wayne.tech' },
 ];
 
 export const MESSY_ISSUES: AuditIssue[] = [
@@ -102,7 +102,7 @@ export const SAMPLE_MESSY_FILE: CSVFile = {
   uploadedAt: '2026-06-23 10:15 AM',
   status: 'completed',
   score: 68,
-  headers: ['Transaction_ID', 'Date', 'Customer_Name', 'Amount', 'Category', 'Country'],
+  headers: ['Transaction_ID', 'Date', 'Customer_Name', 'Amount', 'Category', 'Country', 'Contact_Info'],
   rows: MESSY_ROWS,
   issues: MESSY_ISSUES,
 };
