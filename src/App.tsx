@@ -850,6 +850,7 @@ export default function App() {
                       onNavigate={handleNavigateTab}
                       isDarkMode={isDarkMode}
                       accentClass={accentClass}
+                      onUpdateFile={handleUpdateFile}
                     />
                   )}
 

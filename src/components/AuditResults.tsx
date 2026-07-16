@@ -23,9 +23,10 @@ interface AuditResultsProps {
   onNavigate: (tab: string) => void;
   isDarkMode: boolean;
   accentClass: string;
+  onUpdateFile: (updatedFile: CSVFile) => void;
 }
 
-export default function AuditResults({ activeFile, onNavigate, isDarkMode, accentClass }: AuditResultsProps) {
+export default function AuditResults({ activeFile, onNavigate, isDarkMode, accentClass, onUpdateFile }: AuditResultsProps) {
   const [severityFilter, setSeverityFilter] = useState<'all' | Severity>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | IssueType>('all');
   const [expandedIssue, setExpandedIssue] = useState<string | null>(null);
@@ -213,6 +214,189 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
       setAiExplanations(prev => ({ ...prev, [issueId]: explanation }));
       setAiLoading(null);
     }, 800);
+  };
+
+  const handleQuickFix = (issue: AuditIssue) => {
+    if (!activeFile || !onUpdateFile) return;
+
+    const currentRows = activeFile.cleanedRows ? [...activeFile.cleanedRows] : [...activeFile.rows];
+    
+    // Find matching row index in currentRows
+    let targetIdx = -1;
+    if (issue.row !== undefined) {
+      const idx1 = issue.row - 1;
+      const idx2 = issue.row - 2;
+      if (idx1 >= 0 && idx1 < currentRows.length && String(currentRows[idx1][issue.column]) === String(issue.value)) {
+        targetIdx = idx1;
+      } else if (idx2 >= 0 && idx2 < currentRows.length && String(currentRows[idx2][issue.column]) === String(issue.value)) {
+        targetIdx = idx2;
+      } else {
+        targetIdx = currentRows.findIndex(r => String(r[issue.column]) === String(issue.value));
+      }
+    } else if (issue.value !== undefined && issue.value !== '') {
+      targetIdx = currentRows.findIndex(r => String(r[issue.column]) === String(issue.value));
+    }
+
+    // Fallback if targetIdx is still -1 and it is a missing value issue
+    if (targetIdx === -1 && issue.type === 'missing_value') {
+      const idx1 = issue.row ? issue.row - 1 : -1;
+      const idx2 = issue.row ? issue.row - 2 : -1;
+      if (idx1 >= 0 && idx1 < currentRows.length && (!currentRows[idx1][issue.column] || currentRows[idx1][issue.column].trim() === '')) {
+        targetIdx = idx1;
+      } else if (idx2 >= 0 && idx2 < currentRows.length && (!currentRows[idx2][issue.column] || currentRows[idx2][issue.column].trim() === '')) {
+        targetIdx = idx2;
+      } else {
+        targetIdx = currentRows.findIndex(r => !r[issue.column] || r[issue.column].trim() === '');
+      }
+    }
+
+    let updatedRows = [...currentRows];
+
+    switch (issue.type) {
+      case 'duplicate':
+        if (targetIdx !== -1) {
+          updatedRows = currentRows.filter((_, idx) => idx !== targetIdx);
+        } else {
+          // If row index couldn't be resolved, remove duplicates of this value
+          const seenVal = new Set();
+          updatedRows = currentRows.filter(r => {
+            const val = r[issue.column];
+            if (val === issue.value) {
+              if (seenVal.has(val)) return false;
+              seenVal.add(val);
+            }
+            return true;
+          });
+        }
+        break;
+
+      case 'missing_value': {
+        let fillValue = 'Uncategorized';
+        const isNumericCol = issue.column.toLowerCase() === 'amount' || 
+                             issue.column.toLowerCase().includes('price') || 
+                             issue.column.toLowerCase().includes('quantity');
+        
+        if (isNumericCol) {
+          const numbers = currentRows
+            .map(row => row[issue.column])
+            .filter(val => val !== undefined && val !== null && String(val).trim() !== '')
+            .map(val => Number(val))
+            .filter(n => !isNaN(n));
+          if (numbers.length > 0) {
+            const avg = numbers.reduce((sum, val) => sum + val, 0) / numbers.length;
+            fillValue = avg.toFixed(2);
+          } else {
+            fillValue = '0.00';
+          }
+        } else if (issue.column.toLowerCase() === 'category') {
+          fillValue = 'Uncategorized';
+        } else {
+          fillValue = 'N/A';
+        }
+
+        if (targetIdx !== -1) {
+          updatedRows = currentRows.map((row, idx) => 
+            idx === targetIdx ? { ...row, [issue.column]: fillValue } : row
+          );
+        } else {
+          updatedRows = currentRows.map(row => 
+            (!row[issue.column] || row[issue.column].trim() === '') ? { ...row, [issue.column]: fillValue } : row
+          );
+        }
+        break;
+      }
+
+      case 'invalid_format': {
+        if (targetIdx !== -1) {
+          const rawVal = currentRows[targetIdx][issue.column] || '';
+          let formatted = rawVal;
+          if (rawVal.includes('/')) {
+            const parts = rawVal.split('/');
+            if (parts.length === 3) {
+              const p0 = parseInt(parts[0]);
+              const p1 = parseInt(parts[1]);
+              const year = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
+              
+              let day = p0;
+              let month = p1;
+              if (p0 > 12) {
+                day = p0;
+                month = p1;
+              } else if (p1 > 12) {
+                day = p1;
+                month = p0;
+              } else {
+                day = p0;
+                month = p1;
+              }
+              const mm = month < 10 ? `0${month}` : `${month}`;
+              const dd = day < 10 ? `0${day}` : `${day}`;
+              formatted = `${year}-${mm}-${dd}`;
+            }
+          }
+          updatedRows = currentRows.map((row, idx) => 
+            idx === targetIdx ? { ...row, [issue.column]: formatted } : row
+          );
+        }
+        break;
+      }
+
+      case 'column_inconsistency': {
+        const fixInconsistency = (val: string) => {
+          if (issue.column.toLowerCase() === 'country') {
+            if (val.toLowerCase() === 'us' || val.toLowerCase() === 'united states') return 'United States';
+            if (val.toLowerCase() === 'uk' || val.toLowerCase() === 'united kingdom') return 'United Kingdom';
+          }
+          return val.charAt(0).toUpperCase() + val.slice(1).toLowerCase();
+        };
+
+        if (targetIdx !== -1) {
+          updatedRows = currentRows.map((row, idx) => 
+            idx === targetIdx ? { ...row, [issue.column]: fixInconsistency(row[issue.column] || '') } : row
+          );
+        } else {
+          updatedRows = currentRows.map(row => {
+            const val = row[issue.column] || '';
+            if (val === issue.value) {
+              return { ...row, [issue.column]: fixInconsistency(val) };
+            }
+            return row;
+          });
+        }
+        break;
+      }
+
+      case 'outlier': {
+        const numericValues = currentRows
+          .map(r => Number(r[issue.column]))
+          .filter(n => !isNaN(n))
+          .sort((a, b) => a - b);
+        const median = numericValues.length > 0 ? numericValues[Math.floor(numericValues.length / 2)] : 1250;
+        const cappedVal = (median * 3.5).toFixed(2);
+
+        if (targetIdx !== -1) {
+          updatedRows = currentRows.map((row, idx) => 
+            idx === targetIdx ? { ...row, [issue.column]: cappedVal } : row
+          );
+        }
+        break;
+      }
+
+      default:
+        break;
+    }
+
+    // Mark issue as resolved
+    const updatedIssues = activeFile.issues.map(i => 
+      i.id === issue.id ? { ...i, status: 'resolved' as const } : i
+    );
+
+    onUpdateFile({
+      ...activeFile,
+      cleanedRows: updatedRows,
+      issues: updatedIssues,
+      score: Math.min(100, activeFile.score + 5)
+    });
   };
 
   return (
@@ -469,6 +653,24 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
                   </div>
 
                   <div className="flex items-center gap-4">
+                    {issue.status === 'open' ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleQuickFix(issue);
+                        }}
+                        className={`px-3 py-1 text-[11px] font-bold text-white rounded-lg flex items-center gap-1.5 transition-all shadow-xs cursor-pointer hover:scale-[1.02] active:scale-[0.98] ${accentClass}`}
+                      >
+                        <Sparkles className="w-3 h-3.5" />
+                        <span>One-Click Fix</span>
+                      </button>
+                    ) : (
+                      <span className="px-2.5 py-1 text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Fixed</span>
+                      </span>
+                    )}
                     {getSeverityBadge(issue.severity)}
                     {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />}
                   </div>
@@ -479,9 +681,21 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
                   <div className={`p-5 border-t border-dashed bg-slate-900/10 ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
                     <div className="space-y-4">
                       {/* Suggestion block */}
-                      <div className="text-xs">
-                        <span className="font-bold uppercase tracking-widest text-slate-400 block mb-1">Recommended Solution:</span>
-                        <p className={isDarkMode ? 'text-slate-200 font-semibold' : 'text-slate-700 font-semibold'}>{issue.suggestion}</p>
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-950/20 p-3.5 rounded-xl border border-slate-800/40">
+                        <div className="text-xs text-left">
+                          <span className="font-bold uppercase tracking-widest text-slate-400 block mb-1">Recommended Solution:</span>
+                          <p className={isDarkMode ? 'text-slate-200 font-semibold' : 'text-slate-700 font-semibold'}>{issue.suggestion}</p>
+                        </div>
+                        {issue.status === 'open' && (
+                          <button
+                            type="button"
+                            onClick={() => handleQuickFix(issue)}
+                            className={`px-4 py-2 text-xs font-extrabold text-white rounded-xl shadow-md cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center gap-1.5 shrink-0 ${accentClass}`}
+                          >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            <span>Apply Fix</span>
+                          </button>
+                        )}
                       </div>
 
                       {/* AI Explanations Screen 7 helper button */}
