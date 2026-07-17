@@ -45,6 +45,7 @@ import TeamCollaboration from './components/TeamCollaboration';
 import SettingsView from './components/SettingsView';
 import AdminPanel from './components/AdminPanel';
 import GmailCenter from './components/GmailCenter';
+import CookieBanner, { getCookie, setCookie } from './components/CookieBanner';
 
 // Import Firebase integration
 import { auth, db, OperationType, handleFirestoreError } from './firebase';
@@ -123,6 +124,50 @@ export default function App() {
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Load state preferences from cookies if allowed on initial mount
+  useEffect(() => {
+    const consentPrefs = getCookie('cookie_consent_preferences');
+    if (consentPrefs) {
+      try {
+        const parsed = JSON.parse(consentPrefs);
+        if (parsed.personalization) {
+          const themeCookie = getCookie('app_theme');
+          const accentCookie = getCookie('app_accent');
+          const tabCookie = getCookie('app_last_tab');
+          
+          if (themeCookie) {
+            setIsDarkMode(themeCookie === 'dark');
+          }
+          if (accentCookie) {
+            setSettings(prev => ({ ...prev, accentColor: accentCookie as any }));
+          }
+          if (tabCookie) {
+            setActiveTab(tabCookie);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to parse cookie preferences on startup", e);
+      }
+    }
+  }, []);
+
+  // Sync state preferences to cookies when state changes
+  useEffect(() => {
+    const consentPrefs = getCookie('cookie_consent_preferences');
+    if (consentPrefs) {
+      try {
+        const parsed = JSON.parse(consentPrefs);
+        if (parsed.personalization) {
+          setCookie('app_theme', isDarkMode ? 'dark' : 'light', 365);
+          setCookie('app_accent', settings.accentColor, 365);
+          setCookie('app_last_tab', activeTab, 365);
+        }
+      } catch (e) {
+        console.error("Failed to save state to cookies", e);
+      }
+    }
+  }, [isDarkMode, settings.accentColor, activeTab]);
 
   // Monitor auth state changes
   useEffect(() => {
@@ -974,6 +1019,20 @@ export default function App() {
 
         </div>
       )}
+
+      {/* Cookie Consent & Preferences Inspector Control */}
+      <CookieBanner 
+        isDarkMode={isDarkMode} 
+        accentClass={accentClass}
+        onPreferencesChange={(updatedPrefs) => {
+          // If personalization was newly accepted or rejected, sync
+          if (updatedPrefs.personalization) {
+            setCookie('app_theme', isDarkMode ? 'dark' : 'light', 365);
+            setCookie('app_accent', settings.accentColor, 365);
+            setCookie('app_last_tab', activeTab, 365);
+          }
+        }}
+      />
 
     </div>
   );

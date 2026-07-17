@@ -22,7 +22,8 @@ import {
   ChevronUp,
   Terminal,
   Copy,
-  Check
+  Check,
+  Cookie
 } from 'lucide-react';
 import { SystemSettings } from '../types';
 
@@ -642,6 +643,37 @@ export default function SettingsView({ settings, onUpdateSettings, isDarkMode, t
 
             </motion.div>
           )}
+        </div>
+
+        {/* Cookie Privacy & Live Consent Management */}
+        <div className={`p-6 rounded-2xl border transition-all duration-300 ${isDarkMode ? 'bg-slate-900/40 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
+          <div className="flex items-center justify-between text-left flex-wrap sm:flex-nowrap gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-500 shrink-0">
+                <Cookie className="w-5 h-5 text-indigo-500" />
+              </div>
+              <div>
+                <h3 className={`font-extrabold text-sm ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
+                  Cookie Privacy & Consent Hub
+                </h3>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  View and manage active browser cookies used for workspace themes, telemetry metrics, and user preferences.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const btn = document.querySelector('[title="Open Cookie Preferences"]') as HTMLButtonElement | null;
+                if (btn) {
+                  btn.click();
+                }
+              }}
+              className="px-3.5 py-1.5 rounded-lg text-[10px] font-extrabold bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer transition-all flex items-center gap-1.5 shadow-sm shrink-0"
+            >
+              <Settings className="w-3.5 h-3.5" /> Reconfigure Cookies
+            </button>
+          </div>
         </div>
 
         {/* Terms of Service & Privacy Policy Panel */}

@@ -268,6 +268,45 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
     setExportDropdownOpen(false);
   };
 
+  const exportIssuesOnlyRows = () => {
+    const rows = activeFile.cleanedRows || activeFile.rows;
+    const issueRowNumbers = new Set<number>();
+    
+    // Collect 1-indexed row numbers from mergedIssues
+    mergedIssues.forEach(issue => {
+      if (issue.row !== undefined && issue.status === 'open') {
+        issueRowNumbers.add(issue.row);
+      }
+    });
+
+    // Fallback if no open issues exist: check all issues of any status
+    if (issueRowNumbers.size === 0) {
+      mergedIssues.forEach(issue => {
+        if (issue.row !== undefined) {
+          issueRowNumbers.add(issue.row);
+        }
+      });
+    }
+
+    const issuesOnlyRows = rows.filter((_, idx) => {
+      const humanRowIndex = idx + 2;
+      return issueRowNumbers.has(humanRowIndex);
+    });
+
+    const headersRow = activeFile.headers.map(h => `"${h.replace(/"/g, '""')}"`).join(',');
+    const rowsData = issuesOnlyRows.map(row => {
+      return activeFile.headers.map(header => {
+        const val = row[header] !== undefined ? String(row[header]) : '';
+        return `"${val.replace(/"/g, '""')}"`;
+      }).join(',');
+    });
+
+    const csvContent = [headersRow, ...rowsData].join('\n');
+    const baseName = activeFile.name.replace(/\.csv$/i, '');
+    downloadBlob(csvContent, `${baseName}_rows_with_issues.csv`);
+    setExportDropdownOpen(false);
+  };
+
   const getSeverityBadge = (severity: Severity) => {
     switch (severity) {
       case 'critical':
@@ -713,6 +752,22 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
               <option value="outlier">Outliers</option>
             </select>
 
+            {/* Download CSV (Rows with Issues) Button */}
+            <button
+              type="button"
+              id="audit-results-download-issues-btn"
+              onClick={exportIssuesOnlyRows}
+              className={`px-3 py-1.5 rounded-lg border font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                isDarkMode 
+                  ? 'bg-rose-500/10 border-rose-500/20 hover:border-rose-500/40 text-rose-400 hover:bg-rose-500/20 hover:text-rose-200' 
+                  : 'bg-rose-50 border-rose-100 text-rose-700 hover:bg-rose-100 hover:text-rose-900 hover:border-rose-300'
+              }`}
+              title="Download only rows that have compliance issues for offline review"
+            >
+              <Download className="w-3.5 h-3.5 text-rose-500" />
+              <span>Download CSV (Rows with Issues)</span>
+            </button>
+
             {/* Export Dropdown Button */}
             <div className="relative">
               <button
@@ -788,6 +843,24 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
                           {severityFilter === 'all' && typeFilter === 'all'
                             ? 'Select a severity or type filter to export subset.'
                             : `Download only the ${affectedRowsCount} rows matching active filters.`}
+                        </span>
+                      </div>
+                    </button>
+
+                    {/* Option 2.5: Rows with Issues Only */}
+                    <button
+                      type="button"
+                      id="export-option-issues-only"
+                      onClick={exportIssuesOnlyRows}
+                      className={`w-full px-3 py-2 text-left transition-colors flex items-start gap-2.5 cursor-pointer ${
+                        isDarkMode ? 'hover:bg-slate-900' : 'hover:bg-slate-50'
+                      }`}
+                    >
+                      <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-bold text-xs block">Rows with Issues Only</span>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">
+                          Download only the rows currently identified as having quality issues.
                         </span>
                       </div>
                     </button>

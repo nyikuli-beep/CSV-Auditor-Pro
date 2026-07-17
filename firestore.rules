@@ -77,6 +77,15 @@ service cloud.firestore {
             && (data.keys().size() == 5 || (data.keys().size() == 6 && data.keys().hasAll(['avatar']))));
     }
 
+    function isValidDraft(data) {
+      return data.userId is string && data.userId.size() <= 128
+        && data.mappings is map
+        && data.explanations is map
+        && data.updatedAt is string
+        && (data.keys().hasAll(['userId', 'mappings', 'explanations', 'updatedAt']) 
+            && (data.keys().size() == 4 || (data.keys().size() == 5 && data.keys().hasAll(['pendingFile']))));
+    }
+
     // --- COLLECTION MATCH BLOCKS ---
 
     // USERS COLLECTION
@@ -118,6 +127,14 @@ service cloud.firestore {
           incoming().diff(existing()).affectedKeys().hasOnly(['role', 'status'])
         );
       allow delete: if isVerified() && isValidId(memberId);
+    }
+
+    // DRAFTS COLLECTION
+    match /drafts/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId) && isValidId(userId);
+      allow list: if false;
+      allow create, update: if isVerified() && (request.auth.uid == userId) && isValidId(userId) && isValidDraft(incoming());
+      allow delete: if isVerified() && (request.auth.uid == userId) && isValidId(userId);
     }
   }
 }

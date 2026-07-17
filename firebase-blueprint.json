@@ -121,6 +121,29 @@
         }
       },
       "required": ["id", "name", "email", "role", "status"]
+    },
+    "DraftUploadState": {
+      "title": "DraftUploadState",
+      "description": "In-progress CSV upload and mapping configuration drafts.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string"
+        },
+        "pendingFile": {
+          "type": "object"
+        },
+        "mappings": {
+          "type": "object"
+        },
+        "explanations": {
+          "type": "object"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": ["userId", "mappings", "explanations", "updatedAt"]
     }
   },
   "firestore": {
@@ -139,6 +162,10 @@
     "/members/{memberId}": {
       "schema": "TeamMember",
       "description": "Shared list of invited colleagues in the tenancy segment."
+    },
+    "/drafts/{userId}": {
+      "schema": "DraftUploadState",
+      "description": "Auto-saved in-progress upload state and mappings."
     }
   }
 }

@@ -455,6 +455,152 @@ app.post('/api/gemini/analyze-headers', async (req, res) => {
   }
 });
 
+// Programmatic helper to apply standard formatting fallback
+const programmaticBulkAutoFix = (headers: string[], rows: Record<string, string>[]) => {
+  return rows.map(row => {
+    const cleanedRow: Record<string, string> = {};
+    headers.forEach(header => {
+      let val = row[header];
+      if (val === undefined || val === null) {
+        cleanedRow[header] = '';
+        return;
+      }
+      val = String(val).trim();
+      
+      const lowerHeader = header.toLowerCase();
+      
+      // 1. Correct dates: convert MM/DD/YYYY or DD-MM-YYYY or other formats to YYYY-MM-DD
+      if (lowerHeader.includes('date') || lowerHeader.includes('time') || lowerHeader.includes('timestamp')) {
+        let dateObj: Date | null = null;
+        
+        // Match standard format formats
+        if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/.test(val)) {
+          const parts = val.split(/[\/\-]/);
+          const p0 = parseInt(parts[0], 10);
+          const p1 = parseInt(parts[1], 10);
+          const p2 = parseInt(parts[2], 10);
+          if (p0 > 12) { // DD/MM/YYYY
+            dateObj = new Date(p2, p1 - 1, p0);
+          } else if (p1 > 12) { // MM/DD/YYYY
+            dateObj = new Date(p2, p0 - 1, p1);
+          } else {
+            // Default to MM/DD/YYYY
+            dateObj = new Date(p2, p0 - 1, p1);
+          }
+        } else {
+          const parsed = Date.parse(val);
+          if (!isNaN(parsed)) {
+            dateObj = new Date(parsed);
+          }
+        }
+        
+        if (dateObj && !isNaN(dateObj.getTime())) {
+          const yyyy = dateObj.getFullYear();
+          const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+          const dd = String(dateObj.getDate()).padStart(2, '0');
+          val = `${yyyy}-${mm}-${dd}`;
+        }
+      }
+      
+      // 2. Normalizing casing
+      // Email addresses
+      else if (lowerHeader.includes('email') || val.includes('@')) {
+        val = val.toLowerCase();
+      }
+      // Customer/Name
+      else if (lowerHeader.includes('name') || lowerHeader.includes('client') || lowerHeader.includes('customer') || lowerHeader.includes('buyer') || lowerHeader.includes('recipient')) {
+        val = val.replace(/\b\w/g, c => c.toUpperCase());
+      }
+      // Country / Location
+      else if (lowerHeader.includes('country') || lowerHeader.includes('nation')) {
+        if (val.length <= 3) {
+          val = val.toUpperCase();
+        } else {
+          val = val.replace(/\b\w/g, c => c.toUpperCase());
+        }
+      }
+      
+      // 3. Normalizing currency/amounts: remove currency symbols and spacing
+      else if (lowerHeader.includes('amount') || lowerHeader.includes('price') || lowerHeader.includes('total') || lowerHeader.includes('cost') || lowerHeader.includes('pay') || lowerHeader.includes('fee')) {
+        const cleaned = val.replace(/[^0-9.\-]/g, '');
+        if (cleaned && !isNaN(parseFloat(cleaned))) {
+          val = parseFloat(cleaned).toFixed(2);
+        }
+      }
+      
+      cleanedRow[header] = val;
+    });
+    return cleanedRow;
+  });
+};
+
+// API: Bulk Auto-Fix data rows using Gemini API
+app.post('/api/gemini/bulk-autofix', async (req, res) => {
+  const { headers, rows } = req.body;
+
+  if (!headers || !Array.isArray(headers) || !rows || !Array.isArray(rows)) {
+    res.status(400).json({ error: 'Headers and rows arrays are required' });
+    return;
+  }
+
+  const ai = getGeminiClient();
+
+  if (!ai) {
+    console.log('Gemini API key missing, executing programmatic formatting fallback.');
+    const cleaned = programmaticBulkAutoFix(headers, rows);
+    res.json({ success: true, rows: cleaned, method: 'programmatic' });
+    return;
+  }
+
+  try {
+    const systemInstruction = 
+      "You are an expert data formatting and cleaning AI named Gemini Data Auto-Fixer.\n" +
+      "Your task is to take an array of rows (representing database records) and apply clean-up rules:\n" +
+      "1. Trim leading/trailing whitespaces.\n" +
+      "2. Format dates strictly to YYYY-MM-DD. (e.g., '04/06/2026' -> '2026-06-04').\n" +
+      "3. Normalize text casing (names: title case like 'John Doe', email: lowercase, country: proper uppercase like 'USA' or 'United Kingdom').\n" +
+      "4. Strip currency symbols and commas from numerical columns so they are clean numeric values (e.g., '$1,200.50' -> '1200.50').\n" +
+      "5. Maintain exact headers (keys) of the rows.\n" +
+      "Return ONLY a valid JSON array of corrected row objects. Do not wrap in markdown or add text.";
+
+    const promptText = 
+      `Analyze and fix these spreadsheet rows:\n` +
+      `Headers: ${JSON.stringify(headers)}\n` +
+      `Rows: ${JSON.stringify(rows)}\n\n` +
+      `Please return the cleaned rows JSON array.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.5-flash',
+      contents: promptText,
+      config: {
+        systemInstruction: systemInstruction,
+        responseMimeType: 'application/json',
+        temperature: 0.1,
+      }
+    });
+
+    const responseText = response.text || '';
+    try {
+      const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+      const cleaned = JSON.parse(cleanJson);
+      if (Array.isArray(cleaned)) {
+        res.json({ success: true, rows: cleaned, method: 'gemini' });
+      } else {
+        throw new Error('Response is not an array');
+      }
+    } catch (e) {
+      console.warn('Failed to parse Gemini auto-fix output, using programmatic fallback:', responseText);
+      const cleaned = programmaticBulkAutoFix(headers, rows);
+      res.json({ success: true, rows: cleaned, method: 'programmatic' });
+    }
+
+  } catch (err: any) {
+    console.error('Gemini bulk-autofix failed, using programmatic fallback:', err);
+    const cleaned = programmaticBulkAutoFix(headers, rows);
+    res.json({ success: true, rows: cleaned, method: 'programmatic' });
+  }
+});
+
 // 2. Health check route
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', api: 'online', database: 'connected' });

@@ -20,6 +20,7 @@ import {
   Download
 } from 'lucide-react';
 import { CSVFile, AuditIssue } from '../types';
+import RegexBuilder from './RegexBuilder';
 
 interface CleaningCenterProps {
   activeFile: CSVFile | null;
@@ -68,6 +69,8 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
   const [patternColumn, setPatternColumn] = useState('');
   const [patternPreset, setPatternPreset] = useState('email');
   const [customRegex, setCustomRegex] = useState('');
+  const [showValidationRegexBuilder, setShowValidationRegexBuilder] = useState(false);
+  const [showPatternRegexBuilder, setShowPatternRegexBuilder] = useState(false);
   const [patternAction, setPatternAction] = useState('remove'); // 'remove', 'extract', 'split'
   const [newColName, setNewColName] = useState('');
 
@@ -425,6 +428,15 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
       } else if (validationRule === 'substring') {
         isValid = val.toLowerCase().includes(customSubstring.toLowerCase());
         failureMsg = `Value "${val}" does not contain substring "${customSubstring}"`;
+      } else if (validationRule === 'regex') {
+        try {
+          const r = new RegExp(customRegex);
+          isValid = r.test(val);
+          failureMsg = `Value "${val}" does not match custom pattern /${customRegex}/`;
+        } catch (err) {
+          isValid = false;
+          failureMsg = `Invalid regex pattern: /${customRegex}/`;
+        }
       }
 
       if (!isValid) {
@@ -1171,6 +1183,7 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
                         <option value="length">Text Length Boundaries</option>
                         <option value="required">Non-Empty (Required Field)</option>
                         <option value="substring">Must Contain Substring</option>
+                        <option value="regex">Custom Regex Pattern Match</option>
                       </select>
                     </div>
 
@@ -1247,6 +1260,48 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
                       </div>
                     )}
 
+                    {validationRule === 'regex' && (
+                      <div className="space-y-3 animate-slideDown">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Custom Regex Match</label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={customRegex}
+                              onChange={(e) => setCustomRegex(e.target.value)}
+                              placeholder="e.g. [A-Z]{3}-\d{4}"
+                              className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                                isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                              }`}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowValidationRegexBuilder(!showValidationRegexBuilder)}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold shrink-0 cursor-pointer text-white bg-indigo-600 hover:bg-indigo-500 transition-all flex items-center gap-1 shadow-sm`}
+                            >
+                              <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
+                              {showValidationRegexBuilder ? 'Close Builder' : 'Build Visually'}
+                            </button>
+                          </div>
+                          <p className="text-[9px] text-slate-400">Specify regex body without slashes or flags (e.g., matching codes, IDs, formats).</p>
+                        </div>
+
+                        {showValidationRegexBuilder && (
+                          <div className="pt-2">
+                            <RegexBuilder
+                              initialRegex={customRegex}
+                              onSavePattern={(pattern) => {
+                                setCustomRegex(pattern);
+                                setShowValidationRegexBuilder(false);
+                              }}
+                              onClose={() => setShowValidationRegexBuilder(false)}
+                              isDarkMode={isDarkMode}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">If Assertion Fails</label>
@@ -1288,7 +1343,7 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
                     <button
                       type="button"
                       onClick={runValidationRule}
-                      disabled={!validateColumn}
+                      disabled={!validateColumn || (validationRule === 'regex' && !customRegex)}
                       className={`w-full py-2 rounded-lg text-xs font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-1 shadow-md ${accentClass} disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" /> Execute Validation Audit
@@ -1360,18 +1415,44 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
                     </div>
 
                     {patternPreset === 'custom' && (
-                      <div className="space-y-1.5 animate-slideDown">
-                        <label className="text-[10px] font-bold text-slate-400 block">Custom Regular Expression</label>
-                        <input
-                          type="text"
-                          value={customRegex}
-                          onChange={(e) => setCustomRegex(e.target.value)}
-                          placeholder="e.g. [A-Z]{3}-\d{4}"
-                          className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                            isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
-                          }`}
-                        />
-                        <p className="text-[9px] text-slate-400">Specify regex body without slashes or flags (e.g., matching codes or IDs).</p>
+                      <div className="space-y-3 animate-slideDown">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-slate-400 block">Custom Regular Expression</label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={customRegex}
+                              onChange={(e) => setCustomRegex(e.target.value)}
+                              placeholder="e.g. [A-Z]{3}-\d{4}"
+                              className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                                isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                              }`}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPatternRegexBuilder(!showPatternRegexBuilder)}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold shrink-0 cursor-pointer text-white bg-indigo-600 hover:bg-indigo-500 transition-all flex items-center gap-1 shadow-sm`}
+                            >
+                              <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
+                              {showPatternRegexBuilder ? 'Close Builder' : 'Build Visually'}
+                            </button>
+                          </div>
+                          <p className="text-[9px] text-slate-400">Specify regex body without slashes or flags (e.g., matching codes or IDs).</p>
+                        </div>
+
+                        {showPatternRegexBuilder && (
+                          <div className="pt-2">
+                            <RegexBuilder
+                              initialRegex={customRegex}
+                              onSavePattern={(pattern) => {
+                                setCustomRegex(pattern);
+                                setShowPatternRegexBuilder(false);
+                              }}
+                              onClose={() => setShowPatternRegexBuilder(false)}
+                              isDarkMode={isDarkMode}
+                            />
+                          </div>
+                        )}
                       </div>
                     )}
 
