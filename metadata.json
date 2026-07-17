@@ -1,6 +1,6 @@
 {
   "name": "CSV Auditor Pro",
   "description": "An AI-powered SaaS platform that helps businesses upload, analyze, clean, validate, and audit CSV files.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": ["microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

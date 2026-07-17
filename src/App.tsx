@@ -502,8 +502,14 @@ export default function App() {
   };
 
 
-  // Dispatch prompt context to full-stack backend
-  const handleSendChatMessage = async (msgContent: string) => {
+  // Dispatch prompt context to full-stack backend with multi-turn and custom model/persona support
+  const handleSendChatMessage = async (
+    msgContent: string, 
+    model: string = 'gemini-3.5-flash', 
+    persona: string = 'auditor',
+    image: { data: string; mimeType: string } | null = null,
+    thinkingMode: boolean = false
+  ) => {
     const userMsg: ChatMessage = {
       id: `msg-usr-${Date.now()}`,
       role: 'user',
@@ -518,6 +524,12 @@ export default function App() {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
+    // Capture current message history before state updates
+    const historyToSend = chatMessages.map(msg => ({
+      role: msg.role,
+      content: msg.content
+    }));
+
     // Update state with user message and thinking status
     setChatMessages(prev => [...prev, userMsg, aiThinkingMsg]);
 
@@ -527,6 +539,11 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt: msgContent,
+          history: historyToSend,
+          model: model,
+          persona: persona,
+          image: image,
+          thinkingMode: thinkingMode,
           fileContext: activeFile ? {
             fileName: activeFile.name,
             headers: activeFile.headers,

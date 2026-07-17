@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 
 // Database imports
@@ -18,7 +18,7 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 // --- SECURE CLOUD SQL DATABASE APIS ---
 
@@ -249,37 +249,126 @@ function getGeminiClient(): GoogleGenAI | null {
 
 // 1. API: Custom Gemini Audit Consultation (Full-stack AI integration)
 app.post('/api/gemini/chat', async (req, res) => {
-  const { prompt, fileContext } = req.body;
+  const { prompt, history = [], model = 'gemini-3.5-flash', persona = 'auditor', fileContext, image, thinkingMode = false } = req.body;
 
   if (!prompt) {
     res.status(400).json({ error: 'Prompt is required' });
     return;
   }
 
+  // Force gemini-3.1-pro-preview if image is provided or thinkingMode is enabled
+  let modelToUse = model;
+  if (image) {
+    modelToUse = 'gemini-3.1-pro-preview';
+  } else if (thinkingMode) {
+    modelToUse = 'gemini-3.1-pro-preview';
+  }
+
+  // Map dynamic system instructions by selected persona
+  let systemInstruction = 
+    "You are an expert data analyst and database compliance auditor named CSV Auditor Pro AI. " +
+    "The user will ask questions about their uploaded spreadsheet. " +
+    "Provide clear, concise, professional, and actionable steps. Explain why abnormalities occur " +
+    "and how they can be cleaned to maintain strict relational database constraints (e.g. NOT NULL, UNIQUE, correct DATE patterns).";
+
+  if (persona === 'architect') {
+    systemInstruction = 
+      "You are a senior PostgreSQL Database Architect named Postgres Architect AI. " +
+      "Analyze the user's spreadsheet schema and database goals. " +
+      "Help them design high-performance relational schemas, write optimal SQL DDLs (CREATE TABLE, index creation, foreign keys), " +
+      "explain normalization levels (1NF, 2NF, 3NF), and build structured queries to fetch or analyze their transaction data. " +
+      "Always provide clean, standard SQL that adheres to PostgreSQL best practices.";
+  } else if (persona === 'analyst') {
+    systemInstruction = 
+      "You are a strategic Business Intelligence Analyst named Business Analyst AI. " +
+      "Analyze the user's dataset metrics and spreadsheet summary. " +
+      "Provide executive summaries, track monthly/quarterly trends, spot financial outliers, and outline " +
+      "actionable business growth plans, ROI enhancements, and organizational decision-making frameworks. " +
+      "Speak in a polished, highly professional corporate advisory tone.";
+  }
+
   const ai = getGeminiClient();
 
   // Offline high-fidelity fallback if key is missing or calls are throttled
   if (!ai) {
-    console.log('Gemini API key not found in environment, falling back to simulated analysis.');
+    console.log(`Gemini API key not found in environment, falling back to simulated analysis for persona: ${persona}.`);
     
     let fallbackText = '';
     const q = prompt.toLowerCase();
     
-    if (q.includes('outlier') || q.includes('anomaly') || q.includes('risk')) {
-      fallbackText = `[Simulated Expert Data Auditor]
+    if (image) {
+      fallbackText = `[Simulated Image Analysis - Fallback Mode]
+I have reviewed your uploaded picture. Based on visual inspection:
+- The text/screenshot appears to display transactional metrics matching our current ${fileContext?.fileName || 'loaded spreadsheet'}.
+- Key values parsed: Standardized headers correspond to active data pipelines, but visual validation reveals clear cell gaps.
+- Action: I suggest running 'Fill Blank Cells' inside the Cleaning Center to resolve visual mismatches automatically!`;
+    } else if (thinkingMode) {
+      fallbackText = `[Postgres Auditor AI - HIGH THINKING Fallback Mode]
+*Thinking Process:*
+1. Parse complex prompt: "${prompt}"
+2. Evaluate constraints: Uniqueness validation, correct numeric formats, and date alignment.
+3. Formulate deep reasoning: Since the client wants advanced compliance profiling, the duplicate IDs represent a fatal key exception.
+*Conclusion:*
+I strongly advise using our automatic deduplication filters to ensure proper table structure before migrating to Postgres.`;
+    } else if (persona === 'architect') {
+      if (q.includes('schema') || q.includes('table') || q.includes('sql') || q.includes('ddl')) {
+        fallbackText = `[Postgres Architect AI - Fallback Mode]
+Based on your active dataset "${fileContext?.fileName || 'Company_Q2_Transactions_Messy.csv'}", I recommend the following normalized PostgreSQL table layout:
+
+\`\`\`sql
+CREATE TABLE transactions (
+    transaction_id VARCHAR(50) PRIMARY KEY,
+    transaction_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    customer_name VARCHAR(100) NOT NULL,
+    email_contact VARCHAR(150),
+    amount NUMERIC(12, 2) NOT NULL CHECK (amount >= 0),
+    category VARCHAR(50) DEFAULT 'Uncategorized',
+    country VARCHAR(3) DEFAULT 'USA'
+);
+
+-- Optimize queries by adding indices on common lookup parameters
+CREATE INDEX idx_transactions_customer ON transactions(customer_name);
+CREATE INDEX idx_transactions_date ON transactions(transaction_date);
+\`\`\`
+
+Let me know if you would like me to draft specific indexes or INSERT batches for your Postgres database!`;
+      } else {
+        fallbackText = `[Postgres Architect AI - Fallback Mode]
+I am analyzing your query regarding "${prompt}" from a relational schema lens. 
+For dataset "${fileContext?.fileName || 'Active_Data.csv'}" containing ${fileContext?.rowCount || 0} rows, we must ensure all identifiers satisfy uniqueness constraints, dates resolve to ISO format, and amount scales match numeric parameters. Let me know if you need database normalization tips!`;
+      }
+    } else if (persona === 'analyst') {
+      if (q.includes('trend') || q.includes('summary') || q.includes('roi') || q.includes('growth')) {
+        fallbackText = `[Business Analyst AI - Fallback Mode]
+### Executive Summary & BI Portfolio: "${fileContext?.fileName || 'Active_Data.csv'}"
+
+1. **Strategic Performance**: The dataset records ${fileContext?.rowCount || 0} active transaction pipelines. Correcting the mapping structure allows us to track conversion metrics accurately.
+2. **Growth Opportunities**: Unifying the "Country" metrics reveals that geographic segments remain under-served due to localized billing discrepancies.
+3. **Action Plan**:
+   - Standardize transaction metadata to unlock clear cohort analysis.
+   - Set up automatic triggers in your database pipeline to report high-yield accounts (> $10,000).`;
+      } else {
+        fallbackText = `[Business Analyst AI - Fallback Mode]
+I have reviewed your inquiry regarding "${prompt}". Under a strategic BI framework, ensuring clean, continuous ingestion is critical for calculating active customer lifetime values (LTV) and quarterly churn rates. Let me know if you want to model growth patterns or build predictive dashboards!`;
+      }
+    } else {
+      // Default: Compliance Auditor
+      if (q.includes('outlier') || q.includes('anomaly') || q.includes('risk')) {
+        fallbackText = `[CSV Auditor Pro AI - Fallback Mode]
 Analyzing transaction records for outliers:
 - I've flagged a high risk anomaly in Row 7 ("Initech SA") where the Amount is $1,500,000.00. This is over 400x higher than our median amount. This should be cross-verified with active invoice approvals immediately.
 - Duplicate transaction ID "TXN-1001" on Row 3 was also found. Purging this duplicate in the Cleaning Center will restore compliance and increase your score immediately.`;
-    } else if (q.includes('clean') || q.includes('deduplicate') || q.includes('fix')) {
-      fallbackText = `[Simulated Expert Data Auditor]
+      } else if (q.includes('clean') || q.includes('deduplicate') || q.includes('fix')) {
+        fallbackText = `[CSV Auditor Pro AI - Fallback Mode]
 To clean and prepare this dataset for PG database ingestion:
 1. Trigger "Remove Duplicate Records" to automatically purge row 3.
 2. Trigger "Standardize Date Formats" to convert Row 5's "04/06/2026" into proper ISO standards.
 3. Apply "Fill Missing Blank Cells" to safely impute row 4 and row 8 with standard defaults (0.00 and 'Uncategorized').`;
-    } else {
-      fallbackText = `[Simulated Expert Data Auditor]
+      } else {
+        fallbackText = `[CSV Auditor Pro AI - Fallback Mode]
 Received prompt: "${prompt}". 
 For file "${fileContext?.fileName || 'Company_Q2_Transactions_Messy.csv'}", I advise running structural validations. The schema has ${fileContext?.headersCount || 6} headers. Key metrics indicate 3 critical compliance errors (including un-imputed missing financial fields). Let me know if you would like me to formulate specific SQL insertion scripts for these cleaned rows!`;
+      }
     }
 
     res.json({ text: fallbackText });
@@ -287,33 +376,133 @@ For file "${fileContext?.fileName || 'Company_Q2_Transactions_Messy.csv'}", I ad
   }
 
   try {
-    const systemInstruction = 
-      "You are an expert data analyst and database auditor named CSV Auditor Pro AI. " +
-      "The user will ask questions about their uploaded spreadsheet. " +
-      "Provide clear, concise, professional, and actionable steps. Explain why abnormalities occur " +
-      "and how they can be cleaned to maintain strict relational database constraints (e.g. NOT NULL, UNIQUE, correct DATE patterns).";
+    const contextString = `[Spreadsheet System Context]
+Active Spreadsheet Name: "${fileContext?.fileName || 'Active_Data.csv'}"
+Headers: ${(fileContext?.headers || []).join(', ')}
+Row Count: ${fileContext?.rowCount || 0}
+Anomalies Found: ${fileContext?.issuesCount || 0}
+Please formulate your analysis based on this dataset.`;
 
-    const promptWithContext = 
-      `File Context:\n` +
-      `- Name: ${fileContext?.fileName || 'Spreadsheet.csv'}\n` +
-      `- Headers: ${(fileContext?.headers || []).join(', ')}\n` +
-      `- Row Count: ${fileContext?.rowCount || 0}\n` +
-      `- Anomaly Count: ${fileContext?.issuesCount || 0}\n\n` +
-      `User Question: ${prompt}`;
+    const contents: any[] = [];
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash',
-      contents: promptWithContext,
-      config: {
-        systemInstruction: systemInstruction,
-        temperature: 0.7,
+    // Map message history to Gemini contents structure
+    if (Array.isArray(history) && history.length > 0) {
+      history.forEach((msg: any, index: number) => {
+        let text = msg.content;
+        // Inject sheet context into the very first user message of the history
+        if (index === 0 && msg.role === 'user' && fileContext) {
+          text = `${contextString}\n\n${text}`;
+        }
+        contents.push({
+          role: msg.role === 'user' ? 'user' : 'model',
+          parts: [{ text }]
+        });
+      });
+
+      // Append current prompt & image if available
+      const userParts: any[] = [];
+      if (image && image.data && image.mimeType) {
+        userParts.push({
+          inlineData: {
+            mimeType: image.mimeType,
+            data: image.data
+          }
+        });
       }
+      userParts.push({ text: prompt });
+
+      contents.push({
+        role: 'user',
+        parts: userParts
+      });
+    } else {
+      // Single-turn request
+      let text = prompt;
+      if (fileContext) {
+        text = `${contextString}\n\n${text}`;
+      }
+      
+      const userParts: any[] = [];
+      if (image && image.data && image.mimeType) {
+        userParts.push({
+          inlineData: {
+            mimeType: image.mimeType,
+            data: image.data
+          }
+        });
+      }
+      userParts.push({ text });
+
+      contents.push({
+        role: 'user',
+        parts: userParts
+      });
+    }
+
+    // Configure request config
+    const reqConfig: any = {
+      systemInstruction: systemInstruction,
+      temperature: 0.7,
+    };
+
+    if (thinkingMode) {
+      reqConfig.thinkingConfig = {
+        thinkingLevel: ThinkingLevel.HIGH
+      };
+      // Note: We do NOT set maxOutputTokens here to comply with guidelines
+    }
+
+    // Call selected model
+    const response = await ai.models.generateContent({
+      model: modelToUse,
+      contents: contents,
+      config: reqConfig
     });
 
     res.json({ text: response.text || 'No response text from Gemini.' });
   } catch (error: any) {
-    console.error('Gemini API execution failed:', error);
-    res.status(500).json({ error: 'Failed to process AI prompt. Using standard compiler fallback.' });
+    console.error('Gemini multi-turn API execution failed:', error);
+    res.status(500).json({ error: 'Failed to process AI prompt. Please verify your selected model settings.' });
+  }
+});
+
+// 1b. API: Voice Transcription via Gemini 3.5 Flash
+app.post('/api/gemini/transcribe', async (req, res) => {
+  const { audioData, mimeType = 'audio/webm' } = req.body;
+
+  if (!audioData) {
+    res.status(400).json({ error: 'Audio recording stream data is required.' });
+    return;
+  }
+
+  const ai = getGeminiClient();
+
+  if (!ai) {
+    console.log('Gemini API offline, simulating audio transcription fallback.');
+    res.json({ text: "Are there any high-amount outliers or duplicates in this spreadsheet?" });
+    return;
+  }
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.5-flash',
+      contents: [
+        {
+          inlineData: {
+            mimeType,
+            data: audioData
+          }
+        },
+        {
+          text: "Transcribe the spoken words in this audio file precisely. Output only the transcribed text, without any introductory statements, markdown wrappers, or explanation."
+        }
+      ]
+    });
+
+    res.json({ text: response.text?.trim() || '' });
+  } catch (error: any) {
+    console.error('Gemini Audio Transcription execution failed:', error);
+    res.status(500).json({ error: 'Failed to transcribe captured audio.' });
   }
 });
 
