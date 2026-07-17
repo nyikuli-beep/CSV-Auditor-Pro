@@ -12,6 +12,7 @@ export interface AuditIssue {
   description: string;
   suggestion: string;
   status: 'open' | 'ignored' | 'resolved';
+  explanation?: string;
 }
 
 export interface DetectedFormatMetadata {

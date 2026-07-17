@@ -19,7 +19,8 @@ import {
   AlertTriangle,
   Info,
   ShieldAlert,
-  Loader2
+  Loader2,
+  GitMerge
 } from 'lucide-react';
 import { CSVFile, AuditIssue, Severity, IssueType } from '../types';
 import { detectCSVFormats } from '../lib/formatDetector';
@@ -28,16 +29,23 @@ import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 
 interface UploadCenterProps {
   onFileUpload: (newFile: CSVFile) => void;
+  files?: CSVFile[];
   isDarkMode: boolean;
   accentClass: string;
 }
 
-export default function UploadCenter({ onFileUpload, isDarkMode, accentClass }: UploadCenterProps) {
+export default function UploadCenter({ onFileUpload, files = [], isDarkMode, accentClass }: UploadCenterProps) {
   const [dragActive, setDragActive] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [fileDetails, setFileDetails] = useState<{ name: string; size: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // States for Merge Datasets feature
+  const [selectedFileIdsForMerge, setSelectedFileIdsForMerge] = useState<string[]>([]);
+  const [mergeFileName, setMergeFileName] = useState('');
+  const [mergeError, setMergeError] = useState('');
+  const [mergeSuccess, setMergeSuccess] = useState('');
 
   // States for AI configuration & mapping step during file ingestion
   const [pendingFile, setPendingFile] = useState<CSVFile | null>(null);
@@ -508,6 +516,185 @@ export default function UploadCenter({ onFileUpload, isDarkMode, accentClass }: 
       setExplanations(defaultExplanations);
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const handleMergeFiles = () => {
+    setMergeError('');
+    setMergeSuccess('');
+
+    if (selectedFileIdsForMerge.length < 2) {
+      setMergeError('Please select at least 2 datasets to merge.');
+      return;
+    }
+
+    const filesToMerge = files.filter(f => selectedFileIdsForMerge.includes(f.id));
+    if (filesToMerge.length < 2) {
+      setMergeError('Could not find selected datasets. Please try again.');
+      return;
+    }
+
+    try {
+      // 1. Combine Headers (all unique headers across selected files)
+      const allHeadersSet = new Set<string>();
+      filesToMerge.forEach(file => {
+        file.headers.forEach(h => {
+          if (h && h.trim()) allHeadersSet.add(h.trim());
+        });
+      });
+      const mergedHeaders = Array.from(allHeadersSet);
+
+      if (mergedHeaders.length === 0) {
+        setMergeError('No valid column headers found in selected datasets.');
+        return;
+      }
+
+      // 2. Combine Rows
+      const mergedRows: Record<string, string>[] = [];
+      filesToMerge.forEach(file => {
+        const rowSource = file.cleanedRows || file.rows;
+        rowSource.forEach(row => {
+          const newRow: Record<string, string> = {};
+          mergedHeaders.forEach(h => {
+            newRow[h] = row[h] !== undefined ? row[h] : '';
+          });
+          mergedRows.push(newRow);
+        });
+      });
+
+      if (mergedRows.length === 0) {
+        setMergeError('No rows found in selected datasets.');
+        return;
+      }
+
+      // 3. Calculate merged size
+      const totalSize = filesToMerge.reduce((sum, f) => sum + f.size, 0);
+
+      // 4. Detect formats & generate issues
+      const detectedMetadata = detectCSVFormats(mergedHeaders, mergedRows);
+      const generatedIssues: AuditIssue[] = [];
+      const seenRows = new Set<string>();
+
+      mergedRows.forEach((row, rowIndex) => {
+        const humanRowIndex = rowIndex + 2;
+
+        // Check duplicates
+        const rowString = JSON.stringify(row);
+        if (seenRows.has(rowString)) {
+          generatedIssues.push({
+            id: `dynamic-issue-dup-${rowIndex}-${Date.now()}`,
+            type: 'duplicate',
+            column: mergedHeaders[0] || 'Row',
+            row: humanRowIndex,
+            value: 'Duplicate Row content',
+            severity: 'critical',
+            description: `Entire row matches a previous record exactly.`,
+            suggestion: 'Deduplicate row during clean phase.',
+            status: 'open'
+          });
+        } else {
+          seenRows.add(rowString);
+        }
+
+        // Check missing values & formats
+        mergedHeaders.forEach(h => {
+          const cellVal = row[h];
+          if (cellVal === undefined || cellVal === '') {
+            const isCrucial = h.toLowerCase().includes('id') || h.toLowerCase().includes('amount') || h.toLowerCase().includes('date') || h.toLowerCase().includes('email');
+            generatedIssues.push({
+              id: `dynamic-issue-missing-${rowIndex}-${h}-${Date.now()}`,
+              type: 'missing_value',
+              column: h,
+              row: humanRowIndex,
+              value: '',
+              severity: isCrucial ? 'critical' : 'warning',
+              description: `Missing cell value found in column "${h}".`,
+              suggestion: isCrucial ? 'Required data. Impute value or contact editor.' : 'Fill with standard category or text.',
+              status: 'open'
+            });
+          } else {
+            // Outliers
+            if (h.toLowerCase().includes('amount') || h.toLowerCase().includes('pay') || h.toLowerCase().includes('price')) {
+              const num = parseFloat(cellVal.replace(/[^0-9.-]/g, ''));
+              if (!isNaN(num) && num > 100000) {
+                generatedIssues.push({
+                  id: `dynamic-issue-outlier-${rowIndex}-${h}-${Date.now()}`,
+                  type: 'outlier',
+                  column: h,
+                  row: humanRowIndex,
+                  value: cellVal,
+                  severity: 'warning',
+                  description: `High numerical outlier found: ${cellVal}.`,
+                  suggestion: 'Check if transaction matches correct ledger approvals.',
+                  status: 'open'
+                });
+              }
+            }
+            // Date format check
+            if (h.toLowerCase().includes('date') || detectedMetadata.dateFormats[h]) {
+              const expectedFormat = detectedMetadata.dateFormats[h] || 'YYYY-MM-DD';
+              const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+              if (!dateRegex.test(cellVal)) {
+                let description = `Date "${cellVal}" does not follow YYYY-MM-DD standard format.`;
+                let suggestion = 'Convert to standard ISO-8601 formatting.';
+
+                if (expectedFormat !== 'YYYY-MM-DD') {
+                  description = `Date "${cellVal}" is in "${expectedFormat}" format. System standard is YYYY-MM-DD.`;
+                  suggestion = `Auto-standardize this column from "${expectedFormat}" during cleaning.`;
+                }
+
+                generatedIssues.push({
+                  id: `dynamic-issue-date-${rowIndex}-${h}-${Date.now()}`,
+                  type: 'invalid_format',
+                  column: h,
+                  row: humanRowIndex,
+                  value: cellVal,
+                  severity: 'warning',
+                  description: description,
+                  suggestion: suggestion,
+                  status: 'open'
+                });
+              }
+            }
+          }
+        });
+      });
+
+      // Calculate score
+      const issueCount = generatedIssues.length;
+      const rowCount = mergedRows.length * mergedHeaders.length;
+      const score = Math.max(25, Math.min(100, Math.round(100 - (issueCount / (rowCount || 1)) * 300)));
+
+      const finalMergedFileName = mergeFileName.trim()
+        ? (mergeFileName.trim().toLowerCase().endsWith('.csv') ? mergeFileName.trim() : `${mergeFileName.trim()}.csv`)
+        : `Merged_Master_Audit_${Date.now().toString().slice(-4)}.csv`;
+
+      const mergedFile: CSVFile = {
+        id: `merged-file-${Date.now()}`,
+        name: finalMergedFileName,
+        size: totalSize,
+        uploadedAt: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: 'completed',
+        score: score,
+        headers: mergedHeaders,
+        rows: mergedRows,
+        issues: generatedIssues,
+        totalRowsCount: mergedRows.length,
+        isLargeFile: totalSize > 5 * 1024 * 1024,
+        detectedMetadata: detectedMetadata
+      };
+
+      onFileUpload(mergedFile);
+      setMergeSuccess(`Successfully merged ${filesToMerge.length} datasets into "${finalMergedFileName}"!`);
+      setSelectedFileIdsForMerge([]);
+      setMergeFileName('');
+
+      setTimeout(() => {
+        setMergeSuccess('');
+      }, 5000);
+    } catch (e: any) {
+      console.error('Error merging datasets:', e);
+      setMergeError(`Merge operation failed: ${e.message || e}`);
     }
   };
 
@@ -1464,6 +1651,130 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
               </div>
             </div>
           )}
+
+          {/* Merge Datasets Segment */}
+          <div className={`p-6 rounded-xl border ${isDarkMode ? 'bg-[#131b2e] border-slate-800' : 'bg-white border-slate-200 shadow-sm'} space-y-4`}>
+            <div className="flex items-center gap-2 border-b pb-3 border-slate-500/10">
+              <GitMerge className="w-5 h-5 text-blue-500 animate-pulse" />
+              <div>
+                <h3 className="font-bold text-sm">Merge Datasets</h3>
+                <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                  Concatenate multiple uploaded CSV files into a single master audit file.
+                </p>
+              </div>
+            </div>
+
+            {mergeSuccess && (
+              <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                <span>{mergeSuccess}</span>
+              </div>
+            )}
+
+            {mergeError && (
+              <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                <span>{mergeError}</span>
+              </div>
+            )}
+
+            {!files || files.length < 2 ? (
+              <div className="p-4 rounded-lg bg-slate-500/5 border border-dashed border-slate-500/20 text-center space-y-2">
+                <FileSpreadsheet className="w-8 h-8 text-slate-400 mx-auto opacity-60" />
+                <p className="text-xs text-slate-400">
+                  Multiple datasets required to enable merging. Currently, you have {files?.length || 0} dataset(s) in your workspace.
+                </p>
+                <p className="text-[10px] text-slate-500 italic">
+                  Upload another CSV using the file drop zone above to combine them.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="space-y-2.5">
+                  <span className={`text-[10px] font-bold uppercase tracking-wider block ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                    Select datasets to concatenate ({selectedFileIdsForMerge.length} selected):
+                  </span>
+                  <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-1">
+                    {files.map((file) => {
+                      const isChecked = selectedFileIdsForMerge.includes(file.id);
+                      return (
+                        <div
+                          key={file.id}
+                          onClick={() => {
+                            if (isChecked) {
+                              setSelectedFileIdsForMerge(prev => prev.filter(id => id !== file.id));
+                            } else {
+                              setSelectedFileIdsForMerge(prev => [...prev, file.id]);
+                            }
+                          }}
+                          className={`p-3 rounded-lg border flex items-center justify-between cursor-pointer transition-all ${
+                            isChecked
+                              ? 'border-blue-500/50 bg-blue-500/10'
+                              : isDarkMode
+                              ? 'border-slate-800 bg-[#0f172a] hover:bg-slate-900'
+                              : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {}} // Controlled by outer click
+                              className="rounded text-blue-600 bg-slate-950 border-slate-800 cursor-pointer w-4 h-4 focus:ring-0 focus:ring-offset-0"
+                            />
+                            <div className="min-w-0">
+                              <span className={`text-xs font-bold block truncate ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                                {file.name}
+                              </span>
+                              <span className="text-[10px] text-slate-400 block mt-0.5">
+                                {file.headers.length} columns • {file.rows.length} rows • {file.score}% Quality Score
+                              </span>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                            {file.size > 1024 * 1024
+                              ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+                              : `${(file.size / 1024).toFixed(1)} KB`}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className={`text-[10px] font-bold uppercase tracking-wider block ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                    Master Dataset Name
+                  </label>
+                  <input
+                    type="text"
+                    value={mergeFileName}
+                    onChange={(e) => setMergeFileName(e.target.value)}
+                    placeholder="e.g. Combined_Master_Audit.csv"
+                    className={`w-full px-3 py-2 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                      isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-700 border'
+                    }`}
+                  />
+                  <p className="text-[10px] text-slate-500 leading-relaxed font-normal">
+                    Merge strategy combinations resolve headers automatically. Any unmatched schemas will safely render blank fields for record safety.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleMergeFiles}
+                  disabled={selectedFileIdsForMerge.length < 2}
+                  className={`w-full py-2.5 rounded-lg text-xs font-bold text-white transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer ${
+                    selectedFileIdsForMerge.length < 2
+                      ? 'bg-slate-700 text-slate-400 cursor-not-allowed opacity-50 animate-none'
+                      : accentClass + ' hover:scale-[1.01]'
+                  }`}
+                >
+                  <GitMerge className="w-4 h-4" /> Concatenate & Run Compliance Audit ({selectedFileIdsForMerge.length} files)
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Notices & Sandbox Guides */}

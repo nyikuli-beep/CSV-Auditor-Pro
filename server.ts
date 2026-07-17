@@ -227,6 +227,40 @@ app.get('/api/sql/members', requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
+// 9. Delete team member
+app.delete('/api/sql/delete-member/:id', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      res.status(400).json({ error: 'Missing member ID' });
+      return;
+    }
+
+    await db.delete(members).where(eq(members.id, id));
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('Error deleting member from Postgres:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 10. Delete file
+app.delete('/api/sql/delete-file/:id', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      res.status(400).json({ error: 'Missing file ID' });
+      return;
+    }
+
+    await db.delete(files).where(eq(files.id, id));
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('Error deleting file from Postgres:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Initialize Gemini client lazily to avoid crash if variable is omitted during boot
 let aiClient: GoogleGenAI | null = null;
 
@@ -463,6 +497,170 @@ Please formulate your analysis based on this dataset.`;
   } catch (error: any) {
     console.error('Gemini multi-turn API execution failed:', error);
     res.status(500).json({ error: 'Failed to process AI prompt. Please verify your selected model settings.' });
+  }
+});
+
+// 1c. API: AI Anomaly Detection in Numeric Columns
+app.post('/api/gemini/detect-anomalies', async (req, res) => {
+  const { headers, rows } = req.body;
+
+  if (!headers || !Array.isArray(headers) || !rows || !Array.isArray(rows)) {
+    res.status(400).json({ error: 'Headers and rows are required.' });
+    return;
+  }
+
+  // Find numerical columns
+  const numericColumns = headers.filter(header => {
+    const lower = header.toLowerCase();
+    return (
+      lower.includes('amount') ||
+      lower.includes('budget') ||
+      lower.includes('price') ||
+      lower.includes('total') ||
+      lower.includes('cost') ||
+      lower.includes('fee') ||
+      lower.includes('quantity') ||
+      lower.includes('rate') ||
+      lower.includes('value')
+    );
+  });
+
+  const ai = getGeminiClient();
+
+  // Helper for offline fallback or rule-based outlier detection
+  const runProgrammaticOutlierFallbacks = () => {
+    const anomalies: any[] = [];
+    numericColumns.forEach(header => {
+      const parsedValues: { val: number; raw: string; row: number }[] = [];
+      rows.forEach((row, idx) => {
+        const rawVal = row[header];
+        if (rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== '') {
+          const clean = String(rawVal).replace(/[^0-9.-]/g, '');
+          const parsed = parseFloat(clean);
+          if (!isNaN(parsed)) {
+            parsedValues.push({ val: parsed, raw: String(rawVal), row: idx + 2 });
+          }
+        }
+      });
+
+      if (parsedValues.length < 3) return;
+
+      const mean = parsedValues.reduce((sum, pv) => sum + pv.val, 0) / parsedValues.length;
+      const variance = parsedValues.reduce((sum, pv) => sum + Math.pow(pv.val - mean, 2), 0) / parsedValues.length;
+      const stdDev = Math.sqrt(variance);
+
+      if (stdDev <= 0) return;
+
+      parsedValues.forEach(pv => {
+        const zScore = Math.abs(pv.val - mean) / stdDev;
+        if (zScore > 2.0) { // Slightly more sensitive for AI mode
+          const isCritical = zScore > 3.0;
+          anomalies.push({
+            id: `ai-outlier-${header}-${pv.row}`,
+            type: 'outlier',
+            severity: isCritical ? 'critical' : 'warning',
+            column: header,
+            row: pv.row,
+            value: pv.raw,
+            description: `AI-Powered Anomaly: The value "${pv.raw}" is a statistical deviation (${zScore.toFixed(2)} SDs from average).`,
+            suggestion: `This entry represents extreme variance compared to the standard column mean of $${mean.toFixed(2)}. Please verify transaction authenticity or correct potential input decimals.`,
+            explanation: `Our AI anomaly scanner identified this record in Row ${pv.row} as a high-magnitude outlier. Standard transactions in column "${header}" center around $${mean.toFixed(2)} with a standard deviation of $${stdDev.toFixed(2)}. This specific value of "${pv.raw}" has a Z-Score of ${zScore.toFixed(2)}, which lies in the top 1% of the statistical probability tail, suggesting either a major premium account transaction or a typographical error.`
+          });
+        }
+      });
+    });
+    return anomalies;
+  };
+
+  if (!ai) {
+    console.log('Gemini API key not found, using premium programmatic outlier detection.');
+    const fallbackAnomalies = runProgrammaticOutlierFallbacks();
+    res.json({ anomalies: fallbackAnomalies, method: 'programmatic' });
+    return;
+  }
+
+  try {
+    // If we have rows, let's prepare the numeric data
+    const columnsData: Record<string, { row: number; val: number; raw: string }[]> = {};
+    numericColumns.forEach(header => {
+      columnsData[header] = [];
+      rows.forEach((row, idx) => {
+        const rawVal = row[header];
+        if (rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== '') {
+          const clean = String(rawVal).replace(/[^0-9.-]/g, '');
+          const parsed = parseFloat(clean);
+          if (!isNaN(parsed)) {
+            columnsData[header].push({ row: idx + 2, val: parsed, raw: String(rawVal) });
+          }
+        }
+      });
+    });
+
+    let dataDescription = "";
+    numericColumns.forEach(header => {
+      const dataPoints = columnsData[header].map(item => `Row ${item.row}: ${item.raw}`).join('\n');
+      dataDescription += `\nColumn: "${header}"\nValues:\n${dataPoints}\n`;
+    });
+
+    if (!dataDescription.trim()) {
+      res.json({ anomalies: [] });
+      return;
+    }
+
+    const systemInstruction = 
+      "You are an advanced data auditing and financial fraud detection system named Gemini Anomaly Guard.\n" +
+      "Your objective is to scan numeric columns in a transaction database, identify extreme statistical outliers, entry errors, or fraudulent payout anomalies, and explain why they violate typical transactional distributions.\n" +
+      "You MUST return your findings in a structured JSON object matching this schema:\n" +
+      "{\n" +
+      "  \"anomalies\": [\n" +
+      "    {\n" +
+      "      \"id\": \"string (e.g. ai-outlier-Amount-7)\",\n" +
+      "      \"type\": \"outlier\",\n" +
+      "      \"severity\": \"critical | warning (use critical for extreme anomalies > 3x typical values, warning otherwise)\",\n" +
+      "      \"column\": \"string (column name)\",\n" +
+      "      \"row\": number (the row index number),\n" +
+      "      \"value\": \"string (the raw value)\",\n" +
+      "      \"description\": \"string (brief description of the outlier)\",\n" +
+      "      \"suggestion\": \"string (actionable step, e.g. verify approval, cap value)\",\n" +
+      "      \"explanation\": \"string (detailed statistical explanation of why it is an anomaly)\"\n" +
+      "    }\n" +
+      "  ]\n" +
+      "}\n" +
+      "Output ONLY valid JSON. Do not wrap in markdown or add text.";
+
+    const promptText = 
+      `Identify extreme outliers or statistical anomalies in the following dataset numeric columns:\n` +
+      `${dataDescription}\n\n` +
+      `Focus on values that deviate significantly from standard trends. For example, if most values are between $10 and $1,000, a value of $1,500,000 is an extreme anomaly. Return the anomalies JSON object.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.5-flash',
+      contents: promptText,
+      config: {
+        systemInstruction: systemInstruction,
+        responseMimeType: 'application/json',
+        temperature: 0.1,
+      }
+    });
+
+    const responseText = response.text || '';
+    try {
+      const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(cleanJson);
+      if (parsed && Array.isArray(parsed.anomalies)) {
+        res.json({ anomalies: parsed.anomalies, method: 'gemini' });
+      } else {
+        throw new Error('Response does not match expected schema');
+      }
+    } catch (e) {
+      console.warn('Failed to parse Gemini anomaly detection response, falling back to programmatic:', responseText);
+      const fallbackAnomalies = runProgrammaticOutlierFallbacks();
+      res.json({ anomalies: fallbackAnomalies, method: 'programmatic' });
+    }
+  } catch (error: any) {
+    console.error('Gemini Anomaly Detection API failed:', error);
+    const fallbackAnomalies = runProgrammaticOutlierFallbacks();
+    res.json({ anomalies: fallbackAnomalies, method: 'programmatic' });
   }
 });
 

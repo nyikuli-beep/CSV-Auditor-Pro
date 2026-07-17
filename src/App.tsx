@@ -330,7 +330,7 @@ export default function App() {
   const accentClass = getAccentColorClass();
 
   // Helper to sync mutations with our secure PostgreSQL Cloud SQL database
-  const syncToPostgres = async (path: string, method: 'POST' | 'GET', body?: any) => {
+  const syncToPostgres = async (path: string, method: 'POST' | 'GET' | 'DELETE', body?: any) => {
     if (!firebaseUser) return null;
     try {
       const token = await firebaseUser.getIdToken();
@@ -461,6 +461,38 @@ export default function App() {
     }
   };
 
+  // Delete file from workspace registry
+  const handleDeleteFile = async (id: string, name: string) => {
+    try {
+      await deleteDoc(doc(db, 'files', id));
+      await syncToPostgres(`delete-file/${id}`, 'DELETE');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `files/${id}`);
+    }
+
+    // Safely shift active file index
+    const deletedIndex = files.findIndex(f => f.id === id);
+    if (deletedIndex !== -1) {
+      if (activeFileIndex >= files.length - 1) {
+        setActiveFileIndex(Math.max(0, files.length - 2));
+      }
+    }
+
+    const deleteLog: AuditActivity = {
+      id: `act-${Date.now()}`,
+      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-sarah',
+      userName: user?.email || 'Sarah Jenkins',
+      action: `Deleted dataset file "${name}"`,
+      timestamp: 'Just now'
+    };
+    try {
+      await setDoc(doc(db, 'activities', deleteLog.id), deleteLog);
+      await syncToPostgres('sync-activity', 'POST', deleteLog);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `activities/${deleteLog.id}`);
+    }
+  };
+
   // Invite user to group workspace
   const handleInviteMember = async (newMember: TeamMember) => {
     try {
@@ -482,6 +514,30 @@ export default function App() {
       await syncToPostgres('sync-activity', 'POST', inviteLog);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `activities/${inviteLog.id}`);
+    }
+  };
+
+  // Delete user from group workspace
+  const handleDeleteMember = async (id: string, email: string) => {
+    try {
+      await deleteDoc(doc(db, 'members', id));
+      await syncToPostgres(`delete-member/${id}`, 'DELETE');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `members/${id}`);
+    }
+
+    const deleteLog: AuditActivity = {
+      id: `act-${Date.now()}`,
+      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-sarah',
+      userName: user?.email || 'Sarah Jenkins',
+      action: `Deleted workspace member ${email}`,
+      timestamp: 'Just now'
+    };
+    try {
+      await setDoc(doc(db, 'activities', deleteLog.id), deleteLog);
+      await syncToPostgres('sync-activity', 'POST', deleteLog);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `activities/${deleteLog.id}`);
     }
   };
 
@@ -921,6 +977,7 @@ export default function App() {
                   {activeTab === 'upload' && (
                     <UploadCenter 
                       onFileUpload={handleNewFileUpload}
+                      files={files}
                       isDarkMode={isDarkMode}
                       accentClass={accentClass}
                     />
@@ -980,6 +1037,7 @@ export default function App() {
                     <AuditHistory 
                       files={files}
                       onSelectFile={handleSelectActiveFile}
+                      onDeleteFile={handleDeleteFile}
                       onNavigate={handleNavigateTab}
                       isDarkMode={isDarkMode}
                       accentClass={accentClass}
@@ -990,6 +1048,7 @@ export default function App() {
                     <TeamCollaboration 
                       members={members}
                       onInviteMember={handleInviteMember}
+                      onDeleteMember={handleDeleteMember}
                       activities={activities}
                       isDarkMode={isDarkMode}
                       accentClass={accentClass}

@@ -11,13 +11,15 @@ import {
   ShieldAlert, 
   AlertTriangle,
   Mail,
-  UserCheck
+  UserCheck,
+  Trash2
 } from 'lucide-react';
 import { TeamMember, AuditActivity } from '../types';
 
 interface TeamCollaborationProps {
   members: TeamMember[];
   onInviteMember: (newMember: TeamMember) => void;
+  onDeleteMember?: (id: string, email: string) => void;
   activities: AuditActivity[];
   isDarkMode: boolean;
   accentClass: string;
@@ -31,11 +33,12 @@ interface CommentThread {
   time: string;
 }
 
-export default function TeamCollaboration({ members, onInviteMember, activities, isDarkMode, accentClass }: TeamCollaborationProps) {
+export default function TeamCollaboration({ members, onInviteMember, onDeleteMember, activities, isDarkMode, accentClass }: TeamCollaborationProps) {
   const [inviteName, setInviteName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'Owner' | 'Admin' | 'Editor' | 'Viewer'>('Editor');
   const [successMsg, setSuccessMsg] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Local comments state
   const [comments, setComments] = useState<CommentThread[]>([
@@ -190,6 +193,38 @@ export default function TeamCollaboration({ members, onInviteMember, activities,
                     <span className={`text-[10px] font-bold ${m.status === 'active' ? 'text-emerald-500' : 'text-slate-400 italic'}`}>
                       {m.status === 'active' ? 'Active' : 'Invited'}
                     </span>
+
+                    {m.role !== 'Owner' && onDeleteMember && (
+                      <div className="flex items-center ml-2">
+                        {deletingId === m.id ? (
+                          <div className="flex items-center gap-1.5 animate-fadeIn">
+                            <button
+                              onClick={() => {
+                                onDeleteMember(m.id, m.email);
+                                setDeletingId(null);
+                              }}
+                              className="px-2 py-1 rounded bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all font-bold text-[9px] uppercase cursor-pointer"
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              onClick={() => setDeletingId(null)}
+                              className="px-2 py-1 rounded bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-all font-bold text-[9px] uppercase cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setDeletingId(m.id)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-500/10 transition-all cursor-pointer"
+                            title={`Remove ${m.name}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

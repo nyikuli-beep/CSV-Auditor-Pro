@@ -45,9 +45,50 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
   // Smart Outlier Audit State (Number of Standard Deviations)
   const [outlierThreshold, setOutlierThreshold] = useState<number>(2.5);
 
+  // AI-Powered Anomaly Mode States
+  const [anomalyMode, setAnomalyMode] = useState<'statistical' | 'ai'>('statistical');
+  const [aiAnomalies, setAiAnomalies] = useState<AuditIssue[]>([]);
+  const [fetchingAiAnomalies, setFetchingAiAnomalies] = useState(false);
+  const [aiAnomaliesLoaded, setAiAnomaliesLoaded] = useState(false);
+
+  // Trigger AI Anomaly scan function
+  const triggerAiAnomalyScan = async () => {
+    if (!activeFile) return;
+    setFetchingAiAnomalies(true);
+    try {
+      const rows = activeFile.cleanedRows || activeFile.rows;
+      const response = await fetch('/api/gemini/detect-anomalies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          headers: activeFile.headers,
+          rows: rows
+        })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data.anomalies)) {
+          setAiAnomalies(data.anomalies);
+          setAiAnomaliesLoaded(true);
+        }
+      }
+    } catch (e) {
+      console.error('Error scanning anomalies with AI:', e);
+    } finally {
+      setFetchingAiAnomalies(false);
+    }
+  };
+
   useEffect(() => {
     setIssuesPage(1);
-  }, [activeFile?.id, severityFilter, typeFilter, outlierThreshold]);
+  }, [severityFilter, typeFilter, outlierThreshold, anomalyMode]);
+
+  useEffect(() => {
+    setAiAnomalies([]);
+    setAiAnomaliesLoaded(false);
+    setAnomalyMode('statistical');
+    setIssuesPage(1);
+  }, [activeFile?.id]);
 
   // Dynamically calculate standard deviation metrics and outlier issues
   const calculateNumericalStatsAndOutliers = (file: CSVFile | null, threshold: number) => {
@@ -132,14 +173,16 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
 
   const { outlierIssues, columnStats } = calculateNumericalStatsAndOutliers(activeFile, outlierThreshold);
 
-  // Merge dynamic standard deviation outliers with base file issues.
+  // Merge dynamic standard deviation or AI outliers with base file issues.
   // We replace previous static 'outlier' type issues, but carry over their 'resolved' status.
   const getMergedIssues = (): AuditIssue[] => {
     if (!activeFile) return [];
     
     const nonOutlierIssues = activeFile.issues.filter(i => i.type !== 'outlier');
     
-    const processedOutliers = outlierIssues.map(outlier => {
+    const activeOutliers = anomalyMode === 'ai' ? aiAnomalies : outlierIssues;
+    
+    const processedOutliers = activeOutliers.map(outlier => {
       const existing = activeFile.issues.find(i => i.id === outlier.id);
       if (existing) {
         return { ...outlier, status: existing.status };
@@ -893,79 +936,209 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
 
         {/* Smart Outlier Dashboard Panel */}
         <div className={`mb-6 p-5 rounded-2xl border ${isDarkMode ? 'bg-[#1e293b]/30 border-slate-800' : 'bg-slate-50 border-slate-200'} space-y-4`}>
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800/20 pb-3">
             <div className="flex items-center gap-2.5">
               <span className="p-2 bg-violet-500/10 text-violet-400 rounded-xl"><BrainCircuit className="w-5 h-5 text-violet-500" /></span>
               <div>
-                <h4 className="text-sm font-extrabold tracking-tight">Smart Statistical Outlier Audit</h4>
-                <p className={`text-[11px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Locate financial standard deviations and variance anomalies in mapped numerical columns.</p>
+                <h4 className="text-sm font-extrabold tracking-tight">Smart Statistical & AI Outlier Audit</h4>
+                <p className={`text-[11px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Locate financial standard deviations and cognitive variance anomalies in numerical columns.</p>
               </div>
             </div>
-            
-            {/* Slider to adjust standard deviation threshold */}
-            <div className="w-full md:w-72 space-y-1.5 shrink-0">
-              <div className="flex justify-between text-[11px] font-mono">
-                <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>Outlier Sensitivity</span>
-                <span className="text-violet-500 font-extrabold">{outlierThreshold.toFixed(1)} Standard Devs (σ)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] text-slate-400">Strict (1.5)</span>
-                <input
-                  type="range"
-                  min="1.5"
-                  max="4.0"
-                  step="0.1"
-                  value={outlierThreshold}
-                  onChange={(e) => {
-                    setOutlierThreshold(parseFloat(e.target.value));
-                    setIssuesPage(1);
-                  }}
-                  className="flex-1 h-1.5 rounded-lg appearance-none cursor-pointer accent-violet-500 bg-slate-200 dark:bg-slate-800"
-                />
-                <span className="text-[10px] text-slate-400">Relaxed (4.0)</span>
-              </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setAnomalyMode('statistical')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${anomalyMode === 'statistical' ? 'bg-violet-600 text-white shadow' : 'bg-slate-800/40 text-slate-400 hover:text-white'}`}
+              >
+                📊 Statistical Model
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAnomalyMode('ai');
+                  if (!aiAnomaliesLoaded && !fetchingAiAnomalies) {
+                    triggerAiAnomalyScan();
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${anomalyMode === 'ai' ? 'bg-indigo-600 text-white shadow' : 'bg-slate-800/40 text-slate-400 hover:text-white'}`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-yellow-400" /> AI Anomaly Detection
+              </button>
             </div>
           </div>
 
-          {/* Table displaying calculated standard deviations per numerical column */}
-          {columnStats.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
-              {columnStats.map((stat) => (
-                <div key={stat.column} className={`p-3.5 rounded-xl border flex flex-col justify-between ${isDarkMode ? 'bg-[#0f172a]/60 border-slate-800' : 'bg-white border-slate-200'}`}>
-                  <div className="flex justify-between items-start mb-2 gap-2">
-                    <span className={`font-extrabold text-xs truncate ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`} title={stat.column}>{stat.column}</span>
-                    <span className={`text-[9px] font-mono px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${stat.outliersCount > 0 ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 'bg-emerald-500/10 text-emerald-400'}`}>
-                      {stat.outliersCount} {stat.outliersCount === 1 ? 'Outlier' : 'Outliers'}
-                    </span>
+          {anomalyMode === 'statistical' && (
+            <div className="space-y-4">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div className="text-xs">
+                  <span className="font-bold text-slate-400">Statistical Analysis Parameters:</span>
+                  <p className="text-[10px] text-slate-500">Filters values lying outside standard deviation probability tails.</p>
+                </div>
+                
+                {/* Slider to adjust standard deviation threshold */}
+                <div className="w-full md:w-72 space-y-1.5 shrink-0">
+                  <div className="flex justify-between text-[11px] font-mono">
+                    <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>Outlier Sensitivity</span>
+                    <span className="text-violet-500 font-extrabold">{outlierThreshold.toFixed(1)} Standard Devs (σ)</span>
                   </div>
-                  <div className={`grid grid-cols-3 gap-2 text-[10px] font-mono border-t pt-2.5 ${isDarkMode ? 'border-slate-800/60' : 'border-slate-100'}`}>
-                    <div>
-                      <span className="block text-slate-500 text-[8px] uppercase font-bold tracking-wider mb-0.5">Rows</span>
-                      <strong className={isDarkMode ? 'text-slate-300' : 'text-slate-700'}>{stat.count}</strong>
-                    </div>
-                    <div>
-                      <span className="block text-slate-500 text-[8px] uppercase font-bold tracking-wider mb-0.5">Mean</span>
-                      <strong className={isDarkMode ? 'text-slate-300' : 'text-slate-700'}>
-                        {stat.column.toLowerCase().includes('quantity') ? '' : '$'}
-                        {stat.mean.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
-                      </strong>
-                    </div>
-                    <div>
-                      <span className="block text-slate-500 text-[8px] uppercase font-bold tracking-wider mb-0.5">Std Dev (σ)</span>
-                      <strong className={isDarkMode ? 'text-slate-300' : 'text-slate-700'}>
-                        {stat.column.toLowerCase().includes('quantity') ? '' : '$'}
-                        {stat.stdDev.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
-                      </strong>
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-slate-400">Strict (1.5)</span>
+                    <input
+                      type="range"
+                      min="1.5"
+                      max="4.0"
+                      step="0.1"
+                      value={outlierThreshold}
+                      onChange={(e) => {
+                        setOutlierThreshold(parseFloat(e.target.value));
+                        setIssuesPage(1);
+                      }}
+                      className="flex-1 h-1.5 rounded-lg appearance-none cursor-pointer accent-violet-500 bg-slate-200 dark:bg-slate-800"
+                    />
+                    <span className="text-[10px] text-slate-400">Relaxed (4.0)</span>
                   </div>
                 </div>
-              ))}
+              </div>
+
+              {/* Table displaying calculated standard deviations per numerical column */}
+              {columnStats.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+                  {columnStats.map((stat) => (
+                    <div key={stat.column} className={`p-3.5 rounded-xl border flex flex-col justify-between ${isDarkMode ? 'bg-[#0f172a]/60 border-slate-800' : 'bg-white border-slate-200'}`}>
+                      <div className="flex justify-between items-start mb-2 gap-2">
+                        <span className={`font-extrabold text-xs truncate ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`} title={stat.column}>{stat.column}</span>
+                        <span className={`text-[9px] font-mono px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${stat.outliersCount > 0 ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                          {stat.outliersCount} {stat.outliersCount === 1 ? 'Outlier' : 'Outliers'}
+                        </span>
+                      </div>
+                      <div className={`grid grid-cols-3 gap-2 text-[10px] font-mono border-t pt-2.5 ${isDarkMode ? 'border-slate-800/60' : 'border-slate-100'}`}>
+                        <div>
+                          <span className="block text-slate-500 text-[8px] uppercase font-bold tracking-wider mb-0.5">Rows</span>
+                          <strong className={isDarkMode ? 'text-slate-300' : 'text-slate-700'}>{stat.count}</strong>
+                        </div>
+                        <div>
+                          <span className="block text-slate-500 text-[8px] uppercase font-bold tracking-wider mb-0.5">Mean</span>
+                          <strong className={isDarkMode ? 'text-slate-300' : 'text-slate-700'}>
+                            {stat.column.toLowerCase().includes('quantity') ? '' : '$'}
+                            {stat.mean.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                          </strong>
+                        </div>
+                        <div>
+                          <span className="block text-slate-500 text-[8px] uppercase font-bold tracking-wider mb-0.5">Std Dev (σ)</span>
+                          <strong className={isDarkMode ? 'text-slate-300' : 'text-slate-700'}>
+                            {stat.column.toLowerCase().includes('quantity') ? '' : '$'}
+                            {stat.stdDev.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className={`p-4 rounded-xl border text-center text-xs ${isDarkMode ? 'bg-slate-900/20 border-slate-800 text-slate-400' : 'bg-slate-100/50 border-slate-200 text-slate-500'}`}>
+                  <HelpCircle className="w-5 h-5 text-slate-500 mx-auto mb-1.5" />
+                  <p className="font-semibold">No numerical columns mapped or detected</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Map your headers to "Amount" in the Upload Center or ensure header contains "Amount/Budget/Price" keywords to enable dynamic standard deviation analysis.</p>
+                </div>
+              )}
             </div>
-          ) : (
-            <div className={`p-4 rounded-xl border text-center text-xs ${isDarkMode ? 'bg-slate-900/20 border-slate-800 text-slate-400' : 'bg-slate-100/50 border-slate-200 text-slate-500'}`}>
-              <HelpCircle className="w-5 h-5 text-slate-500 mx-auto mb-1.5" />
-              <p className="font-semibold">No numerical columns mapped or detected</p>
-              <p className="text-[10px] text-slate-500 mt-0.5">Map your headers to "Amount" in the Upload Center or ensure header contains "Amount/Budget/Price" keywords to enable dynamic standard deviation analysis.</p>
+          )}
+
+          {anomalyMode === 'ai' && (
+            <div className="space-y-4">
+              {fetchingAiAnomalies && (
+                <div className="flex flex-col items-center justify-center py-10 space-y-4 animate-pulse">
+                  <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin" />
+                  <div className="text-center">
+                    <h5 className="font-bold text-xs uppercase tracking-wider text-indigo-400">Gemini Anomaly Scanner Running...</h5>
+                    <p className="text-[10px] text-slate-500 mt-1">Inspecting values, scanning probability tails, and computing contextual variance explanations.</p>
+                  </div>
+                </div>
+              )}
+
+              {!fetchingAiAnomalies && aiAnomaliesLoaded && (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center bg-indigo-950/25 p-3.5 rounded-xl border border-indigo-500/20">
+                    <div className="flex items-center gap-2.5 text-xs">
+                      <div className="h-2 w-2 rounded-full bg-indigo-400 animate-ping" />
+                      <span className="font-mono font-bold text-indigo-400 uppercase tracking-wider">Gemini Cognitive Assessment Status: COMPLETE</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] bg-indigo-500/10 text-indigo-400 px-2.5 py-0.5 rounded font-mono font-bold border border-indigo-500/20">
+                        {aiAnomalies.length} Flagged Anomalies
+                      </span>
+                      <button
+                        type="button"
+                        onClick={triggerAiAnomalyScan}
+                        className="p-1 text-slate-400 hover:text-white transition-all rounded-lg hover:bg-slate-800"
+                        title="Rescan file with AI"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {columnStats.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+                      {columnStats.map((stat) => {
+                        const anomaliesForCol = aiAnomalies.filter(a => a.column === stat.column);
+                        const isHealthy = anomaliesForCol.length === 0;
+                        return (
+                          <div key={stat.column} className={`p-3.5 rounded-xl border flex flex-col justify-between ${isDarkMode ? 'bg-[#0f172a]/60 border-slate-800' : 'bg-white border-slate-200'}`}>
+                            <div className="flex justify-between items-start mb-2 gap-2">
+                              <span className={`font-extrabold text-xs truncate ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`} title={stat.column}>{stat.column}</span>
+                              <span className={`text-[9px] font-mono px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${!isHealthy ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                                {anomaliesForCol.length} AI Flagged
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-500 mb-2 leading-tight">
+                              {isHealthy 
+                                ? "AI Audit suggests this column is clean of structural outliers." 
+                                : `AI detected ${anomaliesForCol.length} high-risk statistical deviations.`}
+                            </p>
+                            <div className={`grid grid-cols-2 gap-2 text-[10px] font-mono border-t pt-2.5 ${isDarkMode ? 'border-slate-800/60' : 'border-slate-100'}`}>
+                              <div>
+                                <span className="block text-slate-500 text-[8px] uppercase font-bold tracking-wider mb-0.5">Assessed</span>
+                                <strong className={isDarkMode ? 'text-slate-300' : 'text-slate-700'}>{stat.count} Rows</strong>
+                              </div>
+                              <div>
+                                <span className="block text-slate-500 text-[8px] uppercase font-bold tracking-wider mb-0.5">Distribution</span>
+                                <strong className={isHealthy ? 'text-emerald-500' : 'text-indigo-400 font-bold'}>
+                                  {isHealthy ? 'Normal (Clean)' : 'Anomalous'}
+                                </strong>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className={`p-4 rounded-xl border text-center text-xs ${isDarkMode ? 'bg-slate-900/20 border-slate-800 text-slate-400' : 'bg-slate-100/50 border-slate-200 text-slate-500'}`}>
+                      <HelpCircle className="w-5 h-5 text-slate-500 mx-auto mb-1.5" />
+                      <p className="font-semibold">No numerical columns mapped or detected</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">Map your headers to "Amount" in the Upload Center or ensure header contains "Amount/Budget/Price" keywords to enable dynamic standard deviation analysis.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!fetchingAiAnomalies && !aiAnomaliesLoaded && (
+                <div className="text-center py-8 space-y-3">
+                  <BrainCircuit className="w-8 h-8 text-indigo-400 mx-auto animate-pulse" />
+                  <div>
+                    <h5 className="font-bold text-xs uppercase tracking-wider">AI Anomaly Scanning Pending</h5>
+                    <p className="text-[10px] text-slate-500 mt-1">Start scanning to inspect numerical series using Gemini model reasoning.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={triggerAiAnomalyScan}
+                    className={`px-4 py-1.5 rounded-xl text-xs font-bold text-white transition-all shadow cursor-pointer ${accentClass}`}
+                  >
+                    Launch AI Anomaly Scanner
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1057,7 +1230,7 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
                            <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
                             <Sparkles className="w-3 h-3 text-yellow-500" /> Gemini Audit Intelligence
                           </span>
-                          {!aiExplanations[issue.id] && (
+                          {!aiExplanations[issue.id] && !issue.explanation && (
                             <button
                               onClick={() => fetchAiExplanation(issue.id, issue)}
                               disabled={aiLoading === issue.id}
@@ -1072,9 +1245,9 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
                           )}
                         </div>
 
-                        {aiExplanations[issue.id] && (
-                          <div className={`p-4 rounded-xl border text-xs leading-relaxed ${isDarkMode ? 'bg-blue-950/20 border-blue-950 text-blue-300' : 'bg-blue-50/50 border-blue-100 text-blue-900'}`}>
-                            {aiExplanations[issue.id]}
+                        {(aiExplanations[issue.id] || issue.explanation) && (
+                          <div className={`p-4 rounded-xl border text-xs leading-relaxed ${isDarkMode ? 'bg-indigo-950/20 border-indigo-950/50 text-indigo-300' : 'bg-indigo-50/50 border-indigo-100 text-indigo-955'}`}>
+                            {aiExplanations[issue.id] || issue.explanation}
                           </div>
                         )}
                       </div>

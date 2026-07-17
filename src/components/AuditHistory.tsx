@@ -18,16 +18,18 @@ import { CSVFile } from '../types';
 interface AuditHistoryProps {
   files: CSVFile[];
   onSelectFile: (file: CSVFile) => void;
+  onDeleteFile?: (id: string, name: string) => void;
   onNavigate: (tab: string) => void;
   isDarkMode: boolean;
   accentClass: string;
 }
 
-export default function AuditHistory({ files, onSelectFile, onNavigate, isDarkMode, accentClass }: AuditHistoryProps) {
+export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavigate, isDarkMode, accentClass }: AuditHistoryProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'failed'>('all');
   const [sortBy, setSortBy] = useState<'date' | 'name' | 'score'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Handle Search & Filter
   const filteredFiles = files.filter(file => {
@@ -180,25 +182,58 @@ export default function AuditHistory({ files, onSelectFile, onNavigate, isDarkMo
                     )}
                   </td>
                   <td className="p-4 text-right">
-                    <div className="flex gap-2 justify-end">
-                      <button 
-                        onClick={() => {
-                          onSelectFile(file);
-                          onNavigate('results');
-                        }}
-                        className={`p-2 rounded-lg border hover:scale-105 transition-all text-blue-500 ${isDarkMode ? 'bg-slate-950 border-slate-850 hover:bg-slate-900' : 'bg-white border-slate-200 hover:bg-slate-100'}`}
-                        title="View Report"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                      </button>
-                      <button 
-                        onClick={() => downloadHistoryReport(file)}
-                        disabled={file.status !== 'completed'}
-                        className={`p-2 rounded-lg border hover:scale-105 transition-all text-emerald-500 disabled:opacity-30 disabled:pointer-events-none ${isDarkMode ? 'bg-slate-950 border-slate-850 hover:bg-slate-900' : 'bg-white border-slate-200 hover:bg-slate-100'}`}
-                        title="Download Report"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                      </button>
+                    <div className="flex gap-2 justify-end items-center">
+                      {deletingId === file.id ? (
+                        <div className="flex items-center gap-1.5 animate-fadeIn">
+                          <button
+                            onClick={() => {
+                              if (onDeleteFile) onDeleteFile(file.id, file.name);
+                              setDeletingId(null);
+                            }}
+                            className="px-2 py-1.5 rounded bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all font-bold text-[9px] uppercase cursor-pointer"
+                          >
+                            Confirm
+                          </button>
+                          <button
+                            onClick={() => setDeletingId(null)}
+                            className={`px-2 py-1.5 rounded transition-all font-bold text-[9px] uppercase cursor-pointer ${
+                              isDarkMode ? 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700'
+                            }`}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <button 
+                            onClick={() => {
+                              onSelectFile(file);
+                              onNavigate('results');
+                            }}
+                            className={`p-2 rounded-lg border hover:scale-105 transition-all text-blue-500 ${isDarkMode ? 'bg-slate-950 border-slate-850 hover:bg-slate-900' : 'bg-white border-slate-200 hover:bg-slate-100'}`}
+                            title="View Report"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                          <button 
+                            onClick={() => downloadHistoryReport(file)}
+                            disabled={file.status !== 'completed'}
+                            className={`p-2 rounded-lg border hover:scale-105 transition-all text-emerald-500 disabled:opacity-30 disabled:pointer-events-none ${isDarkMode ? 'bg-slate-950 border-slate-850 hover:bg-slate-900' : 'bg-white border-slate-200 hover:bg-slate-100'}`}
+                            title="Download Report"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                          </button>
+                          {onDeleteFile && (
+                            <button 
+                              onClick={() => setDeletingId(file.id)}
+                              className={`p-2 rounded-lg border hover:scale-105 transition-all text-rose-500 ${isDarkMode ? 'bg-slate-950 border-slate-850 hover:bg-slate-900 hover:bg-rose-500/10' : 'bg-white border-slate-200 hover:bg-slate-100 hover:bg-rose-50'}`}
+                              title="Delete Dataset"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
