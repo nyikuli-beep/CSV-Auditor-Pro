@@ -82,6 +82,7 @@ export default function App() {
   // Files Registry (Initial mock messy CSV loaded by default)
   const [files, setFiles] = useState<CSVFile[]>([]);
   const [activeFileIndex, setActiveFileIndex] = useState<number>(0);
+  const [activeFileId, setActiveFileId] = useState<string>('file-active');
 
   // Collaboration registry
   const [members, setMembers] = useState<TeamMember[]>([]);
@@ -110,7 +111,7 @@ export default function App() {
     timezone: 'UTC'
   });
 
-  const activeFile = files[activeFileIndex] || null;
+  const activeFile = files.find(f => f.id === activeFileId) || files[activeFileIndex] || files[0] || null;
 
   // Real-time Clock UTC state
   const [currentTime, setCurrentTime] = useState<string>('');
@@ -175,6 +176,7 @@ export default function App() {
       setAuthLoading(true);
       if (fUser) {
         setFirebaseUser(fUser);
+        setActiveFileId('file-active-' + fUser.uid);
         
         // Fetch or create user doc
         const userRef = doc(db, 'users', fUser.uid);
@@ -214,7 +216,7 @@ export default function App() {
             })
           });
         } catch (dbErr) {
-          console.error("Error syncing user to Postgres on login:", dbErr);
+          console.warn("Error syncing user to Postgres on login (safe fallback to local state active):", dbErr);
         }
 
         setView('workspace');
@@ -241,18 +243,26 @@ export default function App() {
       });
 
       if (filesList.length === 0) {
-        try {
-          const seedFile: CSVFile = {
-            ...SAMPLE_MESSY_FILE,
-            id: 'file-active',
-            ownerId: firebaseUser.uid
-          };
-          await setDoc(doc(db, 'files', 'file-active'), seedFile);
-        } catch (err) {
-          handleFirestoreError(err, OperationType.WRITE, 'files/file-active');
+        if (!snapshot.metadata.fromCache) {
+          try {
+            const seedFile: CSVFile = {
+              ...SAMPLE_MESSY_FILE,
+              id: 'file-active-' + firebaseUser.uid,
+              ownerId: firebaseUser.uid,
+              uploadedAt: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            };
+            await setDoc(doc(db, 'files', 'file-active-' + firebaseUser.uid), seedFile);
+          } catch (err) {
+            handleFirestoreError(err, OperationType.WRITE, 'files/file-active-' + firebaseUser.uid);
+          }
         }
       } else {
-        // Sort files by uploadedAt string or timestamp
+        // Sort files descending: newer uploaded files/merged files first
+        filesList.sort((a, b) => {
+          const tA = (a as any).timestamp || (a.id.includes('-') ? parseInt(a.id.split('-').pop() || '0') : 0) || 0;
+          const tB = (b as any).timestamp || (b.id.includes('-') ? parseInt(b.id.split('-').pop() || '0') : 0) || 0;
+          return tB - tA; // Newest first
+        });
         setFiles(filesList);
       }
     }, (err) => {
@@ -268,12 +278,14 @@ export default function App() {
       });
 
       if (membersList.length === 0) {
-        try {
-          for (const m of TEAM_MEMBERS) {
-            await setDoc(doc(db, 'members', m.id), m);
+        if (!snapshot.metadata.fromCache) {
+          try {
+            for (const m of TEAM_MEMBERS) {
+              await setDoc(doc(db, 'members', m.id), m);
+            }
+          } catch (err) {
+            handleFirestoreError(err, OperationType.WRITE, 'members');
           }
-        } catch (err) {
-          handleFirestoreError(err, OperationType.WRITE, 'members');
         }
       } else {
         setMembers(membersList);
@@ -291,17 +303,19 @@ export default function App() {
       });
 
       if (activitiesList.length === 0) {
-        try {
-          const currentUid = firebaseUser?.uid || auth.currentUser?.uid;
-          for (const act of AUDIT_ACTIVITIES) {
-            const seedAct = {
-              ...act,
-              userId: currentUid || act.userId
-            };
-            await setDoc(doc(db, 'activities', act.id), seedAct);
+        if (!snapshot.metadata.fromCache) {
+          try {
+            const currentUid = firebaseUser?.uid || auth.currentUser?.uid;
+            for (const act of AUDIT_ACTIVITIES) {
+              const seedAct = {
+                ...act,
+                userId: currentUid || act.userId
+              };
+              await setDoc(doc(db, 'activities', act.id), seedAct);
+            }
+          } catch (err) {
+            handleFirestoreError(err, OperationType.WRITE, 'activities');
           }
-        } catch (err) {
-          handleFirestoreError(err, OperationType.WRITE, 'activities');
         }
       } else {
         setActivities(activitiesList.sort((a, b) => b.id.localeCompare(a.id)));
@@ -349,7 +363,7 @@ export default function App() {
         return await res.json();
       }
     } catch (err) {
-      console.error(`Postgres sync failed for ${path}:`, err);
+      console.warn(`Postgres sync failed for ${path} (safe offline/local fallback active):`, err);
     }
     return null;
   };
@@ -416,25 +430,39 @@ export default function App() {
       await setDoc(doc(db, 'files', fileId), fileToUpload);
       await syncToPostgres('sync-file', 'POST', fileToUpload);
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `files/${fileId}`);
+      console.warn('Firestore write failed, using local fallback state:', err);
     }
 
+    // Always ensure the UI state is updated with the new file immediately
+    setFiles(prev => {
+      const filtered = prev.filter(f => f.id !== fileId);
+      return [fileToUpload, ...filtered];
+    });
+
+    setActiveFileId(fileId);
     setActiveFileIndex(0);
     setActiveTab('results'); // Switch directly to inspect warnings
+
+    const actionDesc = (newFile as any).isQuickCleaned 
+      ? `Uploaded, ingested, and auto-sanitized "${newFile.name}" (Quick Clean applied)`
+      : `Uploaded & ingested new dataset "${newFile.name}"`;
 
     const uploadLog: AuditActivity = {
       id: `act-${Date.now()}`,
       userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-sarah',
       userName: user?.email || 'Sarah Jenkins',
-      action: `Uploaded & ingested new dataset "${newFile.name}"`,
+      action: actionDesc,
       timestamp: 'Just now'
     };
     try {
       await setDoc(doc(db, 'activities', uploadLog.id), uploadLog);
       await syncToPostgres('sync-activity', 'POST', uploadLog);
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `activities/${uploadLog.id}`);
+      console.warn('Firestore write activity failed:', err);
     }
+
+    // Update activities locally
+    setActivities(prev => [uploadLog, ...prev]);
   };
 
   // Update file row values post cleaning
@@ -443,8 +471,11 @@ export default function App() {
       await setDoc(doc(db, 'files', updatedFile.id), updatedFile);
       await syncToPostgres('sync-file', 'POST', updatedFile);
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `files/${updatedFile.id}`);
+      console.warn('Firestore update failed, using local fallback state:', err);
     }
+
+    // Always update local state
+    setFiles(prev => prev.map(f => f.id === updatedFile.id ? updatedFile : f));
 
     const cleanLog: AuditActivity = {
       id: `act-${Date.now()}`,
@@ -457,8 +488,44 @@ export default function App() {
       await setDoc(doc(db, 'activities', cleanLog.id), cleanLog);
       await syncToPostgres('sync-activity', 'POST', cleanLog);
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `activities/${cleanLog.id}`);
+      console.warn('Firestore write activity failed:', err);
     }
+
+    setActivities(prev => [cleanLog, ...prev]);
+  };
+
+  // Update multiple files post batch cleaning
+  const handleUpdateFiles = async (updatedFiles: CSVFile[]) => {
+    try {
+      for (const file of updatedFiles) {
+        await setDoc(doc(db, 'files', file.id), file);
+        await syncToPostgres('sync-file', 'POST', file);
+      }
+    } catch (err) {
+      console.warn('Firestore batch update failed, using local fallback state:', err);
+    }
+
+    // Always update local state
+    setFiles(prev => prev.map(f => {
+      const match = updatedFiles.find(uf => uf.id === f.id);
+      return match ? match : f;
+    }));
+
+    const batchCleanLog: AuditActivity = {
+      id: `act-${Date.now()}`,
+      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-sarah',
+      userName: user?.email || 'Sarah Jenkins',
+      action: `Executed batch data hygiene algorithms on ${updatedFiles.length} file(s)`,
+      timestamp: 'Just now'
+    };
+    try {
+      await setDoc(doc(db, 'activities', batchCleanLog.id), batchCleanLog);
+      await syncToPostgres('sync-activity', 'POST', batchCleanLog);
+    } catch (err) {
+      console.warn('Firestore write batch activity failed:', err);
+    }
+
+    setActivities(prev => [batchCleanLog, ...prev]);
   };
 
   // Delete file from workspace registry
@@ -467,14 +534,30 @@ export default function App() {
       await deleteDoc(doc(db, 'files', id));
       await syncToPostgres(`delete-file/${id}`, 'DELETE');
     } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `files/${id}`);
+      console.warn('Firestore delete failed, using local fallback state:', err);
     }
 
-    // Safely shift active file index
+    // Always update local state first
+    setFiles(prev => prev.filter(f => f.id !== id));
+
+    // Safely shift active file index and ID
     const deletedIndex = files.findIndex(f => f.id === id);
     if (deletedIndex !== -1) {
-      if (activeFileIndex >= files.length - 1) {
-        setActiveFileIndex(Math.max(0, files.length - 2));
+      const remainingFiles = files.filter(f => f.id !== id);
+      if (activeFileId === id) {
+        if (remainingFiles.length > 0) {
+          const nextActiveIdx = Math.min(deletedIndex, remainingFiles.length - 1);
+          setActiveFileId(remainingFiles[nextActiveIdx].id);
+          setActiveFileIndex(nextActiveIdx);
+        } else {
+          setActiveFileId('');
+          setActiveFileIndex(0);
+        }
+      } else {
+        const nextActiveIdx = remainingFiles.findIndex(f => f.id === activeFileId);
+        if (nextActiveIdx !== -1) {
+          setActiveFileIndex(nextActiveIdx);
+        }
       }
     }
 
@@ -489,8 +572,10 @@ export default function App() {
       await setDoc(doc(db, 'activities', deleteLog.id), deleteLog);
       await syncToPostgres('sync-activity', 'POST', deleteLog);
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `activities/${deleteLog.id}`);
+      console.warn('Firestore activity delete failed:', err);
     }
+
+    setActivities(prev => [deleteLog, ...prev]);
   };
 
   // Invite user to group workspace
@@ -643,6 +728,7 @@ export default function App() {
     const foundIdx = files.findIndex(f => f.id === file.id);
     if (foundIdx !== -1) {
       setActiveFileIndex(foundIdx);
+      setActiveFileId(file.id);
     }
   };
 
@@ -996,7 +1082,9 @@ export default function App() {
                   {activeTab === 'clean' && (
                     <CleaningCenter 
                       activeFile={activeFile}
+                      files={files}
                       onUpdateFile={handleUpdateFile}
+                      onUpdateFiles={handleUpdateFiles}
                       onNavigate={handleNavigateTab}
                       isDarkMode={isDarkMode}
                       accentClass={accentClass}

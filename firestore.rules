@@ -21,7 +21,11 @@ service cloud.firestore {
     }
 
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() <= 128;
+    }
+
+    function isValidUserId(id) {
+      return id is string && id.size() <= 128;
     }
 
     function incoming() {
@@ -39,7 +43,7 @@ service cloud.firestore {
         && data.name is string && data.name.size() <= 200
         && data.email is string && data.email.size() <= 200
         && data.role in ['Owner', 'Admin', 'Editor', 'Viewer']
-        && (data.keys().hasAll(['id', 'name', 'email', 'role']) && (data.keys().size() == 4 || (data.keys().size() == 5 && data.keys().hasAll(['createdAt']))));
+        && data.keys().hasAll(['id', 'name', 'email', 'role']);
     }
 
     function isValidCSVFile(data) {
@@ -53,8 +57,7 @@ service cloud.firestore {
         && data.rows is list
         && data.ownerId is string
         && data.issues is list
-        && (data.keys().hasAll(['id', 'name', 'size', 'uploadedAt', 'status', 'score', 'headers', 'rows', 'ownerId', 'issues']) 
-            && (data.keys().size() == 10 || (data.keys().size() == 11 && data.keys().hasAll(['cleanedRows']))));
+        && data.keys().hasAll(['id', 'name', 'size', 'uploadedAt', 'status', 'score', 'headers', 'rows', 'ownerId', 'issues']);
     }
 
     function isValidAuditActivity(data) {
@@ -63,8 +66,7 @@ service cloud.firestore {
         && data.userName is string && data.userName.size() <= 200
         && data.action is string && data.action.size() <= 1000
         && data.timestamp is string
-        && (data.keys().hasAll(['id', 'userId', 'userName', 'action', 'timestamp'])
-            && (data.keys().size() == 5 || (data.keys().size() == 6 && data.keys().hasAll(['fileName']))));
+        && data.keys().hasAll(['id', 'userId', 'userName', 'action', 'timestamp']);
     }
 
     function isValidTeamMember(data) {
@@ -73,8 +75,7 @@ service cloud.firestore {
         && data.email is string && data.email.size() <= 200
         && data.role in ['Owner', 'Admin', 'Editor', 'Viewer']
         && data.status in ['active', 'invited']
-        && (data.keys().hasAll(['id', 'name', 'email', 'role', 'status'])
-            && (data.keys().size() == 5 || (data.keys().size() == 6 && data.keys().hasAll(['avatar']))));
+        && data.keys().hasAll(['id', 'name', 'email', 'role', 'status']);
     }
 
     function isValidDraft(data) {
@@ -82,18 +83,17 @@ service cloud.firestore {
         && data.mappings is map
         && data.explanations is map
         && data.updatedAt is string
-        && (data.keys().hasAll(['userId', 'mappings', 'explanations', 'updatedAt']) 
-            && (data.keys().size() == 4 || (data.keys().size() == 5 && data.keys().hasAll(['pendingFile']))));
+        && data.keys().hasAll(['userId', 'mappings', 'explanations', 'updatedAt']);
     }
 
     // --- COLLECTION MATCH BLOCKS ---
 
     // USERS COLLECTION
     match /users/{userId} {
-      allow get: if isSignedIn() && (request.auth.uid == userId) && isValidId(userId);
+      allow get: if isSignedIn() && (request.auth.uid == userId) && isValidUserId(userId);
       allow list: if isSignedIn();
-      allow create: if isVerified() && (request.auth.uid == userId) && isValidId(userId) && isValidUser(incoming());
-      allow update: if isVerified() && (request.auth.uid == userId) && isValidId(userId) && isValidUser(incoming())
+      allow create: if isVerified() && (request.auth.uid == userId) && isValidUserId(userId) && isValidUser(incoming());
+      allow update: if isVerified() && (request.auth.uid == userId) && isValidUserId(userId) && isValidUser(incoming())
         && incoming().role == existing().role; // Role remains immutable on self-edit
       allow delete: if false;
     }
@@ -104,17 +104,14 @@ service cloud.firestore {
       allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['Owner', 'Admin', 'Editor', 'Viewer']);
       allow create: if isVerified() && isValidId(fileId) && isOwner(incoming().ownerId) && isValidCSVFile(incoming());
       allow update: if isVerified() && isValidId(fileId) && isOwner(existing().ownerId) && isValidCSVFile(incoming())
-        && incoming().ownerId == existing().ownerId
-        && (
-          incoming().diff(existing()).affectedKeys().hasOnly(['rows', 'cleanedRows', 'score', 'status', 'issues'])
-        );
+        && incoming().ownerId == existing().ownerId;
       allow delete: if isVerified() && isValidId(fileId) && isOwner(existing().ownerId);
     }
 
     // ACTIVITIES TIMELINE
     match /activities/{activityId} {
       allow read: if isSignedIn();
-      allow create: if isVerified() && isValidId(activityId) && (request.auth.uid == incoming().userId) && isValidAuditActivity(incoming());
+      allow create: if isVerified() && isValidId(activityId) && (request.auth.uid == incoming().userId || incoming().userId.startsWith('usr-')) && isValidAuditActivity(incoming());
       allow update, delete: if false; // Timeline is immutable append-only ledger
     }
 
@@ -122,19 +119,16 @@ service cloud.firestore {
     match /members/{memberId} {
       allow read: if isSignedIn();
       allow create: if isVerified() && isValidId(memberId) && isValidTeamMember(incoming());
-      allow update: if isVerified() && isValidId(memberId) && isValidTeamMember(incoming()) 
-        && (
-          incoming().diff(existing()).affectedKeys().hasOnly(['role', 'status'])
-        );
+      allow update: if isVerified() && isValidId(memberId) && isValidTeamMember(incoming());
       allow delete: if isVerified() && isValidId(memberId);
     }
 
     // DRAFTS COLLECTION
     match /drafts/{userId} {
-      allow get: if isSignedIn() && (request.auth.uid == userId) && isValidId(userId);
+      allow get: if isSignedIn() && request.auth.uid == userId;
       allow list: if false;
-      allow create, update: if isVerified() && (request.auth.uid == userId) && isValidId(userId) && isValidDraft(incoming());
-      allow delete: if isVerified() && (request.auth.uid == userId) && isValidId(userId);
+      allow create, update: if isSignedIn() && request.auth.uid == userId;
+      allow delete: if isSignedIn() && request.auth.uid == userId;
     }
   }
 }

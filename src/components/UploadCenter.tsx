@@ -22,10 +22,12 @@ import {
   Loader2,
   GitMerge
 } from 'lucide-react';
-import { CSVFile, AuditIssue, Severity, IssueType } from '../types';
+import { CSVFile, AuditIssue, Severity, IssueType, CustomValidationRule } from '../types';
 import { detectCSVFormats } from '../lib/formatDetector';
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import CustomValidationPanel from './CustomValidationPanel';
+
 
 interface UploadCenterProps {
   onFileUpload: (newFile: CSVFile) => void;
@@ -49,6 +51,16 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
 
   // States for AI configuration & mapping step during file ingestion
   const [pendingFile, setPendingFile] = useState<CSVFile | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<CSVFile[]>([]);
+  const [activePendingIndex, setActivePendingIndex] = useState<number>(0);
+  const [quickCleanEnabled, setQuickCleanEnabled] = useState<boolean>(() => {
+    const saved = localStorage.getItem('quick_clean_enabled');
+    return saved ? saved === 'true' : false;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('quick_clean_enabled', String(quickCleanEnabled));
+  }, [quickCleanEnabled]);
   const [mappings, setMappings] = useState<Record<string, string>>({});
   const [explanations, setExplanations] = useState<Record<string, string>>({});
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -59,6 +71,83 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
   // Auto-save states and hooks
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [savedDraft, setSavedDraft] = useState<any | null>(null);
+
+  // States for Custom Validation Rules
+  const [customRules, setCustomRules] = useState<CustomValidationRule[]>(() => {
+    const saved = localStorage.getItem('custom_validation_rules');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        // ignore
+      }
+    }
+    return [
+      {
+        id: 'rule-date',
+        columnName: 'Date',
+        type: 'regex',
+        regexPattern: '^\\d{4}-\\d{2}-\\d{2}$',
+        description: 'Date must be format YYYY-MM-DD',
+        severity: 'warning',
+        isActive: true,
+      },
+      {
+        id: 'rule-amount',
+        columnName: 'Amount',
+        type: 'range',
+        rangeMin: 0,
+        description: 'Amount must be a positive number',
+        severity: 'critical',
+        isActive: true,
+      }
+    ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('custom_validation_rules', JSON.stringify(customRules));
+  }, [customRules]);
+
+  const handleAddRule = (newRule: CustomValidationRule) => {
+    setCustomRules(prev => [...prev, newRule]);
+  };
+
+  const handleToggleRule = (id: string) => {
+    setCustomRules(prev => prev.map(r => r.id === id ? { ...r, isActive: !r.isActive } : r));
+  };
+
+  const handleDeleteRule = (id: string) => {
+    setCustomRules(prev => prev.filter(r => r.id !== id));
+  };
+
+  const removePendingFileAtIndex = (indexToRemove: number, updatedFileToSubmit?: CSVFile) => {
+    if (updatedFileToSubmit) {
+      const fileToSubmit = quickCleanEnabled ? executeDefaultHygiene(updatedFileToSubmit) : updatedFileToSubmit;
+      onFileUpload(fileToSubmit);
+    }
+    
+    setPendingFiles(prev => {
+      const nextList = prev.filter((_, idx) => idx !== indexToRemove);
+      if (nextList.length === 0) {
+        setPendingFile(null);
+        setUploadProgress(null);
+        setFileDetails(null);
+        setMappings({});
+        setExplanations({});
+        setActivePendingIndex(0);
+      } else {
+        const nextIndex = indexToRemove >= nextList.length ? nextList.length - 1 : indexToRemove;
+        setActivePendingIndex(nextIndex);
+        const nextFile = nextList[nextIndex];
+        setPendingFile(nextFile);
+        setMappings({});
+        setExplanations({});
+        fetchHeaderAnalysis(nextFile.headers, nextFile.rows);
+      }
+      return nextList;
+    });
+  };
+
 
   // Load saved draft on mount or auth load
   useEffect(() => {
@@ -77,6 +166,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
         }
       } catch (err) {
         console.error("Failed to load draft:", err);
+        handleFirestoreError(err, OperationType.GET, 'drafts/' + currentUser.uid);
       }
     };
     
@@ -115,6 +205,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
         await setDoc(draftRef, draftData);
       } catch (err) {
         console.error("Background auto-save failed:", err);
+        handleFirestoreError(err, OperationType.WRITE, 'drafts/' + currentUser.uid);
       } finally {
         setIsAutoSaving(false);
       }
@@ -138,10 +229,325 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
         await deleteDoc(doc(db, 'drafts', currentUser.uid));
       } catch (e) {
         console.error("Error deleting draft from Firestore:", e);
+        handleFirestoreError(e, OperationType.DELETE, 'drafts/' + currentUser.uid);
       }
     }
     setSavedDraft(null);
   };
+
+  const generateFileIssues = (
+    headers: string[],
+    rows: Record<string, string>[],
+    detectedMetadata: any,
+    rules: CustomValidationRule[]
+  ): AuditIssue[] => {
+    const generatedIssues: AuditIssue[] = [];
+    const seenRows = new Set<string>();
+
+    rows.forEach((row, rowIndex) => {
+      const humanRowIndex = rowIndex + 2; // 1-indexed accounting for headers
+      
+      // 1. Check Duplicates
+      const rowString = JSON.stringify(row);
+      if (seenRows.has(rowString)) {
+        generatedIssues.push({
+          id: `dynamic-issue-dup-${rowIndex}`,
+          type: 'duplicate',
+          column: headers[0] || 'Row',
+          row: humanRowIndex,
+          value: 'Duplicate Row content',
+          severity: 'critical',
+          description: `Entire row matches a previous record exactly.`,
+          suggestion: 'Deduplicate row during clean phase.',
+          status: 'open'
+        });
+      } else {
+        seenRows.add(rowString);
+      }
+
+      // 2. Check Missing Values & Formats
+      headers.forEach(h => {
+        const cellVal = row[h];
+        if (cellVal === undefined || cellVal === '') {
+          const isCrucial = h.toLowerCase().includes('id') || h.toLowerCase().includes('amount') || h.toLowerCase().includes('date') || h.toLowerCase().includes('email');
+          generatedIssues.push({
+            id: `dynamic-issue-missing-${rowIndex}-${h}`,
+            type: 'missing_value',
+            column: h,
+            row: humanRowIndex,
+            value: '',
+            severity: isCrucial ? 'critical' : 'warning',
+            description: `Missing cell value found in column "${h}".`,
+            suggestion: isCrucial ? 'Required data. Impute value or contact editor.' : 'Fill with standard category or text.',
+            status: 'open'
+          });
+        } else {
+          // Check outliers on numerical columns
+          if (h.toLowerCase().includes('amount') || h.toLowerCase().includes('pay') || h.toLowerCase().includes('price')) {
+            const num = parseFloat(cellVal.replace(/[^0-9.-]/g, ''));
+            if (!isNaN(num) && num > 100000) {
+              generatedIssues.push({
+                id: `dynamic-issue-outlier-${rowIndex}-${h}`,
+                type: 'outlier',
+                column: h,
+                row: humanRowIndex,
+                value: cellVal,
+                severity: 'warning',
+                description: `High numerical outlier found: ${cellVal}.`,
+                suggestion: 'Check if transaction matches correct ledger approvals.',
+                status: 'open'
+              });
+            }
+          }
+          // Check date format
+          if (h.toLowerCase().includes('date') || (detectedMetadata && detectedMetadata.dateFormats && detectedMetadata.dateFormats[h])) {
+            const expectedFormat = (detectedMetadata && detectedMetadata.dateFormats && detectedMetadata.dateFormats[h]) || 'YYYY-MM-DD';
+            const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+            if (!dateRegex.test(cellVal)) {
+              let description = `Date "${cellVal}" does not follow YYYY-MM-DD standard format.`;
+              let suggestion = 'Convert to standard ISO-8601 formatting.';
+
+              if (expectedFormat !== 'YYYY-MM-DD') {
+                description = `Date "${cellVal}" is in "${expectedFormat}" format. System standard is YYYY-MM-DD.`;
+                suggestion = `Auto-standardize this column from "${expectedFormat}" during cleaning.`;
+              }
+
+              generatedIssues.push({
+                id: `dynamic-issue-date-${rowIndex}-${h}`,
+                type: 'invalid_format',
+                column: h,
+                row: humanRowIndex,
+                value: cellVal,
+                severity: 'warning',
+                description: description,
+                suggestion: suggestion,
+                status: 'open'
+              });
+            }
+          }
+        }
+      });
+
+      // 3. Apply custom validation rules
+      rules.filter(rule => rule.isActive).forEach(rule => {
+        // Find matching header case-insensitively
+        const matchedHeader = headers.find(h => h.toLowerCase() === rule.columnName.toLowerCase());
+        if (matchedHeader) {
+          const cellVal = row[matchedHeader];
+          if (cellVal !== undefined && cellVal !== '') {
+            if (rule.type === 'regex' && rule.regexPattern) {
+              try {
+                const regex = new RegExp(rule.regexPattern);
+                if (!regex.test(cellVal)) {
+                  generatedIssues.push({
+                    id: `custom-issue-regex-${rowIndex}-${matchedHeader}-${rule.id}`,
+                    type: 'invalid_format',
+                    column: matchedHeader,
+                    row: humanRowIndex,
+                    value: cellVal,
+                    severity: rule.severity,
+                    description: rule.description || `Value "${cellVal}" failed custom regex validation: /${rule.regexPattern}/.`,
+                    suggestion: `Adjust column content to match required validation criteria.`,
+                    status: 'open'
+                  });
+                }
+              } catch (err) {
+                console.error("Invalid custom regex pattern:", rule.regexPattern, err);
+              }
+            } else if (rule.type === 'range') {
+              const cleanNumStr = cellVal.replace(/[^0-9.-]/g, '');
+              const num = parseFloat(cleanNumStr);
+              if (isNaN(num)) {
+                generatedIssues.push({
+                  id: `custom-issue-range-nan-${rowIndex}-${matchedHeader}-${rule.id}`,
+                  type: 'invalid_format',
+                  column: matchedHeader,
+                  row: humanRowIndex,
+                  value: cellVal,
+                  severity: rule.severity,
+                  description: `Value "${cellVal}" could not be parsed as a number for range validation.`,
+                  suggestion: `Ensure value is a valid numeric format.`,
+                  status: 'open'
+                });
+              } else {
+                let failed = false;
+                let desc = '';
+                if (rule.rangeMin !== undefined && num < rule.rangeMin) {
+                  failed = true;
+                  desc = `Value ${num} is below custom minimum threshold of ${rule.rangeMin}.`;
+                }
+                if (rule.rangeMax !== undefined && num > rule.rangeMax) {
+                  failed = true;
+                  desc = `Value ${num} is above custom maximum threshold of ${rule.rangeMax}.`;
+                }
+                if (failed) {
+                  generatedIssues.push({
+                    id: `custom-issue-range-limit-${rowIndex}-${matchedHeader}-${rule.id}`,
+                    type: 'outlier',
+                    column: matchedHeader,
+                    row: humanRowIndex,
+                    value: cellVal,
+                    severity: rule.severity,
+                    description: rule.description || desc,
+                    suggestion: `Verify or update cell value to sit within allowed bounds.`,
+                    status: 'open'
+                  });
+                }
+              }
+            }
+          }
+        }
+      });
+    });
+
+    return generatedIssues;
+  };
+
+  const calculateScore = (issueCount: number, rowCount: number): number => {
+    return Math.max(25, Math.min(100, Math.round(100 - (issueCount / (rowCount || 1)) * 300)));
+  };
+
+  const executeDefaultHygiene = (file: CSVFile): CSVFile => {
+    let currentRowsList = [...file.rows];
+    let issues = [...file.issues];
+
+    // 1. Deduplicate rows
+    const seen = new Set<string>();
+    const unique = currentRowsList.filter(row => {
+      const key = row.Transaction_ID || JSON.stringify(row);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    currentRowsList = unique;
+    issues = issues.filter(issue => issue.type !== 'duplicate');
+
+    // 2. Standardize dates
+    const dateFormats = file.detectedMetadata?.dateFormats || {};
+    currentRowsList = currentRowsList.map(row => {
+      const updated = { ...row };
+      file.headers.forEach(col => {
+        const fmt = dateFormats[col];
+        if (fmt || col.toLowerCase().includes('date')) {
+          const raw = (row[col] || '').trim();
+          if (!raw) return;
+          if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return;
+
+          let parts: string[] = [];
+          if (raw.includes('/')) parts = raw.split('/');
+          else if (raw.includes('-')) parts = raw.split('-');
+          else if (raw.includes('.')) parts = raw.split('.');
+
+          if (parts.length === 3) {
+            let year = '';
+            let month = '';
+            let day = '';
+            const formatStr = fmt || 'MM/DD/YYYY';
+            const upperFmt = formatStr.toUpperCase();
+
+            if (upperFmt.startsWith('YYYY')) {
+              year = parts[0]; month = parts[1]; day = parts[2];
+            } else if (upperFmt.startsWith('DD')) {
+              day = parts[0]; month = parts[1]; year = parts[2];
+            } else if (upperFmt.startsWith('MM')) {
+              month = parts[0]; day = parts[1]; year = parts[2];
+            } else {
+              const p0 = parseInt(parts[0]);
+              const p1 = parseInt(parts[1]);
+              year = parts[2];
+              if (p0 > 12) {
+                day = parts[0]; month = parts[1];
+              } else if (p1 > 12) {
+                day = parts[1]; month = parts[0];
+              } else {
+                month = parts[0]; day = parts[1];
+              }
+            }
+
+            if (year.length === 2) {
+              const yrNum = parseInt(year);
+              year = yrNum > 50 ? `19${year}` : `20${year}`;
+            }
+
+            if (year && month && day) {
+              updated[col] = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+            }
+          }
+        }
+      });
+      return updated;
+    });
+    issues = issues.filter(issue => !(issue.type === 'invalid_format' && (issue.column.toLowerCase().includes('date') || dateFormats[issue.column])));
+
+    // 3. Impute missing values
+    currentRowsList = currentRowsList.map(row => {
+      const updated = { ...row };
+      Object.keys(updated).forEach(key => {
+        if (updated[key] === '' || updated[key] === undefined) {
+          if (key.toLowerCase().includes('amount') || key.toLowerCase().includes('price') || key.toLowerCase().includes('pay')) {
+            updated[key] = '0.00';
+          } else {
+            updated[key] = 'Uncategorized';
+          }
+        }
+      });
+      return updated;
+    });
+    issues = issues.filter(issue => issue.type !== 'missing_value');
+
+    // 4. Correct casing
+    currentRowsList = currentRowsList.map(row => {
+      const updated = { ...row };
+      if (updated.Category) {
+        updated.Category = updated.Category.charAt(0).toUpperCase() + updated.Category.slice(1).toLowerCase();
+      }
+      if (updated.Country && updated.Country.length === 2) {
+        updated.Country = updated.Country.toUpperCase();
+      }
+      return updated;
+    });
+
+    const originalIssuesCount = file.issues.length;
+    const solvedIssuesCount = originalIssuesCount - issues.length;
+    const originalScore = file.score;
+    const newScore = Math.min(100, Math.max(25, originalScore + (solvedIssuesCount * 5)));
+
+    return {
+      ...file,
+      rows: currentRowsList,
+      cleanedRows: currentRowsList,
+      issues: issues,
+      score: newScore,
+      isQuickCleaned: true
+    };
+  };
+
+  // Revalidate whenever custom rules change
+  useEffect(() => {
+    if (!pendingFile) return;
+
+    const updatedIssues = generateFileIssues(
+      pendingFile.headers,
+      pendingFile.rows,
+      pendingFile.detectedMetadata,
+      customRules
+    );
+
+    const currentIssueIds = pendingFile.issues.map(i => i.id).join(',');
+    const updatedIssueIds = updatedIssues.map(i => i.id).join(',');
+
+    if (currentIssueIds !== updatedIssueIds) {
+      const score = calculateScore(updatedIssues.length, pendingFile.rows.length * pendingFile.headers.length);
+      setPendingFile(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          issues: updatedIssues,
+          score: score
+        };
+      });
+    }
+  }, [customRules, pendingFile?.headers, pendingFile?.rows]);
 
   const runSanityCheck = () => {
     if (!pendingFile) return [];
@@ -787,99 +1193,9 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
             // Auto-detect formats during ingestion
             const detectedMetadata = detectCSVFormats(headers, rows);
 
-            // Generate real dynamic issues for the active rows
-            const generatedIssues: AuditIssue[] = [];
-            const seenRows = new Set<string>();
-
-            rows.forEach((row, rowIndex) => {
-              const humanRowIndex = rowIndex + 2; // 1-indexed accounting for headers
-              
-              // 1. Check Duplicates
-              const rowString = JSON.stringify(row);
-              if (seenRows.has(rowString)) {
-                generatedIssues.push({
-                  id: `dynamic-issue-dup-${rowIndex}`,
-                  type: 'duplicate',
-                  column: headers[0] || 'Row',
-                  row: humanRowIndex,
-                  value: 'Duplicate Row content',
-                  severity: 'critical',
-                  description: `Entire row matches a previous record exactly.`,
-                  suggestion: 'Deduplicate row during clean phase.',
-                  status: 'open'
-                });
-              } else {
-                seenRows.add(rowString);
-              }
-
-              // 2. Check Missing Values & Formats
-              headers.forEach(h => {
-                const cellVal = row[h];
-                if (cellVal === undefined || cellVal === '') {
-                  const isCrucial = h.toLowerCase().includes('id') || h.toLowerCase().includes('amount') || h.toLowerCase().includes('date') || h.toLowerCase().includes('email');
-                  generatedIssues.push({
-                    id: `dynamic-issue-missing-${rowIndex}-${h}`,
-                    type: 'missing_value',
-                    column: h,
-                    row: humanRowIndex,
-                    value: '',
-                    severity: isCrucial ? 'critical' : 'warning',
-                    description: `Missing cell value found in column "${h}".`,
-                    suggestion: isCrucial ? 'Required data. Impute value or contact editor.' : 'Fill with standard category or text.',
-                    status: 'open'
-                  });
-                } else {
-                  // Check outliers on numeric columns
-                  if (h.toLowerCase().includes('amount') || h.toLowerCase().includes('pay') || h.toLowerCase().includes('price')) {
-                    const num = parseFloat(cellVal.replace(/[^0-9.-]/g, ''));
-                    if (!isNaN(num) && num > 100000) {
-                      generatedIssues.push({
-                        id: `dynamic-issue-outlier-${rowIndex}-${h}`,
-                        type: 'outlier',
-                        column: h,
-                        row: humanRowIndex,
-                        value: cellVal,
-                        severity: 'warning',
-                        description: `High numerical outlier found: ${cellVal}.`,
-                        suggestion: 'Check if transaction matches correct ledger approvals.',
-                        status: 'open'
-                      });
-                    }
-                  }
-                  // Check date format
-                  if (h.toLowerCase().includes('date') || detectedMetadata.dateFormats[h]) {
-                    const expectedFormat = detectedMetadata.dateFormats[h] || 'YYYY-MM-DD';
-                    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-                    if (!dateRegex.test(cellVal)) {
-                      let description = `Date "${cellVal}" does not follow YYYY-MM-DD standard format.`;
-                      let suggestion = 'Convert to standard ISO-8601 formatting.';
-
-                      if (expectedFormat !== 'YYYY-MM-DD') {
-                        description = `Date "${cellVal}" is in "${expectedFormat}" format. System standard is YYYY-MM-DD.`;
-                        suggestion = `Auto-standardize this column from "${expectedFormat}" during cleaning.`;
-                      }
-
-                      generatedIssues.push({
-                        id: `dynamic-issue-date-${rowIndex}-${h}`,
-                        type: 'invalid_format',
-                        column: h,
-                        row: humanRowIndex,
-                        value: cellVal,
-                        severity: 'warning',
-                        description: description,
-                        suggestion: suggestion,
-                        status: 'open'
-                      });
-                    }
-                  }
-                }
-              });
-            });
-
-            // Calculate score
-            const issueCount = generatedIssues.length;
-            const rowCount = rows.length * headers.length;
-            const score = Math.max(25, Math.min(100, Math.round(100 - (issueCount / (rowCount || 1)) * 300)));
+            // Generate real dynamic issues for the active rows, including user-defined custom rules
+            const generatedIssues = generateFileIssues(headers, rows, detectedMetadata, customRules);
+            const score = calculateScore(generatedIssues.length, rows.length * headers.length);
 
             const parsedFile: CSVFile = {
               id: `uploaded-file-${Date.now()}`,
@@ -897,6 +1213,8 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
             };
 
             // Intercept file ingestion for AI canonical mapping step
+            setPendingFiles([parsedFile]);
+            setActivePendingIndex(0);
             setPendingFile(parsedFile);
             fetchHeaderAnalysis(parsedFile.headers, parsedFile.rows);
           } catch (err) {
@@ -908,19 +1226,145 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     }, 100);
   };
 
+  const processMultipleFiles = async (filesList: File[]) => {
+    setErrorMsg('');
+    setFileDetails(null);
+    setUploadProgress(null);
+
+    const validFiles = filesList.filter(file => {
+      if (!file.name.endsWith('.csv') && file.type !== 'text/csv') {
+        setErrorMsg(`Skipped some files: only standard .csv spreadsheet formats are supported.`);
+        return false;
+      }
+      if (file.size > 100 * 1024 * 1024) {
+        setErrorMsg(`Skipped some files: "${file.name}" exceeds 100MB size limit.`);
+        return false;
+      }
+      return true;
+    });
+
+    if (validFiles.length === 0) return;
+
+    setIsAnalyzing(true);
+    const parsedFiles: CSVFile[] = [];
+
+    for (let idx = 0; idx < validFiles.length; idx++) {
+      const file = validFiles[idx];
+      setFileDetails({ name: file.name, size: file.size });
+      setUploadProgress(Math.round((idx / validFiles.length) * 100));
+
+      try {
+        const fileParsed: CSVFile = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            try {
+              const text = e.target?.result as string;
+              if (!text) throw new Error('Empty spreadsheet content');
+              
+              const isLargeFile = file.size > 5 * 1024 * 1024;
+              
+              let totalLinesCount = 0;
+              let pos = 0;
+              while ((pos = text.indexOf('\n', pos)) !== -1) {
+                totalLinesCount++;
+                pos++;
+              }
+              if (text.length > 0 && text[text.length - 1] !== '\n') {
+                totalLinesCount++;
+              }
+
+              const maxLinesToParse = isLargeFile ? 10000 : totalLinesCount;
+              let endPos = 0;
+              let linesCollected = 0;
+              while (linesCollected < maxLinesToParse && endPos !== -1) {
+                endPos = text.indexOf('\n', endPos);
+                if (endPos !== -1) {
+                  endPos++;
+                  linesCollected++;
+                }
+              }
+              const previewText = (isLargeFile && endPos !== -1) ? text.substring(0, endPos) : text;
+              
+              const lines = previewText.split(/\r?\n/).filter(line => line.trim() !== '');
+              if (lines.length === 0) throw new Error('Spreadsheet has no lines');
+
+              const headers = lines[0].split(',').map(h => h.replace(/^["']|["']$/g, '').trim());
+              const rows: Record<string, string>[] = [];
+
+              for (let i = 1; i < lines.length; i++) {
+                const columns = lines[i].split(',').map(c => c.replace(/^["']|["']$/g, '').trim());
+                const rowObj: Record<string, string> = {};
+                headers.forEach((h, index) => {
+                  rowObj[h] = columns[index] || '';
+                });
+                rows.push(rowObj);
+              }
+
+              const detectedMetadata = detectCSVFormats(headers, rows);
+              const generatedIssues = generateFileIssues(headers, rows, detectedMetadata, customRules);
+              const score = calculateScore(generatedIssues.length, rows.length * headers.length);
+
+              const parsedFile: CSVFile = {
+                id: `uploaded-file-${Date.now()}-${idx}-${Math.floor(Math.random() * 1000)}`,
+                name: file.name,
+                size: file.size,
+                uploadedAt: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                status: 'completed',
+                score: score,
+                headers: headers,
+                rows: rows,
+                issues: generatedIssues,
+                totalRowsCount: totalLinesCount - 1,
+                isLargeFile: isLargeFile,
+                detectedMetadata: detectedMetadata
+              };
+
+              resolve(parsedFile);
+            } catch (err) {
+              reject(new Error(`Failed to parse ${file.name}`));
+            }
+          };
+          reader.readAsText(file);
+        });
+
+        parsedFiles.push(fileParsed);
+      } catch (err) {
+        console.warn(err);
+      }
+    }
+
+    setUploadProgress(100);
+    setIsAnalyzing(false);
+
+    if (parsedFiles.length > 0) {
+      setPendingFiles(parsedFiles);
+      setActivePendingIndex(0);
+      setPendingFile(parsedFiles[0]);
+      fetchHeaderAnalysis(parsedFiles[0].headers, parsedFiles[0].rows);
+    }
+  };
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
 
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      processFile(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      if (e.dataTransfer.files.length === 1) {
+        processFile(e.dataTransfer.files[0]);
+      } else {
+        processMultipleFiles(Array.from(e.dataTransfer.files));
+      }
     }
   };
 
   const handleBrowse = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      processFile(e.target.files[0]);
+    if (e.target.files && e.target.files.length > 0) {
+      if (e.target.files.length === 1) {
+        processFile(e.target.files[0]);
+      } else {
+        processMultipleFiles(Array.from(e.target.files));
+      }
     }
   };
 
@@ -950,6 +1394,64 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
   if (pendingFile) {
     return (
       <div className="space-y-8 animate-fadeIn">
+        {/* Bulk Ingestion Queue Header */}
+        {pendingFiles.length > 1 && (
+          <div className={`p-4 rounded-2xl border flex flex-col md:flex-row md:items-center justify-between gap-4 ${isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200 shadow-sm'}`}>
+            <div className="flex items-center gap-2.5">
+              <span className="p-2 bg-blue-500/10 text-blue-400 rounded-lg shrink-0 animate-pulse">
+                <FileSpreadsheet className="w-5 h-5 text-blue-500" />
+              </span>
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-wider text-blue-500">Ingestion Queue ({pendingFiles.length} files remaining)</h4>
+                <p className="text-[10px] text-slate-400 mt-0.5">Customize individual schema mappings or skip and ingest all files instantly with default columns.</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex gap-1.5 max-h-12 overflow-x-auto py-1">
+                {pendingFiles.map((file, idx) => (
+                  <button
+                    key={file.id}
+                    onClick={() => {
+                      setActivePendingIndex(idx);
+                      setPendingFile(file);
+                      setMappings({});
+                      setExplanations({});
+                      fetchHeaderAnalysis(file.headers, file.rows);
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold font-mono border transition-all cursor-pointer ${
+                      idx === activePendingIndex
+                        ? 'bg-blue-600 border-blue-500 text-white font-bold shadow'
+                        : isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white' : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {file.name}
+                  </button>
+                ))}
+              </div>
+              
+              <button
+                onClick={() => {
+                  pendingFiles.forEach(f => {
+                    const fileToSubmit = quickCleanEnabled ? executeDefaultHygiene(f) : f;
+                    onFileUpload(fileToSubmit);
+                  });
+                  setPendingFiles([]);
+                  setActivePendingIndex(0);
+                  setPendingFile(null);
+                  setUploadProgress(null);
+                  setFileDetails(null);
+                  setMappings({});
+                  setExplanations({});
+                }}
+                className="px-4 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 border border-emerald-500/20 rounded-lg transition-all cursor-pointer shadow-sm flex items-center gap-1.5 hover:scale-[1.01]"
+              >
+                <Check className="w-3.5 h-3.5" /> Skip & Ingest All
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <span className="text-xs font-mono font-bold text-blue-500 uppercase tracking-widest flex items-center gap-1.5 mb-1">
@@ -1225,6 +1727,17 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
                 </div>
               </div>
 
+              {/* Custom Validation Rules Panel */}
+              <CustomValidationPanel
+                customRules={customRules}
+                onAddRule={handleAddRule}
+                onToggleRule={handleToggleRule}
+                onDeleteRule={handleDeleteRule}
+                isDarkMode={isDarkMode}
+                accentClass={accentClass}
+                availableColumns={pendingFile.headers}
+              />
+
               <div className={`p-6 rounded-xl border ${isDarkMode ? 'bg-[#131b2e]/60 border-slate-800' : 'bg-white border-slate-200 shadow-sm'} space-y-5`}>
                 <div className="flex justify-between items-center border-b pb-3 border-slate-800/40">
                   <h3 className="font-bold text-xs uppercase tracking-wider text-slate-400">Map Raw Columns to Canonical Entities</h3>
@@ -1345,11 +1858,7 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
                           console.error("Failed to delete draft:", e);
                         }
                       }
-                      setPendingFile(null);
-                      setUploadProgress(null);
-                      setFileDetails(null);
-                      setMappings({});
-                      setExplanations({});
+                      removePendingFileAtIndex(activePendingIndex);
                     }}
                     className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
                       isDarkMode ? 'border-slate-800 text-slate-400 hover:text-slate-200 bg-slate-900/40' : 'border-slate-200 text-slate-600 bg-white hover:bg-slate-50'
@@ -1370,13 +1879,8 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
                           }
                         }
                         if (pendingFile) {
-                          onFileUpload(pendingFile);
+                          removePendingFileAtIndex(activePendingIndex, pendingFile);
                         }
-                        setPendingFile(null);
-                        setUploadProgress(null);
-                        setFileDetails(null);
-                        setMappings({});
-                        setExplanations({});
                       }}
                       className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
                         isDarkMode ? 'border-slate-800 text-slate-300 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-700 hover:bg-slate-50'
@@ -1401,12 +1905,7 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
                             console.error("Failed to delete draft:", e);
                           }
                         }
-                        onFileUpload(finalFile);
-                        setPendingFile(null);
-                        setUploadProgress(null);
-                        setFileDetails(null);
-                        setMappings({});
-                        setExplanations({});
+                        removePendingFileAtIndex(activePendingIndex, finalFile);
                       }}
                       className={`px-5 py-2 rounded-xl text-xs font-bold text-white transition-all cursor-pointer shadow-md flex items-center gap-1.5 ${accentClass}`}
                     >
@@ -1583,6 +2082,7 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
               accept=".csv"
               onChange={handleBrowse}
               className="hidden"
+              multiple
             />
             
             <div className="max-w-md mx-auto space-y-3">
@@ -1606,6 +2106,46 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
                 </button>
               </div>
             </div>
+          </div>
+
+          {/* Quick Clean Toggle */}
+          <div className={`p-4 rounded-xl border flex items-center justify-between gap-4 transition-all duration-300 ${
+            quickCleanEnabled 
+              ? (isDarkMode ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-emerald-50/40 border-emerald-200 shadow-sm')
+              : (isDarkMode ? 'bg-slate-900/40 border-slate-800' : 'bg-slate-50/50 border-slate-200')
+          }`}>
+            <div className="flex gap-3 items-start">
+              <div className={`p-2 rounded-lg shrink-0 transition-colors ${
+                quickCleanEnabled 
+                  ? (isDarkMode ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-100 text-emerald-600')
+                  : (isDarkMode ? 'bg-slate-950 text-slate-500' : 'bg-slate-100 text-slate-500')
+              }`}>
+                <Sparkles className={`w-5 h-5 ${quickCleanEnabled ? 'animate-pulse text-emerald-500' : 'text-slate-400'}`} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className={`font-bold text-xs ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>Automated Quick Clean Mode</span>
+                  <span className="text-[9px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider">Default Hygiene</span>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">
+                  Automatically remove duplicates, standardize dates to YYYY-MM-DD, fill blank/missing cells, and normalize casing immediately upon ingestion.
+                </p>
+              </div>
+            </div>
+            
+            {/* Toggle Button */}
+            <button
+              type="button"
+              id="quick-clean-toggle-btn"
+              onClick={() => setQuickCleanEnabled(!quickCleanEnabled)}
+              className={`w-11 h-6 rounded-full p-1 transition-colors duration-200 relative cursor-pointer focus:outline-none focus:ring-1 focus:ring-emerald-500 shrink-0 ${
+                quickCleanEnabled ? 'bg-emerald-500' : 'bg-slate-600'
+              }`}
+            >
+              <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                quickCleanEnabled ? 'translate-x-5' : 'translate-x-0'
+              }`}></div>
+            </button>
           </div>
 
           {/* Progress or Errors */}
@@ -1651,6 +2191,16 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
               </div>
             </div>
           )}
+
+          {/* Custom Validation Rules Panel */}
+          <CustomValidationPanel
+            customRules={customRules}
+            onAddRule={handleAddRule}
+            onToggleRule={handleToggleRule}
+            onDeleteRule={handleDeleteRule}
+            isDarkMode={isDarkMode}
+            accentClass={accentClass}
+          />
 
           {/* Merge Datasets Segment */}
           <div className={`p-6 rounded-xl border ${isDarkMode ? 'bg-[#131b2e] border-slate-800' : 'bg-white border-slate-200 shadow-sm'} space-y-4`}>

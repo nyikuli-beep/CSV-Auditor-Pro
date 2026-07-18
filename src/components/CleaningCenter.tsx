@@ -17,23 +17,65 @@ import {
   Printer,
   X,
   Columns,
-  Download
+  Download,
+  Check,
+  Play,
+  Loader2,
+  Database,
+  ArrowRight,
+  Shield,
+  SlidersHorizontal,
+  AlertCircle
 } from 'lucide-react';
 import { CSVFile, AuditIssue } from '../types';
 import RegexBuilder from './RegexBuilder';
 
 interface CleaningCenterProps {
   activeFile: CSVFile | null;
+  files?: CSVFile[];
   onUpdateFile: (updatedFile: CSVFile) => void;
+  onUpdateFiles?: (updatedFiles: CSVFile[]) => void;
   onNavigate: (tab: string) => void;
   isDarkMode: boolean;
   accentClass: string;
   userRole: string; // To enforce viewer restriction
 }
 
-export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, isDarkMode, accentClass, userRole }: CleaningCenterProps) {
+export default function CleaningCenter({ 
+  activeFile, 
+  files = [], 
+  onUpdateFile, 
+  onUpdateFiles, 
+  onNavigate, 
+  isDarkMode, 
+  accentClass, 
+  userRole 
+}: CleaningCenterProps) {
   const isViewer = userRole === 'Viewer';
   
+  // Batch processing state
+  const [cleaningMode, setCleaningMode] = useState<'single' | 'batch'>(activeFile ? 'single' : 'batch');
+  const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
+  const [selectedRoutines, setSelectedRoutines] = useState<string[]>(['dedup', 'standardizeDates', 'fillMissing']);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processingStep, setProcessingStep] = useState('');
+  const [processingProgress, setProcessingProgress] = useState(0);
+  const [batchResult, setBatchResult] = useState<{
+    success: boolean;
+    filesReport: {
+      id: string;
+      name: string;
+      originalScore: number;
+      newScore: number;
+      originalRows: number;
+      newRows: number;
+      issuesSolved: number;
+    }[];
+  } | null>(null);
+
+  // Search/filter state inside batch / selection view
+  const [batchSearch, setBatchSearch] = useState('');
+
   // History state for Undo/Redo
   const [history, setHistory] = useState<Record<string, string>[][]>(activeFile ? [activeFile.rows] : []);
   const [headersHistory, setHeadersHistory] = useState<string[][]>(activeFile ? [activeFile.headers] : []);
@@ -83,6 +125,9 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
   const [selectedPrintColumns, setSelectedPrintColumns] = useState<string[]>(activeFile ? activeFile.headers : []);
   const [printLimit, setPrintLimit] = useState<number>(50);
 
+  const currentRows = activeFile ? (history[historyIndex] || activeFile.rows) : [];
+  const currentHeaders = activeFile ? (headersHistory[historyIndex] || activeFile.headers) : [];
+
   // Sync state and clean history upon activating a different file
   useEffect(() => {
     if (activeFile) {
@@ -93,29 +138,681 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
       setSelectedPrintColumns(activeFile.headers);
       setPrintTitle(`CSV Auditor Report: ${activeFile.name}`);
       setCurrentPage(1);
+      setCleaningMode('single');
     }
   }, [activeFile?.id]);
 
-  if (!activeFile) {
+  const handleRunBatchClean = async () => {
+    if (selectedFileIds.length === 0) return;
+    if (selectedRoutines.length === 0) return;
+
+    setIsProcessing(true);
+    setProcessingProgress(0);
+    setProcessingStep("Initializing batch processing engine...");
+    setBatchResult(null);
+
+    await new Promise(resolve => setTimeout(resolve, 800));
+
+    const selectedFiles = files.filter(f => selectedFileIds.includes(f.id) && f.status === 'completed');
+    const updatedFilesList: CSVFile[] = [];
+    const reportList: any[] = [];
+    const progressStepSize = 100 / selectedFiles.length;
+
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const file = selectedFiles[i];
+      setProcessingStep(`Acquiring read lock on "${file.name}"...`);
+      await new Promise(resolve => setTimeout(resolve, 400));
+
+      let currentRowsList = [...(file.cleanedRows || file.rows)];
+      let issues = [...file.issues];
+
+      if (selectedRoutines.includes('dedup')) {
+        setProcessingStep(`Deduplicating rows inside "${file.name}"...`);
+        await new Promise(resolve => setTimeout(resolve, 350));
+        const seen = new Set<string>();
+        const unique = currentRowsList.filter(row => {
+          const key = row.Transaction_ID || JSON.stringify(row);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        const removed = currentRowsList.length - unique.length;
+        currentRowsList = unique;
+        issues = issues.filter(issue => issue.type !== 'duplicate');
+      }
+
+      if (selectedRoutines.includes('standardizeDates')) {
+        setProcessingStep(`Standardizing date formats inside "${file.name}"...`);
+        await new Promise(resolve => setTimeout(resolve, 350));
+        const dateFormats = file.detectedMetadata?.dateFormats || {};
+        currentRowsList = currentRowsList.map(row => {
+          const updated = { ...row };
+          file.headers.forEach(col => {
+            const fmt = dateFormats[col];
+            if (fmt || col.toLowerCase().includes('date')) {
+              const raw = (row[col] || '').trim();
+              if (!raw) return;
+              if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return;
+
+              let parts: string[] = [];
+              if (raw.includes('/')) parts = raw.split('/');
+              else if (raw.includes('-')) parts = raw.split('-');
+              else if (raw.includes('.')) parts = raw.split('.');
+
+              if (parts.length === 3) {
+                let year = '';
+                let month = '';
+                let day = '';
+                const formatStr = fmt || 'MM/DD/YYYY';
+                const upperFmt = formatStr.toUpperCase();
+
+                if (upperFmt.startsWith('YYYY')) {
+                  year = parts[0]; month = parts[1]; day = parts[2];
+                } else if (upperFmt.startsWith('DD')) {
+                  day = parts[0]; month = parts[1]; year = parts[2];
+                } else if (upperFmt.startsWith('MM')) {
+                  month = parts[0]; day = parts[1]; year = parts[2];
+                } else {
+                  const p0 = parseInt(parts[0]);
+                  const p1 = parseInt(parts[1]);
+                  year = parts[2];
+                  if (p0 > 12) {
+                    day = parts[0]; month = parts[1];
+                  } else if (p1 > 12) {
+                    day = parts[1]; month = parts[0];
+                  } else {
+                    month = parts[0]; day = parts[1];
+                  }
+                }
+
+                if (year.length === 2) {
+                  const yrNum = parseInt(year);
+                  year = yrNum > 50 ? `19${year}` : `20${year}`;
+                }
+
+                if (year && month && day) {
+                  updated[col] = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                }
+              }
+            }
+          });
+          return updated;
+        });
+        issues = issues.filter(issue => !(issue.type === 'invalid_format' && (issue.column.toLowerCase().includes('date') || dateFormats[issue.column])));
+      }
+
+      if (selectedRoutines.includes('fillMissing')) {
+        setProcessingStep(`Imputing missing values inside "${file.name}"...`);
+        await new Promise(resolve => setTimeout(resolve, 350));
+        currentRowsList = currentRowsList.map(row => {
+          const updated = { ...row };
+          Object.keys(updated).forEach(key => {
+            if (updated[key] === '' || updated[key] === undefined) {
+              if (key.toLowerCase().includes('amount') || key.toLowerCase().includes('price') || key.toLowerCase().includes('pay')) {
+                updated[key] = '0.00';
+              } else {
+                updated[key] = 'Uncategorized';
+              }
+            }
+          });
+          return updated;
+        });
+        issues = issues.filter(issue => issue.type !== 'missing_value');
+      }
+
+      if (selectedRoutines.includes('correctCasing')) {
+        setProcessingStep(`Standardizing capitalization inside "${file.name}"...`);
+        await new Promise(resolve => setTimeout(resolve, 300));
+        currentRowsList = currentRowsList.map(row => {
+          const updated = { ...row };
+          if (updated.Category) {
+            updated.Category = updated.Category.charAt(0).toUpperCase() + updated.Category.slice(1).toLowerCase();
+          }
+          if (updated.Country && updated.Country.length === 2) {
+            updated.Country = updated.Country.toUpperCase();
+          }
+          return updated;
+        });
+      }
+
+      const originalIssuesCount = file.issues.length;
+      const solvedIssuesCount = originalIssuesCount - issues.length;
+      const originalScore = file.score;
+      const newScore = Math.min(100, Math.max(0, originalScore + (solvedIssuesCount * 8) + (selectedRoutines.includes('correctCasing') ? 5 : 0)));
+
+      const updatedFile: CSVFile = {
+        ...file,
+        cleanedRows: currentRowsList,
+        issues: issues,
+        score: newScore,
+        status: 'completed'
+      };
+
+      updatedFilesList.push(updatedFile);
+      reportList.push({
+        id: file.id,
+        name: file.name,
+        originalScore,
+        newScore,
+        originalRows: file.rows.length,
+        newRows: currentRowsList.length,
+        issuesSolved: solvedIssuesCount
+      });
+
+      setProcessingProgress(Math.round((i + 1) * progressStepSize));
+    }
+
+    setProcessingStep("Persisting cleaned datasets to database core...");
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    if (onUpdateFiles) {
+      await onUpdateFiles(updatedFilesList);
+    }
+
+    setBatchResult({
+      success: true,
+      filesReport: reportList
+    });
+    setIsProcessing(false);
+  };
+
+  const handleDownloadSingleBatchFile = (fileId: string) => {
+    const file = files.find(f => f.id === fileId);
+    if (!file) return;
+
+    const headersList = file.headers;
+    const rowsList = file.cleanedRows || file.rows;
+
+    const headersRow = headersList.map(h => {
+      const escaped = h.replace(/"/g, '""');
+      return `"${escaped}"`;
+    }).join(',');
+
+    const rowsData = rowsList.map(row => {
+      return headersList.map(header => {
+        const value = row[header] !== undefined ? String(row[header]) : '';
+        const escaped = value.replace(/"/g, '""');
+        return `"${escaped}"`;
+      }).join(',');
+    });
+
+    const csvContent = [headersRow, ...rowsData].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    const baseName = file.name.replace(/\.csv$/i, '');
+    link.setAttribute('download', `${baseName}_cleaned_batch.csv`);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // Switch modes check
+  if (cleaningMode === 'batch') {
+    const filteredFiles = files.filter(f => f.status === 'completed' && f.name.toLowerCase().includes(batchSearch.toLowerCase()));
+
     return (
-      <div className="text-center py-20 border-2 border-dashed border-slate-800 rounded-3xl animate-fadeIn">
-        <FileSpreadsheet className="w-12 h-12 text-slate-500 mx-auto mb-4" />
-        <h3 className="font-bold text-lg mb-1">No Dataset Loaded for Cleaning</h3>
-        <p className="text-sm text-slate-400 max-w-sm mx-auto mb-6">
-          Upload a file first or load our messy company transactions CSV to test the cleaning workspace.
-        </p>
-        <button 
-          onClick={() => onNavigate('upload')}
-          className={`px-5 py-2.5 text-sm font-semibold text-white rounded-xl shadow cursor-pointer ${accentClass}`}
-        >
-          Go to Upload Center
-        </button>
+      <div className="space-y-8 animate-fadeIn">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <span className="text-xs font-mono font-bold text-blue-500 uppercase tracking-widest flex items-center gap-1">
+              <Database className="w-3.5 h-3.5 text-blue-500" /> Hygiene Laboratory
+            </span>
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Batch Cleaning Engine</h1>
+            <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+              Select multiple uploaded files from the archive and run a cleaning routine across all of them simultaneously.
+            </p>
+          </div>
+
+          <div className="flex rounded-xl p-1 bg-slate-950 border border-slate-800 w-fit">
+            {activeFile && (
+              <button
+                onClick={() => setCleaningMode('single')}
+                className={`px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
+                  cleaningMode === 'single'
+                    ? 'bg-blue-600 text-white shadow'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Single File Hygiene
+              </button>
+            )}
+            <button
+              onClick={() => setCleaningMode('batch')}
+              className={`px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
+                cleaningMode === 'batch'
+                  ? 'bg-blue-600 text-white shadow'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Batch Processing Engine
+            </button>
+          </div>
+        </div>
+
+        {/* Processing Loader Overlay */}
+        {isProcessing && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+            <div className={`p-8 rounded-3xl border text-center max-w-md w-full space-y-6 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+              <div className="relative w-20 h-20 mx-auto flex items-center justify-center">
+                <Loader2 className="w-16 h-16 text-blue-500 animate-spin" />
+                <span className="absolute text-xs font-bold font-mono text-slate-300">{processingProgress}%</span>
+              </div>
+              <div className="space-y-2">
+                <h3 className="font-bold text-lg">Processing Active Batch</h3>
+                <p className="text-xs font-mono text-blue-400 animate-pulse">{processingStep}</p>
+              </div>
+              <div className="w-full bg-slate-800/50 rounded-full h-1.5 overflow-hidden">
+                <div className="bg-gradient-to-r from-blue-500 to-emerald-500 h-full rounded-full transition-all duration-300" style={{ width: `${processingProgress}%` }}></div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* main columns */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* File selector column */}
+          <div className={`lg:col-span-7 p-6 rounded-3xl border space-y-6 ${isDarkMode ? 'bg-slate-900/40 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <h3 className="font-bold text-base flex items-center gap-2">
+                <SlidersHorizontal className="w-4 h-4 text-blue-500" />
+                Select Datasets to Clean ({selectedFileIds.length} chosen)
+              </h3>
+
+              <div className="flex gap-2 text-[10px] font-bold">
+                <button
+                  onClick={() => setSelectedFileIds(files.filter(f => f.status === 'completed').map(f => f.id))}
+                  className="px-2.5 py-1 rounded bg-slate-800/60 hover:bg-slate-800 text-slate-300 transition-colors uppercase cursor-pointer"
+                >
+                  Select All
+                </button>
+                <button
+                  onClick={() => setSelectedFileIds([])}
+                  className="px-2.5 py-1 rounded bg-slate-800/60 hover:bg-slate-800 text-slate-300 transition-colors uppercase cursor-pointer"
+                >
+                  Clear All
+                </button>
+              </div>
+            </div>
+
+            {/* Search Input */}
+            <div className="relative">
+              <input 
+                type="text" 
+                placeholder="Search archived files..." 
+                value={batchSearch}
+                onChange={(e) => setBatchSearch(e.target.value)}
+                className={`w-full pl-3 pr-4 py-2.5 rounded-xl text-xs border focus:outline-none focus:ring-1 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500' : 'bg-white border-slate-200 text-slate-950'}`}
+              />
+            </div>
+
+            {/* list */}
+            {filteredFiles.length === 0 ? (
+              <div className="text-center py-12 border-2 border-dashed border-slate-800 rounded-2xl">
+                <FileSpreadsheet className="w-8 h-8 text-slate-500 mx-auto mb-2" />
+                <p className="text-xs text-slate-400">No matching archived datasets found.</p>
+              </div>
+            ) : (
+              <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-2">
+                {filteredFiles.map(file => {
+                  const isChecked = selectedFileIds.includes(file.id);
+                  return (
+                    <div 
+                      key={file.id}
+                      onClick={() => {
+                        if (isChecked) {
+                          setSelectedFileIds(prev => prev.filter(id => id !== file.id));
+                        } else {
+                          setSelectedFileIds(prev => [...prev, file.id]);
+                        }
+                      }}
+                      className={`p-3.5 rounded-xl border flex items-center justify-between gap-4 cursor-pointer transition-all hover:scale-[1.01] ${
+                        isChecked 
+                          ? (isDarkMode ? 'bg-blue-500/10 border-blue-500/50' : 'bg-blue-50 border-blue-200')
+                          : (isDarkMode ? 'bg-slate-950 border-slate-850 hover:bg-slate-900' : 'bg-slate-50 border-slate-100 hover:bg-slate-100/50')
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
+                          isChecked ? 'bg-blue-500 border-blue-500 text-white' : 'border-slate-700'
+                        }`}>
+                          {isChecked && <Check className="w-3.5 h-3.5 stroke-[3px]" />}
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold truncate max-w-[220px]">{file.name}</p>
+                          <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-400 font-mono font-bold">
+                            <span>
+                              {file.size > 1024 * 1024 
+                                ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 
+                                : `${(file.size / 1024).toFixed(1)} KB`}
+                            </span>
+                            <span>•</span>
+                            <span>{file.rows.length} rows</span>
+                            <span>•</span>
+                            <span>Rating: {file.score}%</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {file.issues.length > 0 ? (
+                          <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full uppercase">
+                            {file.issues.length} issues
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full uppercase">
+                            Clean
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Configurations column */}
+          <div className="lg:col-span-5 space-y-6">
+            <div className={`p-6 rounded-3xl border space-y-6 ${isDarkMode ? 'bg-slate-900/40 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
+              <h3 className="font-bold text-base flex items-center gap-2">
+                <Shield className="w-4 h-4 text-emerald-500" />
+                Configure Cleaning Protocols
+              </h3>
+
+              <div className="space-y-3">
+                {[
+                  { id: 'dedup', label: 'Deduplicate Records', desc: 'Identify and remove redundant transaction rows automatically.' },
+                  { id: 'standardizeDates', label: 'Standardize Dates (ISO-8601)', desc: 'Standardize inconsistent dates to YYYY-MM-DD.' },
+                  { id: 'fillMissing', label: 'Impute Missing Values', desc: 'Fill blank cells with zero for currency or "Uncategorized" text.' },
+                  { id: 'correctCasing', label: 'Standardize Text Capitalization', desc: 'Auto-correct casing on Categories and Country Codes.' }
+                ].map(routine => {
+                  const isChecked = selectedRoutines.includes(routine.id);
+                  return (
+                    <div 
+                      key={routine.id}
+                      onClick={() => {
+                        if (isChecked) {
+                          setSelectedRoutines(prev => prev.filter(id => id !== routine.id));
+                        } else {
+                          setSelectedRoutines(prev => [...prev, routine.id]);
+                        }
+                      }}
+                      className={`p-3.5 rounded-2xl border cursor-pointer transition-colors ${
+                        isChecked 
+                          ? (isDarkMode ? 'bg-slate-950 border-emerald-500/40' : 'bg-slate-50 border-emerald-200')
+                          : (isDarkMode ? 'bg-slate-950/40 border-slate-850 hover:bg-slate-900' : 'bg-white border-slate-100 hover:bg-slate-50')
+                      }`}
+                    >
+                      <div className="flex gap-3">
+                        <div className={`w-5 h-5 rounded-full border shrink-0 flex items-center justify-center mt-0.5 transition-colors ${
+                          isChecked ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-700'
+                        }`}>
+                          {isChecked && <Check className="w-3.5 h-3.5 stroke-[3px]" />}
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold">{routine.label}</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">{routine.desc}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {isViewer && (
+                <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex gap-2.5 text-xs text-rose-400">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <p className="leading-tight">Viewer status detected. Batch execution protocol is write-protected for your role.</p>
+                </div>
+              )}
+
+              <button
+                onClick={handleRunBatchClean}
+                disabled={isViewer || selectedFileIds.length === 0 || selectedRoutines.length === 0}
+                className="w-full py-3.5 rounded-2xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow cursor-pointer disabled:opacity-40 disabled:pointer-events-none hover:scale-[1.02] active:scale-[0.99] transition-all bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500 text-white"
+              >
+                <Play className="w-4 h-4 text-white fill-white" />
+                Run Batch Clean Routine
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Batch Report Results */}
+        {batchResult && (
+          <div className={`p-6 rounded-3xl border space-y-6 animate-fadeIn ${isDarkMode ? 'bg-slate-900/40 border-slate-800/80 shadow-2xl shadow-emerald-500/1' : 'bg-white border-slate-200 shadow-sm'}`}>
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Batch Job Execution Succeeded
+                </span>
+                <h3 className="text-lg font-extrabold mt-0.5">Executive Batch Processing Summary</h3>
+              </div>
+              <button 
+                onClick={() => setBatchResult(null)}
+                className="text-slate-400 hover:text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Cards Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-850 text-center">
+                <span className="text-[10px] text-slate-400 font-bold uppercase">Files Cleaned</span>
+                <p className="text-xl md:text-2xl font-black text-blue-500 mt-1">{batchResult.filesReport.length}</p>
+              </div>
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-850 text-center">
+                <span className="text-[10px] text-slate-400 font-bold uppercase">Total Rows Cleaned</span>
+                <p className="text-xl md:text-2xl font-black text-blue-500 mt-1">
+                  {batchResult.filesReport.reduce((sum, f) => sum + f.newRows, 0)}
+                </p>
+              </div>
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-850 text-center">
+                <span className="text-[10px] text-slate-400 font-bold uppercase">Issues Solved</span>
+                <p className="text-xl md:text-2xl font-black text-emerald-400 mt-1">
+                  {batchResult.filesReport.reduce((sum, f) => sum + f.issuesSolved, 0)}
+                </p>
+              </div>
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-850 text-center">
+                <span className="text-[10px] text-slate-400 font-bold uppercase">Average Score Boost</span>
+                <p className="text-xl md:text-2xl font-black text-emerald-400 mt-1">
+                  +{(batchResult.filesReport.reduce((sum, f) => sum + (f.newScore - f.originalScore), 0) / batchResult.filesReport.length).toFixed(0)}%
+                </p>
+              </div>
+            </div>
+
+            {/* Detailed per-file report list */}
+            <div className="overflow-x-auto rounded-2xl border border-slate-800">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-950 border-b border-slate-800 text-slate-400 font-semibold font-mono text-[10px]">
+                    <th className="p-4">File Name</th>
+                    <th className="p-4 text-center">Rows Cleaned</th>
+                    <th className="p-4 text-center">Audit Quality Improvement</th>
+                    <th className="p-4 text-center">Resolved Issues</th>
+                    <th className="p-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/40">
+                  {batchResult.filesReport.map(report => (
+                    <tr key={report.id} className="hover:bg-slate-800/10 transition-colors">
+                      <td className="p-4 font-bold flex items-center gap-2">
+                        <FileSpreadsheet className="w-4 h-4 text-blue-500 shrink-0" />
+                        <span>{report.name}</span>
+                      </td>
+                      <td className="p-4 text-center font-mono font-bold text-slate-300">
+                        {report.originalRows === report.newRows ? (
+                          <span>{report.originalRows} rows</span>
+                        ) : (
+                          <span className="flex items-center justify-center gap-1.5">
+                            <span className="line-through text-slate-500">{report.originalRows}</span>
+                            <ArrowRight className="w-3 h-3 text-slate-400" />
+                            <span>{report.newRows}</span>
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-4 text-center">
+                        <span className="flex items-center justify-center gap-2">
+                          <span className="text-slate-400 font-bold">{report.originalScore}%</span>
+                          <ArrowRight className="w-3 h-3 text-emerald-500" />
+                          <span className="text-emerald-400 font-black font-mono bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                            {report.newScore}%
+                          </span>
+                        </span>
+                      </td>
+                      <td className="p-4 text-center">
+                        <span className="text-xs font-bold font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                          {report.issuesSolved} resolved
+                        </span>
+                      </td>
+                      <td className="p-4 text-right">
+                        <div className="flex gap-2 justify-end items-center">
+                          <button
+                            onClick={() => {
+                              const fileObj = files.find(f => f.id === report.id);
+                              if (fileObj) {
+                                onUpdateFile(fileObj); // Set active in App
+                                setCleaningMode('single');
+                              }
+                            }}
+                            className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-bold hover:scale-105 cursor-pointer transition-all ${
+                              isDarkMode ? 'bg-slate-950 border-slate-850 text-blue-400 hover:bg-slate-900' : 'bg-white border-slate-200 text-blue-600 hover:bg-slate-100'
+                            }`}
+                          >
+                            Single Mode
+                          </button>
+                          <button
+                            onClick={() => handleDownloadSingleBatchFile(report.id)}
+                            className={`p-1.5 rounded-lg border text-emerald-400 hover:scale-105 cursor-pointer transition-all ${
+                              isDarkMode ? 'bg-slate-950 border-slate-850 hover:bg-slate-900' : 'bg-white border-slate-200 hover:bg-slate-100'
+                            }`}
+                            title="Download Cleaned CSV"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
-  const currentRows = history[historyIndex] || activeFile.rows;
-  const currentHeaders = headersHistory[historyIndex] || activeFile.headers;
+  // Active file check fallback
+  if (!activeFile) {
+    return (
+      <div className="space-y-8 animate-fadeIn">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <span className="text-xs font-mono font-bold text-blue-500 uppercase tracking-widest flex items-center gap-1">
+              <Database className="w-3.5 h-3.5 text-blue-500" /> Hygiene Laboratory
+            </span>
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Data Hygiene Lab</h1>
+            <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+              Select a single dataset to perform deep tactical sanitization, or launch the batch cleaning engine across multiple files simultaneously.
+            </p>
+          </div>
+
+          <div className="flex rounded-xl p-1 bg-slate-950 border border-slate-800 w-fit">
+            <button
+              onClick={() => setCleaningMode('single')}
+              className={`px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
+                cleaningMode === 'single'
+                  ? 'bg-blue-600 text-white shadow'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Single File Hygiene
+            </button>
+            <button
+              onClick={() => setCleaningMode('batch')}
+              className={`px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
+                cleaningMode === 'batch'
+                  ? 'bg-blue-600 text-white shadow'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Batch Processing Engine
+            </button>
+          </div>
+        </div>
+
+        {/* Empty selection layout */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+          {/* Option A: Single File selection */}
+          <div className={`p-6 rounded-3xl border flex flex-col justify-between space-y-6 ${isDarkMode ? 'bg-slate-900/30 border-slate-800/80' : 'bg-white border-slate-200'}`}>
+            <div className="space-y-2">
+              <FileSpreadsheet className="w-10 h-10 text-blue-500" />
+              <h3 className="font-extrabold text-base">Launch Single-File Hygiene</h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Load a single spreadsheet from your workspace archives below or upload a new spreadsheet to unlock column splitting, custom regex extraction, and manual quality overrides.
+              </p>
+            </div>
+
+            {files.filter(f => f.status === 'completed').length === 0 ? (
+              <button 
+                onClick={() => onNavigate('upload')}
+                className={`w-full py-3 text-xs font-bold uppercase rounded-xl text-white tracking-wider shadow cursor-pointer text-center ${accentClass}`}
+              >
+                Upload Spreadsheet
+              </button>
+            ) : (
+              <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
+                {files.filter(f => f.status === 'completed').map(file => (
+                  <div 
+                    key={file.id}
+                    onClick={() => {
+                      onUpdateFile(file);
+                      setCleaningMode('single');
+                    }}
+                    className={`p-2.5 rounded-xl border border-slate-800/60 hover:border-blue-500/50 bg-slate-950/60 hover:bg-slate-900/50 flex items-center justify-between cursor-pointer transition-all`}
+                  >
+                    <span className="text-xs font-bold truncate max-w-[180px]">{file.name}</span>
+                    <span className="text-[10px] font-mono font-bold text-slate-400">{file.score}% rating</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Option B: Batch processing */}
+          <div className={`p-6 rounded-3xl border flex flex-col justify-between space-y-6 ${isDarkMode ? 'bg-slate-900/30 border-slate-800/80' : 'bg-white border-slate-200'}`}>
+            <div className="space-y-2">
+              <Database className="w-10 h-10 text-emerald-500" />
+              <h3 className="font-extrabold text-base">Batch Cleaning Processor</h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Connect and clean multiple datasets from the archive workspace simultaneously. Run critical deduplication, standardized dates, and field imputations inside a parallel batch stream.
+              </p>
+            </div>
+
+            <button
+              onClick={() => {
+                setCleaningMode('batch');
+                setSelectedFileIds(files.filter(f => f.status === 'completed').map(f => f.id));
+              }}
+              className="w-full py-3 text-xs font-bold uppercase rounded-xl tracking-wider text-white shadow cursor-pointer text-center bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500"
+            >
+              Configure Batch Routine
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const pushState = (newRows: Record<string, string>[], stepLabel: string, newHeaders?: string[]) => {
     const nextHeaders = newHeaders || currentHeaders;
@@ -907,6 +1604,30 @@ export default function CleaningCenter({ activeFile, onUpdateFile, onNavigate, i
 
   return (
     <div className="space-y-8 animate-fadeIn">
+      {/* Mode Toggle Tab */}
+      <div className="flex rounded-xl p-1 bg-slate-950 border border-slate-800 w-fit">
+        <button
+          onClick={() => setCleaningMode('single')}
+          className={`px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
+            cleaningMode === 'single'
+              ? 'bg-blue-600 text-white shadow'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          Single File Hygiene
+        </button>
+        <button
+          onClick={() => setCleaningMode('batch')}
+          className={`px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
+            cleaningMode === 'batch'
+              ? 'bg-blue-600 text-white shadow'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          Batch Processing Engine
+        </button>
+      </div>
+
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>

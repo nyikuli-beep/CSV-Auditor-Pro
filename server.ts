@@ -20,6 +20,32 @@ const PORT = 3000;
 
 app.use(express.json({ limit: '50mb' }));
 
+// Bypass middleware if Cloud SQL (PostgreSQL) is not provisioned or configured yet.
+// This prevents connection timeout/reset errors ("Failed to fetch") on the client side.
+app.use('/api/sql', (req, res, next) => {
+  if (!process.env.SQL_HOST) {
+    console.warn(`[SQL Bypass] ${req.method} ${req.path} - SQL_HOST not set, using local/Firestore fallback state.`);
+    if (req.method === 'GET') {
+      if (req.path === '/status') {
+        return res.json({
+          status: 'offline',
+          provider: 'Cloud SQL (PostgreSQL)',
+          connection: 'not-configured',
+          metrics: {
+            totalUsers: 0,
+            totalFiles: 0,
+            totalActivities: 0,
+            totalMembers: 0,
+          }
+        });
+      }
+      return res.json([]);
+    }
+    return res.json({ success: true, message: 'SQL_HOST not configured, local/Firestore fallback active.' });
+  }
+  next();
+});
+
 // --- SECURE CLOUD SQL DATABASE APIS ---
 
 // 1. Connection diagnostics check

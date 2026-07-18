@@ -280,43 +280,6 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
                 </div>
               </div>
 
-              {/* DEMO PERSONA/ROLE INJECTOR */}
-              <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-slate-900/30 border-slate-800/80' : 'bg-blue-50/20 border-slate-200/50'}`}>
-                <div className="text-xs font-semibold mb-3 flex items-center gap-1 text-slate-400 uppercase tracking-widest">
-                  <Sparkles className="w-3 h-3 text-blue-500" /> Demo Quick-Load Personas
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <button 
-                    type="button" 
-                    onClick={() => selectQuickRole('Owner', 'sarah@company.com', 'Sarah Jenkins')}
-                    className={`p-2.5 rounded-lg border text-left transition-all ${email === 'sarah@company.com' ? 'bg-blue-500/10 border-blue-500/50 text-blue-400 font-bold' : 'bg-slate-900/10 dark:bg-slate-950 hover:opacity-80 border-slate-700/30'}`}
-                  >
-                    Sarah <span className="block opacity-60 text-[10px] font-normal">Owner (Full Access)</span>
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={() => selectQuickRole('Admin', 'marcus@company.com', 'Marcus Vance')}
-                    className={`p-2.5 rounded-lg border text-left transition-all ${email === 'marcus@company.com' ? 'bg-blue-500/10 border-blue-500/50 text-blue-400 font-bold' : 'bg-slate-900/10 dark:bg-slate-950 hover:opacity-80 border-slate-700/30'}`}
-                  >
-                    Marcus <span className="block opacity-60 text-[10px] font-normal">Admin (Settings & Logs)</span>
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={() => selectQuickRole('Editor', 'leila.c@company.com', 'Leila Chen')}
-                    className={`p-2.5 rounded-lg border text-left transition-all ${email === 'leila.c@company.com' ? 'bg-blue-500/10 border-blue-500/50 text-blue-400 font-bold' : 'bg-slate-900/10 dark:bg-slate-950 hover:opacity-80 border-slate-700/30'}`}
-                  >
-                    Leila <span className="block opacity-60 text-[10px] font-normal">Editor (Can Clean/Audit)</span>
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={() => selectQuickRole('Viewer', 'd.kim@company.com', 'David Kim')}
-                    className={`p-2.5 rounded-lg border text-left transition-all ${email === 'd.kim@company.com' ? 'bg-blue-500/10 border-blue-500/50 text-blue-400 font-bold' : 'bg-slate-900/10 dark:bg-slate-950 hover:opacity-80 border-slate-700/30'}`}
-                  >
-                    David <span className="block opacity-60 text-[10px] font-normal">Viewer (View-Only)</span>
-                  </button>
-                </div>
-              </div>
-
               <button 
                 type="submit" 
                 className={`w-full py-3.5 text-white font-medium rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all hover:scale-[1.01] hover:shadow-xl ${accentClass}`}

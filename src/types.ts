@@ -42,6 +42,7 @@ export interface CSVFile {
   detectedMetadata?: DetectedFormatMetadata;
   headerMappings?: Record<string, string>;
   mappingExplanations?: Record<string, string>;
+  isQuickCleaned?: boolean;
 }
 
 export interface TeamMember {
@@ -93,3 +94,16 @@ export interface SystemSettings {
   };
   apiKey: string;
 }
+
+export interface CustomValidationRule {
+  id: string;
+  columnName: string;
+  type: 'regex' | 'range';
+  regexPattern?: string;
+  rangeMin?: number;
+  rangeMax?: number;
+  description: string;
+  severity: Severity;
+  isActive: boolean;
+}
+
