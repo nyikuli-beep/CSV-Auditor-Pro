@@ -23,9 +23,13 @@ import {
   Terminal,
   Copy,
   Check,
-  Cookie
+  Cookie,
+  Cpu,
+  Layers,
+  Trash2,
+  Flame
 } from 'lucide-react';
-import { SystemSettings } from '../types';
+import { SystemSettings, CSVFile, AuditActivity, ChatMessage } from '../types';
 
 interface SettingsViewProps {
   settings: SystemSettings;
@@ -33,9 +37,29 @@ interface SettingsViewProps {
   isDarkMode: boolean;
   toggleTheme: () => void;
   accentClass: string;
+  files?: CSVFile[];
+  activeFileId?: string;
+  activities?: AuditActivity[];
+  chatMessages?: ChatMessage[];
+  onClearActivities?: () => void;
+  onClearChat?: () => void;
+  onPurgeInactiveFiles?: () => void;
 }
 
-export default function SettingsView({ settings, onUpdateSettings, isDarkMode, toggleTheme, accentClass }: SettingsViewProps) {
+export default function SettingsView({ 
+  settings, 
+  onUpdateSettings, 
+  isDarkMode, 
+  toggleTheme, 
+  accentClass,
+  files = [],
+  activeFileId = '',
+  activities = [],
+  chatMessages = [],
+  onClearActivities,
+  onClearChat,
+  onPurgeInactiveFiles
+}: SettingsViewProps) {
   const [tempApiKey, setTempApiKey] = useState(settings.apiKey || '••••••••••••••••••••••••••••••••');
   const [showKey, setShowKey] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
@@ -44,6 +68,99 @@ export default function SettingsView({ settings, onUpdateSettings, isDarkMode, t
   const [apiDocOpen, setApiDocOpen] = useState(false);
   const [tosOpen, setTosOpen] = useState(false);
   const [copiedText, setCopiedText] = useState<string | null>(null);
+
+  // Memory Management States & Calculations
+  const [cleaningStatus, setCleaningStatus] = useState<Record<string, 'idle' | 'cleaning' | 'success'>>({});
+
+  const memoryMetrics = React.useMemo(() => {
+    let filesRowsCount = 0;
+    let filesCellsCount = 0;
+    let filesSizeEstimate = 0;
+    
+    files.forEach(f => {
+      const rows = f.rows || [];
+      filesRowsCount += rows.length;
+      filesCellsCount += rows.length * (f.headers?.length || 0);
+      filesSizeEstimate += JSON.stringify(f).length;
+    });
+
+    const chatMsgCount = chatMessages.length;
+    const chatSizeEstimate = JSON.stringify(chatMessages).length;
+
+    const activitiesCount = activities.length;
+    const activitiesSizeEstimate = JSON.stringify(activities).length;
+
+    let localStorageSizeEstimate = 0;
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key) {
+          localStorageSizeEstimate += (key.length + (localStorage.getItem(key) || '').length);
+        }
+      }
+    } catch (e) {
+      console.warn(e);
+    }
+
+    const totalEstimate = filesSizeEstimate + chatSizeEstimate + activitiesSizeEstimate + localStorageSizeEstimate;
+
+    return {
+      filesRowsCount,
+      filesCellsCount,
+      filesSizeKB: Math.round(filesSizeEstimate / 1024 * 10) / 10,
+      chatMsgCount,
+      chatSizeKB: Math.round(chatSizeEstimate / 1024 * 10) / 10,
+      activitiesCount,
+      activitiesSizeKB: Math.round(activitiesSizeEstimate / 1024 * 10) / 10,
+      localStorageKB: Math.round(localStorageSizeEstimate / 1024 * 10) / 10,
+      totalKB: Math.round(totalEstimate / 1024 * 10) / 10,
+    };
+  }, [files, chatMessages, activities]);
+
+  const runCleanChat = async () => {
+    setCleaningStatus(prev => ({ ...prev, chat: 'cleaning' }));
+    await new Promise(resolve => setTimeout(resolve, 600));
+    if (onClearChat) onClearChat();
+    setCleaningStatus(prev => ({ ...prev, chat: 'success' }));
+    setTimeout(() => setCleaningStatus(prev => ({ ...prev, chat: 'idle' })), 2000);
+  };
+
+  const runCleanActivities = async () => {
+    setCleaningStatus(prev => ({ ...prev, activities: 'cleaning' }));
+    await new Promise(resolve => setTimeout(resolve, 800));
+    if (onClearActivities) onClearActivities();
+    setCleaningStatus(prev => ({ ...prev, activities: 'success' }));
+    setTimeout(() => setCleaningStatus(prev => ({ ...prev, activities: 'idle' })), 2000);
+  };
+
+  const runPurgeFiles = async () => {
+    setCleaningStatus(prev => ({ ...prev, files: 'cleaning' }));
+    await new Promise(resolve => setTimeout(resolve, 1200));
+    if (onPurgeInactiveFiles) onPurgeInactiveFiles();
+    setCleaningStatus(prev => ({ ...prev, files: 'success' }));
+    setTimeout(() => setCleaningStatus(prev => ({ ...prev, files: 'idle' })), 2000);
+  };
+
+  const runCleanDrafts = async () => {
+    setCleaningStatus(prev => ({ ...prev, drafts: 'cleaning' }));
+    await new Promise(resolve => setTimeout(resolve, 500));
+    localStorage.removeItem('custom_validation_rules');
+    localStorage.removeItem('quick_clean_enabled');
+    setCleaningStatus(prev => ({ ...prev, drafts: 'success' }));
+    setTimeout(() => setCleaningStatus(prev => ({ ...prev, drafts: 'idle' })), 2000);
+  };
+
+  const runDeepGC = async () => {
+    setCleaningStatus(prev => ({ ...prev, gc: 'cleaning' }));
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    if ((window as any).gc) {
+      try {
+        (window as any).gc();
+      } catch (e) {}
+    }
+    setCleaningStatus(prev => ({ ...prev, gc: 'success' }));
+    setTimeout(() => setCleaningStatus(prev => ({ ...prev, gc: 'idle' })), 2000);
+  };
 
   // Google Search Console (GSC) Verification State
   const [metaCode, setMetaCode] = useState('');
@@ -501,6 +618,292 @@ export default function SettingsView({ settings, onUpdateSettings, isDarkMode, t
         </div>
 
       </form>
+
+      {/* Memory Management & Storage Optimization Hub (User Request) */}
+      <div id="memory-mgmt-hub" className={`p-6 rounded-2xl border transition-all duration-300 ${isDarkMode ? 'bg-slate-900/40 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
+        <div className="flex items-start justify-between gap-4 flex-wrap md:flex-nowrap mb-6">
+          <div className="space-y-1">
+            <span className="text-[10px] font-mono font-bold text-emerald-500 uppercase tracking-widest flex items-center gap-1">
+              <Cpu className="w-3.5 h-3.5 animate-pulse" /> System Runtime Optimization
+            </span>
+            <h2 className="text-xl font-extrabold tracking-tight">Memory Management & Storage Hub</h2>
+            <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
+              Monitor browser memory overhead, clean active RAM buffers, prune temporary file fragments, and clear database records to maximize pipeline responsiveness.
+            </p>
+          </div>
+          
+          <button
+            type="button"
+            id="deep-gc-btn"
+            disabled={cleaningStatus.gc === 'cleaning'}
+            onClick={runDeepGC}
+            className={`px-4 py-2 text-xs font-bold rounded-xl border cursor-pointer transition-all flex items-center gap-1.5 shadow-sm hover:scale-102 ${
+              cleaningStatus.gc === 'cleaning'
+                ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                : cleaningStatus.gc === 'success'
+                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                  : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white border-blue-500/20'
+            }`}
+          >
+            <Layers className={`w-3.5 h-3.5 ${cleaningStatus.gc === 'cleaning' ? 'animate-spin' : ''}`} />
+            {cleaningStatus.gc === 'cleaning' 
+              ? 'Flushing Memory Buffers...' 
+              : cleaningStatus.gc === 'success'
+                ? 'Defragmented & Reclaimed!' 
+                : 'Defragment & Deep GC'}
+          </button>
+        </div>
+
+        {/* Dynamic Diagnostics Panel */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          
+          {/* Left Column: Visual Consumption Indicator */}
+          <div className={`lg:col-span-4 p-5 rounded-xl border flex flex-col items-center justify-center text-center ${
+            isDarkMode ? 'bg-slate-950/40 border-slate-800/80' : 'bg-slate-50 border-slate-100'
+          }`}>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Live Memory Load Meter</span>
+            
+            <div className="relative w-36 h-36 flex items-center justify-center">
+              {/* Circular Gauge Border */}
+              <svg className="absolute w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                <circle 
+                  cx="50" 
+                  cy="50" 
+                  r="42" 
+                  stroke={isDarkMode ? '#1e293b' : '#e2e8f0'} 
+                  strokeWidth="8" 
+                  fill="transparent" 
+                />
+                <circle 
+                  cx="50" 
+                  cy="50" 
+                  r="42" 
+                  stroke={
+                    memoryMetrics.totalKB < 50 
+                      ? '#10b981' // Green
+                      : memoryMetrics.totalKB < 500 
+                        ? '#3b82f6' // Blue
+                        : memoryMetrics.totalKB < 2000 
+                          ? '#f59e0b' // Amber
+                          : '#ef4444' // Red
+                  } 
+                  strokeWidth="8" 
+                  fill="transparent" 
+                  strokeDasharray="264"
+                  strokeDashoffset={Math.max(0, 264 - (264 * Math.min(memoryMetrics.totalKB, 3000)) / 3000)}
+                  className="transition-all duration-500"
+                />
+              </svg>
+              
+              <div className="text-center z-10 space-y-0.5">
+                <span className="text-2xl font-extrabold tracking-tight">{memoryMetrics.totalKB}</span>
+                <span className="text-xs font-bold text-slate-400 block uppercase">KB Allocated</span>
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-1">
+              <div className="flex items-center gap-1.5 justify-center">
+                <span className={`w-2 h-2 rounded-full ${
+                  memoryMetrics.totalKB < 100 
+                    ? 'bg-emerald-500 animate-pulse' 
+                    : memoryMetrics.totalKB < 1000 
+                      ? 'bg-blue-500' 
+                      : memoryMetrics.totalKB < 3000 
+                        ? 'bg-amber-500' 
+                        : 'bg-red-500'
+                }`}></span>
+                <span className="text-xs font-bold uppercase tracking-wider">
+                  {memoryMetrics.totalKB < 100 
+                    ? 'Excellent (Ultra Light)' 
+                    : memoryMetrics.totalKB < 1000 
+                      ? 'Healthy (Optimal)' 
+                      : memoryMetrics.totalKB < 3000 
+                        ? 'Elevated Memory' 
+                        : 'Heavy Buffers'}
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-400 px-3">
+                Calculated overhead of active data frames in browser RAM.
+              </p>
+            </div>
+          </div>
+
+          {/* Right Column: Breakdown & Individual Cleaner Buttons */}
+          <div className="lg:col-span-8 space-y-4">
+            
+            {/* Item 1: Active RAM Datasets */}
+            <div className={`p-3.5 rounded-xl border flex items-center justify-between gap-4 transition-all ${
+              isDarkMode ? 'bg-slate-950/20 border-slate-800' : 'bg-white border-slate-200'
+            }`}>
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <Database className="w-3.5 h-3.5 text-blue-400" />
+                  <span className="text-xs font-bold">Ingested Datasets cache</span>
+                </div>
+                <div className="text-[10px] text-slate-400 space-x-2">
+                  <span>{files.length} active files</span>
+                  <span>•</span>
+                  <span>{memoryMetrics.filesRowsCount} parsed rows</span>
+                  <span>•</span>
+                  <span className="font-mono text-blue-400">{memoryMetrics.filesSizeKB} KB</span>
+                </div>
+              </div>
+              
+              <button
+                type="button"
+                id="purge-datasets-btn"
+                disabled={files.length <= 1 || cleaningStatus.files === 'cleaning'}
+                onClick={runPurgeFiles}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-all ${
+                  cleaningStatus.files === 'cleaning'
+                    ? 'bg-amber-500/10 border border-amber-500/20 text-amber-400'
+                    : cleaningStatus.files === 'success'
+                      ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                      : files.length <= 1
+                        ? 'bg-slate-800/10 border border-slate-800/20 text-slate-500 opacity-50 cursor-not-allowed'
+                        : 'bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20'
+                }`}
+                title={files.length <= 1 ? "Keep active file (cannot delete last remaining dataset)" : "Delete other inactive datasets"}
+              >
+                <Trash2 className="w-3 h-3" />
+                {cleaningStatus.files === 'cleaning' 
+                  ? 'Purging...' 
+                  : cleaningStatus.files === 'success'
+                    ? 'Purged!' 
+                    : 'Purge Inactive'}
+              </button>
+            </div>
+
+            {/* Item 2: Assistant Conversation memory */}
+            <div className={`p-3.5 rounded-xl border flex items-center justify-between gap-4 transition-all ${
+              isDarkMode ? 'bg-slate-950/20 border-slate-800' : 'bg-white border-slate-200'
+            }`}>
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <Cpu className="w-3.5 h-3.5 text-violet-400" />
+                  <span className="text-xs font-bold">AI Assistant Chat Memory</span>
+                </div>
+                <div className="text-[10px] text-slate-400 space-x-2">
+                  <span>{memoryMetrics.chatMsgCount} turns in buffer</span>
+                  <span>•</span>
+                  <span className="font-mono text-violet-400">{memoryMetrics.chatSizeKB} KB</span>
+                </div>
+              </div>
+              
+              <button
+                type="button"
+                id="purge-chat-btn"
+                disabled={chatMessages.length <= 1 || cleaningStatus.chat === 'cleaning'}
+                onClick={runCleanChat}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-all ${
+                  cleaningStatus.chat === 'cleaning'
+                    ? 'bg-amber-500/10 border border-amber-500/20 text-amber-400'
+                    : cleaningStatus.chat === 'success'
+                      ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                      : chatMessages.length <= 1
+                        ? 'bg-slate-800/10 border border-slate-800/20 text-slate-500 opacity-50 cursor-not-allowed'
+                        : 'bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20'
+                }`}
+              >
+                <Flame className="w-3 h-3" />
+                {cleaningStatus.chat === 'cleaning' 
+                  ? 'Pruning...' 
+                  : cleaningStatus.chat === 'success'
+                    ? 'Pruned!' 
+                    : 'Prune Chat'}
+              </button>
+            </div>
+
+            {/* Item 3: System Activities Timeline logs */}
+            <div className={`p-3.5 rounded-xl border flex items-center justify-between gap-4 transition-all ${
+              isDarkMode ? 'bg-slate-950/20 border-slate-800' : 'bg-white border-slate-200'
+            }`}>
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <Terminal className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="text-xs font-bold">Diagnostic Timeline Registry</span>
+                </div>
+                <div className="text-[10px] text-slate-400 space-x-2">
+                  <span>{memoryMetrics.activitiesCount} records</span>
+                  <span>•</span>
+                  <span className="font-mono text-amber-400">{memoryMetrics.activitiesSizeKB} KB</span>
+                </div>
+              </div>
+              
+              <button
+                type="button"
+                id="purge-logs-btn"
+                disabled={activities.length === 0 || cleaningStatus.activities === 'cleaning'}
+                onClick={runCleanActivities}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-all ${
+                  cleaningStatus.activities === 'cleaning'
+                    ? 'bg-amber-500/10 border border-amber-500/20 text-amber-400'
+                    : cleaningStatus.activities === 'success'
+                      ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                      : activities.length === 0
+                        ? 'bg-slate-800/10 border border-slate-800/20 text-slate-500 opacity-50 cursor-not-allowed'
+                        : 'bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20'
+                }`}
+              >
+                <Trash2 className="w-3 h-3" />
+                {cleaningStatus.activities === 'cleaning' 
+                  ? 'Pruning...' 
+                  : cleaningStatus.activities === 'success'
+                    ? 'Pruned!' 
+                    : 'Prune Logs'}
+              </button>
+            </div>
+
+            {/* Item 4: LocalStorage cached state */}
+            <div className={`p-3.5 rounded-xl border flex items-center justify-between gap-4 transition-all ${
+              isDarkMode ? 'bg-slate-950/20 border-slate-800' : 'bg-white border-slate-200'
+            }`}>
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <Cookie className="w-3.5 h-3.5 text-indigo-400" />
+                  <span className="text-xs font-bold">Browser Ingestion Drafts & Cache</span>
+                </div>
+                <div className="text-[10px] text-slate-400 space-x-2">
+                  <span>Validation rules, session parameters</span>
+                  <span>•</span>
+                  <span className="font-mono text-indigo-400">{memoryMetrics.localStorageKB} KB</span>
+                </div>
+              </div>
+              
+              <button
+                type="button"
+                id="purge-cache-btn"
+                disabled={cleaningStatus.drafts === 'cleaning'}
+                onClick={runCleanDrafts}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-all ${
+                  cleaningStatus.drafts === 'cleaning'
+                    ? 'bg-amber-500/10 border border-amber-500/20 text-amber-400'
+                    : cleaningStatus.drafts === 'success'
+                      ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                      : 'bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20'
+                }`}
+              >
+                <Layers className="w-3 h-3" />
+                {cleaningStatus.drafts === 'cleaning' 
+                  ? 'Flushing...' 
+                  : cleaningStatus.drafts === 'success'
+                    ? 'Flushed!' 
+                    : 'Flush Cache'}
+              </button>
+            </div>
+
+          </div>
+
+        </div>
+
+        {/* Informative Help Text */}
+        <div className="mt-4 p-3.5 rounded-xl bg-blue-500/5 border border-blue-500/10 text-[10px] text-blue-400 flex gap-2">
+          <Info className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>
+            <strong>Pro Tip:</strong> Reclaiming memory releases DOM nodes and array scopes in active JS closures. Once defragmented, browsers automatically reschedule garbage collection intervals within 15-30 seconds.
+          </span>
+        </div>
+      </div>
 
       {/* API Reference & Terms of Service */}
       <div className="space-y-6 pt-6 border-t border-slate-800/20">

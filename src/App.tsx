@@ -642,6 +642,42 @@ export default function App() {
     }
   };
 
+  const handleClearActivities = async () => {
+    try {
+      for (const act of activities) {
+        await deleteDoc(doc(db, 'activities', act.id));
+        await syncToPostgres(`delete-activity/${act.id}`, 'DELETE').catch(() => {});
+      }
+    } catch (err) {
+      console.error("Error clearing activities:", err);
+    }
+    setActivities([]);
+  };
+
+  const handleClearChat = () => {
+    setChatMessages([
+      { 
+        id: 'm-init', 
+        role: 'assistant', 
+        content: 'Greetings Sarah! I have analyzed "Company_Q2_Transactions_Messy.csv". I found 3 critical duplicate transaction keys, missing budget metrics, and outdated ISO calendar formatting. How shall we begin clean operations?', 
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+      }
+    ]);
+  };
+
+  const handlePurgeInactiveFiles = async () => {
+    const inactiveFiles = files.filter(f => f.id !== activeFileId);
+    for (const file of inactiveFiles) {
+      try {
+        await deleteDoc(doc(db, 'files', file.id));
+        await syncToPostgres(`delete-file/${file.id}`, 'DELETE').catch(() => {});
+      } catch (err) {
+        console.error(`Error purging file ${file.name}:`, err);
+      }
+    }
+    setFiles(files.filter(f => f.id === activeFileId));
+  };
+
 
   // Dispatch prompt context to full-stack backend with multi-turn and custom model/persona support
   const handleSendChatMessage = async (
@@ -1150,6 +1186,13 @@ export default function App() {
                       isDarkMode={isDarkMode}
                       toggleTheme={() => setIsDarkMode(!isDarkMode)}
                       accentClass={accentClass}
+                      files={files}
+                      activeFileId={activeFileId}
+                      activities={activities}
+                      chatMessages={chatMessages}
+                      onClearActivities={handleClearActivities}
+                      onClearChat={handleClearChat}
+                      onPurgeInactiveFiles={handlePurgeInactiveFiles}
                     />
                   )}
 
