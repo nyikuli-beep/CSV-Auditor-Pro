@@ -156,17 +156,17 @@ export const PREVIOUS_AUDITS: CSVFile[] = [
 ];
 
 export const TEAM_MEMBERS: TeamMember[] = [
-  { id: 'usr-1', name: 'Sarah Jenkins', email: 'sarah@company.com', role: 'Owner', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face', status: 'active' },
+  { id: 'usr-1', name: 'Nyikuli Bramwel', email: 'nyikulibramwel@gmail.com', role: 'Owner', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face', status: 'active' },
   { id: 'usr-2', name: 'Marcus Vance', email: 'marcus@company.com', role: 'Admin', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face', status: 'active' },
   { id: 'usr-3', name: 'Leila Chen', email: 'leila.c@company.com', role: 'Editor', avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=100&h=100&fit=crop&crop=face', status: 'active' },
   { id: 'usr-4', name: 'David Kim', email: 'd.kim@company.com', role: 'Viewer', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop&crop=face', status: 'invited' },
 ];
 
 export const AUDIT_ACTIVITIES: AuditActivity[] = [
-  { id: 'act-1', userId: 'usr-1', userName: 'Sarah Jenkins', action: 'Uploaded a new CSV dataset for auditing', timestamp: '2026-06-23 10:15 AM', fileName: 'Company_Q2_Transactions_Messy.csv' },
+  { id: 'act-1', userId: 'usr-1', userName: 'Nyikuli Bramwel', action: 'Uploaded a new CSV dataset for auditing', timestamp: '2026-06-23 10:15 AM', fileName: 'Company_Q2_Transactions_Messy.csv' },
   { id: 'act-2', userId: 'usr-2', userName: 'Marcus Vance', action: 'Resolved 3 invalid email formatting errors', timestamp: '2026-06-22 03:40 PM', fileName: 'NGO_Donor_Report_Unclean.csv' },
   { id: 'act-3', userId: 'usr-3', userName: 'Leila Chen', action: 'Downloaded PDF audit compliance report', timestamp: '2026-06-22 11:24 AM', fileName: 'Payroll_May_2026_Standardized.csv' },
-  { id: 'act-4', userId: 'usr-1', userName: 'Sarah Jenkins', action: 'Invited David Kim to join company project workspace', timestamp: '2026-06-21 02:15 PM' },
+  { id: 'act-4', userId: 'usr-1', userName: 'Nyikuli Bramwel', action: 'Invited David Kim to join company project workspace', timestamp: '2026-06-21 02:15 PM' },
 ];
 
 export const TESTIMONIALS = [

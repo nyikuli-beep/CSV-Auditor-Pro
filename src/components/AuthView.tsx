@@ -41,7 +41,7 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
       const userRef = doc(db, 'users', uid);
       await setDoc(userRef, {
         id: uid,
-        name: userName || userEmail.split('@')[0] || 'Sarah Jenkins',
+        name: userName || userEmail.split('@')[0] || 'Nyikuli Bramwel',
         email: userEmail,
         role: userRole,
         createdAt: new Date().toISOString()
@@ -74,7 +74,7 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
       }
 
       const uid = userCredential.user.uid;
-      const userName = name || email.split('@')[0] || 'Sarah Jenkins';
+      const userName = name || email.split('@')[0] || 'Nyikuli Bramwel';
       await syncUserProfile(uid, email || `${uid}@demo.com`, userName, role);
 
       onLoginSuccess({
@@ -144,7 +144,7 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
       
       const uid = result.user.uid;
       const uEmail = result.user.email || 'google.user@company.com';
-      const uName = result.user.displayName || uEmail.split('@')[0] || 'Sarah Jenkins';
+      const uName = result.user.displayName || uEmail.split('@')[0] || 'Nyikuli Bramwel';
       
       // Keep selected or fallback role
       await syncUserProfile(uid, uEmail, uName, role);
@@ -345,7 +345,7 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
                   type="text" 
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Sarah Jenkins" 
+                  placeholder="Nyikuli Bramwel" 
                   className={`w-full px-4 py-3 rounded-xl text-sm border focus:outline-none focus:ring-1 ${isDarkMode ? 'bg-slate-900/60 border-slate-800 text-slate-100 focus:border-blue-500' : 'bg-white border-slate-200 text-slate-950 focus:border-blue-600'}`}
                 />
               </div>

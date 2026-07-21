@@ -42,7 +42,7 @@ export default function AdminPanel({ isDarkMode, accentClass }: AdminPanelProps)
 
   const adminLogs = [
     { id: 'l-1', admin: 'Marcus Vance', action: 'Modified subscription status for stark@corp.com to Enterprise', time: '2 hours ago' },
-    { id: 'l-2', admin: 'Sarah Jenkins', action: 'Toggled feature flag: highCapacityIngest on Sandbox-Cluster-3', time: '4 hours ago' }
+    { id: 'l-2', admin: 'Nyikuli Bramwel', action: 'Toggled feature flag: highCapacityIngest on Sandbox-Cluster-3', time: '4 hours ago' }
   ];
 
   return (

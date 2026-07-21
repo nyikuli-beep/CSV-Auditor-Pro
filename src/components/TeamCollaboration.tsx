@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
   Users, 
@@ -40,6 +40,16 @@ export default function TeamCollaboration({ members, onInviteMember, onDeleteMem
   const [successMsg, setSuccessMsg] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  const timeoutRef = useRef<any>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
   // Local comments state
   const [comments, setComments] = useState<CommentThread[]>([
     { id: 'c1', author: 'Marcus Vance', role: 'Admin', text: 'Sarah, I noticed row 7 has an extreme transaction outlier of 1.5M. Let\'s verify this with the sales ledger before pushing.', time: '2026-06-23 10:45 AM' },
@@ -62,7 +72,8 @@ export default function TeamCollaboration({ members, onInviteMember, onDeleteMem
     setInviteName('');
     setInviteEmail('');
     setSuccessMsg(`Successfully dispatched invitation to ${inviteEmail}!`);
-    setTimeout(() => setSuccessMsg(''), 3000);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => setSuccessMsg(''), 3000);
   };
 
   const handleAddComment = (e: React.FormEvent) => {
@@ -73,7 +84,7 @@ export default function TeamCollaboration({ members, onInviteMember, onDeleteMem
       ...comments,
       {
         id: `c-${Date.now()}`,
-        author: 'Sarah Jenkins',
+        author: 'Nyikuli Bramwel',
         role: 'Owner',
         text: newCommentText,
         time: 'Just now'

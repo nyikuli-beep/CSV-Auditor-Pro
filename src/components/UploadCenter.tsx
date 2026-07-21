@@ -42,6 +42,15 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
   const [errorMsg, setErrorMsg] = useState('');
   const [fileDetails, setFileDetails] = useState<{ name: string; size: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadIntervalRef = useRef<any>(null);
+
+  useEffect(() => {
+    return () => {
+      if (uploadIntervalRef.current) {
+        clearInterval(uploadIntervalRef.current);
+      }
+    };
+  }, []);
 
   // States for Merge Datasets feature
   const [selectedFileIdsForMerge, setSelectedFileIdsForMerge] = useState<string[]>([]);
@@ -67,6 +76,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
   const [selectedPreviewRows, setSelectedPreviewRows] = useState<number[]>([]);
   const [isBulkFixing, setIsBulkFixing] = useState(false);
   const [bulkFixMessage, setBulkFixMessage] = useState<string | null>(null);
+  const [isActionPending, setIsActionPending] = useState(false);
 
   // Auto-save states and hooks
   const [isAutoSaving, setIsAutoSaving] = useState(false);
@@ -107,6 +117,141 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
   useEffect(() => {
     localStorage.setItem('custom_validation_rules', JSON.stringify(customRules));
   }, [customRules]);
+
+  // Delimiter pre-configuration states
+  const [fileToConfigure, setFileToConfigure] = useState<File | null>(null);
+  const [multipleFilesToConfigure, setMultipleFilesToConfigure] = useState<File[]>([]);
+  const [detectedDelimiter, setDetectedDelimiter] = useState<string>(',');
+  const [selectedDelimiter, setSelectedDelimiter] = useState<string>(',');
+  const [delimiterPreviewLines, setDelimiterPreviewLines] = useState<string[]>([]);
+
+  const detectDelimiter = (text: string): string => {
+    const candidates = [',', ';', '\t', '|'];
+    const lines = text.split(/\r?\n/).slice(0, 10).filter(line => line.trim() !== '');
+    if (lines.length === 0) return ',';
+
+    let bestDelimiter = ',';
+    let bestConsistencyScore = -1;
+
+    candidates.forEach(delim => {
+      const counts = lines.map(line => line.split(delim).length - 1);
+      const average = counts.reduce((a, b) => a + b, 0) / counts.length;
+      
+      if (average === 0) return;
+
+      const isConsistent = counts.every(c => c === counts[0] && c > 0);
+      const minCount = Math.min(...counts);
+      
+      let score = average;
+      if (isConsistent) {
+        score += 100;
+      } else if (minCount > 0) {
+        score += 50;
+      }
+
+      if (score > bestConsistencyScore) {
+        bestConsistencyScore = score;
+        bestDelimiter = delim;
+      }
+    });
+
+    return bestDelimiter;
+  };
+
+  const initiateFileConfiguration = (file: File) => {
+    setErrorMsg('');
+    setFileDetails({ name: file.name, size: file.size });
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        if (!text) throw new Error('Empty spreadsheet content');
+        
+        const lines = text.split(/\r?\n/).filter(line => line.trim() !== '').slice(0, 15);
+        if (lines.length === 0) throw new Error('Spreadsheet has no content');
+        
+        const autoDelim = detectDelimiter(text);
+        setDetectedDelimiter(autoDelim);
+        setSelectedDelimiter(autoDelim);
+        setDelimiterPreviewLines(lines);
+        setMultipleFilesToConfigure([]);
+        setFileToConfigure(file);
+      } catch (err) {
+        setErrorMsg('Error pre-reading file for delimiter auto-detection.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const initiateMultipleFilesConfiguration = (filesList: File[]) => {
+    setErrorMsg('');
+    const firstFile = filesList[0];
+    setFileDetails({ name: `${filesList.length} files queued`, size: filesList.reduce((acc, f) => acc + f.size, 0) });
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        if (!text) throw new Error('Empty spreadsheet content');
+        
+        const lines = text.split(/\r?\n/).filter(line => line.trim() !== '').slice(0, 15);
+        const autoDelim = detectDelimiter(text);
+        setDetectedDelimiter(autoDelim);
+        setSelectedDelimiter(autoDelim);
+        setDelimiterPreviewLines(lines);
+        setMultipleFilesToConfigure(filesList);
+        setFileToConfigure(firstFile);
+      } catch (err) {
+        setErrorMsg('Error pre-reading files for delimiter auto-detection.');
+      }
+    };
+    reader.readAsText(firstFile);
+  };
+
+  const handleStartIngestion = () => {
+    if (!fileToConfigure) return;
+    
+    const file = fileToConfigure;
+    const delim = selectedDelimiter;
+    
+    setFileToConfigure(null);
+    setDelimiterPreviewLines([]);
+    
+    if (multipleFilesToConfigure.length > 1) {
+      const list = [...multipleFilesToConfigure];
+      setMultipleFilesToConfigure([]);
+      processMultipleFiles(list, delim);
+    } else {
+      setMultipleFilesToConfigure([]);
+      processFile(file, delim);
+    }
+  };
+
+  const previewData = React.useMemo(() => {
+    if (delimiterPreviewLines.length === 0) return { headers: [], rows: [] };
+    
+    const headers = delimiterPreviewLines[0].split(selectedDelimiter).map(h => h.replace(/^["']|["']$/g, '').trim());
+    const rows: string[][] = [];
+    
+    for (let i = 1; i < Math.min(delimiterPreviewLines.length, 5); i++) {
+      const cols = delimiterPreviewLines[i].split(selectedDelimiter).map(c => c.replace(/^["']|["']$/g, '').trim());
+      rows.push(cols);
+    }
+    
+    return { headers, rows };
+  }, [delimiterPreviewLines, selectedDelimiter]);
+
+  const isDelimiterProbablyWrong = React.useMemo(() => {
+    if (previewData.headers.length <= 1 && delimiterPreviewLines.length > 0) {
+      const hasSeparators = delimiterPreviewLines[0].includes(',') || 
+                            delimiterPreviewLines[0].includes(';') || 
+                            delimiterPreviewLines[0].includes('\t') || 
+                            delimiterPreviewLines[0].includes('|');
+      return hasSeparators;
+    }
+    return false;
+  }, [previewData, delimiterPreviewLines]);
 
   const handleAddRule = (newRule: CustomValidationRule) => {
     setCustomRules(prev => [...prev, newRule]);
@@ -165,8 +310,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
           }
         }
       } catch (err) {
-        console.error("Failed to load draft:", err);
-        handleFirestoreError(err, OperationType.GET, 'drafts/' + currentUser.uid);
+        console.warn("Failed to load draft from Firestore (using local session fallback):", err);
       }
     };
     
@@ -204,8 +348,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
         };
         await setDoc(draftRef, draftData);
       } catch (err) {
-        console.error("Background auto-save failed:", err);
-        handleFirestoreError(err, OperationType.WRITE, 'drafts/' + currentUser.uid);
+        console.warn("Background auto-save draft failed (safe offline/local fallback active):", err);
       } finally {
         setIsAutoSaving(false);
       }
@@ -228,8 +371,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
       try {
         await deleteDoc(doc(db, 'drafts', currentUser.uid));
       } catch (e) {
-        console.error("Error deleting draft from Firestore:", e);
-        handleFirestoreError(e, OperationType.DELETE, 'drafts/' + currentUser.uid);
+        console.warn("Failed to discard draft from Firestore (safe local fallback active):", e);
       }
     }
     setSavedDraft(null);
@@ -239,7 +381,8 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     headers: string[],
     rows: Record<string, string>[],
     detectedMetadata: any,
-    rules: CustomValidationRule[]
+    rules: CustomValidationRule[],
+    headerMappings?: Record<string, string>
   ): AuditIssue[] => {
     const generatedIssues: AuditIssue[] = [];
     const seenRows = new Set<string>();
@@ -268,8 +411,11 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
       // 2. Check Missing Values & Formats
       headers.forEach(h => {
         const cellVal = row[h];
+        const mappedCanonical = headerMappings?.[h] || 'None';
+
         if (cellVal === undefined || cellVal === '') {
-          const isCrucial = h.toLowerCase().includes('id') || h.toLowerCase().includes('amount') || h.toLowerCase().includes('date') || h.toLowerCase().includes('email');
+          const isCrucial = h.toLowerCase().includes('id') || h.toLowerCase().includes('amount') || h.toLowerCase().includes('date') || h.toLowerCase().includes('email') ||
+                            mappedCanonical === 'Transaction ID' || mappedCanonical === 'Amount' || mappedCanonical === 'Transaction Date' || mappedCanonical === 'Email / Contact';
           generatedIssues.push({
             id: `dynamic-issue-missing-${rowIndex}-${h}`,
             type: 'missing_value',
@@ -283,7 +429,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
           });
         } else {
           // Check outliers on numerical columns
-          if (h.toLowerCase().includes('amount') || h.toLowerCase().includes('pay') || h.toLowerCase().includes('price')) {
+          if (h.toLowerCase().includes('amount') || h.toLowerCase().includes('pay') || h.toLowerCase().includes('price') || mappedCanonical === 'Amount') {
             const num = parseFloat(cellVal.replace(/[^0-9.-]/g, ''));
             if (!isNaN(num) && num > 100000) {
               generatedIssues.push({
@@ -300,7 +446,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
             }
           }
           // Check date format
-          if (h.toLowerCase().includes('date') || (detectedMetadata && detectedMetadata.dateFormats && detectedMetadata.dateFormats[h])) {
+          if (h.toLowerCase().includes('date') || mappedCanonical === 'Transaction Date' || (detectedMetadata && detectedMetadata.dateFormats && detectedMetadata.dateFormats[h])) {
             const expectedFormat = (detectedMetadata && detectedMetadata.dateFormats && detectedMetadata.dateFormats[h]) || 'YYYY-MM-DD';
             const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
             if (!dateRegex.test(cellVal)) {
@@ -321,6 +467,23 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
                 severity: 'warning',
                 description: description,
                 suggestion: suggestion,
+                status: 'open'
+              });
+            }
+          }
+          // Check email format if mapped to Email / Contact
+          if (mappedCanonical === 'Email / Contact' || h.toLowerCase().includes('email')) {
+            const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+            if (!emailRegex.test(cellVal)) {
+              generatedIssues.push({
+                id: `dynamic-issue-email-${rowIndex}-${h}`,
+                type: 'invalid_format',
+                column: h,
+                row: humanRowIndex,
+                value: cellVal,
+                severity: 'warning',
+                description: `Value "${cellVal}" does not follow standard email formats.`,
+                suggestion: 'Verify address syntax or fix empty placeholders.',
                 status: 'open'
               });
             }
@@ -522,7 +685,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     };
   };
 
-  // Revalidate whenever custom rules change
+  // Revalidate whenever custom rules or mappings change
   useEffect(() => {
     if (!pendingFile) return;
 
@@ -530,7 +693,8 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
       pendingFile.headers,
       pendingFile.rows,
       pendingFile.detectedMetadata,
-      customRules
+      customRules,
+      mappings
     );
 
     const currentIssueIds = pendingFile.issues.map(i => i.id).join(',');
@@ -547,7 +711,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
         };
       });
     }
-  }, [customRules, pendingFile?.headers, pendingFile?.rows]);
+  }, [customRules, pendingFile?.headers, pendingFile?.rows, mappings]);
 
   const runSanityCheck = () => {
     if (!pendingFile) return [];
@@ -591,9 +755,9 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
 
     // 2. Crucial Business Column Check (Date, ID, Amount)
     const lowerHeaders = pendingFile.headers.map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
-    const hasID = lowerHeaders.some(h => h.includes('id') || h.includes('txn') || h.includes('key') || h.includes('ref'));
-    const hasDate = lowerHeaders.some(h => h.includes('date') || h.includes('time') || h.includes('timestamp'));
-    const hasAmount = lowerHeaders.some(h => h.includes('amount') || h.includes('price') || h.includes('total') || h.includes('cost'));
+    const hasID = lowerHeaders.some(h => h.includes('id') || h.includes('txn') || h.includes('key') || h.includes('ref')) || Object.values(mappings).includes('Transaction ID');
+    const hasDate = lowerHeaders.some(h => h.includes('date') || h.includes('time') || h.includes('timestamp')) || Object.values(mappings).includes('Transaction Date');
+    const hasAmount = lowerHeaders.some(h => h.includes('amount') || h.includes('price') || h.includes('total') || h.includes('cost')) || Object.values(mappings).includes('Amount');
 
     const missingCrucial = [];
     if (!hasID) missingCrucial.push('Transaction ID');
@@ -1114,7 +1278,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     }
   };
 
-  const processFile = (file: File) => {
+  const processFile = (file: File, delimiterOverride?: string) => {
     setErrorMsg('');
     setFileDetails(null);
     setUploadProgress(null);
@@ -1135,11 +1299,17 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
 
     // Simulate progress upload
     let progress = 0;
-    const interval = setInterval(() => {
+    if (uploadIntervalRef.current) {
+      clearInterval(uploadIntervalRef.current);
+    }
+    uploadIntervalRef.current = setInterval(() => {
       progress += 20;
       setUploadProgress(progress);
       if (progress >= 100) {
-        clearInterval(interval);
+        if (uploadIntervalRef.current) {
+          clearInterval(uploadIntervalRef.current);
+          uploadIntervalRef.current = null;
+        }
         
         // Parse actual CSV file client-side!
         const reader = new FileReader();
@@ -1178,11 +1348,12 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
             const lines = previewText.split(/\r?\n/).filter(line => line.trim() !== '');
             if (lines.length === 0) throw new Error('Spreadsheet has no lines');
 
-            const headers = lines[0].split(',').map(h => h.replace(/^["']|["']$/g, '').trim());
+            const activeDelimiter = delimiterOverride || selectedDelimiter || ',';
+            const headers = lines[0].split(activeDelimiter).map(h => h.replace(/^["']|["']$/g, '').trim());
             const rows: Record<string, string>[] = [];
 
             for (let i = 1; i < lines.length; i++) {
-              const columns = lines[i].split(',').map(c => c.replace(/^["']|["']$/g, '').trim());
+              const columns = lines[i].split(activeDelimiter).map(c => c.replace(/^["']|["']$/g, '').trim());
               const rowObj: Record<string, string> = {};
               headers.forEach((h, index) => {
                 rowObj[h] = columns[index] || '';
@@ -1226,7 +1397,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     }, 100);
   };
 
-  const processMultipleFiles = async (filesList: File[]) => {
+  const processMultipleFiles = async (filesList: File[], delimiterOverride?: string) => {
     setErrorMsg('');
     setFileDetails(null);
     setUploadProgress(null);
@@ -1288,11 +1459,12 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
               const lines = previewText.split(/\r?\n/).filter(line => line.trim() !== '');
               if (lines.length === 0) throw new Error('Spreadsheet has no lines');
 
-              const headers = lines[0].split(',').map(h => h.replace(/^["']|["']$/g, '').trim());
+              const activeDelimiter = delimiterOverride || selectedDelimiter || ',';
+              const headers = lines[0].split(activeDelimiter).map(h => h.replace(/^["']|["']$/g, '').trim());
               const rows: Record<string, string>[] = [];
 
               for (let i = 1; i < lines.length; i++) {
-                const columns = lines[i].split(',').map(c => c.replace(/^["']|["']$/g, '').trim());
+                const columns = lines[i].split(activeDelimiter).map(c => c.replace(/^["']|["']$/g, '').trim());
                 const rowObj: Record<string, string> = {};
                 headers.forEach((h, index) => {
                   rowObj[h] = columns[index] || '';
@@ -1351,9 +1523,9 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
 
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       if (e.dataTransfer.files.length === 1) {
-        processFile(e.dataTransfer.files[0]);
+        initiateFileConfiguration(e.dataTransfer.files[0]);
       } else {
-        processMultipleFiles(Array.from(e.dataTransfer.files));
+        initiateMultipleFilesConfiguration(Array.from(e.dataTransfer.files));
       }
     }
   };
@@ -1361,9 +1533,9 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
   const handleBrowse = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       if (e.target.files.length === 1) {
-        processFile(e.target.files[0]);
+        initiateFileConfiguration(e.target.files[0]);
       } else {
-        processMultipleFiles(Array.from(e.target.files));
+        initiateMultipleFilesConfiguration(Array.from(e.target.files));
       }
     }
   };
@@ -1849,19 +2021,23 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
                 {/* Confirmations */}
                 <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-2">
                   <button
+                    disabled={isActionPending}
                     onClick={async () => {
-                      const currentUser = auth.currentUser;
-                      if (currentUser) {
-                        try {
+                      setIsActionPending(true);
+                      try {
+                        const currentUser = auth?.currentUser;
+                        if (currentUser && db) {
                           await deleteDoc(doc(db, 'drafts', currentUser.uid));
-                        } catch (e) {
-                          console.error("Failed to delete draft:", e);
                         }
+                      } catch (e) {
+                        console.error("Failed to delete draft:", e);
+                      } finally {
+                        removePendingFileAtIndex(activePendingIndex);
+                        setIsActionPending(false);
                       }
-                      removePendingFileAtIndex(activePendingIndex);
                     }}
-                    className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-                      isDarkMode ? 'border-slate-800 text-slate-400 hover:text-slate-200 bg-slate-900/40' : 'border-slate-200 text-slate-600 bg-white hover:bg-slate-50'
+                    className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all duration-200 cursor-pointer hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-red-500/50 disabled:opacity-50 disabled:pointer-events-none ${
+                      isDarkMode ? 'border-slate-800 text-slate-400 hover:text-slate-200 bg-slate-900/40 hover:bg-slate-900' : 'border-slate-200 text-slate-600 bg-white hover:bg-slate-50'
                     }`}
                   >
                     Cancel Ingestion
@@ -1869,20 +2045,24 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
 
                   <div className="flex gap-3">
                     <button
+                      disabled={isActionPending}
                       onClick={async () => {
-                        const currentUser = auth.currentUser;
-                        if (currentUser) {
-                          try {
+                        setIsActionPending(true);
+                        try {
+                          const currentUser = auth?.currentUser;
+                          if (currentUser && db) {
                             await deleteDoc(doc(db, 'drafts', currentUser.uid));
-                          } catch (e) {
-                            console.error("Failed to delete draft:", e);
                           }
-                        }
-                        if (pendingFile) {
-                          removePendingFileAtIndex(activePendingIndex, pendingFile);
+                        } catch (e) {
+                          console.error("Failed to delete draft:", e);
+                        } finally {
+                          if (pendingFile) {
+                            removePendingFileAtIndex(activePendingIndex, pendingFile);
+                          }
+                          setIsActionPending(false);
                         }
                       }}
-                      className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                      className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all duration-200 cursor-pointer hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-slate-500/50 disabled:opacity-50 disabled:pointer-events-none ${
                         isDarkMode ? 'border-slate-800 text-slate-300 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-700 hover:bg-slate-50'
                       }`}
                     >
@@ -1890,26 +2070,52 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
                     </button>
 
                     <button
+                      disabled={isActionPending}
                       onClick={async () => {
                         if (!pendingFile) return;
-                        const finalFile: CSVFile = {
-                          ...pendingFile,
-                          headerMappings: mappings,
-                          mappingExplanations: explanations
-                        };
-                        const currentUser = auth.currentUser;
-                        if (currentUser) {
-                          try {
+                        setIsActionPending(true);
+
+                        try {
+                          // Force fully audited schema mappings re-execution
+                          const finalIssues = generateFileIssues(
+                            pendingFile.headers,
+                            pendingFile.rows,
+                            pendingFile.detectedMetadata,
+                            customRules,
+                            mappings
+                          );
+                          const finalScore = calculateScore(finalIssues.length, pendingFile.rows.length * pendingFile.headers.length);
+
+                          const finalFile: CSVFile = {
+                            ...pendingFile,
+                            headerMappings: mappings,
+                            mappingExplanations: explanations,
+                            issues: finalIssues,
+                            score: finalScore
+                          };
+
+                          const currentUser = auth?.currentUser;
+                          if (currentUser && db) {
                             await deleteDoc(doc(db, 'drafts', currentUser.uid));
-                          } catch (e) {
-                            console.error("Failed to delete draft:", e);
                           }
+                          removePendingFileAtIndex(activePendingIndex, finalFile);
+                        } catch (e) {
+                          console.error("Failed to apply schema mapping and delete draft:", e);
+                        } finally {
+                          setIsActionPending(false);
                         }
-                        removePendingFileAtIndex(activePendingIndex, finalFile);
                       }}
-                      className={`px-5 py-2 rounded-xl text-xs font-bold text-white transition-all cursor-pointer shadow-md flex items-center gap-1.5 ${accentClass}`}
+                      className={`px-5 py-2 rounded-xl text-xs font-bold text-white transition-all duration-200 cursor-pointer hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-blue-500/50 shadow-md flex items-center gap-1.5 disabled:opacity-50 disabled:pointer-events-none ${accentClass}`}
                     >
-                      <Check className="w-4 h-4" /> Apply Schema & Run Audit
+                      {isActionPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" /> Processing...
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-4 h-4" /> Apply Schema & Run Audit
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
@@ -2019,6 +2225,177 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
 
           </div>
         )}
+      </div>
+    );
+  }
+
+  if (fileToConfigure) {
+    return (
+      <div className="space-y-8 animate-fadeIn">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Audit Ingestion Center</h1>
+          <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+            Configure CSV parser options, preview dynamic column layouts, and proceed with auditing.
+          </p>
+        </div>
+
+        <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-md'} max-w-4xl mx-auto space-y-6`}>
+          <div className="flex items-start justify-between">
+            <div className="space-y-1">
+              <span className="text-[10px] font-mono font-bold text-blue-500 uppercase tracking-widest flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5" /> CSV Structure Pre-check
+              </span>
+              <h2 className="text-xl font-extrabold tracking-tight">Configure CSV Delimiter</h2>
+              <p className="text-xs text-slate-400">
+                Review and customize file format options before committing the spreadsheet to the audit engine.
+              </p>
+            </div>
+            <button 
+              onClick={() => {
+                setFileToConfigure(null);
+                setMultipleFilesToConfigure([]);
+                setDelimiterPreviewLines([]);
+              }}
+              className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5 text-slate-400" />
+            </button>
+          </div>
+
+          {/* File Details */}
+          <div className={`p-4 rounded-xl flex flex-wrap items-center justify-between gap-4 ${isDarkMode ? 'bg-slate-950/40 border border-slate-800/60' : 'bg-slate-50 border border-slate-200/60'}`}>
+            <div className="flex items-center gap-3">
+              <div className={`p-2.5 rounded-lg ${isDarkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+                <FileSpreadsheet className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="font-bold text-xs">{multipleFilesToConfigure.length > 1 ? `${multipleFilesToConfigure.length} Files Queued` : fileToConfigure?.name}</h4>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  {multipleFilesToConfigure.length > 1 
+                    ? `${(multipleFilesToConfigure.reduce((sum, f) => sum + f.size, 0) / 1024).toFixed(1)} KB total` 
+                    : `${((fileToConfigure?.size || 0) / 1024).toFixed(1)} KB`
+                  } • Standard spreadsheet stream
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Auto-Detected Delimiter:</span>
+              <span className="text-[10px] font-mono font-extrabold bg-blue-500/10 text-blue-400 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                {detectedDelimiter === ',' && 'Comma (,)'}
+                {detectedDelimiter === ';' && 'Semicolon (;)'}
+                {detectedDelimiter === '\t' && 'Tab (\\t)'}
+                {detectedDelimiter === '|' && 'Pipe (|)'}
+              </span>
+            </div>
+          </div>
+
+          {/* Manual Override Option */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-300 block">Manual Delimiter Override</label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: 'Comma ( , )', value: ',' },
+                { label: 'Semicolon ( ; )', value: ';' },
+                { label: 'Tab ( \\t )', value: '\t' },
+                { label: 'Pipe ( | )', value: '|' }
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setSelectedDelimiter(opt.value)}
+                  className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-all flex items-center justify-between cursor-pointer ${
+                    selectedDelimiter === opt.value
+                      ? 'border-blue-500 bg-blue-500/10 text-blue-400'
+                      : isDarkMode 
+                        ? 'border-slate-800 bg-slate-950/40 text-slate-400 hover:border-slate-700 hover:bg-slate-900/60' 
+                        : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <span>{opt.label}</span>
+                  {selectedDelimiter === opt.value && <Check className="w-3.5 h-3.5 text-blue-500" />}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Warning Badge if delimiter is probably wrong */}
+          {isDelimiterProbablyWrong && (
+            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs flex items-start gap-2.5 animate-pulse">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold block mb-0.5">Potential Delimiter Mismatch</span>
+                <span>The preview shows all cells joined in a single column. Try selecting another delimiter option.</span>
+              </div>
+            </div>
+          )}
+
+          {/* Live Grid Preview */}
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-bold text-slate-300 block">Live Parser Column Grid Preview</span>
+              <span className="text-[9px] font-mono text-slate-400 uppercase">First 3 Rows parsed with "{selectedDelimiter}"</span>
+            </div>
+            
+            <div className={`border rounded-xl overflow-hidden ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className={isDarkMode ? 'bg-slate-950 border-b border-slate-800' : 'bg-slate-50 border-b border-slate-200'}>
+                      {previewData.headers.map((h, i) => (
+                        <th key={i} className="p-3 text-[11px] font-mono font-bold text-slate-400 uppercase border-r last:border-r-0 border-slate-800/30 whitespace-nowrap">
+                          {h || `Column ${i + 1}`}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previewData.rows.length === 0 ? (
+                      <tr>
+                        <td colSpan={1} className="p-4 text-center text-xs text-slate-500">No rows to display</td>
+                      </tr>
+                    ) : (
+                      previewData.rows.map((row, rIdx) => (
+                        <tr key={rIdx} className={`border-b last:border-b-0 ${isDarkMode ? 'border-slate-800/50 hover:bg-slate-900/20' : 'border-slate-200/50 hover:bg-slate-50'}`}>
+                          {previewData.headers.map((_, cIdx) => (
+                            <td key={cIdx} className="p-3 text-[11px] text-slate-300 font-mono border-r last:border-r-0 border-slate-800/30 truncate max-w-[200px]" title={row[cIdx]}>
+                              {row[cIdx] !== undefined ? row[cIdx] : <span className="text-slate-500 italic">null</span>}
+                            </td>
+                          ))}
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {/* Start Action */}
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setFileToConfigure(null);
+                setMultipleFilesToConfigure([]);
+                setDelimiterPreviewLines([]);
+              }}
+              className={`px-4 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                isDarkMode ? 'border-slate-800 hover:bg-slate-800 text-slate-400' : 'border-slate-200 hover:bg-slate-50 text-slate-600'
+              }`}
+            >
+              Cancel
+            </button>
+            
+            <button
+              type="button"
+              onClick={handleStartIngestion}
+              className="px-5 py-2 text-xs font-bold text-white rounded-xl bg-blue-600 hover:bg-blue-700 shadow-sm hover:scale-[1.01] transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              Confirm & Ingest Spreadsheet <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
       </div>
     );
   }

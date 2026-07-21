@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { 
   Settings, 
@@ -69,6 +69,31 @@ export default function SettingsView({
   const [tosOpen, setTosOpen] = useState(false);
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
+  const timersRef = useRef<any[]>([]);
+
+  const safeSetTimeout = (cb: () => void, delay: number) => {
+    const id = setTimeout(cb, delay);
+    timersRef.current.push(id);
+    return id;
+  };
+
+  const safeDelay = (ms: number) => {
+    return new Promise<void>((resolve) => {
+      const id = setTimeout(() => {
+        resolve();
+      }, ms);
+      timersRef.current.push(id);
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      timersRef.current.forEach(id => {
+        clearTimeout(id);
+      });
+    };
+  }, []);
+
   // Memory Management States & Calculations
   const [cleaningStatus, setCleaningStatus] = useState<Record<string, 'idle' | 'cleaning' | 'success'>>({});
 
@@ -119,47 +144,47 @@ export default function SettingsView({
 
   const runCleanChat = async () => {
     setCleaningStatus(prev => ({ ...prev, chat: 'cleaning' }));
-    await new Promise(resolve => setTimeout(resolve, 600));
+    await safeDelay(600);
     if (onClearChat) onClearChat();
     setCleaningStatus(prev => ({ ...prev, chat: 'success' }));
-    setTimeout(() => setCleaningStatus(prev => ({ ...prev, chat: 'idle' })), 2000);
+    safeSetTimeout(() => setCleaningStatus(prev => ({ ...prev, chat: 'idle' })), 2000);
   };
 
   const runCleanActivities = async () => {
     setCleaningStatus(prev => ({ ...prev, activities: 'cleaning' }));
-    await new Promise(resolve => setTimeout(resolve, 800));
+    await safeDelay(800);
     if (onClearActivities) onClearActivities();
     setCleaningStatus(prev => ({ ...prev, activities: 'success' }));
-    setTimeout(() => setCleaningStatus(prev => ({ ...prev, activities: 'idle' })), 2000);
+    safeSetTimeout(() => setCleaningStatus(prev => ({ ...prev, activities: 'idle' })), 2000);
   };
 
   const runPurgeFiles = async () => {
     setCleaningStatus(prev => ({ ...prev, files: 'cleaning' }));
-    await new Promise(resolve => setTimeout(resolve, 1200));
+    await safeDelay(1200);
     if (onPurgeInactiveFiles) onPurgeInactiveFiles();
     setCleaningStatus(prev => ({ ...prev, files: 'success' }));
-    setTimeout(() => setCleaningStatus(prev => ({ ...prev, files: 'idle' })), 2000);
+    safeSetTimeout(() => setCleaningStatus(prev => ({ ...prev, files: 'idle' })), 2000);
   };
 
   const runCleanDrafts = async () => {
     setCleaningStatus(prev => ({ ...prev, drafts: 'cleaning' }));
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await safeDelay(500);
     localStorage.removeItem('custom_validation_rules');
     localStorage.removeItem('quick_clean_enabled');
     setCleaningStatus(prev => ({ ...prev, drafts: 'success' }));
-    setTimeout(() => setCleaningStatus(prev => ({ ...prev, drafts: 'idle' })), 2000);
+    safeSetTimeout(() => setCleaningStatus(prev => ({ ...prev, drafts: 'idle' })), 2000);
   };
 
   const runDeepGC = async () => {
     setCleaningStatus(prev => ({ ...prev, gc: 'cleaning' }));
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await safeDelay(1500);
     if ((window as any).gc) {
       try {
         (window as any).gc();
       } catch (e) {}
     }
     setCleaningStatus(prev => ({ ...prev, gc: 'success' }));
-    setTimeout(() => setCleaningStatus(prev => ({ ...prev, gc: 'idle' })), 2000);
+    safeSetTimeout(() => setCleaningStatus(prev => ({ ...prev, gc: 'idle' })), 2000);
   };
 
   // Google Search Console (GSC) Verification State
@@ -172,7 +197,7 @@ export default function SettingsView({
   const handleCopy = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     setCopiedText(label);
-    setTimeout(() => setCopiedText(null), 2000);
+    safeSetTimeout(() => setCopiedText(null), 2000);
   };
 
   useEffect(() => {
@@ -196,7 +221,7 @@ export default function SettingsView({
       .catch(err => {
         console.warn(`Error fetching GSC settings (retries left: ${retries}):`, err);
         if (retries > 0) {
-          setTimeout(() => fetchGscSettings(retries - 1, delay * 1.5), delay);
+          safeSetTimeout(() => fetchGscSettings(retries - 1, delay * 1.5), delay);
         } else {
           console.error("Failed to fetch GSC settings after all retries:", err);
         }
@@ -215,7 +240,7 @@ export default function SettingsView({
       });
       if (res.ok) {
         setGscSuccessMsg('Google Search Console configuration saved and live deployed!');
-        setTimeout(() => setGscSuccessMsg(''), 3500);
+        safeSetTimeout(() => setGscSuccessMsg(''), 3500);
       } else {
         console.error('Failed to save GSC settings');
       }
@@ -240,7 +265,7 @@ export default function SettingsView({
       .catch(err => {
         console.warn(`Error fetching db status (retries left: ${retries}):`, err);
         if (retries > 0) {
-          setTimeout(() => fetchDbStatus(retries - 1, delay * 1.5), delay);
+          safeSetTimeout(() => fetchDbStatus(retries - 1, delay * 1.5), delay);
         } else {
           console.error("Failed to fetch DB status after all retries:", err);
           setDbStatus({ status: 'error', error: 'Database link momentarily offline. Please click refresh to try again.' });
@@ -256,7 +281,7 @@ export default function SettingsView({
       apiKey: tempApiKey
     });
     setSuccessMsg('Settings updated successfully!');
-    setTimeout(() => setSuccessMsg(''), 3500);
+    safeSetTimeout(() => setSuccessMsg(''), 3500);
   };
 
   const handleAccentChange = (color: 'blue' | 'emerald' | 'violet' | 'amber') => {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   FileSpreadsheet, 
@@ -31,21 +31,31 @@ import { CSVFile, TeamMember, AuditActivity, ChatMessage, SystemSettings } from 
 // Import Mock Initial Data
 import { SAMPLE_MESSY_FILE, TEAM_MEMBERS, AUDIT_ACTIVITIES } from './sampleData';
 
-// Import Views
-import LandingPage from './components/LandingPage';
-import AuthView from './components/AuthView';
-import DashboardHome from './components/DashboardHome';
-import UploadCenter from './components/UploadCenter';
-import AuditResults from './components/AuditResults';
-import CleaningCenter from './components/CleaningCenter';
-import InsightsCenter from './components/InsightsCenter';
-import ReportGen from './components/ReportGen';
-import AuditHistory from './components/AuditHistory';
-import TeamCollaboration from './components/TeamCollaboration';
-import SettingsView from './components/SettingsView';
-import AdminPanel from './components/AdminPanel';
-import GmailCenter from './components/GmailCenter';
+// Import Views (Lazy Loaded for Low-Memory Devices & Mobile Startup Performance)
+const LandingPage = lazy(() => import('./components/LandingPage'));
+const AuthView = lazy(() => import('./components/AuthView'));
+const DashboardHome = lazy(() => import('./components/DashboardHome'));
+const UploadCenter = lazy(() => import('./components/UploadCenter'));
+const AuditResults = lazy(() => import('./components/AuditResults'));
+const CleaningCenter = lazy(() => import('./components/CleaningCenter'));
+const InsightsCenter = lazy(() => import('./components/InsightsCenter'));
+const ReportGen = lazy(() => import('./components/ReportGen'));
+const AuditHistory = lazy(() => import('./components/AuditHistory'));
+const TeamCollaboration = lazy(() => import('./components/TeamCollaboration'));
+const SettingsView = lazy(() => import('./components/SettingsView'));
+const AdminPanel = lazy(() => import('./components/AdminPanel'));
+const GmailCenter = lazy(() => import('./components/GmailCenter'));
 import CookieBanner, { getCookie, setCookie } from './components/CookieBanner';
+
+// Loading spinner fallback optimized for instant render on 2GB RAM devices
+function LoadingSpinner({ message }: { message: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center p-12 min-h-[400px]" id="loading-spinner">
+      <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-3" />
+      <span className="text-sm font-medium text-slate-500">{message}</span>
+    </div>
+  );
+}
 
 // Import Firebase integration
 import { auth, db, OperationType, handleFirestoreError } from './firebase';
@@ -188,7 +198,7 @@ export default function App() {
           } else {
             const newProfile = {
               id: fUser.uid,
-              name: fUser.displayName || fUser.email?.split('@')[0] || 'Sarah Jenkins',
+              name: fUser.displayName || fUser.email?.split('@')[0] || 'Nyikuli Bramwel',
               email: fUser.email || `${fUser.uid}@demo.com`,
               role: 'Owner'
             };
@@ -210,7 +220,7 @@ export default function App() {
               'Authorization': `Bearer ${idToken}`
             },
             body: JSON.stringify({
-              name: fUser.displayName || fUser.email?.split('@')[0] || 'Sarah Jenkins',
+              name: fUser.displayName || fUser.email?.split('@')[0] || 'Nyikuli Bramwel',
               email: fUser.email || `${fUser.uid}@demo.com`,
               role: userRole
             })
@@ -257,13 +267,37 @@ export default function App() {
           }
         }
       } else {
-        // Sort files descending: newer uploaded files/merged files first
-        filesList.sort((a, b) => {
-          const tA = (a as any).timestamp || (a.id.includes('-') ? parseInt(a.id.split('-').pop() || '0') : 0) || 0;
-          const tB = (b as any).timestamp || (b.id.includes('-') ? parseInt(b.id.split('-').pop() || '0') : 0) || 0;
-          return tB - tA; // Newest first
+        // Keep any unsynced local files that haven't registered in the Firestore snapshot yet
+        setFiles(prev => {
+          const unsynced = prev.filter(p => !filesList.some(f => f.id === p.id) && !p.id.startsWith('file-active'));
+          const combined = [...unsynced, ...filesList];
+          
+          combined.sort((a, b) => {
+            let timeA = 0;
+            let timeB = 0;
+            
+            if (a.uploadedAt) {
+              const parsed = Date.parse(a.uploadedAt);
+              if (!isNaN(parsed)) timeA = parsed;
+            }
+            if (b.uploadedAt) {
+              const parsed = Date.parse(b.uploadedAt);
+              if (!isNaN(parsed)) timeB = parsed;
+            }
+            
+            if (timeA === timeB) {
+              const matchA = a.id.match(/\d+/g);
+              const matchB = b.id.match(/\d+/g);
+              const numA = matchA ? parseInt(matchA.join(''), 10) : 0;
+              const numB = matchB ? parseInt(matchB.join(''), 10) : 0;
+              timeA = numA;
+              timeB = numB;
+            }
+            
+            return timeB - timeA; // Newest first
+          });
+          return combined;
         });
-        setFiles(filesList);
       }
     }, (err) => {
       handleFirestoreError(err, OperationType.LIST, 'files');
@@ -426,14 +460,7 @@ export default function App() {
       ownerId: firebaseUser?.uid || 'usr-sarah'
     };
 
-    try {
-      await setDoc(doc(db, 'files', fileId), fileToUpload);
-      await syncToPostgres('sync-file', 'POST', fileToUpload);
-    } catch (err) {
-      console.warn('Firestore write failed, using local fallback state:', err);
-    }
-
-    // Always ensure the UI state is updated with the new file immediately
+    // Optimistically update files and transition immediately for instant, high-performance UI feedback
     setFiles(prev => {
       const filtered = prev.filter(f => f.id !== fileId);
       return [fileToUpload, ...filtered];
@@ -441,7 +468,7 @@ export default function App() {
 
     setActiveFileId(fileId);
     setActiveFileIndex(0);
-    setActiveTab('results'); // Switch directly to inspect warnings
+    setActiveTab('clean'); // Switch directly to the Cleaning Center for cleaning
 
     const actionDesc = (newFile as any).isQuickCleaned 
       ? `Uploaded, ingested, and auto-sanitized "${newFile.name}" (Quick Clean applied)`
@@ -450,19 +477,28 @@ export default function App() {
     const uploadLog: AuditActivity = {
       id: `act-${Date.now()}`,
       userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-sarah',
-      userName: user?.email || 'Sarah Jenkins',
+      userName: user?.email || 'Nyikuli Bramwel',
       action: actionDesc,
       timestamp: 'Just now'
     };
+
+    // Update activities locally immediately
+    setActivities(prev => [uploadLog, ...prev]);
+
+    // Save in firestore and sync to postgres in the background without blocking the UI navigation
+    try {
+      await setDoc(doc(db, 'files', fileId), fileToUpload);
+      await syncToPostgres('sync-file', 'POST', fileToUpload);
+    } catch (err) {
+      console.warn('Firestore write failed, using local fallback state:', err);
+    }
+
     try {
       await setDoc(doc(db, 'activities', uploadLog.id), uploadLog);
       await syncToPostgres('sync-activity', 'POST', uploadLog);
     } catch (err) {
       console.warn('Firestore write activity failed:', err);
     }
-
-    // Update activities locally
-    setActivities(prev => [uploadLog, ...prev]);
   };
 
   // Update file row values post cleaning
@@ -480,7 +516,7 @@ export default function App() {
     const cleanLog: AuditActivity = {
       id: `act-${Date.now()}`,
       userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-sarah',
-      userName: user?.email || 'Sarah Jenkins',
+      userName: user?.email || 'Nyikuli Bramwel',
       action: `Executed data hygiene algorithms on "${updatedFile.name}"`,
       timestamp: 'Just now'
     };
@@ -514,7 +550,7 @@ export default function App() {
     const batchCleanLog: AuditActivity = {
       id: `act-${Date.now()}`,
       userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-sarah',
-      userName: user?.email || 'Sarah Jenkins',
+      userName: user?.email || 'Nyikuli Bramwel',
       action: `Executed batch data hygiene algorithms on ${updatedFiles.length} file(s)`,
       timestamp: 'Just now'
     };
@@ -564,7 +600,7 @@ export default function App() {
     const deleteLog: AuditActivity = {
       id: `act-${Date.now()}`,
       userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-sarah',
-      userName: user?.email || 'Sarah Jenkins',
+      userName: user?.email || 'Nyikuli Bramwel',
       action: `Deleted dataset file "${name}"`,
       timestamp: 'Just now'
     };
@@ -590,7 +626,7 @@ export default function App() {
     const inviteLog: AuditActivity = {
       id: `act-${Date.now()}`,
       userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-sarah',
-      userName: user?.email || 'Sarah Jenkins',
+      userName: user?.email || 'Nyikuli Bramwel',
       action: `Dispatched tenancy invitation to ${newMember.email}`,
       timestamp: 'Just now'
     };
@@ -614,7 +650,7 @@ export default function App() {
     const deleteLog: AuditActivity = {
       id: `act-${Date.now()}`,
       userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-sarah',
-      userName: user?.email || 'Sarah Jenkins',
+      userName: user?.email || 'Nyikuli Bramwel',
       action: `Deleted workspace member ${email}`,
       timestamp: 'Just now'
     };
@@ -630,7 +666,7 @@ export default function App() {
     const newLog: AuditActivity = {
       id: `act-${Date.now()}`,
       userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-sarah',
-      userName: user?.email || 'Sarah Jenkins',
+      userName: user?.email || 'Nyikuli Bramwel',
       action: actionText,
       timestamp: 'Just now'
     };
@@ -773,22 +809,26 @@ export default function App() {
       
       {/* 1. Landing View */}
       {view === 'landing' && (
-        <LandingPage 
-          onStartTrial={() => setView('auth')}
-          isDarkMode={isDarkMode}
-          toggleTheme={() => setIsDarkMode(!isDarkMode)}
-          accentClass={accentClass}
-        />
+        <Suspense fallback={<LoadingSpinner message="Initializing CSV Auditor Pro..." />}>
+          <LandingPage 
+            onStartTrial={() => setView('auth')}
+            isDarkMode={isDarkMode}
+            toggleTheme={() => setIsDarkMode(!isDarkMode)}
+            accentClass={accentClass}
+          />
+        </Suspense>
       )}
 
       {/* 2. Authentication view */}
       {view === 'auth' && (
-        <AuthView 
-          onLoginSuccess={handleAuthSuccess}
-          onBackToLanding={() => setView('landing')}
-          isDarkMode={isDarkMode}
-          accentClass={accentClass}
-        />
+        <Suspense fallback={<LoadingSpinner message="Setting up secure workspace portal..." />}>
+          <AuthView 
+            onLoginSuccess={handleAuthSuccess}
+            onBackToLanding={() => setView('landing')}
+            isDarkMode={isDarkMode}
+            accentClass={accentClass}
+          />
+        </Suspense>
       )}
 
       {/* 3. SaaS Active Workspace Segment */}
@@ -1085,123 +1125,127 @@ export default function App() {
                   exit={{ opacity: 0, y: -4 }}
                   transition={{ duration: 0.15 }}
                 >
-                  {activeTab === 'dashboard' && (
-                    <DashboardHome 
-                      files={files}
-                      activeFile={activeFile}
-                      activities={activities}
-                      onNavigate={handleNavigateTab}
-                      isDarkMode={isDarkMode}
-                      accentClass={accentClass}
-                    />
-                  )}
+                  <Suspense fallback={<LoadingSpinner message={`Loading visual components...`} />}>
+                    {activeTab === 'dashboard' && (
+                      <DashboardHome 
+                        files={files}
+                        activeFile={activeFile}
+                        activities={activities}
+                        onNavigate={handleNavigateTab}
+                        onSelectFile={handleSelectActiveFile}
+                        isDarkMode={isDarkMode}
+                        accentClass={accentClass}
+                      />
+                    )}
 
-                  {activeTab === 'upload' && (
-                    <UploadCenter 
-                      onFileUpload={handleNewFileUpload}
-                      files={files}
-                      isDarkMode={isDarkMode}
-                      accentClass={accentClass}
-                    />
-                  )}
+                    {activeTab === 'upload' && (
+                      <UploadCenter 
+                        onFileUpload={handleNewFileUpload}
+                        files={files}
+                        isDarkMode={isDarkMode}
+                        accentClass={accentClass}
+                      />
+                    )}
 
-                  {activeTab === 'results' && (
-                    <AuditResults 
-                      activeFile={activeFile}
-                      onNavigate={handleNavigateTab}
-                      isDarkMode={isDarkMode}
-                      accentClass={accentClass}
-                      onUpdateFile={handleUpdateFile}
-                    />
-                  )}
+                    {activeTab === 'results' && (
+                      <AuditResults 
+                        activeFile={activeFile}
+                        onNavigate={handleNavigateTab}
+                        isDarkMode={isDarkMode}
+                        accentClass={accentClass}
+                        onUpdateFile={handleUpdateFile}
+                      />
+                    )}
 
-                  {activeTab === 'clean' && (
-                    <CleaningCenter 
-                      activeFile={activeFile}
-                      files={files}
-                      onUpdateFile={handleUpdateFile}
-                      onUpdateFiles={handleUpdateFiles}
-                      onNavigate={handleNavigateTab}
-                      isDarkMode={isDarkMode}
-                      accentClass={accentClass}
-                      userRole={user?.role || 'Owner'}
-                    />
-                  )}
+                    {activeTab === 'clean' && (
+                      <CleaningCenter 
+                        activeFile={activeFile}
+                        files={files}
+                        onUpdateFile={handleUpdateFile}
+                        onUpdateFiles={handleUpdateFiles}
+                        onSelectFile={handleSelectActiveFile}
+                        onNavigate={handleNavigateTab}
+                        isDarkMode={isDarkMode}
+                        accentClass={accentClass}
+                        userRole={user?.role || 'Owner'}
+                      />
+                    )}
 
-                  {activeTab === 'insights' && (
-                    <InsightsCenter 
-                      activeFile={activeFile}
-                      chatMessages={chatMessages}
-                      onSendMessage={handleSendChatMessage}
-                      isDarkMode={isDarkMode}
-                      accentClass={accentClass}
-                    />
-                  )}
+                    {activeTab === 'insights' && (
+                      <InsightsCenter 
+                        activeFile={activeFile}
+                        chatMessages={chatMessages}
+                        onSendMessage={handleSendChatMessage}
+                        isDarkMode={isDarkMode}
+                        accentClass={accentClass}
+                      />
+                    )}
 
-                  {activeTab === 'gmail' && (
-                    <GmailCenter 
-                      activeFile={activeFile}
-                      isDarkMode={isDarkMode}
-                      accentClass={accentClass}
-                      onNavigate={handleNavigateTab}
-                      onAddActivity={handleAddNewActivity}
-                    />
-                  )}
+                    {activeTab === 'gmail' && (
+                      <GmailCenter 
+                        activeFile={activeFile}
+                        isDarkMode={isDarkMode}
+                        accentClass={accentClass}
+                        onNavigate={handleNavigateTab}
+                        onAddActivity={handleAddNewActivity}
+                      />
+                    )}
 
-                  {activeTab === 'reports' && (
-                    <ReportGen 
-                      activeFile={activeFile}
-                      onNavigate={handleNavigateTab}
-                      isDarkMode={isDarkMode}
-                      accentClass={accentClass}
-                    />
-                  )}
+                    {activeTab === 'reports' && (
+                      <ReportGen 
+                        activeFile={activeFile}
+                        onNavigate={handleNavigateTab}
+                        isDarkMode={isDarkMode}
+                        accentClass={accentClass}
+                      />
+                    )}
 
-                  {activeTab === 'history' && (
-                    <AuditHistory 
-                      files={files}
-                      onSelectFile={handleSelectActiveFile}
-                      onDeleteFile={handleDeleteFile}
-                      onNavigate={handleNavigateTab}
-                      isDarkMode={isDarkMode}
-                      accentClass={accentClass}
-                    />
-                  )}
+                    {activeTab === 'history' && (
+                      <AuditHistory 
+                        files={files}
+                        onSelectFile={handleSelectActiveFile}
+                        onDeleteFile={handleDeleteFile}
+                        onNavigate={handleNavigateTab}
+                        isDarkMode={isDarkMode}
+                        accentClass={accentClass}
+                      />
+                    )}
 
-                  {activeTab === 'team' && (
-                    <TeamCollaboration 
-                      members={members}
-                      onInviteMember={handleInviteMember}
-                      onDeleteMember={handleDeleteMember}
-                      activities={activities}
-                      isDarkMode={isDarkMode}
-                      accentClass={accentClass}
-                    />
-                  )}
+                    {activeTab === 'team' && (
+                      <TeamCollaboration 
+                        members={members}
+                        onInviteMember={handleInviteMember}
+                        onDeleteMember={handleDeleteMember}
+                        activities={activities}
+                        isDarkMode={isDarkMode}
+                        accentClass={accentClass}
+                      />
+                    )}
 
-                  {activeTab === 'settings' && (
-                    <SettingsView 
-                      settings={settings}
-                      onUpdateSettings={setSettings}
-                      isDarkMode={isDarkMode}
-                      toggleTheme={() => setIsDarkMode(!isDarkMode)}
-                      accentClass={accentClass}
-                      files={files}
-                      activeFileId={activeFileId}
-                      activities={activities}
-                      chatMessages={chatMessages}
-                      onClearActivities={handleClearActivities}
-                      onClearChat={handleClearChat}
-                      onPurgeInactiveFiles={handlePurgeInactiveFiles}
-                    />
-                  )}
+                    {activeTab === 'settings' && (
+                      <SettingsView 
+                        settings={settings}
+                        onUpdateSettings={setSettings}
+                        isDarkMode={isDarkMode}
+                        toggleTheme={() => setIsDarkMode(!isDarkMode)}
+                        accentClass={accentClass}
+                        files={files}
+                        activeFileId={activeFileId}
+                        activities={activities}
+                        chatMessages={chatMessages}
+                        onClearActivities={handleClearActivities}
+                        onClearChat={handleClearChat}
+                        onPurgeInactiveFiles={handlePurgeInactiveFiles}
+                      />
+                    )}
 
-                  {activeTab === 'admin' && (
-                    <AdminPanel 
-                      isDarkMode={isDarkMode}
-                      accentClass={accentClass}
-                    />
-                  )}
+                    {activeTab === 'admin' && (
+                      <AdminPanel 
+                        isDarkMode={isDarkMode}
+                        accentClass={accentClass}
+                      />
+                    )}
+                  </Suspense>
                 </motion.div>
               </AnimatePresence>
             </div>

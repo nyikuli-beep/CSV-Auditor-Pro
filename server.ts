@@ -868,6 +868,170 @@ app.post('/api/gemini/analyze-headers', async (req, res) => {
   }
 });
 
+// API: AI-Powered Column Mapping suggestions for different naming standard styles
+app.post('/api/gemini/suggest-column-mappings', async (req, res) => {
+  const { headers, sampleRows, style = 'database' } = req.body;
+
+  if (!headers || !Array.isArray(headers)) {
+    res.status(400).json({ error: 'Headers array is required.' });
+    return;
+  }
+
+  const generateRuleBasedMappingsForStyle = (headersList: string[], samples: Record<string, string>[], targetStyle: string) => {
+    const mappings: Record<string, string> = {};
+    const explanations: Record<string, string> = {};
+
+    headersList.forEach(header => {
+      const lower = header.toLowerCase().replace(/[^a-z0-9]/g, '');
+      let suggested = header;
+      let explanation = '';
+
+      // Semantic category detection
+      let category = 'none';
+      if (lower.includes('id') || lower.includes('txn') || lower.includes('ref') || lower.includes('key') || lower.includes('identifier') || lower.includes('code')) {
+        category = 'id';
+      } else if (lower.includes('date') || lower.includes('time') || lower.includes('created') || lower.includes('timestamp') || lower.includes('day')) {
+        category = 'date';
+      } else if (lower.includes('name') || lower.includes('client') || lower.includes('buyer') || lower.includes('recipient') || lower.includes('customer')) {
+        category = 'name';
+      } else if (lower.includes('email') || lower.includes('mail') || lower.includes('contact') || lower.includes('phone') || lower.includes('address')) {
+        category = 'email';
+      } else if (lower.includes('amount') || lower.includes('price') || lower.includes('total') || lower.includes('pay') || lower.includes('cost') || lower.includes('value') || lower.includes('subtotal') || lower.includes('fee')) {
+        category = 'amount';
+      } else if (lower.includes('category') || lower.includes('type') || lower.includes('class') || lower.includes('tag') || lower.includes('group') || lower.includes('genre')) {
+        category = 'category';
+      } else if (lower.includes('country') || lower.includes('location') || lower.includes('region') || lower.includes('city') || lower.includes('state') || lower.includes('nation') || lower.includes('geo') || lower.includes('us') || lower.includes('uk')) {
+        category = 'country';
+      }
+
+      if (targetStyle === 'database') {
+        if (category === 'id') { suggested = 'transaction_id'; explanation = 'Normalized messy identifier to standard "transaction_id".'; }
+        else if (category === 'date') { suggested = 'transaction_date'; explanation = 'Normalized date/time to standard "transaction_date".'; }
+        else if (category === 'name') { suggested = 'customer_name'; explanation = 'Normalized user/customer name to "customer_name".'; }
+        else if (category === 'email') { suggested = 'email'; explanation = 'Standardized contact info to lowercase "email".'; }
+        else if (category === 'amount') { suggested = 'amount'; explanation = 'Standardized currency/ledger field to "amount".'; }
+        else if (category === 'category') { suggested = 'category'; explanation = 'Standardized categorization field to lowercase "category".'; }
+        else if (category === 'country') { suggested = 'country'; explanation = 'Standardized location field to lowercase "country".'; }
+        else {
+          suggested = header.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+          explanation = 'Formatted original header as database snake_case.';
+        }
+      } else if (targetStyle === 'javascript') {
+        if (category === 'id') { suggested = 'transactionId'; explanation = 'Normalized messy identifier to camelCase "transactionId".'; }
+        else if (category === 'date') { suggested = 'transactionDate'; explanation = 'Normalized date/time to camelCase "transactionDate".'; }
+        else if (category === 'name') { suggested = 'customerName'; explanation = 'Normalized user/customer name to camelCase "customerName".'; }
+        else if (category === 'email') { suggested = 'email'; explanation = 'Standardized contact info to camelCase "email".'; }
+        else if (category === 'amount') { suggested = 'amount'; explanation = 'Standardized currency/ledger field to "amount".'; }
+        else if (category === 'category') { suggested = 'category'; explanation = 'Standardized categorization field to camelCase "category".'; }
+        else if (category === 'country') { suggested = 'country'; explanation = 'Standardized location field to camelCase "country".'; }
+        else {
+          const words = header.replace(/[^a-zA-Z0-9]/g, ' ').split(/\s+/).filter(Boolean);
+          if (words.length > 0) {
+            suggested = words[0].toLowerCase() + words.slice(1).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join('');
+          }
+          explanation = 'Formatted original header as camelCase.';
+        }
+      } else if (targetStyle === 'clean_display') {
+        if (category === 'id') { suggested = 'Transaction ID'; explanation = 'Formatted identifier as Title Case display header.'; }
+        else if (category === 'date') { suggested = 'Transaction Date'; explanation = 'Formatted date/time as Title Case display header.'; }
+        else if (category === 'name') { suggested = 'Customer Name'; explanation = 'Formatted name fields as Title Case display header.'; }
+        else if (category === 'email') { suggested = 'Email'; explanation = 'Formatted email contact as Title Case display header.'; }
+        else if (category === 'amount') { suggested = 'Amount'; explanation = 'Formatted currency field as Title Case display header.'; }
+        else if (category === 'category') { suggested = 'Category'; explanation = 'Formatted categorization column as Title Case display header.'; }
+        else if (category === 'country') { suggested = 'Country'; explanation = 'Formatted location column as Title Case display header.'; }
+        else {
+          suggested = header.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[^a-zA-Z0-9]/g, ' ').split(/\s+/).filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+          explanation = 'Formatted original header as Clean Title Case.';
+        }
+      } else { // canonical
+        if (category === 'id') { suggested = 'Transaction ID'; explanation = 'Mapped to audit-standard canonical "Transaction ID".'; }
+        else if (category === 'date') { suggested = 'Transaction Date'; explanation = 'Mapped to audit-standard canonical "Transaction Date".'; }
+        else if (category === 'name') { suggested = 'Customer Name'; explanation = 'Mapped to audit-standard canonical "Customer Name".'; }
+        else if (category === 'email') { suggested = 'Email / Contact'; explanation = 'Mapped to audit-standard canonical "Email / Contact".'; }
+        else if (category === 'amount') { suggested = 'Amount'; explanation = 'Mapped to audit-standard canonical "Amount".'; }
+        else if (category === 'category') { suggested = 'Category'; explanation = 'Mapped to audit-standard canonical "Category".'; }
+        else if (category === 'country') { suggested = 'Country'; explanation = 'Mapped to audit-standard canonical "Country".'; }
+        else {
+          suggested = header;
+          explanation = 'Preserved original auxiliary column.';
+        }
+      }
+
+      mappings[header] = suggested;
+      explanations[header] = explanation;
+    });
+
+    return { mappings, explanations };
+  };
+
+  const ai = getGeminiClient();
+
+  if (!ai) {
+    console.log(`Gemini API key missing, generating rule-based mappings for style: ${style}`);
+    const result = generateRuleBasedMappingsForStyle(headers, sampleRows || [], style);
+    res.json(result);
+    return;
+  }
+
+  try {
+    const systemInstruction = 
+      "You are an expert data architect, software engineer, and CSV schema standardizer named Gemini Column Standardizer.\n" +
+      "Your objective is to analyze a list of CSV column headers and their corresponding sample data rows, then suggest a recommended standardized renaming mapping to match a target standard naming style.\n" +
+      "The target styles are:\n" +
+      "1. 'database' (snake_case): Recommendations MUST be lowercase snake_case suited for relational databases (e.g., 'cust_id' or 'CustomerID' -> 'customer_id', 'usr_email' -> 'email', 'txnAmount' -> 'amount', 'created_dt' -> 'transaction_date').\n" +
+      "2. 'javascript' (camelCase): Recommendations MUST be camelCase suited for JSON keys/APIs (e.g., 'customer_id' -> 'customerId', 'usr_email' -> 'email', 'txnAmount' -> 'amount', 'created_dt' -> 'transactionDate').\n" +
+      "3. 'clean_display' (Title Case): Recommendations MUST be user-friendly Title Case headers (e.g., 'usr_email' -> 'Email', 'tx_id' -> 'Transaction ID', 'cust_name' -> 'Customer Name', 'txnAmount' -> 'Amount').\n" +
+      "4. 'canonical' (Compliance Fields): Recommendations MUST map to our platform's exact canonical fields: 'Transaction ID', 'Transaction Date', 'Customer Name', 'Email / Contact', 'Amount', 'Category', 'Country'. If a header does not fit these, map to 'None'.\n\n" +
+      "You MUST look past dirty column prefixes (such as 'usr_', 'cust_', 'tx_', 'txn_', 'dt_') and abbreviations, understanding the semantic purpose of each field based on headers and sample records.\n\n" +
+      "Return your response ONLY as a valid JSON object matching this schema:\n" +
+      "{\n" +
+      "  \"mappings\": {\n" +
+      "    \"Original Header Name\": \"Suggested Header Name\"\n" +
+      "  },\n" +
+      "  \"explanations\": {\n" +
+      "    \"Original Header Name\": \"A short, concise explanation of why this mapping was suggested\"\n" +
+      "  }\n" +
+      "}\n" +
+      "Strict Constraint: Return ONLY valid JSON. Do not wrap in markdown or add commentary outside JSON.";
+
+    const promptText = 
+      `Analyze these CSV headers and sample data rows:\n` +
+      `Headers: ${JSON.stringify(headers)}\n` +
+      `Sample Data: ${JSON.stringify((sampleRows || []).slice(0, 3))}\n` +
+      `Target Style Standard: "${style}"\n\n` +
+      `Please provide the JSON mappings.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.5-flash',
+      contents: promptText,
+      config: {
+        systemInstruction: systemInstruction,
+        responseMimeType: 'application/json',
+        temperature: 0.1,
+      }
+    });
+
+    const responseText = response.text || '';
+    try {
+      const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+      const result = JSON.parse(cleanJson);
+      if (result && typeof result.mappings === 'object' && typeof result.explanations === 'object') {
+        res.json(result);
+      } else {
+        throw new Error('Response does not match expected JSON mapping schema.');
+      }
+    } catch (e) {
+      console.warn('Failed to parse Gemini suggest-column-mappings response, falling back to programmatic:', responseText);
+      const result = generateRuleBasedMappingsForStyle(headers, sampleRows || [], style);
+      res.json(result);
+    }
+  } catch (error: any) {
+    console.error('Gemini suggest-column-mappings API failed:', error);
+    const result = generateRuleBasedMappingsForStyle(headers, sampleRows || [], style);
+    res.json(result);
+  }
+});
+
 // Programmatic helper to apply standard formatting fallback
 const programmaticBulkAutoFix = (headers: string[], rows: Record<string, string>[]) => {
   return rows.map(row => {

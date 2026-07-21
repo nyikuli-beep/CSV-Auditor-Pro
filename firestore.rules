@@ -79,11 +79,7 @@ service cloud.firestore {
     }
 
     function isValidDraft(data) {
-      return data.userId is string && data.userId.size() <= 128
-        && data.mappings is map
-        && data.explanations is map
-        && data.updatedAt is string
-        && data.keys().hasAll(['userId', 'mappings', 'explanations', 'updatedAt']);
+      return data.userId is string && data.userId.size() <= 128;
     }
 
     // --- COLLECTION MATCH BLOCKS ---
@@ -127,7 +123,7 @@ service cloud.firestore {
     match /drafts/{userId} {
       allow get: if isSignedIn() && request.auth.uid == userId;
       allow list: if false;
-      allow create, update: if isSignedIn() && request.auth.uid == userId;
+      allow create, update: if isSignedIn() && request.auth.uid == userId && isValidDraft(incoming());
       allow delete: if isSignedIn() && request.auth.uid == userId;
     }
   }

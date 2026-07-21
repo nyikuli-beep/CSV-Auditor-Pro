@@ -35,6 +35,7 @@ interface CleaningCenterProps {
   files?: CSVFile[];
   onUpdateFile: (updatedFile: CSVFile) => void;
   onUpdateFiles?: (updatedFiles: CSVFile[]) => void;
+  onSelectFile?: (file: CSVFile) => void;
   onNavigate: (tab: string) => void;
   isDarkMode: boolean;
   accentClass: string;
@@ -46,6 +47,7 @@ export default function CleaningCenter({
   files = [], 
   onUpdateFile, 
   onUpdateFiles, 
+  onSelectFile,
   onNavigate, 
   isDarkMode, 
   accentClass, 
@@ -116,6 +118,15 @@ export default function CleaningCenter({
   const [patternAction, setPatternAction] = useState('remove'); // 'remove', 'extract', 'split'
   const [newColName, setNewColName] = useState('');
 
+  // AI-Powered Column Mapping Engine State
+  const [isMappingOpen, setIsMappingOpen] = useState(false);
+  const [mappingStyle, setMappingStyle] = useState<'database' | 'javascript' | 'clean_display' | 'canonical'>('database');
+  const [isMappingLoading, setIsMappingLoading] = useState(false);
+  const [mappingSuggestions, setMappingSuggestions] = useState<Record<string, string>>({});
+  const [mappingExplanations, setMappingExplanations] = useState<Record<string, string>>({});
+  const [editableMappings, setEditableMappings] = useState<Record<string, string>>({});
+  const [selectedMappings, setSelectedMappings] = useState<Record<string, boolean>>({});
+
   // Print Modal Configuration State
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [printTitle, setPrintTitle] = useState(activeFile ? `CSV Auditor Report: ${activeFile.name}` : 'CSV Auditor Report');
@@ -139,6 +150,13 @@ export default function CleaningCenter({
       setPrintTitle(`CSV Auditor Report: ${activeFile.name}`);
       setCurrentPage(1);
       setCleaningMode('single');
+      
+      // Reset AI mapping states
+      setIsMappingOpen(false);
+      setMappingSuggestions({});
+      setMappingExplanations({});
+      setEditableMappings({});
+      setSelectedMappings({});
     }
   }, [activeFile?.id]);
 
@@ -153,7 +171,7 @@ export default function CleaningCenter({
 
     await new Promise(resolve => setTimeout(resolve, 800));
 
-    const selectedFiles = files.filter(f => selectedFileIds.includes(f.id) && f.status === 'completed');
+    const selectedFiles = files.filter(f => selectedFileIds.includes(f.id) && f.status !== 'failed');
     const updatedFilesList: CSVFile[] = [];
     const reportList: any[] = [];
     const progressStepSize = 100 / selectedFiles.length;
@@ -354,7 +372,7 @@ export default function CleaningCenter({
 
   // Switch modes check
   if (cleaningMode === 'batch') {
-    const filteredFiles = files.filter(f => f.status === 'completed' && f.name.toLowerCase().includes(batchSearch.toLowerCase()));
+    const filteredFiles = files.filter(f => f.status !== 'failed' && f.name.toLowerCase().includes(batchSearch.toLowerCase()));
 
     return (
       <div className="space-y-8 animate-fadeIn">
@@ -427,7 +445,7 @@ export default function CleaningCenter({
 
               <div className="flex gap-2 text-[10px] font-bold">
                 <button
-                  onClick={() => setSelectedFileIds(files.filter(f => f.status === 'completed').map(f => f.id))}
+                  onClick={() => setSelectedFileIds(files.filter(f => f.status !== 'failed').map(f => f.id))}
                   className="px-2.5 py-1 rounded bg-slate-800/60 hover:bg-slate-800 text-slate-300 transition-colors uppercase cursor-pointer"
                 >
                   Select All
@@ -763,7 +781,7 @@ export default function CleaningCenter({
               </p>
             </div>
 
-            {files.filter(f => f.status === 'completed').length === 0 ? (
+            {files.filter(f => f.status !== 'failed').length === 0 ? (
               <button 
                 onClick={() => onNavigate('upload')}
                 className={`w-full py-3 text-xs font-bold uppercase rounded-xl text-white tracking-wider shadow cursor-pointer text-center ${accentClass}`}
@@ -772,7 +790,7 @@ export default function CleaningCenter({
               </button>
             ) : (
               <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
-                {files.filter(f => f.status === 'completed').map(file => (
+                {files.filter(f => f.status !== 'failed').map(file => (
                   <div 
                     key={file.id}
                     onClick={() => {
@@ -802,7 +820,7 @@ export default function CleaningCenter({
             <button
               onClick={() => {
                 setCleaningMode('batch');
-                setSelectedFileIds(files.filter(f => f.status === 'completed').map(f => f.id));
+                setSelectedFileIds(files.filter(f => f.status !== 'failed').map(f => f.id));
               }}
               className="w-full py-3 text-xs font-bold uppercase rounded-xl tracking-wider text-white shadow cursor-pointer text-center bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500"
             >
@@ -875,6 +893,107 @@ export default function CleaningCenter({
 
     const removedCount = currentRows.length - uniqueRows.length;
     pushState(uniqueRows, `Deduplicated rows: Removed ${removedCount} matching duplicate record(s).`);
+  };
+
+  const fetchMappingSuggestions = async () => {
+    if (!activeFile) return;
+    setIsMappingLoading(true);
+    try {
+      const response = await fetch('/api/gemini/suggest-column-mappings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          headers: currentHeaders,
+          sampleRows: currentRows.slice(0, 3),
+          style: mappingStyle
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const suggestions = data.mappings || {};
+        const explanations = data.explanations || {};
+        
+        setMappingSuggestions(suggestions);
+        setMappingExplanations(explanations);
+        setEditableMappings({ ...suggestions });
+        
+        // Auto-select suggestions that actually change the header name
+        const initialSelected: Record<string, boolean> = {};
+        currentHeaders.forEach(h => {
+          const suggested = suggestions[h];
+          initialSelected[h] = suggested !== undefined && suggested !== h;
+        });
+        setSelectedMappings(initialSelected);
+      } else {
+        throw new Error('Failed to fetch standard column mapping recommendations.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert("An error occurred while fetching column mapping recommendations. Using fallback system.");
+    } finally {
+      setIsMappingLoading(false);
+    }
+  };
+
+  const applyColumnMappings = () => {
+    if (!activeFile) return;
+
+    // Filter to only those mappings that are selected
+    const mappingMap: Record<string, string> = {};
+    const finalHeaders: string[] = [];
+
+    currentHeaders.forEach(h => {
+      if (selectedMappings[h] && editableMappings[h] && editableMappings[h].trim() !== '') {
+        const targetName = editableMappings[h].trim();
+        mappingMap[h] = targetName;
+        finalHeaders.push(targetName);
+      } else {
+        finalHeaders.push(h);
+      }
+    });
+
+    const activeMappingsCount = Object.keys(mappingMap).length;
+    if (activeMappingsCount === 0) {
+      alert("No valid column mappings selected to apply.");
+      return;
+    }
+
+    // Check for duplicates
+    const uniqueFinal = new Set(finalHeaders);
+    if (uniqueFinal.size !== finalHeaders.length) {
+      alert("Error: Mapping would result in duplicate column names. Please ensure all target column names are unique.");
+      return;
+    }
+
+    // Map row object keys
+    const renamedRows = currentRows.map(row => {
+      const newRow: Record<string, string> = {};
+      currentHeaders.forEach(h => {
+        const value = row[h] || '';
+        const targetName = mappingMap[h] || h;
+        newRow[targetName] = value;
+      });
+      return newRow;
+    });
+
+    const mappedDetails = Object.entries(mappingMap)
+      .map(([orig, dest]) => `"${orig}" ➔ "${dest}"`)
+      .join(', ');
+
+    pushState(
+      renamedRows,
+      `AI Column Mapping: Standardized ${activeMappingsCount} column(s) to ${mappingStyle} style (${mappedDetails}).`,
+      finalHeaders
+    );
+
+    // Reset suggestions
+    setMappingSuggestions({});
+    setMappingExplanations({});
+    setEditableMappings({});
+    setSelectedMappings({});
   };
 
   const standardizeDates = () => {
@@ -1640,22 +1759,48 @@ export default function CleaningCenter({
           </p>
         </div>
 
-        {/* Undo Redo controls */}
-        <div className="flex gap-2">
-          <button 
-            onClick={handleUndo}
-            disabled={historyIndex === 0 || isViewer}
-            className={`p-2.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 hover:bg-slate-800/40 transition-all ${historyIndex === 0 ? 'opacity-40 cursor-not-allowed' : ''} ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-200'}`}
-          >
-            <RotateCcw className="w-4 h-4" /> Undo
-          </button>
-          <button 
-            onClick={handleRedo}
-            disabled={historyIndex === history.length - 1 || isViewer}
-            className={`p-2.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 hover:bg-slate-800/40 transition-all ${historyIndex === history.length - 1 ? 'opacity-40 cursor-not-allowed' : ''} ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-200'}`}
-          >
-            <RotateCw className="w-4 h-4" /> Redo
-          </button>
+        {/* Undo Redo & Switch File controls */}
+        <div className="flex items-center gap-3 flex-wrap md:flex-nowrap">
+          <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5">
+            <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider select-none mr-1">Dataset:</span>
+            <select
+              value={activeFile?.id || ''}
+              onChange={(e) => {
+                const targetFile = files.find(f => f.id === e.target.value);
+                if (targetFile) {
+                  if (onSelectFile) {
+                    onSelectFile(targetFile);
+                  } else {
+                    onUpdateFile(targetFile);
+                  }
+                }
+              }}
+              className="bg-transparent text-slate-100 font-bold text-xs focus:outline-none cursor-pointer max-w-[150px] md:max-w-[200px] truncate"
+            >
+              {files.filter(f => f.status !== 'failed').map(f => (
+                <option key={f.id} value={f.id} className="bg-slate-950 text-slate-100">
+                  {f.name} ({f.score}% rating)
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex gap-2">
+            <button 
+              onClick={handleUndo}
+              disabled={historyIndex === 0 || isViewer}
+              className={`p-2.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 hover:bg-slate-800/40 transition-all ${historyIndex === 0 ? 'opacity-40 cursor-not-allowed' : ''} ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-200'}`}
+            >
+              <RotateCcw className="w-4 h-4" /> Undo
+            </button>
+            <button 
+              onClick={handleRedo}
+              disabled={historyIndex === history.length - 1 || isViewer}
+              className={`p-2.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 hover:bg-slate-800/40 transition-all ${historyIndex === history.length - 1 ? 'opacity-40 cursor-not-allowed' : ''} ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-200'}`}
+            >
+              <RotateCw className="w-4 h-4" /> Redo
+            </button>
+          </div>
         </div>
       </div>
 
@@ -2216,6 +2361,169 @@ export default function CleaningCenter({
                     >
                       <Sparkles className="w-3.5 h-3.5 text-yellow-300" /> Execute Pattern Sanitize
                     </button>
+                  </div>
+                )}
+              </div>
+
+              {/* AI Column Mapping Accordion */}
+              <div className={`rounded-xl border transition-all ${
+                isMappingOpen 
+                  ? 'border-purple-500/40 bg-purple-500/5 shadow-xs' 
+                  : 'hover:bg-purple-500/5 hover:border-purple-500/30 border-slate-800/80 bg-slate-950/60'
+              }`}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMappingOpen(!isMappingOpen);
+                    setIsSplitterOpen(false);
+                    setIsValidationOpen(false);
+                    setIsPatternOpen(false);
+                  }}
+                  disabled={isViewer}
+                  className="w-full p-4 text-left flex gap-3.5 items-start cursor-pointer group disabled:opacity-50"
+                >
+                  <div className="p-2 bg-purple-500/10 text-purple-400 rounded-lg group-hover:bg-purple-500/20">
+                    <Database className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center">
+                      <h4 className="font-bold text-xs flex items-center gap-1.5 text-slate-200">
+                        AI Column Mapping Standardizer
+                        <Sparkles className="w-3 h-3 text-purple-400 animate-pulse" />
+                      </h4>
+                      <ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isMappingOpen ? 'rotate-90 text-purple-400' : ''}`} />
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Map messy header names (e.g., usr_email) to database snake_case, camelCase, or Canonical standards using AI.</p>
+                  </div>
+                </button>
+
+                {isMappingOpen && (
+                  <div className={`p-4 border-t px-5 space-y-4 text-xs ${isDarkMode ? 'border-slate-800/80 text-slate-200' : 'border-slate-150 text-slate-700'}`}>
+                    
+                    {/* Convention Style Select */}
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Target Naming Convention</label>
+                      <select
+                        value={mappingStyle}
+                        onChange={(e) => setMappingStyle(e.target.value as any)}
+                        className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-purple-500 ${
+                          isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                        }`}
+                      >
+                        <option value="database">Database Style (snake_case - e.g. customer_id)</option>
+                        <option value="javascript">API/JS Style (camelCase - e.g. customerId)</option>
+                        <option value="clean_display">Display Style (Title Case - e.g. Customer ID)</option>
+                        <option value="canonical">Compliance Canonical (Platform Standard - e.g. Transaction ID)</option>
+                      </select>
+                    </div>
+
+                    {/* Suggestions trigger button */}
+                    <button
+                      type="button"
+                      onClick={fetchMappingSuggestions}
+                      disabled={isMappingLoading}
+                      className={`w-full py-2 rounded-lg text-xs font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md bg-purple-600 hover:bg-purple-500 disabled:opacity-50`}
+                    >
+                      {isMappingLoading ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          Analyzing Headers with AI...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
+                          Suggest Naming Mappings
+                        </>
+                      )}
+                    </button>
+
+                    {/* Mapping List / Output Table */}
+                    {Object.keys(mappingSuggestions).length > 0 && (
+                      <div className="space-y-3.5 pt-2 border-t border-slate-800/60 animate-slideDown">
+                        <div className="flex justify-between items-center">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">AI Suggested Mappings</label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const allSelected = Object.values(selectedMappings).every(v => v);
+                              const nextSelected: Record<string, boolean> = {};
+                              currentHeaders.forEach(h => {
+                                nextSelected[h] = !allSelected;
+                              });
+                              setSelectedMappings(nextSelected);
+                            }}
+                            className="text-[9px] font-bold text-purple-400 hover:underline cursor-pointer"
+                          >
+                            Toggle All
+                          </button>
+                        </div>
+
+                        <div className="max-h-[300px] overflow-y-auto pr-1 space-y-2.5">
+                          {currentHeaders.map((header) => {
+                            const suggested = editableMappings[header] || '';
+                            const originalSuggested = mappingSuggestions[header] || '';
+                            const explanation = mappingExplanations[header] || 'Standardized heading name.';
+                            const isSelected = !!selectedMappings[header];
+                            const isChanged = suggested !== header;
+
+                            return (
+                              <div 
+                                key={header}
+                                className={`p-2.5 rounded-lg border transition-all ${
+                                  isSelected 
+                                    ? 'bg-purple-500/5 border-purple-500/20' 
+                                    : 'bg-slate-950/20 border-slate-800/40'
+                                }`}
+                              >
+                                <div className="flex items-start gap-2">
+                                  {/* Custom Checkbox */}
+                                  <input 
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={(e) => setSelectedMappings(prev => ({ ...prev, [header]: e.target.checked }))}
+                                    className="mt-0.5 rounded border-slate-700 text-purple-600 focus:ring-purple-500/40 cursor-pointer h-3.5 w-3.5 bg-slate-900"
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    {/* Compare display */}
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 truncate max-w-[120px]">
+                                        {header}
+                                      </span>
+                                      <ArrowRight className="w-3 h-3 text-slate-500" />
+                                      <input
+                                        type="text"
+                                        value={suggested}
+                                        onChange={(e) => setEditableMappings(prev => ({ ...prev, [header]: e.target.value }))}
+                                        className={`px-2 py-0.5 rounded text-[10px] font-semibold w-full sm:w-auto font-mono max-w-[140px] focus:outline-none focus:ring-1 focus:ring-purple-500 ${
+                                          isChanged 
+                                            ? 'bg-purple-500/10 text-purple-300 border border-purple-500/30' 
+                                            : 'bg-slate-900 border border-slate-800 text-slate-400'
+                                        }`}
+                                      />
+                                    </div>
+                                    <p className="text-[9px] text-slate-400 mt-1 leading-relaxed">
+                                      {explanation}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Apply Button */}
+                        <div className="pt-2">
+                          <button
+                            type="button"
+                            onClick={applyColumnMappings}
+                            className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <Check className="w-3.5 h-3.5 text-white" />
+                            Apply Selected Column Renaming
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
