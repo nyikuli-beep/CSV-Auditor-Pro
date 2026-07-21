@@ -22,7 +22,8 @@ import {
   Menu,
   X,
   MessageSquare,
-  History
+  History,
+  ShieldCheck
 } from 'lucide-react';
 
 // Import Types
@@ -45,6 +46,7 @@ const TeamCollaboration = lazy(() => import('./components/TeamCollaboration'));
 const SettingsView = lazy(() => import('./components/SettingsView'));
 const AdminPanel = lazy(() => import('./components/AdminPanel'));
 const GmailCenter = lazy(() => import('./components/GmailCenter'));
+const SchemaManager = lazy(() => import('./components/SchemaManager'));
 import CookieBanner, { getCookie, setCookie } from './components/CookieBanner';
 
 // Loading spinner fallback optimized for instant render on 2GB RAM devices
@@ -898,6 +900,7 @@ export default function App() {
                       {[
                         { id: 'dashboard', label: 'Dashboard Home', icon: BarChart3 },
                         { id: 'upload', label: 'Upload Center', icon: Upload },
+                        { id: 'schema', label: 'Schema Validator', icon: ShieldCheck },
                         { id: 'results', label: 'Audit Findings', icon: Sparkles, badge: activeFile ? activeFile.issues.length : 0 },
                         { id: 'clean', label: 'Hygiene Workspace', icon: Trash2 },
                         { id: 'insights', label: 'AI Intelligence', icon: MessageSquare },
@@ -999,6 +1002,7 @@ export default function App() {
                 {[
                   { id: 'dashboard', label: 'Dashboard Home', icon: BarChart3 },
                   { id: 'upload', label: 'Upload Center', icon: Upload },
+                  { id: 'schema', label: 'Schema Validator', icon: ShieldCheck },
                   { id: 'results', label: 'Audit Findings', icon: Sparkles, badge: activeFile ? activeFile.issues.length : 0 },
                   { id: 'clean', label: 'Hygiene Workspace', icon: Trash2 },
                   { id: 'insights', label: 'AI Intelligence', icon: MessageSquare },
@@ -1069,6 +1073,7 @@ export default function App() {
                   <h2 className={`text-sm md:text-base font-semibold ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
                     {activeTab === 'dashboard' && 'Main Workspace'}
                     {activeTab === 'upload' && 'Spreadsheet Ingestion'}
+                    {activeTab === 'schema' && 'Schema Compliance'}
                     {activeTab === 'results' && 'Audit Findings'}
                     {activeTab === 'clean' && 'Hygiene Laboratory'}
                     {activeTab === 'insights' && 'AI Intelligence Core'}
@@ -1142,6 +1147,17 @@ export default function App() {
                       <UploadCenter 
                         onFileUpload={handleNewFileUpload}
                         files={files}
+                        isDarkMode={isDarkMode}
+                        accentClass={accentClass}
+                      />
+                    )}
+
+                    {activeTab === 'schema' && (
+                      <SchemaManager 
+                        files={files}
+                        activeFile={activeFile}
+                        onSelectFile={handleSelectActiveFile}
+                        onNavigate={handleNavigateTab}
                         isDarkMode={isDarkMode}
                         accentClass={accentClass}
                       />
