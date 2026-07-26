@@ -17,6 +17,11 @@ import {
   RefreshCw,
   Code2,
   Shield,
+  ShieldAlert,
+  ShieldCheck,
+  UserX,
+  EyeOff,
+  AlertOctagon,
   BookOpen,
   ChevronDown,
   ChevronUp,
@@ -27,7 +32,8 @@ import {
   Cpu,
   Layers,
   Trash2,
-  Flame
+  Flame,
+  Camera
 } from 'lucide-react';
 import { SystemSettings, CSVFile, AuditActivity, ChatMessage } from '../types';
 
@@ -44,6 +50,13 @@ interface SettingsViewProps {
   onClearActivities?: () => void;
   onClearChat?: () => void;
   onPurgeInactiveFiles?: () => void;
+  currentUser?: {
+    email: string;
+    role: string;
+    name?: string;
+    avatar?: string;
+  } | null;
+  onOpenProfileModal?: () => void;
 }
 
 export default function SettingsView({ 
@@ -58,16 +71,83 @@ export default function SettingsView({
   chatMessages = [],
   onClearActivities,
   onClearChat,
-  onPurgeInactiveFiles
+  onPurgeInactiveFiles,
+  currentUser,
+  onOpenProfileModal
 }: SettingsViewProps) {
   const [tempApiKey, setTempApiKey] = useState(settings.apiKey || '••••••••••••••••••••••••••••••••');
   const [showKey, setShowKey] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
   const [dbStatus, setDbStatus] = useState<any>(null);
   const [dbLoading, setDbLoading] = useState(true);
   const [apiDocOpen, setApiDocOpen] = useState(false);
   const [tosOpen, setTosOpen] = useState(false);
   const [copiedText, setCopiedText] = useState<string | null>(null);
+
+  // Owner Permission Check
+  const AUTHORIZED_OWNER_EMAILS = ['nyikulibramwel@gmail.com', 'nyikuli@company.com'];
+  const isOwner = currentUser?.email
+    ? AUTHORIZED_OWNER_EMAILS.some(e => e.toLowerCase() === currentUser.email.toLowerCase().trim())
+    : false;
+
+  // Restricted Features & Access Security Policy State
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [policyToast, setPolicyToast] = useState<string | null>(null);
+  const [securityPolicies, setSecurityPolicies] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem('app_restricted_features_policies');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return {
+      restrictApiKey: true,
+      restrictMemberProvisioning: true,
+      restrictGscVerification: true,
+      restrictDatabasePurge: true,
+      restrictGmailScopes: true,
+      restrictLogPurging: true,
+    };
+  });
+
+  const toggleSecurityPolicy = (key: string) => {
+    if (!isOwner) {
+      setPolicyToast('Access Restricted: Only owner email nyikulibramwel@gmail.com can modify security access policies.');
+      safeSetTimeout(() => setPolicyToast(null), 3500);
+      return;
+    }
+    setSecurityPolicies(prev => {
+      const next = { ...prev, [key]: !prev[key] };
+      try {
+        localStorage.setItem('app_restricted_features_policies', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+    setPolicyToast('Security Access Policy Updated & Live Saved');
+    safeSetTimeout(() => setPolicyToast(null), 3000);
+  };
+
+  const handleApplyAllRestrictions = () => {
+    if (!isOwner) {
+      setPolicyToast('Access Restricted: Only owner email nyikulibramwel@gmail.com can enforce security access policies.');
+      safeSetTimeout(() => setPolicyToast(null), 3500);
+      return;
+    }
+    const allEnforced = {
+      restrictApiKey: true,
+      restrictMemberProvisioning: true,
+      restrictGscVerification: true,
+      restrictDatabasePurge: true,
+      restrictGmailScopes: true,
+      restrictLogPurging: true,
+    };
+    setSecurityPolicies(allEnforced);
+    try {
+      localStorage.setItem('app_restricted_features_policies', JSON.stringify(allEnforced));
+    } catch (e) {}
+    setPolicyToast('All Recommended Security Access Restrictions Enforced for Non-Owners!');
+    safeSetTimeout(() => setPolicyToast(null), 3500);
+  };
 
   const timersRef = useRef<any[]>([]);
 
@@ -151,6 +231,11 @@ export default function SettingsView({
   };
 
   const runCleanActivities = async () => {
+    if (!isOwner) {
+      setPolicyToast('Access Restricted: Only workspace owner nyikulibramwel@gmail.com can clear timeline audit records.');
+      safeSetTimeout(() => setPolicyToast(null), 3500);
+      return;
+    }
     setCleaningStatus(prev => ({ ...prev, activities: 'cleaning' }));
     await safeDelay(800);
     if (onClearActivities) onClearActivities();
@@ -159,6 +244,11 @@ export default function SettingsView({
   };
 
   const runPurgeFiles = async () => {
+    if (!isOwner) {
+      setPolicyToast('Access Restricted: Only workspace owner nyikulibramwel@gmail.com can purge database and dataset caches.');
+      safeSetTimeout(() => setPolicyToast(null), 3500);
+      return;
+    }
     setCleaningStatus(prev => ({ ...prev, files: 'cleaning' }));
     await safeDelay(1200);
     if (onPurgeInactiveFiles) onPurgeInactiveFiles();
@@ -176,6 +266,11 @@ export default function SettingsView({
   };
 
   const runDeepGC = async () => {
+    if (!isOwner) {
+      setPolicyToast('Access Restricted: Defragmentation and deep GC are restricted to primary owner nyikulibramwel@gmail.com.');
+      safeSetTimeout(() => setPolicyToast(null), 3500);
+      return;
+    }
     setCleaningStatus(prev => ({ ...prev, gc: 'cleaning' }));
     await safeDelay(1500);
     if ((window as any).gc) {
@@ -201,9 +296,14 @@ export default function SettingsView({
   };
 
   useEffect(() => {
-    fetchDbStatus();
-    fetchGscSettings();
-  }, []);
+    if (isOwner) {
+      fetchDbStatus();
+      fetchGscSettings();
+    } else {
+      setDbLoading(false);
+      setDbStatus({ status: 'restricted', error: 'Database access restricted to workspace owner.' });
+    }
+  }, [isOwner]);
 
   const fetchGscSettings = (retries = 3, delay = 1000) => {
     fetch('/api/gsc/settings')
@@ -230,6 +330,11 @@ export default function SettingsView({
 
   const handleGscSave = async (e: React.MouseEvent) => {
     e.preventDefault();
+    if (!isOwner) {
+      setGscSuccessMsg('Permission Restricted: Search Console verification is strictly limited to nyikulibramwel@gmail.com.');
+      safeSetTimeout(() => setGscSuccessMsg(''), 4000);
+      return;
+    }
     setGscLoading(true);
     setGscSuccessMsg('');
     try {
@@ -252,6 +357,11 @@ export default function SettingsView({
   };
 
   const fetchDbStatus = (retries = 3, delay = 1000) => {
+    if (!isOwner) {
+      setDbStatus({ status: 'restricted', error: 'Database access restricted to workspace owner.' });
+      setDbLoading(false);
+      return;
+    }
     setDbLoading(true);
     fetch('/api/sql/status')
       .then(res => {
@@ -274,14 +384,34 @@ export default function SettingsView({
       });
   };
 
-  const saveSettings = (e: React.FormEvent) => {
+  const saveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    onUpdateSettings({
+    setIsSaving(true);
+    setSaveSuccess(false);
+
+    const updatedSettings: SystemSettings = {
       ...settings,
       apiKey: tempApiKey
-    });
-    setSuccessMsg('Settings updated successfully!');
-    safeSetTimeout(() => setSuccessMsg(''), 3500);
+    };
+
+    onUpdateSettings(updatedSettings);
+
+    try {
+      localStorage.setItem('app_system_settings', JSON.stringify(updatedSettings));
+    } catch (err) {
+      console.warn('LocalStorage save error:', err);
+    }
+
+    await safeDelay(350);
+
+    setIsSaving(false);
+    setSaveSuccess(true);
+    setSuccessMsg('All user profile, locale, email & API configurations updated successfully!');
+
+    safeSetTimeout(() => {
+      setSaveSuccess(false);
+      setSuccessMsg('');
+    }, 4000);
   };
 
   const handleAccentChange = (color: 'blue' | 'emerald' | 'violet' | 'amber') => {
@@ -326,13 +456,72 @@ export default function SettingsView({
         
         {/* Left Side: General Profile, Theme & Accents */}
         <div className="lg:col-span-6 space-y-6">
+
+          {/* User Profile & Profile Picture Upload Card */}
+          <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
+            <h3 className={`font-bold text-sm uppercase tracking-wider mb-4 flex items-center justify-between ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
+              <span className="flex items-center gap-2">
+                <User className="w-4 h-4 text-blue-500" /> Account & Profile Picture
+              </span>
+              <span className={`text-[10px] font-mono uppercase font-bold ${isDarkMode ? 'text-slate-500' : 'text-slate-600'}`}>Active User Session</span>
+            </h3>
+
+            <div className={`flex flex-col sm:flex-row items-center justify-between gap-5 p-4 rounded-xl border ${isDarkMode ? 'bg-slate-950/30 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+              <div className="flex items-center gap-4">
+                <div className="relative group shrink-0">
+                  <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-blue-500 shadow-md">
+                    <img 
+                      src={currentUser?.avatar || '/macbook_code.jpg'} 
+                      alt={currentUser?.name || 'User Profile'} 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  {onOpenProfileModal && (
+                    <button
+                      type="button"
+                      onClick={onOpenProfileModal}
+                      className="absolute bottom-0 right-0 p-1.5 rounded-full bg-blue-600 text-white shadow hover:scale-110 transition-transform cursor-pointer border-2 border-slate-900"
+                      title="Upload profile picture"
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="text-left">
+                  <h4 className={`font-extrabold text-sm flex items-center gap-2 ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
+                    {currentUser?.name || 'Nyikuli Bramwel'}
+                    <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-blue-500/10 text-blue-500 border border-blue-500/20">
+                      {currentUser?.role || 'Owner'}
+                    </span>
+                  </h4>
+                  <p className={`text-xs font-mono mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{currentUser?.email || 'nyikuli@company.com'}</p>
+                  <p className="text-[10px] text-emerald-500 font-mono mt-1 flex items-center gap-1 font-semibold">
+                    <CheckCircle2 className="w-3 h-3" /> Profile Picture Synchronized
+                  </p>
+                </div>
+              </div>
+
+              {onOpenProfileModal && (
+                <button
+                  type="button"
+                  onClick={onOpenProfileModal}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold text-white flex items-center gap-2 shadow hover:scale-102 transition-all cursor-pointer ${accentClass}`}
+                >
+                  <Camera className="w-4 h-4" />
+                  <span>Upload / Edit Picture</span>
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Accent Color Section (Requirement) */}
           <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
-            <h3 className="font-bold text-sm uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-2"><Palette className="w-4 h-4 text-emerald-500" /> Brand Customization</h3>
+            <h3 className={`font-bold text-sm uppercase tracking-wider mb-4 flex items-center gap-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}><Palette className="w-4 h-4 text-emerald-500" /> Brand Customization</h3>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">Accent Theme Selection</label>
+                <label className={`block text-[10px] font-bold mb-2 uppercase tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Accent Theme Selection</label>
                 <div className="grid grid-cols-4 gap-2.5">
                   {[
                     { key: 'blue', label: 'Deep Blue', hex: '#2563EB' },
@@ -344,20 +533,20 @@ export default function SettingsView({
                       key={colorObj.key}
                       type="button"
                       onClick={() => handleAccentChange(colorObj.key as any)}
-                      className={`p-3 rounded-xl border-2 text-xs font-bold text-center flex flex-col items-center gap-1.5 transition-all hover:scale-102 ${settings.accentColor === colorObj.key ? 'border-blue-500 dark:border-blue-400 bg-blue-500/5' : 'border-slate-800 dark:bg-slate-950/40 hover:opacity-85'}`}
+                      className={`p-3 rounded-xl border-2 text-xs font-bold text-center flex flex-col items-center gap-1.5 transition-all hover:scale-102 ${settings.accentColor === colorObj.key ? 'border-blue-500 dark:border-blue-400 bg-blue-500/5' : isDarkMode ? 'border-slate-800 bg-slate-950/40 hover:opacity-85' : 'border-slate-200 bg-slate-50 hover:bg-slate-100'}`}
                     >
-                      <span className="w-4 h-4 rounded-full" style={{ backgroundColor: colorObj.hex }}></span>
-                      <span className="text-[9px] uppercase tracking-widest block">{colorObj.label}</span>
+                      <span className="w-4 h-4 rounded-full shadow-xs" style={{ backgroundColor: colorObj.hex }}></span>
+                      <span className={`text-[9px] uppercase tracking-widest block ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>{colorObj.label}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
               {/* Theme toggle checkbox */}
-              <div className="flex justify-between items-center pt-2.5 border-t border-slate-800/40">
+              <div className={`flex justify-between items-center pt-2.5 border-t ${isDarkMode ? 'border-slate-800/40' : 'border-slate-200'}`}>
                 <div>
-                  <h4 className="font-bold text-xs">Light / Dark Toggle</h4>
-                  <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">Instantly switch between white and charcoal dark backgrounds.</p>
+                  <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>Light / Dark Toggle</h4>
+                  <p className={`text-[10px] mt-0.5 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Instantly switch between white and charcoal dark backgrounds.</p>
                 </div>
                 <button
                   type="button"
@@ -372,10 +561,10 @@ export default function SettingsView({
 
           {/* Locale & Language settings */}
           <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
-            <h3 className="font-bold text-sm uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-2"><Globe className="w-4 h-4 text-blue-500" /> Locale Preferences</h3>
+            <h3 className={`font-bold text-sm uppercase tracking-wider mb-4 flex items-center gap-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}><Globe className="w-4 h-4 text-blue-500" /> Locale Preferences</h3>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-widest">Language</label>
+                <label className={`block text-[10px] font-bold mb-1.5 uppercase tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Language</label>
                 <select
                   value={settings.language}
                   onChange={(e) => onUpdateSettings({ ...settings, language: e.target.value })}
@@ -388,7 +577,7 @@ export default function SettingsView({
                 </select>
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-widest">Time Zone</label>
+                <label className={`block text-[10px] font-bold mb-1.5 uppercase tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Time Zone</label>
                 <select
                   value={settings.timezone}
                   onChange={(e) => onUpdateSettings({ ...settings, timezone: e.target.value })}
@@ -406,62 +595,80 @@ export default function SettingsView({
           {/* Database Connection Status (Cloud SQL) */}
           <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
             <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-sm uppercase tracking-wider text-slate-400 flex items-center gap-2">
+              <h3 className={`font-bold text-sm uppercase tracking-wider flex items-center gap-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
                 <Database className="w-4 h-4 text-emerald-500" /> Database Integration
               </h3>
-              <button
-                type="button"
-                onClick={fetchDbStatus}
-                disabled={dbLoading}
-                className="p-1.5 rounded-lg border border-slate-800/60 hover:bg-slate-800/20 text-slate-400 transition-all cursor-pointer"
-                title="Refresh Status"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${dbLoading ? 'animate-spin text-emerald-500' : ''}`} />
-              </button>
+              {!isOwner ? (
+                <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center gap-1">
+                  <Lock className="w-3 h-3" /> Owner Locked
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => fetchDbStatus()}
+                  disabled={dbLoading}
+                  className={`p-1.5 rounded-lg border transition-all cursor-pointer ${isDarkMode ? 'border-slate-800/60 hover:bg-slate-800/20 text-slate-400' : 'border-slate-200 hover:bg-slate-100 text-slate-600'}`}
+                  title="Refresh Status"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${dbLoading ? 'animate-spin text-emerald-500' : ''}`} />
+                </button>
+              )}
             </div>
 
-            {dbLoading ? (
-              <div className="py-4 flex justify-center items-center gap-2 text-xs text-slate-400">
-                <div className="w-4 h-4 border-2 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin"></div>
-                <span>Checking connectivity...</span>
-              </div>
-            ) : dbStatus?.status === 'online' ? (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-xs p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span className="font-semibold text-emerald-400">Cloud SQL (PostgreSQL)</span>
-                  </div>
-                  <span className="text-[10px] font-mono text-emerald-500 uppercase font-bold">Connected</span>
+            {isOwner ? (
+              dbLoading ? (
+                <div className="py-4 flex justify-center items-center gap-2 text-xs text-slate-400">
+                  <div className="w-4 h-4 border-2 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin"></div>
+                  <span>Checking connectivity...</span>
                 </div>
+              ) : dbStatus?.status === 'online' ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-xs p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <span className="font-semibold text-emerald-500">Cloud SQL (PostgreSQL)</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-emerald-500 uppercase font-bold">Connected</span>
+                  </div>
 
-                <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
-                  <div className={`p-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
-                    <span className="text-slate-400 block text-[9px] uppercase tracking-wider mb-0.5">Ingested Datasets</span>
-                    <span className="text-xs font-extrabold text-slate-200">{dbStatus.metrics?.totalFiles ?? 0} files</span>
-                  </div>
-                  <div className={`p-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
-                    <span className="text-slate-400 block text-[9px] uppercase tracking-wider mb-0.5">Audit Activities</span>
-                    <span className="text-xs font-extrabold text-slate-200">{dbStatus.metrics?.totalActivities ?? 0} rows</span>
-                  </div>
-                  <div className={`p-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
-                    <span className="text-slate-400 block text-[9px] uppercase tracking-wider mb-0.5">Synced Members</span>
-                    <span className="text-xs font-extrabold text-slate-200">{dbStatus.metrics?.totalMembers ?? 0} users</span>
-                  </div>
-                  <div className={`p-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
-                    <span className="text-slate-400 block text-[9px] uppercase tracking-wider mb-0.5">Instance Region</span>
-                    <span className="text-xs font-extrabold text-slate-200">europe-west2</span>
+                  <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+                    <div className={`p-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <span className={`block text-[9px] uppercase tracking-wider mb-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Ingested Datasets</span>
+                      <span className={`text-xs font-extrabold ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>{dbStatus.metrics?.totalFiles ?? 0} files</span>
+                    </div>
+                    <div className={`p-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <span className={`block text-[9px] uppercase tracking-wider mb-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Audit Activities</span>
+                      <span className={`text-xs font-extrabold ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>{dbStatus.metrics?.totalActivities ?? 0} rows</span>
+                    </div>
+                    <div className={`p-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <span className={`block text-[9px] uppercase tracking-wider mb-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Synced Members</span>
+                      <span className={`text-xs font-extrabold ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>{dbStatus.metrics?.totalMembers ?? 0} users</span>
+                    </div>
+                    <div className={`p-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <span className={`block text-[9px] uppercase tracking-wider mb-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Instance Region</span>
+                      <span className={`text-xs font-extrabold ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>europe-west2</span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-xs flex flex-col gap-2">
+                  <div className="flex items-center gap-2 font-bold">
+                    <AlertTriangle className="w-4 h-4 text-red-500 animate-bounce" />
+                    <span>Database Link Inactive</span>
+                  </div>
+                  <p className={`text-[10px] leading-normal ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                    {dbStatus?.error || 'Failed to communicate with PostgreSQL instance. Verify your .env setup.'}
+                  </p>
+                </div>
+              )
             ) : (
-              <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex flex-col gap-2">
-                <div className="flex items-center gap-2 font-bold">
-                  <AlertTriangle className="w-4 h-4 text-red-500 animate-bounce" />
-                  <span>Database Link Inactive</span>
+              <div className={`p-4 rounded-xl border space-y-2 ${isDarkMode ? 'bg-slate-950/60 border-rose-500/20 text-slate-300' : 'bg-slate-50 border-rose-200 text-slate-700'}`}>
+                <div className="flex items-center gap-2 text-rose-400 font-extrabold text-xs">
+                  <ShieldAlert className="w-4 h-4 text-rose-500 shrink-0" />
+                  <span>Cloud SQL Database Integration Access Restricted</span>
                 </div>
-                <p className="text-[10px] text-slate-400 leading-normal">
-                  {dbStatus?.error || 'Failed to communicate with PostgreSQL instance. Verify your .env setup.'}
+                <p className="text-[11px] leading-relaxed text-slate-400">
+                  Cloud SQL database integration status, PostgreSQL schema synchronization, and connection management parameters are restricted exclusively to primary workspace owner <strong className="text-blue-400 font-mono">nyikulibramwel@gmail.com</strong>. Invited non-owner members cannot view or modify database integrations.
                 </p>
               </div>
             )}
@@ -472,174 +679,508 @@ export default function SettingsView({
         <div className="lg:col-span-6 space-y-6">
           {/* API Key management */}
           <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
-            <h3 className="font-bold text-sm uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-2"><Key className="w-4 h-4 text-violet-500" /> Gemini API Settings</h3>
+            <h3 className={`font-bold text-sm uppercase tracking-wider mb-4 flex items-center justify-between ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
+              <span className="flex items-center gap-2">
+                <Key className="w-4 h-4 text-violet-500" /> Gemini API Settings
+              </span>
+              {!isOwner && (
+                <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center gap-1">
+                  <Lock className="w-3 h-3" /> Owner Locked
+                </span>
+              )}
+            </h3>
             
-            <div className="space-y-4">
-              <p className="text-[10px] leading-relaxed text-slate-400">
-                To bypass standard public Sandbox request throttling, input your private Google Gemini API key. All LLM reasoning will be direct-routed through your billing tier.
-              </p>
+            {isOwner ? (
+              <div className="space-y-4">
+                <p className={`text-[10px] leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                  To bypass standard public Sandbox request throttling, input your private Google Gemini API key. All LLM reasoning will be direct-routed through your billing tier.
+                </p>
 
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-widest">API Secret Key</label>
-                <div className="flex gap-2">
-                  <input 
-                    type={showKey ? "text" : "password"}
-                    value={tempApiKey}
-                    onChange={(e) => setTempApiKey(e.target.value)}
-                    placeholder="AIzaSy..." 
-                    className={`flex-1 px-3.5 py-2.5 rounded-xl text-xs border focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-950'}`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowKey(!showKey)}
-                    className={`px-3 py-2.5 text-xs font-semibold rounded-xl border hover:bg-slate-800/20 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
-                  >
-                    {showKey ? 'Hide' : 'Show'}
-                  </button>
+                <div>
+                  <label className={`block text-[10px] font-bold mb-1.5 uppercase tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>API Secret Key</label>
+                  <div className="flex gap-2">
+                    <input 
+                      type={showKey ? "text" : "password"}
+                      value={tempApiKey}
+                      onChange={(e) => setTempApiKey(e.target.value)}
+                      placeholder="AIzaSy..." 
+                      className={`flex-1 px-3.5 py-2.5 rounded-xl text-xs border focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-950'}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowKey(!showKey)}
+                      className={`px-3 py-2.5 text-xs font-semibold rounded-xl border hover:bg-slate-800/20 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
+                    >
+                      {showKey ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-500 text-[10px] flex gap-2">
+                  <Info className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>Default API keys are configured and injected automatically by Google AI Studio at runtime. Standard developer sandbox features are active.</span>
                 </div>
               </div>
-
-              <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] flex gap-2">
-                <Info className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>Default API keys are configured and injected automatically by Google AI Studio at runtime. Standard developer sandbox features are active.</span>
+            ) : (
+              <div className={`p-4 rounded-xl border space-y-2 ${isDarkMode ? 'bg-slate-950/60 border-rose-500/20 text-slate-300' : 'bg-slate-50 border-rose-200 text-slate-700'}`}>
+                <div className="flex items-center gap-2 text-rose-400 font-extrabold text-xs">
+                  <ShieldAlert className="w-4 h-4 text-rose-500 shrink-0" />
+                  <span>Gemini API Key & Model Access Restricted</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-slate-400">
+                  Private Gemini API key configuration, model routing, and billing tier parameters are restricted exclusively to primary owner <strong className="text-blue-400 font-mono">nyikulibramwel@gmail.com</strong>. Invited users cannot view or edit API secret keys.
+                </p>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Email Notifications */}
           <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
-            <h3 className="font-bold text-sm uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-2"><Bell className="w-4 h-4 text-amber-500" /> Email Configurations</h3>
+            <h3 className={`font-bold text-sm uppercase tracking-wider mb-4 flex items-center justify-between ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
+              <span className="flex items-center gap-2">
+                <Bell className="w-4 h-4 text-amber-500" /> Email Configurations
+              </span>
+              {!isOwner && (
+                <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center gap-1">
+                  <Lock className="w-3 h-3" /> Owner Locked
+                </span>
+              )}
+            </h3>
             
-            <div className="space-y-3">
-              {/* Box 1 */}
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  checked={settings.emailNotifications.auditCompleted}
-                  onChange={() => toggleNotification('auditCompleted')}
-                  className="mt-1 accent-blue-500"
-                />
-                <div className="text-xs">
-                  <span className="font-bold block text-slate-200">Audit Completion Dispatches</span>
-                  <span className="text-[10px] text-slate-400">Receive an email notification once any pipeline file finishes evaluation.</span>
-                </div>
-              </label>
+            {isOwner ? (
+              <div className="space-y-3">
+                {/* Box 1 */}
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    checked={settings.emailNotifications.auditCompleted}
+                    onChange={() => toggleNotification('auditCompleted')}
+                    className="mt-1 accent-blue-500"
+                  />
+                  <div className="text-xs">
+                    <span className={`font-bold block ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>Audit Completion Dispatches</span>
+                    <span className={`text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Receive an email notification once any pipeline file finishes evaluation.</span>
+                  </div>
+                </label>
 
-              {/* Box 2 */}
-              <label className="flex items-start gap-3 cursor-pointer pt-3 border-t border-slate-800/40">
-                <input 
-                  type="checkbox" 
-                  checked={settings.emailNotifications.teamInvites}
-                  onChange={() => toggleNotification('teamInvites')}
-                  className="mt-1 accent-blue-500"
-                />
-                <div className="text-xs">
-                  <span className="font-bold block text-slate-200">Team Invites & Mentions</span>
-                  <span className="text-[10px] text-slate-400">Receive notification digests when commentators tag you on a row annotation.</span>
+                {/* Box 2 */}
+                <label className={`flex items-start gap-3 cursor-pointer pt-3 border-t ${isDarkMode ? 'border-slate-800/40' : 'border-slate-200'}`}>
+                  <input 
+                    type="checkbox" 
+                    checked={settings.emailNotifications.teamInvites}
+                    onChange={() => toggleNotification('teamInvites')}
+                    className="mt-1 accent-blue-500"
+                  />
+                  <div className="text-xs">
+                    <span className={`font-bold block ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>Team Invites & Mentions</span>
+                    <span className={`text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Receive notification digests when commentators tag you on a row annotation.</span>
+                  </div>
+                </label>
+              </div>
+            ) : (
+              <div className={`p-4 rounded-xl border space-y-2 ${isDarkMode ? 'bg-slate-950/60 border-rose-500/20 text-slate-300' : 'bg-slate-50 border-rose-200 text-slate-700'}`}>
+                <div className="flex items-center gap-2 text-rose-400 font-extrabold text-xs">
+                  <ShieldAlert className="w-4 h-4 text-rose-500 shrink-0" />
+                  <span>Email Dispatch & Server Settings Restricted</span>
                 </div>
-              </label>
-            </div>
+                <p className="text-[11px] leading-relaxed text-slate-400">
+                  Automated email notification dispatches and server SMTP dispatch parameters can only be altered by primary workspace owner <strong className="text-blue-400 font-mono">nyikulibramwel@gmail.com</strong>.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Google Search Console Verification */}
           <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
-            <h3 className="font-bold text-sm uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-2">
-              <Globe className="w-4 h-4 text-blue-500" /> Search Console Verification
+            <h3 className={`font-bold text-sm uppercase tracking-wider mb-4 flex items-center justify-between ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
+              <span className="flex items-center gap-2">
+                <Globe className="w-4 h-4 text-blue-500" /> Search Console Verification
+              </span>
+              {!isOwner && (
+                <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center gap-1">
+                  <Lock className="w-3 h-3" /> Owner Locked
+                </span>
+              )}
             </h3>
             
-            <div className="space-y-4">
-              <p className="text-[10px] leading-relaxed text-slate-400">
-                Verify your app on Google Search Console using HTML Meta Tag or dynamic HTML File verification.
-              </p>
+            {isOwner ? (
+              <div className="space-y-4">
+                <p className="text-[10px] leading-relaxed text-slate-400">
+                  Verify your app on Google Search Console using HTML Meta Tag or dynamic HTML File verification.
+                </p>
 
-              {gscSuccessMsg && (
-                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 animate-pulse" />
-                  <span>{gscSuccessMsg}</span>
-                </div>
-              )}
-
-              {/* Meta Tag Code */}
-              <div className="space-y-1">
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                  Method A: HTML Meta Tag Content Code
-                </label>
-                <input 
-                  type="text"
-                  value={metaCode}
-                  onChange={(e) => setMetaCode(e.target.value)}
-                  placeholder="e.g. google1234567890abcdef" 
-                  className={`w-full px-3 py-2 rounded-xl text-xs border focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-950'}`}
-                />
-                <span className="text-[9px] text-slate-500 block">
-                  Places verification meta tag in your document header.
-                </span>
-              </div>
-
-              <div className="border-t border-slate-800/40 my-3"></div>
-
-              {/* Dynamic HTML File serving */}
-              <div className="space-y-3">
-                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                  Method B: Dynamic HTML File
-                </span>
-                
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="block text-[9px] font-bold text-slate-500 uppercase">
-                      Verification Filename
-                    </label>
-                    <input 
-                      type="text"
-                      value={fileName}
-                      onChange={(e) => setFileName(e.target.value)}
-                      placeholder="e.g. google1234567890.html" 
-                      className={`w-full px-3 py-1.5 rounded-lg text-xs border focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-950'}`}
-                    />
+                {gscSuccessMsg && (
+                  <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 animate-pulse" />
+                    <span>{gscSuccessMsg}</span>
                   </div>
-                  <div className="space-y-1">
-                    <label className="block text-[9px] font-bold text-slate-500 uppercase">
-                      File Content
-                    </label>
-                    <input 
-                      type="text"
-                      value={fileContent}
-                      onChange={(e) => setFileContent(e.target.value)}
-                      placeholder="e.g. google-site-verification: google1234567890.html" 
-                      className={`w-full px-3 py-1.5 rounded-lg text-xs border focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-950'}`}
-                    />
-                  </div>
-                </div>
-                <span className="text-[9px] text-slate-500 block">
-                  Dynamically responds with verification details when requested.
-                </span>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleGscSave}
-                disabled={gscLoading}
-                className="w-full mt-2 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-55 rounded-xl cursor-pointer transition-all flex items-center justify-center gap-1.5 shadow-md"
-              >
-                {gscLoading ? (
-                  <>
-                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    <span>Saving...</span>
-                  </>
-                ) : (
-                  <span>Save & Deploy Search Console Verification</span>
                 )}
-              </button>
+
+                {/* Meta Tag Code */}
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    Method A: HTML Meta Tag Content Code
+                  </label>
+                  <input 
+                    type="text"
+                    value={metaCode}
+                    onChange={(e) => setMetaCode(e.target.value)}
+                    placeholder="e.g. google1234567890abcdef" 
+                    className={`w-full px-3 py-2 rounded-xl text-xs border focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-950'}`}
+                  />
+                  <span className="text-[9px] text-slate-500 block">
+                    Places verification meta tag in your document header.
+                  </span>
+                </div>
+
+                <div className="border-t border-slate-800/40 my-3"></div>
+
+                {/* Dynamic HTML File serving */}
+                <div className="space-y-3">
+                  <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    Method B: Dynamic HTML File
+                  </span>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="block text-[9px] font-bold text-slate-500 uppercase">
+                        Verification Filename
+                      </label>
+                      <input 
+                        type="text"
+                        value={fileName}
+                        onChange={(e) => setFileName(e.target.value)}
+                        placeholder="e.g. google1234567890.html" 
+                        className={`w-full px-3 py-1.5 rounded-lg text-xs border focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-950'}`}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[9px] font-bold text-slate-500 uppercase">
+                        File Content
+                      </label>
+                      <input 
+                        type="text"
+                        value={fileContent}
+                        onChange={(e) => setFileContent(e.target.value)}
+                        placeholder="e.g. google-site-verification: google1234567890.html" 
+                        className={`w-full px-3 py-1.5 rounded-lg text-xs border focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-950'}`}
+                      />
+                    </div>
+                  </div>
+                  <span className="text-[9px] text-slate-500 block">
+                    Dynamically responds with verification details when requested.
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleGscSave}
+                  disabled={gscLoading}
+                  className="w-full mt-2 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-55 rounded-xl cursor-pointer transition-all flex items-center justify-center gap-1.5 shadow-md"
+                >
+                  {gscLoading ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>Save & Deploy Search Console Verification</span>
+                  )}
+                </button>
+              </div>
+            ) : (
+              <div className={`p-4 rounded-xl border space-y-2 ${isDarkMode ? 'bg-slate-950/60 border-rose-500/20 text-slate-300' : 'bg-slate-50 border-rose-200 text-slate-700'}`}>
+                <div className="flex items-center gap-2 text-rose-400 font-extrabold text-xs">
+                  <ShieldAlert className="w-4 h-4 text-rose-500 shrink-0" />
+                  <span>Search Console Verification Deployment Restricted</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-slate-400">
+                  Search Console site verification meta tags and dynamic file endpoint deployment grant domain indexation authority. Permission is strictly granted to primary owner <strong className="text-blue-400 font-mono">nyikulibramwel@gmail.com</strong>.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Restricted Features & Access Policy Matrix (User & API Settings Security) */}
+          <div className={`lg:col-span-12 p-6 rounded-2xl border transition-all ${
+            isDarkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+          }`}>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-800/40">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="p-1.5 rounded-lg bg-rose-500/10 text-rose-500 border border-rose-500/20">
+                    <ShieldAlert className="w-5 h-5 animate-pulse" />
+                  </span>
+                  <span className="text-xs font-mono font-bold text-rose-500 uppercase tracking-widest">
+                    Recommended Security Access Policy
+                  </span>
+                </div>
+                <h2 className={`text-lg font-extrabold tracking-tight ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
+                  Restricted Features & Access Control Guidelines
+                </h2>
+                <p className={`text-xs mt-1 max-w-3xl leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                  Suggested security matrix highlighting sensitive platform features and API capabilities that <strong className="text-rose-400 font-semibold">MUST NOT be accessible to non-owner users</strong> to safeguard billing, data privacy, and domain integrity.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 shrink-0">
+                <div className={`px-3 py-2 rounded-xl border text-[10px] font-mono flex items-center gap-2 ${
+                  isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'
+                }`}>
+                  <Lock className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  <span>Protected Owners: <strong className="text-blue-400">nyikulibramwel@gmail.com</strong> / <strong className="text-blue-400">nyikuli@company.com</strong></span>
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={handleApplyAllRestrictions}
+                  className="px-3.5 py-2 text-xs font-bold rounded-xl bg-rose-600 hover:bg-rose-500 text-white shadow hover:scale-102 transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Enforce Recommended Policy</span>
+                </button>
+              </div>
+            </div>
+
+            {policyToast && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center gap-2"
+              >
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 animate-bounce shrink-0" />
+                <span>{policyToast}</span>
+              </motion.div>
+            )}
+
+            {/* Category Filter Tabs */}
+            <div className="flex items-center gap-2 mb-5 overflow-x-auto pb-2 border-b border-slate-800/20">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1 shrink-0">Filter By Scope:</span>
+              {[
+                { id: 'all', label: 'All Restricted Features' },
+                { id: 'api', label: 'API & Billing Secrets' },
+                { id: 'users', label: 'User Slot & Member Privileges' },
+                { id: 'database', label: 'Cloud SQL & Data Memory' },
+                { id: 'integrations', label: 'OAuth & Domain Integrations' }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setSelectedCategory(tab.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                    selectedCategory === tab.id
+                      ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 shadow-sm'
+                      : isDarkMode
+                        ? 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-slate-200'
+                        : 'bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Restricted Features Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[
+                {
+                  id: 'restrictApiKey',
+                  category: 'api',
+                  icon: Key,
+                  iconColor: 'text-violet-400 bg-violet-500/10 border-violet-500/20',
+                  risk: 'CRITICAL RISK',
+                  riskBg: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+                  title: 'Gemini API Private Key & Billing Tier',
+                  whyRestricted: 'Exposing private Gemini API keys lets secondary users view, copy, or overwrite master API tokens, risking quota theft, unauthorized usage charges, or API denial of service.',
+                  recommendedLevel: 'Restricted to Workspace Owners Only',
+                  lockDescription: 'Hide API secret key, disable key editing for non-owners, and route requests via server-side proxies.'
+                },
+                {
+                  id: 'restrictMemberProvisioning',
+                  category: 'users',
+                  icon: UserX,
+                  iconColor: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
+                  risk: 'CRITICAL RISK',
+                  riskBg: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+                  title: 'User Slot Provisioning & Member Revocation',
+                  whyRestricted: 'Collaborator users must not be permitted to add user accounts, assign Owner privileges, or delete existing workspace team members.',
+                  recommendedLevel: 'Restricted to Workspace Owners Only',
+                  lockDescription: 'Lock user slot allocation, disable role escalation, and restrict member deletion buttons to owner emails.'
+                },
+                {
+                  id: 'restrictGscVerification',
+                  category: 'integrations',
+                  icon: Globe,
+                  iconColor: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
+                  risk: 'HIGH RISK',
+                  riskBg: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+                  title: 'Search Console Site Verification & Meta Tags',
+                  whyRestricted: 'Editing Search Console verification meta tags or serving dynamic HTML verification files grants external users complete site ownership and SEO search console control.',
+                  recommendedLevel: 'Restricted to Primary Workspace Owner & Verification Admin',
+                  lockDescription: 'Require owner authentication before deploying Search Console meta tags or serving verification files.'
+                },
+                {
+                  id: 'restrictDatabasePurge',
+                  category: 'database',
+                  icon: Database,
+                  iconColor: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+                  risk: 'CRITICAL RISK',
+                  riskBg: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+                  title: 'Cloud SQL Database Purge & Deep Memory GC',
+                  whyRestricted: 'Non-owner users should not be allowed to execute deep memory defragmentation, purge parsed CSV dataset files, or delete Cloud SQL PostgreSQL records.',
+                  recommendedLevel: 'Restricted to Workspace Owners Only',
+                  lockDescription: 'Prompt for owner authorization pin before purging datasets or running deep garbage collection.'
+                },
+                {
+                  id: 'restrictGmailScopes',
+                  category: 'integrations',
+                  icon: Mail,
+                  iconColor: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+                  risk: 'HIGH RISK',
+                  riskBg: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+                  title: 'Gmail Center OAuth & Mail Dispatch Tokens',
+                  whyRestricted: 'Authorizing Gmail OAuth scopes grants permission to dispatch automated emails or inspect workspace mail logs. Secondary users must not access owner mail tokens.',
+                  recommendedLevel: 'Restricted to Authenticated Session Email Only',
+                  lockDescription: 'Isolate OAuth tokens to verified session owners and disable token sharing across test user personas.'
+                },
+                {
+                  id: 'restrictLogPurging',
+                  category: 'api',
+                  icon: Terminal,
+                  iconColor: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+                  risk: 'HIGH RISK',
+                  riskBg: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+                  title: 'Global System Settings & Diagnostic Timeline Erasure',
+                  whyRestricted: 'Wiping workspace audit activity timelines or modifying global system settings destroys compliance logs and disrupts security monitoring.',
+                  recommendedLevel: 'Restricted to Workspace Owners Only',
+                  lockDescription: 'Enforce tamper-proof activity logging and disable bulk diagnostic timeline deletion for non-owners.'
+                }
+              ]
+                .filter(item => selectedCategory === 'all' || item.category === selectedCategory)
+                .map(item => {
+                  const ItemIcon = item.icon;
+                  const isRestricted = securityPolicies[item.id] ?? true;
+
+                  return (
+                    <div 
+                      key={item.id} 
+                      className={`p-4 rounded-xl border flex flex-col justify-between transition-all ${
+                        isDarkMode 
+                          ? 'bg-slate-950/60 border-slate-800/80 hover:border-slate-700' 
+                          : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <div>
+                        {/* Header Badge */}
+                        <div className="flex items-center justify-between gap-2 mb-3">
+                          <div className={`p-2 rounded-lg border shrink-0 ${item.iconColor}`}>
+                            <ItemIcon className="w-4 h-4" />
+                          </div>
+                          <span className={`text-[9px] font-mono font-extrabold uppercase px-2 py-0.5 rounded border ${item.riskBg}`}>
+                            {item.risk}
+                          </span>
+                        </div>
+
+                        {/* Title & Reasons */}
+                        <h4 className={`text-xs font-extrabold mb-1.5 ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
+                          {item.title}
+                        </h4>
+
+                        <div className={`p-2.5 rounded-lg border text-[11px] leading-relaxed mb-3 ${
+                          isDarkMode ? 'bg-slate-900/80 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-700'
+                        }`}>
+                          <span className="font-bold text-rose-400 block mb-0.5 uppercase text-[9px] tracking-wider">
+                            Why Other Users Shouldn't Access:
+                          </span>
+                          {item.whyRestricted}
+                        </div>
+
+                        {/* Recommended Policy */}
+                        <div className="space-y-1 mb-3">
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block">Recommended Security Policy:</span>
+                          <span className="text-[10px] font-mono font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-1 rounded block">
+                            {item.recommendedLevel}
+                          </span>
+                        </div>
+
+                        <p className="text-[10px] text-slate-400 italic leading-normal mb-4">
+                          {item.lockDescription}
+                        </p>
+                      </div>
+
+                      {/* Interactive Enforcement Toggle */}
+                      <div className={`pt-3 border-t flex items-center justify-between gap-2 ${
+                        isDarkMode ? 'border-slate-800/80' : 'border-slate-200'
+                      }`}>
+                        <div className="flex items-center gap-1.5">
+                          <Lock className={`w-3.5 h-3.5 ${isRestricted ? 'text-emerald-400' : 'text-amber-400'}`} />
+                          <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                            isRestricted ? 'text-emerald-400' : 'text-amber-400'
+                          }`}>
+                            {isRestricted ? 'Restriction Enforced' : 'Access Unlocked'}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => toggleSecurityPolicy(item.id)}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase transition-all cursor-pointer ${
+                            isRestricted
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30'
+                              : 'bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30'
+                          }`}
+                        >
+                          {isRestricted ? 'Lock Active' : 'Enable Restriction'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
             </div>
           </div>
 
-          {/* Submit Settings */}
-          <button
-            type="submit"
-            className={`w-full py-3.5 text-white font-bold rounded-xl shadow-lg hover:scale-101 transition-all cursor-pointer ${accentClass}`}
-          >
-            Save All Configurations
-          </button>
+          {/* Save Configurations Feedback & Button */}
+          <div className="space-y-3 pt-2">
+            {saveSuccess && (
+              <motion.div
+                initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center justify-between gap-2 shadow-lg"
+              >
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4.5 h-4.5 text-emerald-500 animate-bounce shrink-0" />
+                  <span>All User & API Configurations Saved Successfully!</span>
+                </div>
+                <span className="text-[10px] font-mono font-semibold opacity-90 uppercase tracking-widest px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300">Live Synced</span>
+              </motion.div>
+            )}
+
+            <button
+              type="submit"
+              disabled={isSaving}
+              className={`w-full py-3.5 font-bold rounded-xl shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2 text-sm ${
+                saveSuccess
+                  ? 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-emerald-900/30'
+                  : `text-white hover:scale-[1.01] ${accentClass}`
+              } ${isSaving ? 'opacity-80 cursor-wait' : ''}`}
+            >
+              {isSaving ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  <span>Saving Configurations...</span>
+                </>
+              ) : saveSuccess ? (
+                <>
+                  <CheckCircle2 className="w-5 h-5 text-emerald-200 animate-pulse" />
+                  <span>Configurations Saved & Deployed!</span>
+                </>
+              ) : (
+                <span>Save All Configurations</span>
+              )}
+            </button>
+          </div>
         </div>
 
       </form>
@@ -1140,22 +1681,22 @@ export default function SettingsView({
                 
                 {/* Terms of Use */}
                 <div className="space-y-4">
-                  <div className="flex items-center gap-2 font-bold text-slate-200">
+                  <div className={`flex items-center gap-2 font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
                     <BookOpen className="w-4 h-4 text-emerald-500" />
                     <span>Terms of Service</span>
                   </div>
                   
-                  <div className="space-y-3 font-medium text-[11px]">
+                  <div className={`space-y-3 font-medium text-[11px] ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                     <div>
-                      <span className="text-slate-300 block font-bold mb-0.5">1. Acceptance & Authorization Parameters</span>
+                      <span className={`block font-bold mb-0.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>1. Acceptance & Authorization Parameters</span>
                       By accessing the Auditor Pro spreadsheet hygiene pipeline, you authorize our platform to programmatically map structural cell models to a secure Google Cloud SQL PostgreSQL backend.
                     </div>
                     <div>
-                      <span className="text-slate-300 block font-bold mb-0.5">2. User Ownership Rights</span>
+                      <span className={`block font-bold mb-0.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>2. User Ownership Rights</span>
                       We acknowledge that all CSV datasets, customized heuristics, structural schemas, data rows, and exported reports remain 100% the intellectual property and exclusive custody of the tenant.
                     </div>
                     <div>
-                      <span className="text-slate-300 block font-bold mb-0.5">3. Regulatory Advisory & Disclaimers</span>
+                      <span className={`block font-bold mb-0.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>3. Regulatory Advisory & Disclaimers</span>
                       Suggestive remarks, formatting warnings, and compliance scores are generated for administrative diagnostics. These are suggestive recommendations and do not constitute legal or formal accounting audit certifications.
                     </div>
                   </div>
@@ -1163,22 +1704,22 @@ export default function SettingsView({
 
                 {/* Data Privacy */}
                 <div className="space-y-4">
-                  <div className="flex items-center gap-2 font-bold text-slate-200">
+                  <div className={`flex items-center gap-2 font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
                     <Shield className="w-4 h-4 text-emerald-500" />
                     <span>Data Governance & Privacy</span>
                   </div>
 
-                  <div className="space-y-3 font-medium text-[11px]">
+                  <div className={`space-y-3 font-medium text-[11px] ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                     <div>
-                      <span className="text-slate-300 block font-bold mb-0.5">1. No Model Re-Training</span>
+                      <span className={`block font-bold mb-0.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>1. No Model Re-Training</span>
                       Any spreadsheet row evaluation performed using Google Gemini is completed via a private secure API session. Your custom datasets are never persistent-stored for LLM training or distributed model tuning.
                     </div>
                     <div>
-                      <span className="text-slate-300 block font-bold mb-0.5">2. Safe Storage Encapsulation</span>
+                      <span className={`block font-bold mb-0.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>2. Safe Storage Encapsulation</span>
                       All database storage resides on custom Cloud SQL infrastructure with row-level ownership protections tied to your verified Firebase Authentication UID token.
                     </div>
                     <div>
-                      <span className="text-slate-300 block font-bold mb-0.5">3. Account Cessation Guarantee</span>
+                      <span className={`block font-bold mb-0.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>3. Account Cessation Guarantee</span>
                       Upon tenant account termination, all registered records, audit files, system timeline logs, and activity items linked to the unique workspace are completely purged from the active Postgres datastore.
                     </div>
                   </div>

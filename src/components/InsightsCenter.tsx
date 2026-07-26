@@ -22,7 +22,10 @@ import {
   Sliders,
   Database,
   BarChart3,
-  Bot
+  Bot,
+  ShieldCheck,
+  Zap,
+  Search
 } from 'lucide-react';
 import { CSVFile, ChatMessage } from '../types';
 
@@ -248,6 +251,73 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
     }
   };
 
+  // Quick Diagnostic Prompts definition when a file is active
+  const quickInsightPrompts = activeFile ? [
+    {
+      id: 'error-patterns',
+      title: 'Summarize Top 5 Errors',
+      category: 'Error Patterns',
+      prompt: `Summarize top 5 error patterns and compliance risks detected in active dataset "${activeFile.name}". Identify affected row indices, key column headers, and root cause corrections.`,
+      description: 'Finds top 5 duplicate keys, date syntax errors, and missing fields.',
+      icon: AlertTriangle,
+      badgeBg: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+      pillBg: 'bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 border-amber-500/30'
+    },
+    {
+      id: 'schema-drift',
+      title: 'Check for Schema Drift',
+      category: 'Schema Quality',
+      prompt: `Check for schema drift and structural anomalies in "${activeFile.name}". Compare column headers, data type consistency across rows, missing fields, and SQL table compatibility.`,
+      description: 'Audits header alignment, column data types, and null patterns.',
+      icon: Sliders,
+      badgeBg: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+      pillBg: 'bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 border-blue-500/30'
+    },
+    {
+      id: 'outliers',
+      title: 'Spot High-Risk Outliers',
+      category: 'Anomalies',
+      prompt: `Detect high-risk data outliers, duplicate transactions, monetary anomalies, and policy non-compliant values in "${activeFile.name}".`,
+      description: 'Identifies transaction outliers and duplicate record clusters.',
+      icon: TrendingDown,
+      badgeBg: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+      pillBg: 'bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 border-rose-500/30'
+    },
+    {
+      id: 'cleaning-script',
+      title: 'Generate Cleaning Plan',
+      category: 'Transformation',
+      prompt: `Generate an automated cleaning and data transformation action plan for active dataset "${activeFile.name}" to achieve 100% compliance quality score.`,
+      description: 'Outlines step-by-step cleaning operations and transformation logic.',
+      icon: Sparkles,
+      badgeBg: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+      pillBg: 'bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 border-emerald-500/30'
+    },
+    {
+      id: 'type-integrity',
+      title: 'Verify ISO & Types',
+      category: 'Format Audit',
+      prompt: `Verify ISO date formats, email syntax validity, phone formats, and column data-type integrity across all rows in "${activeFile.name}".`,
+      description: 'Checks date consistency, email addresses, and type safety.',
+      icon: ShieldCheck,
+      badgeBg: 'bg-violet-500/10 text-violet-400 border-violet-500/20',
+      pillBg: 'bg-violet-500/10 text-violet-300 hover:bg-violet-500/20 border-violet-500/30'
+    }
+  ] : [];
+
+  const handleRunQuickInsight = (promptText: string) => {
+    setUserInput(promptText);
+    setLoading(true);
+    onSendMessage(
+      promptText,
+      selectedModel,
+      selectedPersona,
+      attachedImage,
+      thinkingMode
+    );
+    setLoading(false);
+  };
+
   return (
     <div className="space-y-8 animate-fadeIn">
       {/* Header */}
@@ -256,7 +326,9 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
           <span className="text-xs font-mono font-bold text-blue-500 uppercase tracking-widest flex items-center gap-1">
             <BrainCircuit className="w-3.5 h-3.5 animate-pulse" /> Advanced Core
           </span>
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">AI Insights & Auditing</h1>
+          <h1 className={`text-2xl md:text-3xl font-extrabold tracking-tight ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
+            AI Insights & Auditing
+          </h1>
           <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
             Configure your AI analyst settings, analyze physical receipts or screenshots, and run detailed multi-turn audits.
           </p>
@@ -266,15 +338,15 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
         <div className={`p-3 rounded-xl border flex flex-wrap items-center gap-3 text-xs ${isDarkMode ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200 shadow-xs'}`}>
           {/* Persona selector */}
           <div className="flex items-center gap-1.5">
-            <Sliders className="w-3.5 h-3.5 text-slate-400" />
+            <Sliders className={`w-3.5 h-3.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} />
             <select 
               value={selectedPersona} 
               onChange={(e) => setSelectedPersona(e.target.value)}
               className={`px-2 py-1 rounded-md border focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-800'}`}
             >
-              <option value="auditor">👤 Compliance Auditor</option>
-              <option value="architect">🗄️ PostgreSQL Architect</option>
-              <option value="analyst">📈 Business BI Analyst</option>
+              <option value="auditor">Compliance Auditor</option>
+              <option value="architect">PostgreSQL Architect</option>
+              <option value="analyst">Business BI Analyst</option>
             </select>
           </div>
 
@@ -284,14 +356,14 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
             onChange={(e) => setSelectedModel(e.target.value)}
             className={`px-2 py-1 rounded-md border focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-800'}`}
           >
-            <option value="gemini-3.5-flash">✨ Gemini 3.5 Flash (General)</option>
-            <option value="gemini-3.1-pro-preview">🧠 Gemini 3.1 Pro (Complex/SQL)</option>
-            <option value="gemini-3.1-flash-lite">⚡ Gemini 3.1 Flash Lite (Fast)</option>
+            <option value="gemini-3.5-flash">Gemini 3.5 Flash (General)</option>
+            <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (Complex/SQL)</option>
+            <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Fast)</option>
           </select>
 
           {/* High Thinking Mode Toggle */}
-          <div className="flex items-center gap-2 border-l border-slate-800/60 pl-3">
-            <span className={`font-medium ${thinkingMode ? 'text-blue-500' : 'text-slate-400'}`}>High Thinking</span>
+          <div className={`flex items-center gap-2 border-l pl-3 ${isDarkMode ? 'border-slate-800/60' : 'border-slate-200'}`}>
+            <span className={`font-medium ${thinkingMode ? 'text-blue-500' : isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>High Thinking</span>
             <button 
               type="button"
               onClick={() => {
@@ -309,6 +381,93 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
         </div>
       </div>
 
+      {/* Quick Insight Diagnostics Banner for Active File */}
+      {activeFile && (
+        <div className={`p-5 rounded-2xl border transition-all ${isDarkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+          <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-dashed ${isDarkMode ? 'border-slate-800/60' : 'border-slate-200'}`}>
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-500 border border-blue-500/20 shrink-0">
+                <FileSpreadsheet className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className={`font-bold text-sm ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>{activeFile.name}</h2>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    Active File Diagnostic Target
+                  </span>
+                </div>
+                <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                  {activeFile.rows.length} records • {activeFile.headers.length} schema headers • {activeFile.issues.length} active violations
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 fill-amber-400 text-amber-400 animate-pulse" />
+                Quick Insights Active
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className={`text-xs font-bold flex items-center gap-1.5 uppercase tracking-wider ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                Automated Diagnostic Prompts
+              </span>
+              <span className={`text-[10px] font-mono hidden sm:inline ${isDarkMode ? 'text-slate-500' : 'text-slate-600'}`}>
+                Click any prompt to instantly execute AI analysis on active dataset
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+              {quickInsightPrompts.map((qi) => {
+                const IconComponent = qi.icon;
+                return (
+                  <button
+                    key={qi.id}
+                    type="button"
+                    onClick={() => handleRunQuickInsight(qi.prompt)}
+                    disabled={loading}
+                    className={`p-3 rounded-xl border text-left transition-all duration-200 group hover:scale-[1.02] active:scale-[0.98] cursor-pointer flex flex-col justify-between ${
+                      isDarkMode 
+                        ? 'bg-slate-950/70 border-slate-800 hover:border-blue-500/60 hover:bg-slate-900' 
+                        : 'bg-slate-50 border-slate-200 hover:border-blue-400 hover:bg-blue-50/50 shadow-xs'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className={`p-1.5 rounded-lg border ${qi.badgeBg}`}>
+                          <IconComponent className="w-4 h-4" />
+                        </div>
+                        <span className={`text-[8px] font-bold font-mono px-1.5 py-0.5 rounded border uppercase ${qi.badgeBg}`}>
+                          {qi.category}
+                        </span>
+                      </div>
+
+                      <h4 className={`font-bold text-xs group-hover:text-blue-500 transition-colors ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                        {qi.title}
+                      </h4>
+                      <p className={`text-[10px] mt-1 line-clamp-2 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                        {qi.description}
+                      </p>
+                    </div>
+
+                    <div className={`mt-3 pt-2 border-t flex items-center justify-between text-[9px] font-bold transition-colors ${isDarkMode ? 'border-slate-800/40 text-slate-500 group-hover:text-blue-400' : 'border-slate-200 text-slate-600 group-hover:text-blue-600'}`}>
+                      <span className="font-mono flex items-center gap-1">
+                        <Zap className="w-2.5 h-2.5 text-amber-400 fill-amber-400" /> Run Prompt
+                      </span>
+                      <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left Side: Dynamic Persona Insights & Recommendations */}
         <div className="lg:col-span-5 space-y-6">
@@ -323,17 +482,26 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
               Active Session Persona
             </span>
             
-            <h2 className="text-xl font-bold mt-2 flex items-center gap-2">
+            <h2 className={`text-xl font-bold mt-2 flex items-center gap-2 ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
               {selectedPersona === 'architect' ? (
-                <>🗄️ PostgreSQL Database Architect</>
+                <>
+                  <Database className="w-5 h-5 text-blue-500 shrink-0" />
+                  <span>PostgreSQL Database Architect</span>
+                </>
               ) : selectedPersona === 'analyst' ? (
-                <>📈 Strategic BI Analyst</>
+                <>
+                  <BarChart3 className="w-5 h-5 text-emerald-500 shrink-0" />
+                  <span>Strategic BI Analyst</span>
+                </>
               ) : (
-                <>👤 Data Compliance Auditor</>
+                <>
+                  <ShieldCheck className="w-5 h-5 text-indigo-500 shrink-0" />
+                  <span>Data Compliance Auditor</span>
+                </>
               )}
             </h2>
 
-            <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+            <p className={`text-xs mt-2 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
               {selectedPersona === 'architect' ? (
                 "Equipped with advanced understanding of physical schema design, normalization indexes, foreign key trees, transactional scaling, and complete SQL scripting."
               ) : selectedPersona === 'analyst' ? (
@@ -346,7 +514,7 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
 
           {/* Executive Summary Portfolio */}
           <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
-            <h3 className="font-bold text-sm uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-2">
+            <h3 className={`font-bold text-sm uppercase tracking-wider mb-4 flex items-center gap-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
               <Sparkles className="w-4 h-4 text-yellow-500 animate-pulse" /> Executive AI Summary
             </h3>
             <div className={`p-4 rounded-xl text-xs leading-relaxed space-y-3 ${isDarkMode ? 'bg-slate-950/50 text-slate-300' : 'bg-slate-50 text-slate-700'}`}>
@@ -364,7 +532,7 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
 
           {/* Prompt Suggestions */}
           <div className="space-y-2">
-            <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+            <span className={`text-[10px] font-mono font-bold uppercase tracking-widest flex items-center gap-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
               <Compass className="w-3.5 h-3.5" /> Prompt Guidelines
             </span>
             <div className="grid grid-cols-1 gap-2">
@@ -377,7 +545,7 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
                 >
                   <div>
                     <span className="font-bold text-blue-500 text-[10px] uppercase block mb-0.5">{sug.label}</span>
-                    <span className="line-clamp-2 leading-relaxed text-slate-400 group-hover:text-slate-300">{sug.text}</span>
+                    <span className={`line-clamp-2 leading-relaxed ${isDarkMode ? 'text-slate-400 group-hover:text-slate-300' : 'text-slate-600 group-hover:text-slate-900'}`}>{sug.text}</span>
                   </div>
                   <ArrowRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-blue-500 shrink-0 transition-colors" />
                 </button>
@@ -391,16 +559,16 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
           <div className={`p-6 rounded-3xl border flex-1 flex flex-col justify-between overflow-hidden relative ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
             
             {/* Active Model Indicator Header */}
-            <div className="flex justify-between items-center border-b border-dashed border-slate-800/60 pb-4 mb-4">
+            <div className={`flex justify-between items-center border-b border-dashed pb-4 mb-4 ${isDarkMode ? 'border-slate-800/60' : 'border-slate-200'}`}>
               <div className="flex items-center gap-2.5">
                 <div className="p-2 bg-blue-500/10 text-blue-500 rounded-xl">
                   <MessageSquare className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-xs uppercase tracking-wider text-slate-400">Conversational Auditor</h3>
-                  <p className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1">
+                  <h3 className={`font-bold text-xs uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>Conversational Auditor</h3>
+                  <p className={`text-[10px] mt-0.5 flex items-center gap-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-600'}`}>
                     <span>Engine:</span> 
-                    <span className="font-mono font-bold text-blue-400 uppercase">
+                    <span className="font-mono font-bold text-blue-500 uppercase">
                       {selectedModel} {thinkingMode && "(High Thinking)"}
                     </span>
                   </p>
@@ -509,7 +677,33 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
             </AnimatePresence>
 
             {/* Interactive Input Bar */}
-            <form onSubmit={handleSend} className="mt-4 pt-4 border-t border-dashed border-slate-800/60 flex flex-col gap-2 relative">
+            <form onSubmit={handleSend} className={`mt-4 pt-4 border-t border-dashed flex flex-col gap-2 relative ${isDarkMode ? 'border-slate-800/60' : 'border-slate-200'}`}>
+              
+              {/* Quick Insight Pills above input box */}
+              {activeFile && (
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 mb-1 scrollbar-none">
+                  <span className="text-[10px] font-mono font-bold text-amber-400 shrink-0 flex items-center gap-1 mr-1">
+                    <Zap className="w-3 h-3 fill-amber-400 text-amber-400" /> Quick Insights:
+                  </span>
+                  {quickInsightPrompts.map((qi) => {
+                    const IconComp = qi.icon;
+                    return (
+                      <button
+                        key={qi.id}
+                        type="button"
+                        onClick={() => handleRunQuickInsight(qi.prompt)}
+                        disabled={loading || isRecording}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold font-mono border whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${qi.pillBg}`}
+                        title={qi.prompt}
+                      >
+                        <IconComp className="w-3 h-3" />
+                        <span>{qi.title}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
               <div className="flex gap-2">
                 {/* Audio Recording Toggle Button */}
                 <button 

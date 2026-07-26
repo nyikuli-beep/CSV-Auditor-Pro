@@ -23,11 +23,20 @@ import {
   X,
   MessageSquare,
   History,
-  ShieldCheck
+  ShieldCheck,
+  ShieldAlert,
+  Camera,
+  Keyboard,
+  Compass
 } from 'lucide-react';
 
 // Import Types
 import { CSVFile, TeamMember, AuditActivity, ChatMessage, SystemSettings } from './types';
+
+// Import Profile Upload, Keyboard Shortcuts & Onboarding Tour Modals
+import ProfileUploadModal from './components/ProfileUploadModal';
+import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
+import OnboardingTourModal from './components/OnboardingTourModal';
 
 // Import Mock Initial Data
 import { SAMPLE_MESSY_FILE, TEAM_MEMBERS, AUDIT_ACTIVITIES } from './sampleData';
@@ -83,12 +92,58 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   
   // Session / Persona State
-  const [user, setUser] = useState<{ email: string; role: string } | null>(null);
+  const [user, setUser] = useState<{ email: string; role: string; name?: string; avatar?: string } | null>(() => {
+    const savedAvatar = localStorage.getItem('user_profile_avatar') || '/macbook_code.jpg';
+    const savedName = localStorage.getItem('user_profile_name') || 'Nyikuli Bramwel';
+    return { 
+      email: 'nyikulibramwel@gmail.com', 
+      role: 'Owner', 
+      name: savedName, 
+      avatar: savedAvatar 
+    };
+  });
+  const [profileModalOpen, setProfileModalOpen] = useState<boolean>(false);
+  const [shortcutsModalOpen, setShortcutsModalOpen] = useState<boolean>(false);
+  const [tourModalOpen, setTourModalOpen] = useState<boolean>(() => {
+    return localStorage.getItem('onboarding_tour_completed') !== 'true';
+  });
+  const [shortcutToast, setShortcutToast] = useState<{ message: string; keyCombo: string } | null>(null);
+  const [securityAlert, setSecurityAlert] = useState<{ title: string; message: string } | null>(null);
+
+  const PROTECTED_ADMIN_EMAILS = ['nyikulibramwel@gmail.com', 'nyikuli@company.com'];
+
+  const triggerShortcutToast = (message: string, keyCombo: string) => {
+    setShortcutToast({ message, keyCombo });
+    setTimeout(() => {
+      setShortcutToast(null);
+    }, 2200);
+  };
+
+  const handleToggleTheme = () => {
+    setIsDarkMode(prev => !prev);
+  };
   const [firebaseUser, setFirebaseUser] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
   
-  // Theme Toggle (Default to high-density light mode)
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
+  // Theme Toggle (Default to saved preference or false)
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    try {
+      const savedTheme = localStorage.getItem('app_theme');
+      if (savedTheme) {
+        return savedTheme === 'dark';
+      }
+      const savedSettings = localStorage.getItem('app_system_settings');
+      if (savedSettings) {
+        const parsed = JSON.parse(savedSettings);
+        if (parsed.theme) return parsed.theme === 'dark';
+      }
+      const themeCookie = getCookie('app_theme');
+      if (themeCookie) return themeCookie === 'dark';
+    } catch (e) {
+      console.warn("Could not load theme from storage:", e);
+    }
+    return false;
+  });
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
 
   // Files Registry (Initial mock messy CSV loaded by default)
@@ -105,22 +160,31 @@ export default function App() {
     { 
       id: 'm-init', 
       role: 'assistant', 
-      content: 'Greetings Sarah! I have analyzed "Company_Q2_Transactions_Messy.csv". I found 3 critical duplicate transaction keys, missing budget metrics, and outdated ISO calendar formatting. How shall we begin clean operations?', 
+      content: 'Greetings Nyikuli! I have analyzed "Company_Q2_Transactions_Messy.csv". I found 3 critical duplicate transaction keys, missing budget metrics, and outdated ISO calendar formatting. How shall we begin clean operations?', 
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
     }
   ]);
 
   // System Config
-  const [settings, setSettings] = useState<SystemSettings>({
-    accentColor: 'blue',
-    apiKey: '',
-    emailNotifications: {
-      auditCompleted: true,
-      teamInvites: true,
-      weeklyDigest: false
-    },
-    language: 'en',
-    timezone: 'UTC'
+  const [settings, setSettings] = useState<SystemSettings>(() => {
+    try {
+      const saved = localStorage.getItem('app_system_settings');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.warn('Could not parse app_system_settings from localStorage', e);
+    }
+    return {
+      theme: 'light',
+      accentColor: 'blue',
+      apiKey: '',
+      emailNotifications: {
+        auditCompleted: true,
+        teamInvites: true,
+        weeklyDigest: false
+      },
+      language: 'en',
+      timezone: 'UTC'
+    };
   });
 
   const activeFile = files.find(f => f.id === activeFileId) || files[activeFileIndex] || files[0] || null;
@@ -165,8 +229,135 @@ export default function App() {
     }
   }, []);
 
-  // Sync state preferences to cookies when state changes
+  // Global Keyboard Shortcuts Listener
   useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check if user is currently typing in an input field or textarea
+      const target = e.target as HTMLElement | null;
+      const isInput = target && (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable
+      );
+
+      // Escape key to close open modals
+      if (e.key === 'Escape') {
+        if (shortcutsModalOpen) {
+          setShortcutsModalOpen(false);
+          return;
+        }
+        if (profileModalOpen) {
+          setProfileModalOpen(false);
+          return;
+        }
+      }
+
+      // '?' key (Shift + /) opens shortcuts guide when not inside an input
+      if (e.key === '?' && !isInput && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        setShortcutsModalOpen(prev => !prev);
+        return;
+      }
+
+      // Alt key modifier combinations
+      if (e.altKey && !e.ctrlKey && !e.metaKey) {
+        const key = e.key.toLowerCase();
+
+        if (key === 'd') {
+          e.preventDefault();
+          setActiveTab('dashboard');
+          triggerShortcutToast('Dashboard Home', 'Alt + D');
+        } else if (key === 'u') {
+          e.preventDefault();
+          setActiveTab('upload');
+          triggerShortcutToast('Upload Center', 'Alt + U');
+        } else if (key === 's' && !e.shiftKey) {
+          e.preventDefault();
+          setActiveTab('schema');
+          triggerShortcutToast('Schema Validator', 'Alt + S');
+        } else if (key === 'r') {
+          e.preventDefault();
+          setActiveTab('results');
+          triggerShortcutToast('Audit Findings', 'Alt + R');
+        } else if (key === 'c') {
+          e.preventDefault();
+          setActiveTab('clean');
+          triggerShortcutToast('Hygiene Workspace', 'Alt + C');
+        } else if (key === 'i') {
+          e.preventDefault();
+          setActiveTab('insights');
+          triggerShortcutToast('AI Intelligence', 'Alt + I');
+        } else if (key === 'g') {
+          e.preventDefault();
+          setActiveTab('gmail');
+          triggerShortcutToast('Gmail Compliance', 'Alt + G');
+        } else if (key === 'p' && !e.shiftKey) {
+          e.preventDefault();
+          setActiveTab('reports');
+          triggerShortcutToast('Branded Reports', 'Alt + P');
+        } else if (key === 'h') {
+          e.preventDefault();
+          setActiveTab('history');
+          triggerShortcutToast('File Archive', 'Alt + H');
+        } else if (key === 't') {
+          e.preventDefault();
+          setActiveTab('team');
+          triggerShortcutToast('Team Tenancy', 'Alt + T');
+        } else if (key === 'a') {
+          e.preventDefault();
+          if (user?.role === 'Admin' || user?.role === 'Owner') {
+            setActiveTab('admin');
+            triggerShortcutToast('Admin Panel', 'Alt + A');
+          }
+        } else if (key === 'o' || key === ',') {
+          e.preventDefault();
+          setActiveTab('settings');
+          triggerShortcutToast('API & Settings', 'Alt + O');
+        } else if (key === 'k') {
+          e.preventDefault();
+          setShortcutsModalOpen(prev => !prev);
+        } else if (key === 'p' && e.shiftKey) {
+          e.preventDefault();
+          setProfileModalOpen(true);
+          triggerShortcutToast('Profile Picture Upload', 'Alt + Shift + P');
+        } else if (key === 'l' && e.shiftKey) {
+          e.preventDefault();
+          handleToggleTheme();
+          triggerShortcutToast('Switched Theme', 'Alt + Shift + L');
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [user, shortcutsModalOpen, profileModalOpen]);
+
+  // Prevent background scrolling when mobile menu drawer is open
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileMenuOpen]);
+
+  // Sync state preferences to cookies & localStorage when state changes
+  useEffect(() => {
+    localStorage.setItem('app_theme', isDarkMode ? 'dark' : 'light');
+    setSettings(prev => {
+      const newTheme = isDarkMode ? 'dark' : 'light';
+      if (prev.theme === newTheme) return prev;
+      const next = { ...prev, theme: newTheme };
+      try {
+        localStorage.setItem('app_system_settings', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+
     const consentPrefs = getCookie('cookie_consent_preferences');
     if (consentPrefs) {
       try {
@@ -182,35 +373,91 @@ export default function App() {
     }
   }, [isDarkMode, settings.accentColor, activeTab]);
 
+  // Auto-sync user avatar and profile details to localStorage
+  useEffect(() => {
+    if (user?.avatar) {
+      localStorage.setItem('user_profile_avatar', user.avatar);
+    }
+    if (user?.name) {
+      localStorage.setItem('user_profile_name', user.name);
+    }
+  }, [user?.avatar, user?.name]);
+
+  // Document class & background sync for dark mode to prevent white spaces on scroll/overscroll
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+      document.body.classList.add('dark');
+      document.documentElement.style.backgroundColor = '#0b0f19';
+      document.body.style.backgroundColor = '#0b0f19';
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.body.classList.remove('dark');
+      document.documentElement.style.backgroundColor = '#f8fafc';
+      document.body.style.backgroundColor = '#f8fafc';
+    }
+  }, [isDarkMode]);
+
   // Monitor auth state changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (fUser) => {
       setAuthLoading(true);
       if (fUser) {
+        // Check if cached Firebase ID token is valid; if expired or near expiry, force a silent refresh using getIdToken(true)
+        try {
+          const tokenResult = await fUser.getIdTokenResult();
+          const expirationTime = new Date(tokenResult.expirationTime).getTime();
+          if (expirationTime <= Date.now() + 5 * 60 * 1000) {
+            await fUser.getIdToken(true);
+          }
+        } catch (tokenCheckErr) {
+          try {
+            await fUser.getIdToken(true);
+          } catch (e) {}
+        }
+
         setFirebaseUser(fUser);
         setActiveFileId('file-active-' + fUser.uid);
         
         // Fetch or create user doc
         const userRef = doc(db, 'users', fUser.uid);
         let userRole = 'Owner';
+        let userName = localStorage.getItem('user_profile_name') || fUser.displayName || 'Nyikuli Bramwel';
+        let userAvatar = localStorage.getItem('user_profile_avatar') || '/macbook_code.jpg';
+
         try {
           const userSnap = await getDoc(userRef);
           if (userSnap.exists()) {
-            userRole = userSnap.data().role || 'Owner';
+            const data = userSnap.data();
+            userRole = data.role || 'Owner';
+            if (data.avatar) {
+              userAvatar = data.avatar;
+              localStorage.setItem('user_profile_avatar', data.avatar);
+            }
+            if (data.name) {
+              userName = data.name;
+              localStorage.setItem('user_profile_name', data.name);
+            }
           } else {
             const newProfile = {
               id: fUser.uid,
-              name: fUser.displayName || fUser.email?.split('@')[0] || 'Nyikuli Bramwel',
+              name: userName,
               email: fUser.email || `${fUser.uid}@demo.com`,
-              role: 'Owner'
+              role: 'Owner',
+              avatar: userAvatar
             };
             await setDoc(userRef, newProfile);
           }
         } catch (err) {
-          console.error("Error loading profile from Firestore:", err);
+          console.warn("Firestore profile sync fallback (using local session defaults):", err);
         }
         
-        setUser({ email: fUser.email || `${fUser.uid}@demo.com`, role: userRole });
+        setUser({ 
+          email: fUser.email || `${fUser.uid}@demo.com`, 
+          role: userRole,
+          name: userName,
+          avatar: userAvatar
+        });
         
         // Sync user profile to Postgres
         try {
@@ -310,14 +557,24 @@ export default function App() {
     const unsubscribeMembers = onSnapshot(membersQuery, async (snapshot) => {
       const membersList: TeamMember[] = [];
       snapshot.forEach((docSnap) => {
-        membersList.push(docSnap.data() as TeamMember);
+        const data = docSnap.data() as TeamMember;
+        const lowerName = (data.name || '').toLowerCase();
+        const lowerEmail = (data.email || '').toLowerCase();
+        if (lowerName.includes('sarah') || lowerEmail.includes('sarah') || lowerName.includes('jenkins') || lowerEmail.includes('jenkins')) {
+          // Permanently purge Sarah Jenkins if present in Firestore
+          deleteDoc(doc(db, 'members', docSnap.id)).catch(() => {});
+        } else {
+          membersList.push(data);
+        }
       });
 
       if (membersList.length === 0) {
         if (!snapshot.metadata.fromCache) {
           try {
             for (const m of TEAM_MEMBERS) {
-              await setDoc(doc(db, 'members', m.id), m);
+              if (!m.name.toLowerCase().includes('sarah') && !m.email.toLowerCase().includes('sarah') && !m.name.toLowerCase().includes('jenkins')) {
+                await setDoc(doc(db, 'members', m.id), m);
+              }
             }
           } catch (err) {
             handleFirestoreError(err, OperationType.WRITE, 'members');
@@ -407,6 +664,7 @@ export default function App() {
   // Handle successful registration/auth
   const handleAuthSuccess = async (userInfo: { name: string; email: string; role: 'Owner' | 'Admin' | 'Editor' | 'Viewer' }) => {
     // If we've authenticated in Firebase, onAuthStateChanged handles routing
+    const savedAvatar = localStorage.getItem('user_profile_avatar') || '/macbook_code.jpg';
     const activeUser = firebaseUser || auth.currentUser;
     if (activeUser) {
       try {
@@ -416,20 +674,22 @@ export default function App() {
           name: userInfo.name,
           email: userInfo.email,
           role: userInfo.role,
+          avatar: savedAvatar,
           createdAt: new Date().toISOString()
-        });
+        }, { merge: true });
       } catch (err) {
         console.error("Error setting user profile in Firestore:", err);
       }
     }
-    setUser({ email: userInfo.email, role: userInfo.role });
+    localStorage.setItem('user_profile_name', userInfo.name);
+    setUser({ email: userInfo.email, role: userInfo.role, name: userInfo.name, avatar: savedAvatar });
     setView('workspace');
     setActiveTab('dashboard');
 
     // Prepend user activation activity log
     const activationLog: AuditActivity = {
       id: `act-${Date.now()}`,
-      userId: activeUser?.uid || 'usr-sarah',
+      userId: activeUser?.uid || 'usr-nyikuli',
       userName: userInfo.name,
       action: 'Authenticated to workspace segment',
       timestamp: 'Just now'
@@ -459,7 +719,7 @@ export default function App() {
     const fileToUpload: CSVFile = {
       ...newFile,
       id: fileId,
-      ownerId: firebaseUser?.uid || 'usr-sarah'
+      ownerId: firebaseUser?.uid || 'usr-nyikuli'
     };
 
     // Optimistically update files and transition immediately for instant, high-performance UI feedback
@@ -478,7 +738,7 @@ export default function App() {
 
     const uploadLog: AuditActivity = {
       id: `act-${Date.now()}`,
-      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-sarah',
+      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-nyikuli',
       userName: user?.email || 'Nyikuli Bramwel',
       action: actionDesc,
       timestamp: 'Just now'
@@ -517,7 +777,7 @@ export default function App() {
 
     const cleanLog: AuditActivity = {
       id: `act-${Date.now()}`,
-      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-sarah',
+      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-nyikuli',
       userName: user?.email || 'Nyikuli Bramwel',
       action: `Executed data hygiene algorithms on "${updatedFile.name}"`,
       timestamp: 'Just now'
@@ -551,7 +811,7 @@ export default function App() {
 
     const batchCleanLog: AuditActivity = {
       id: `act-${Date.now()}`,
-      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-sarah',
+      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-nyikuli',
       userName: user?.email || 'Nyikuli Bramwel',
       action: `Executed batch data hygiene algorithms on ${updatedFiles.length} file(s)`,
       timestamp: 'Just now'
@@ -601,7 +861,7 @@ export default function App() {
 
     const deleteLog: AuditActivity = {
       id: `act-${Date.now()}`,
-      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-sarah',
+      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-nyikuli',
       userName: user?.email || 'Nyikuli Bramwel',
       action: `Deleted dataset file "${name}"`,
       timestamp: 'Just now'
@@ -627,7 +887,7 @@ export default function App() {
 
     const inviteLog: AuditActivity = {
       id: `act-${Date.now()}`,
-      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-sarah',
+      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-nyikuli',
       userName: user?.email || 'Nyikuli Bramwel',
       action: `Dispatched tenancy invitation to ${newMember.email}`,
       timestamp: 'Just now'
@@ -651,7 +911,7 @@ export default function App() {
 
     const deleteLog: AuditActivity = {
       id: `act-${Date.now()}`,
-      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-sarah',
+      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-nyikuli',
       userName: user?.email || 'Nyikuli Bramwel',
       action: `Deleted workspace member ${email}`,
       timestamp: 'Just now'
@@ -662,12 +922,165 @@ export default function App() {
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `activities/${deleteLog.id}`);
     }
+
+    // If currently logged-in user email was deleted, evict session immediately
+    if (user?.email.toLowerCase() === email.toLowerCase()) {
+      setSecurityAlert({
+        title: 'Account Deleted',
+        message: `Your workspace account (${email}) has been deleted by the owner. You have been signed out.`
+      });
+      handleLogout();
+    }
+  };
+
+  // Toggle member logging access (Allow vs Deny sign-in access)
+  const handleToggleMemberAccess = async (id: string, email: string, accessDenied: boolean) => {
+    const targetMember = members.find(m => m.id === id || m.email.toLowerCase() === email.toLowerCase());
+    if (!targetMember) return;
+
+    const updatedMember: TeamMember = {
+      ...targetMember,
+      status: accessDenied ? 'denied' : 'active',
+      accessDenied: accessDenied,
+      deniedAt: accessDenied ? new Date().toISOString() : undefined,
+      deniedBy: accessDenied ? (user?.email || 'nyikulibramwel@gmail.com') : undefined
+    };
+
+    // Optimistically update local members state
+    setMembers(prev => prev.map(m => m.id === id ? updatedMember : m));
+
+    try {
+      await setDoc(doc(db, 'members', id), updatedMember, { merge: true });
+      await syncToPostgres('sync-member', 'POST', updatedMember);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `members/${id}`);
+    }
+
+    const logAction = accessDenied
+      ? `Revoked / Denied login access for ${email}`
+      : `Restored / Allowed login access for ${email}`;
+
+    const accessLog: AuditActivity = {
+      id: `act-${Date.now()}`,
+      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-nyikuli',
+      userName: user?.email || 'Nyikuli Bramwel',
+      action: logAction,
+      timestamp: 'Just now'
+    };
+
+    try {
+      await setDoc(doc(db, 'activities', accessLog.id), accessLog);
+      await syncToPostgres('sync-activity', 'POST', accessLog);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `activities/${accessLog.id}`);
+    }
+
+    // If currently logged-in user email was denied, evict session immediately
+    if (user?.email.toLowerCase() === email.toLowerCase() && accessDenied) {
+      setSecurityAlert({
+        title: 'Access Revoked',
+        message: `Your login permissions for ${email} have been revoked by the workspace owner. You will now be signed out.`
+      });
+      handleLogout();
+    }
+  };
+
+  // Switch active user persona for multi-user session testing with security checks
+  const handleSwitchActiveUser = (member: TeamMember) => {
+    // Check if target member has access denied
+    if (member.status === 'denied' || member.accessDenied) {
+      setSecurityAlert({
+        title: 'Access Denied: Login Revoked',
+        message: `Security Protocol Active: Logging access for '${member.email}' has been revoked / denied by the workspace owner (nyikulibramwel@gmail.com). Access to the application is blocked.`
+      });
+      return;
+    }
+
+    const isTargetProtected = PROTECTED_ADMIN_EMAILS.some(
+      e => e.toLowerCase() === member.email.toLowerCase().trim()
+    );
+
+    // Get active authenticated session email (firebase authenticated user or active session)
+    const activeAuthEmail = firebaseUser?.email || '';
+    const isSessionAuthorized = PROTECTED_ADMIN_EMAILS.some(
+      e => e.toLowerCase() === activeAuthEmail.toLowerCase().trim()
+    );
+
+    if (isTargetProtected && !isSessionAuthorized) {
+      setSecurityAlert({
+        title: 'Access Restricted: Protected Owner Account',
+        message: `Security Protocol Active: Account '${member.email}' is a protected owner email address. Your current session (${activeAuthEmail || 'Unverified User'}) is not authorized to access or impersonate this persona. Access is strictly limited to authentic logins for this email.`
+      });
+      return;
+    }
+
+    setUser({
+      email: member.email,
+      role: member.role,
+      name: member.name,
+      avatar: member.avatar
+    });
+    if (member.avatar) {
+      localStorage.setItem('user_profile_avatar', member.avatar);
+    }
+    if (member.name) {
+      localStorage.setItem('user_profile_name', member.name);
+    }
+  };
+
+  // Profile Picture Upload and Account Sync handler
+  const handleSaveProfile = async (updated: { name?: string; avatar?: string }) => {
+    const newAvatar = updated.avatar || user?.avatar || localStorage.getItem('user_profile_avatar') || '/macbook_code.jpg';
+    const newName = updated.name || user?.name || user?.email.split('@')[0] || 'Nyikuli Bramwel';
+
+    localStorage.setItem('user_profile_avatar', newAvatar);
+    localStorage.setItem('user_profile_name', newName);
+
+    setUser(prev => prev ? { ...prev, name: newName, avatar: newAvatar } : null);
+
+    // Sync with members array
+    if (user?.email) {
+      setMembers(prevMembers => prevMembers.map(m => {
+        if (m.email.toLowerCase() === user.email.toLowerCase()) {
+          return {
+            ...m,
+            name: newName,
+            avatar: newAvatar
+          };
+        }
+        return m;
+      }));
+    }
+
+    // Append activity log
+    const profileLog: AuditActivity = {
+      id: `act-${Date.now()}`,
+      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-nyikuli',
+      userName: newName,
+      action: 'Updated profile picture photo & account avatar',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+    setActivities(prev => [profileLog, ...prev]);
+
+    // Save to Firestore if available
+    const activeUid = firebaseUser?.uid || auth.currentUser?.uid;
+    if (activeUid) {
+      try {
+        const userRef = doc(db, 'users', activeUid);
+        await setDoc(userRef, {
+          name: newName,
+          avatar: newAvatar
+        }, { merge: true });
+      } catch (err) {
+        console.warn("Firestore profile avatar sync fallback:", err);
+      }
+    }
   };
 
   const handleAddNewActivity = async (actionText: string) => {
     const newLog: AuditActivity = {
       id: `act-${Date.now()}`,
-      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-sarah',
+      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-nyikuli',
       userName: user?.email || 'Nyikuli Bramwel',
       action: actionText,
       timestamp: 'Just now'
@@ -697,7 +1110,7 @@ export default function App() {
       { 
         id: 'm-init', 
         role: 'assistant', 
-        content: 'Greetings Sarah! I have analyzed "Company_Q2_Transactions_Messy.csv". I found 3 critical duplicate transaction keys, missing budget metrics, and outdated ISO calendar formatting. How shall we begin clean operations?', 
+        content: 'Greetings Nyikuli! I have analyzed "Company_Q2_Transactions_Messy.csv". I found 3 critical duplicate transaction keys, missing budget metrics, and outdated ISO calendar formatting. How shall we begin clean operations?', 
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
       }
     ]);
@@ -807,7 +1220,7 @@ export default function App() {
   };
 
   return (
-    <div className={`min-h-screen font-sans transition-colors duration-200 ${isDarkMode ? 'bg-[#0b0f19] text-slate-100' : 'bg-[#F8FAFC] text-[#1E293B]'}`}>
+    <div className={`min-h-screen w-full max-w-full overflow-x-hidden font-sans transition-colors duration-200 ${isDarkMode ? 'bg-[#0b0f19] text-slate-100' : 'bg-[#F8FAFC] text-[#1E293B]'}`}>
       
       {/* 1. Landing View */}
       {view === 'landing' && (
@@ -825,6 +1238,7 @@ export default function App() {
       {view === 'auth' && (
         <Suspense fallback={<LoadingSpinner message="Setting up secure workspace portal..." />}>
           <AuthView 
+            members={members}
             onLoginSuccess={handleAuthSuccess}
             onBackToLanding={() => setView('landing')}
             isDarkMode={isDarkMode}
@@ -835,7 +1249,7 @@ export default function App() {
 
       {/* 3. SaaS Active Workspace Segment */}
       {view === 'workspace' && (
-        <div className="flex min-h-screen">
+        <div className="flex min-h-screen w-full max-w-full overflow-x-hidden">
           
           {/* Mobile Drawer Backdrop Overlay */}
           <AnimatePresence>
@@ -843,10 +1257,11 @@ export default function App() {
               <>
                 <motion.div 
                   initial={{ opacity: 0 }}
-                  animate={{ opacity: 0.5 }}
+                  animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
                   onClick={() => setMobileMenuOpen(false)}
-                  className="fixed inset-0 bg-black z-40 md:hidden"
+                  className="fixed inset-0 h-screen h-dvh w-screen w-dvh bg-slate-950/60 backdrop-blur-md z-40 md:hidden touch-none"
                 />
                 
                 <motion.aside 
@@ -854,7 +1269,7 @@ export default function App() {
                   animate={{ x: 0 }}
                   exit={{ x: '-100%' }}
                   transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-                  className={`fixed inset-y-0 left-0 w-64 z-50 p-5 flex flex-col justify-between md:hidden shadow-2xl ${isDarkMode ? 'bg-[#0f172a] border-r border-slate-800 text-slate-100' : 'bg-white border-r border-slate-200 text-[#1E293B]'}`}
+                  className={`fixed inset-y-0 left-0 w-72 max-w-[85vw] h-screen h-dvh z-50 p-5 flex flex-col justify-between md:hidden shadow-2xl overflow-y-auto ${isDarkMode ? 'bg-slate-950/95 border-r border-slate-800/80 text-slate-100 backdrop-blur-xl' : 'bg-white/95 border-r border-slate-200 text-[#1E293B] backdrop-blur-xl'}`}
                 >
                   <div className="space-y-6">
                     {/* Brand with Close Trigger */}
@@ -939,15 +1354,21 @@ export default function App() {
 
                   {/* Mobile Logout Panel */}
                   <div className="pt-6 border-t border-slate-900/80">
-                    <div className="flex items-center gap-3 mb-4 text-xs text-left">
-                      <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-[10px] text-white">
-                        {user?.email ? user.email.slice(0, 2).toUpperCase() : 'ME'}
+                    <button 
+                      onClick={() => setProfileModalOpen(true)}
+                      className="w-full flex items-center gap-3 mb-4 text-xs text-left p-2 rounded-xl hover:bg-slate-900/60 transition-colors group cursor-pointer"
+                    >
+                      <div className="relative w-9 h-9 rounded-full overflow-hidden border border-slate-700 shrink-0">
+                        <img src={user?.avatar || '/macbook_code.jpg'} alt={user?.name || "User Profile"} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                          <Camera className="w-3.5 h-3.5" />
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <span className="font-bold block truncate max-w-[110px]">{user?.email || 'sarah@Jenkins.com'}</span>
-                        <span className="text-[9px] text-slate-500 block font-mono font-bold uppercase">{user?.role || 'Owner'}</span>
+                      <div className="min-w-0 flex-1">
+                        <span className="font-bold block truncate max-w-[120px]">{user?.name || user?.email || 'nyikuli@company.com'}</span>
+                        <span className="text-[9px] text-blue-400 block font-mono font-bold uppercase">{user?.role || 'Owner'} • Edit Avatar</span>
                       </div>
-                    </div>
+                    </button>
                     <button 
                       onClick={() => {
                         handleLogout();
@@ -1000,19 +1421,19 @@ export default function App() {
               {/* Navigation Tabs Stack */}
               <nav className="space-y-1">
                 {[
-                  { id: 'dashboard', label: 'Dashboard Home', icon: BarChart3 },
-                  { id: 'upload', label: 'Upload Center', icon: Upload },
-                  { id: 'schema', label: 'Schema Validator', icon: ShieldCheck },
-                  { id: 'results', label: 'Audit Findings', icon: Sparkles, badge: activeFile ? activeFile.issues.length : 0 },
-                  { id: 'clean', label: 'Hygiene Workspace', icon: Trash2 },
-                  { id: 'insights', label: 'AI Intelligence', icon: MessageSquare },
-                  { id: 'gmail', label: 'Gmail Compliance', icon: Mail },
-                  { id: 'reports', label: 'Branded Reports', icon: FileText },
-                  { id: 'history', label: 'File Archive', icon: History },
-                  { id: 'team', label: 'Team Tenancy', icon: Users },
+                  { id: 'dashboard', label: 'Dashboard Home', icon: BarChart3, shortcut: 'Alt+D' },
+                  { id: 'upload', label: 'Upload Center', icon: Upload, shortcut: 'Alt+U' },
+                  { id: 'schema', label: 'Schema Validator', icon: ShieldCheck, shortcut: 'Alt+S' },
+                  { id: 'results', label: 'Audit Findings', icon: Sparkles, badge: activeFile ? activeFile.issues.length : 0, shortcut: 'Alt+R' },
+                  { id: 'clean', label: 'Hygiene Workspace', icon: Trash2, shortcut: 'Alt+C' },
+                  { id: 'insights', label: 'AI Intelligence', icon: MessageSquare, shortcut: 'Alt+I' },
+                  { id: 'gmail', label: 'Gmail Compliance', icon: Mail, shortcut: 'Alt+G' },
+                  { id: 'reports', label: 'Branded Reports', icon: FileText, shortcut: 'Alt+P' },
+                  { id: 'history', label: 'File Archive', icon: History, shortcut: 'Alt+H' },
+                  { id: 'team', label: 'Team Tenancy', icon: Users, shortcut: 'Alt+T' },
                   // Admin panel toggleable
-                  ...(user?.role === 'Admin' || user?.role === 'Owner' ? [{ id: 'admin', label: 'Admin Panel', icon: Lock }] : []),
-                  { id: 'settings', label: 'API & settings', icon: Settings }
+                  ...(user?.role === 'Admin' || user?.role === 'Owner' ? [{ id: 'admin', label: 'Admin Panel', icon: Lock, shortcut: 'Alt+A' }] : []),
+                  { id: 'settings', label: 'API & settings', icon: Settings, shortcut: 'Alt+O' }
                 ].map((tab) => {
                   const Icon = tab.icon;
                   const isActive = activeTab === tab.id;
@@ -1020,17 +1441,23 @@ export default function App() {
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
-                      className={`w-full px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between transition-all cursor-pointer ${isActive ? isDarkMode ? 'bg-[#1e293b]/80 text-blue-400 font-bold border-l-2 border-blue-500 pl-2.5' : 'bg-blue-50/80 text-blue-700 font-bold border-l-2 border-blue-600 pl-2.5' : isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800/40' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+                      className={`w-full px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between transition-all cursor-pointer group ${isActive ? isDarkMode ? 'bg-[#1e293b]/80 text-blue-400 font-bold border-l-2 border-blue-500 pl-2.5' : 'bg-blue-50/80 text-blue-700 font-bold border-l-2 border-blue-600 pl-2.5' : isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800/40' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+                      title={`Navigate to ${tab.label} (${tab.shortcut})`}
                     >
                       <span className="flex items-center gap-2.5">
                         <Icon className={`w-4 h-4 ${isActive ? 'text-blue-500' : ''}`} />
                         <span>{tab.label}</span>
                       </span>
-                      {tab.badge !== undefined && tab.badge > 0 && (
-                        <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-rose-500 text-white font-mono shrink-0">
-                          {tab.badge}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {tab.badge !== undefined && tab.badge > 0 && (
+                          <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-rose-500 text-white font-mono shrink-0">
+                            {tab.badge}
+                          </span>
+                        )}
+                        <span className={`text-[9px] font-mono font-semibold px-1 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity ${isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-200 text-slate-600'}`}>
+                          {tab.shortcut}
                         </span>
-                      )}
+                      </div>
                     </button>
                   );
                 })}
@@ -1040,15 +1467,22 @@ export default function App() {
 
             {/* Logout panel */}
             <div className="pt-6 border-t border-slate-900/80">
-              <div className="flex items-center gap-3 mb-4 text-xs text-left">
-                <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-[10px] text-white">
-                  {user?.email ? user.email.slice(0, 2).toUpperCase() : 'ME'}
+              <button 
+                onClick={() => setProfileModalOpen(true)}
+                className="w-full flex items-center gap-3 mb-4 text-xs text-left p-2 rounded-xl hover:bg-slate-900/60 transition-colors group cursor-pointer"
+                title="Click to edit profile picture & account details"
+              >
+                <div className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-blue-500/40 shrink-0">
+                  <img src={user?.avatar || '/macbook_code.jpg'} alt={user?.name || "User Profile"} className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-slate-950/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                    <Camera className="w-4 h-4" />
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <span className="font-bold block truncate max-w-[110px]">{user?.email || 'sarah@Jenkins.com'}</span>
-                  <span className="text-[9px] text-slate-500 block font-mono font-bold uppercase">{user?.role || 'Owner'}</span>
+                <div className="min-w-0 flex-1">
+                  <span className="font-bold block truncate max-w-[120px]">{user?.name || user?.email?.split('@')[0] || 'Nyikuli B.'}</span>
+                  <span className="text-[9px] text-blue-400 block font-mono font-bold uppercase tracking-wider">{user?.role || 'Owner'} • Edit Avatar</span>
                 </div>
-              </div>
+              </button>
               <button 
                 onClick={handleLogout}
                 className="w-full py-2.5 rounded-xl border border-slate-800 text-xs font-bold text-slate-400 hover:text-slate-100 hover:bg-slate-900/60 transition-all flex items-center justify-center gap-2 cursor-pointer"
@@ -1059,9 +1493,9 @@ export default function App() {
           </aside>
 
           {/* Right Workstation frame */}
-          <main className={`flex-1 flex flex-col min-w-0 ${isDarkMode ? 'bg-[#0b0f19]' : 'bg-[#F8FAFC]'}`}>
+          <main className={`flex-1 flex flex-col min-w-0 max-w-full overflow-x-hidden ${isDarkMode ? 'bg-[#0b0f19]' : 'bg-[#F8FAFC]'}`}>
             {/* Top Workspace Header */}
-            <header className={`h-14 px-6 border-b flex items-center justify-between gap-4 shrink-0 ${isDarkMode ? 'bg-[#0f172a] border-slate-800' : 'bg-white border-slate-200'}`}>
+            <header className={`h-14 px-3 sm:px-6 border-b flex items-center justify-between gap-2 sm:gap-4 shrink-0 max-w-full overflow-x-hidden ${isDarkMode ? 'bg-[#0f172a] border-slate-800' : 'bg-white border-slate-200'}`}>
               <div className="flex items-center gap-4">
                 <button 
                   onClick={() => setMobileMenuOpen(true)}
@@ -1100,28 +1534,60 @@ export default function App() {
                   <span className="text-[10px] text-slate-400 font-mono font-bold">{currentTime}</span>
                 </div>
 
+                {/* Interactive Tour Button */}
+                <button 
+                  onClick={() => setTourModalOpen(true)}
+                  className={`p-1.5 px-2.5 rounded-lg border cursor-pointer hover:scale-[1.02] transition-all flex items-center gap-1.5 ${
+                    isDarkMode ? 'bg-[#1e293b]/50 border-slate-800 text-slate-400 hover:text-white' : 'bg-white border-slate-200 text-slate-500 hover:text-slate-900'
+                  }`}
+                  title="Take Interactive Onboarding Tour"
+                >
+                  <Compass className="w-4 h-4 text-emerald-500" />
+                  <span className="hidden md:inline text-[11px] font-mono font-bold">Tour</span>
+                </button>
+
+                {/* Keyboard Shortcuts Guide Button */}
+                <button 
+                  onClick={() => setShortcutsModalOpen(true)}
+                  className={`p-1.5 px-2.5 rounded-lg border cursor-pointer hover:scale-[1.02] transition-all flex items-center gap-1.5 ${
+                    isDarkMode ? 'bg-[#1e293b]/50 border-slate-800 text-slate-400 hover:text-white' : 'bg-white border-slate-200 text-slate-500 hover:text-slate-900'
+                  }`}
+                  title="Keyboard Shortcuts Guide (Alt + K or ?)"
+                >
+                  <Keyboard className="w-4 h-4 text-blue-500" />
+                  <span className="hidden md:inline text-[11px] font-mono font-bold">Alt+K</span>
+                </button>
+
                 {/* Mode toggle */}
                 <button 
                   onClick={() => setIsDarkMode(!isDarkMode)}
                   className={`p-1.5 rounded-lg border cursor-pointer hover:scale-[1.03] transition-all ${isDarkMode ? 'bg-[#1e293b]/50 border-slate-800 text-slate-400 hover:text-white' : 'bg-white border-slate-200 text-slate-500 hover:text-slate-900'}`}
+                  title="Toggle Light / Dark Mode (Alt + Shift + L)"
                 >
                   {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
                 </button>
 
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center font-bold text-[9px] text-white border border-slate-200/20 shadow-sm">
-                    {user?.email ? user.email.slice(0, 2).toUpperCase() : 'SJ'}
+                <button 
+                  onClick={() => setProfileModalOpen(true)}
+                  className="flex items-center gap-2.5 p-1 rounded-xl hover:bg-slate-800/20 transition-all cursor-pointer group"
+                  title="Upload / Change Profile Picture"
+                >
+                  <div className="relative w-8 h-8 rounded-full overflow-hidden border-2 border-blue-500/50 shadow-sm shrink-0">
+                    <img src={user?.avatar || '/macbook_code.jpg'} alt={user?.name || "User Profile"} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-slate-950/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                      <Camera className="w-3.5 h-3.5" />
+                    </div>
                   </div>
                   <div className="hidden sm:flex flex-col text-left text-xs leading-tight">
-                    <span className={`font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>{user?.email?.split('@')[0] || 'Sarah J.'}</span>
-                    <span className="text-[9px] font-mono text-slate-400 font-bold uppercase">{user?.role || 'Owner'}</span>
+                    <span className={`font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>{user?.name?.split(' ')[0] || user?.email?.split('@')[0] || 'Nyikuli B.'}</span>
+                    <span className="text-[9px] font-mono text-blue-500 font-bold uppercase">{user?.role || 'Owner'}</span>
                   </div>
-                </div>
+                </button>
               </div>
             </header>
 
             {/* Container for active view tabs */}
-            <div className="p-6 flex-1 overflow-y-auto w-full mx-auto max-w-7xl">
+            <div className="p-3 sm:p-6 flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full mx-auto max-w-7xl">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={activeTab}
@@ -1129,6 +1595,7 @@ export default function App() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -4 }}
                   transition={{ duration: 0.15 }}
+                  className="w-full max-w-full overflow-x-hidden"
                 >
                   <Suspense fallback={<LoadingSpinner message={`Loading visual components...`} />}>
                     {activeTab === 'dashboard' && (
@@ -1232,9 +1699,12 @@ export default function App() {
                         members={members}
                         onInviteMember={handleInviteMember}
                         onDeleteMember={handleDeleteMember}
+                        onUpdateMemberAccess={handleToggleMemberAccess}
                         activities={activities}
                         isDarkMode={isDarkMode}
                         accentClass={accentClass}
+                        currentUserEmail={user?.email || 'nyikulibramwel@gmail.com'}
+                        onSwitchActiveUser={handleSwitchActiveUser}
                       />
                     )}
 
@@ -1252,6 +1722,8 @@ export default function App() {
                         onClearActivities={handleClearActivities}
                         onClearChat={handleClearChat}
                         onPurgeInactiveFiles={handlePurgeInactiveFiles}
+                        currentUser={user}
+                        onOpenProfileModal={() => setProfileModalOpen(true)}
                       />
                     )}
 
@@ -1259,6 +1731,8 @@ export default function App() {
                       <AdminPanel 
                         isDarkMode={isDarkMode}
                         accentClass={accentClass}
+                        currentUserEmail={user?.email || 'nyikulibramwel@gmail.com'}
+                        activities={activities}
                       />
                     )}
                   </Suspense>
@@ -1267,7 +1741,7 @@ export default function App() {
             </div>
             
             {/* Custom High Density Footer */}
-            <footer className={`mt-auto border-t px-6 py-3.5 flex items-center justify-between text-[9px] font-bold uppercase tracking-widest shrink-0 ${isDarkMode ? 'bg-[#0f172a] border-slate-800 text-slate-500' : 'bg-white border-slate-200 text-slate-400'}`}>
+            <footer className={`mt-auto border-t px-3 sm:px-6 py-3.5 flex items-center justify-between text-[9px] font-bold uppercase tracking-widest shrink-0 max-w-full overflow-x-hidden ${isDarkMode ? 'bg-[#0f172a] border-slate-800 text-slate-500' : 'bg-white border-slate-200 text-slate-400'}`}>
               <div>&copy; 2026 CSV Auditor Pro Inc.</div>
               <div className="flex items-center gap-4 sm:gap-6">
                 <div className="flex gap-3 sm:gap-4 border-r border-slate-300 dark:border-slate-800 pr-4 sm:pr-6">
@@ -1287,6 +1761,57 @@ export default function App() {
         </div>
       )}
 
+      {/* Keyboard Shortcuts Guide Modal */}
+      <KeyboardShortcutsModal 
+        isOpen={shortcutsModalOpen}
+        onClose={() => setShortcutsModalOpen(false)}
+        onNavigate={(tabId) => setActiveTab(tabId)}
+        onToggleTheme={handleToggleTheme}
+        onOpenProfileUpload={() => setProfileModalOpen(true)}
+        isDarkMode={isDarkMode}
+        isAdmin={user?.role === 'Admin' || user?.role === 'Owner'}
+      />
+
+      {/* Interactive Onboarding Tour Overlay Modal */}
+      <OnboardingTourModal
+        isOpen={tourModalOpen}
+        onClose={() => setTourModalOpen(false)}
+        onNavigateTab={(tabId) => setActiveTab(tabId)}
+        isDarkMode={isDarkMode}
+      />
+
+      {/* Floating Keyboard Shortcut Notification Toast */}
+      <AnimatePresence>
+        {shortcutToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl bg-slate-900/90 text-white shadow-xl border border-slate-700/80 backdrop-blur-md flex items-center gap-3"
+          >
+            <div className="p-1 rounded-md bg-blue-500/20 text-blue-400">
+              <Keyboard className="w-4 h-4" />
+            </div>
+            <div className="text-xs">
+              <span className="font-bold text-slate-100">{shortcutToast.message}</span>
+              <span className="ml-2 font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-blue-400 border border-slate-700 font-bold">
+                {shortcutToast.keyCombo}
+              </span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Profile Picture Upload Modal */}
+      <ProfileUploadModal 
+        isOpen={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
+        currentUser={user}
+        onSaveProfile={handleSaveProfile}
+        isDarkMode={isDarkMode}
+        accentClass={accentClass}
+      />
+
       {/* Cookie Consent & Preferences Inspector Control */}
       <CookieBanner 
         isDarkMode={isDarkMode} 
@@ -1300,6 +1825,51 @@ export default function App() {
           }
         }}
       />
+
+      {/* Security Protection Enforcement Modal */}
+      <AnimatePresence>
+        {securityAlert && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 10 }}
+              className={`w-full max-w-md p-6 rounded-2xl border shadow-2xl relative ${
+                isDarkMode ? 'bg-slate-900 border-rose-500/30 text-slate-100' : 'bg-white border-rose-200 text-slate-900'
+              }`}
+            >
+              <div className="flex items-start gap-4 mb-4">
+                <div className="p-3 rounded-xl bg-rose-500/10 text-rose-500 shrink-0 border border-rose-500/20">
+                  <ShieldAlert className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-rose-500 leading-tight">
+                    {securityAlert.title}
+                  </h3>
+                  <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-wider">
+                    Owner Account Protection Active
+                  </p>
+                </div>
+              </div>
+
+              <div className={`p-4 rounded-xl border text-xs leading-relaxed mb-6 ${
+                isDarkMode ? 'bg-slate-950/60 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'
+              }`}>
+                {securityAlert.message}
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setSecurityAlert(null)}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white shadow-lg transition-all cursor-pointer"
+                >
+                  Acknowledge & Close
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

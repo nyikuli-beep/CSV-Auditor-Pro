@@ -22,7 +22,8 @@ import {
   Activity,
   GripVertical,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Lightbulb
 } from 'lucide-react';
 import { CSVFile } from '../types';
 
@@ -642,7 +643,7 @@ export default function SchemaManager({
                 >
                   {files.map(file => (
                     <option key={file.id} value={file.id}>
-                      📊 {file.name} ({file.rows.length} rows, {file.headers.length} cols)
+                      {file.name} ({file.rows.length} rows, {file.headers.length} cols)
                     </option>
                   ))}
                 </select>
@@ -719,7 +720,7 @@ export default function SchemaManager({
                   >
                     {schemas.map(schema => (
                       <option key={schema.id} value={schema.id}>
-                        🛡️ {schema.name} ({schema.fields.length} constraints)
+                        {schema.name} ({schema.fields.length} constraints)
                       </option>
                     ))}
                   </select>
@@ -1200,8 +1201,9 @@ export default function SchemaManager({
                         <span className="font-bold">Found:</span> <code className="bg-rose-500/10 text-rose-400 px-1 rounded max-w-[120px] truncate">{err.found || 'Blank'}</code>
                       </div>
 
-                      <div className="text-[11px] text-blue-500 font-semibold pt-1 border-t border-slate-500/5 mt-1.5">
-                        💡 Suggestion: {err.suggestion}
+                      <div className="text-[11px] text-blue-500 font-semibold pt-1 border-t border-slate-500/5 mt-1.5 flex items-center gap-1">
+                        <Lightbulb className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                        <span>Suggestion: {err.suggestion}</span>
                       </div>
                     </div>
                   </div>

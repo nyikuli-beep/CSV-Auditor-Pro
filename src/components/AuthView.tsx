@@ -15,17 +15,19 @@ import {
 import { auth, googleProvider, db, setGmailAccessToken } from '../firebase';
 import { signInWithPopup, signInAnonymously, signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
+import { TeamMember } from '../types';
 
 interface AuthViewProps {
   onLoginSuccess: (user: { name: string; email: string; role: 'Owner' | 'Admin' | 'Editor' | 'Viewer' }) => void;
   onBackToLanding: () => void;
   isDarkMode: boolean;
   accentClass: string;
+  members?: TeamMember[];
 }
 
 type AuthScreen = 'signin' | 'signup' | 'forgot' | 'verification' | 'reset';
 
-export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, accentClass }: AuthViewProps) {
+export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, accentClass, members = [] }: AuthViewProps) {
   const [screen, setScreen] = useState<AuthScreen>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -34,6 +36,32 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [authInProgress, setAuthInProgress] = useState(false);
+
+  const PROTECTED_EMAILS = ['nyikulibramwel@gmail.com', 'nyikuli@company.com'];
+
+  // Access check against owner denials
+  const checkEmailAccess = (targetEmail: string): { allowed: boolean; reason?: string } => {
+    const norm = (targetEmail || '').trim().toLowerCase();
+    if (!norm) return { allowed: true };
+
+    // Primary owner emails are always allowed
+    if (PROTECTED_EMAILS.some(p => p.toLowerCase() === norm)) {
+      return { allowed: true };
+    }
+
+    // Check if target email has been set to denied / blocked by workspace owner
+    const memberRecord = members.find(m => m.email.trim().toLowerCase() === norm);
+    if (memberRecord) {
+      if (memberRecord.status === 'denied' || memberRecord.accessDenied) {
+        return {
+          allowed: false,
+          reason: `Access Denied: The workspace owner (nyikulibramwel@gmail.com) has revoked / denied logging access for "${targetEmail}". Please contact the owner to restore access.`
+        };
+      }
+    }
+
+    return { allowed: true };
+  };
 
   // Helper to register user profile in Firestore
   const syncUserProfile = async (uid: string, userEmail: string, userName: string, userRole: string) => {
@@ -57,6 +85,20 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
       setErrorMsg('Please enter your email address.');
       return;
     }
+
+    // Access control check: Deny sign-in if owner has blocked this email
+    const accessCheck = checkEmailAccess(email);
+    if (!accessCheck.allowed) {
+      setErrorMsg(accessCheck.reason || 'Login access denied by workspace owner.');
+      return;
+    }
+
+    const isProtected = PROTECTED_EMAILS.some(p => p.toLowerCase() === email.trim().toLowerCase());
+    if (isProtected) {
+      setErrorMsg(`Security Restriction: ${email.trim()} is a protected workspace owner account. Manual password or anonymous sign-in is disabled for protected emails. Please sign in using verified Google OAuth.`);
+      return;
+    }
+
     setAuthInProgress(true);
     setErrorMsg('');
     try {
@@ -95,6 +137,20 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
       setErrorMsg('Please fill in all details.');
       return;
     }
+
+    // Access control check: Deny sign-up if owner has blocked this email
+    const accessCheck = checkEmailAccess(email);
+    if (!accessCheck.allowed) {
+      setErrorMsg(accessCheck.reason || 'Login access denied by workspace owner.');
+      return;
+    }
+
+    const isProtected = PROTECTED_EMAILS.some(p => p.toLowerCase() === email.trim().toLowerCase());
+    if (isProtected) {
+      setErrorMsg(`Security Restriction: Cannot create manual account claiming ${email.trim()}. Protected owner accounts require direct verified Google OAuth.`);
+      return;
+    }
+
     setAuthInProgress(true);
     setErrorMsg('');
     try {
@@ -118,14 +174,25 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
+    const targetEmail = email || 'demo@auditor.com';
+    const accessCheck = checkEmailAccess(targetEmail);
+    if (!accessCheck.allowed) {
+      setErrorMsg(accessCheck.reason || 'Login access denied by workspace owner.');
+      return;
+    }
     onLoginSuccess({
       name: name || 'Demo Auditor',
-      email: email || 'demo@auditor.com',
+      email: targetEmail,
       role: role
     });
   };
 
   const selectQuickRole = (selectedRole: 'Owner' | 'Admin' | 'Editor' | 'Viewer', demoEmail: string, demoName: string) => {
+    const accessCheck = checkEmailAccess(demoEmail);
+    if (!accessCheck.allowed) {
+      setErrorMsg(accessCheck.reason || 'Login access denied by workspace owner.');
+      return;
+    }
     setEmail(demoEmail);
     setName(demoName);
     setPassword('demopassword123');
@@ -145,6 +212,13 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
       const uid = result.user.uid;
       const uEmail = result.user.email || 'google.user@company.com';
       const uName = result.user.displayName || uEmail.split('@')[0] || 'Nyikuli Bramwel';
+
+      // Access control check for Google authenticated user
+      const accessCheck = checkEmailAccess(uEmail);
+      if (!accessCheck.allowed) {
+        setErrorMsg(accessCheck.reason || 'Login access denied by workspace owner.');
+        return;
+      }
       
       // Keep selected or fallback role
       await syncUserProfile(uid, uEmail, uName, role);

@@ -25,10 +25,13 @@ import {
   ArrowRight,
   Shield,
   SlidersHorizontal,
-  AlertCircle
+  AlertCircle,
+  GitMerge
 } from 'lucide-react';
 import { CSVFile, AuditIssue } from '../types';
+import { exportCleanedAuditToExcel } from '../lib/excelExporter';
 import RegexBuilder from './RegexBuilder';
+import BulkProcessingProgressBar, { ProcessingFileItem } from './BulkProcessingProgressBar';
 
 interface CleaningCenterProps {
   activeFile: CSVFile | null;
@@ -62,6 +65,10 @@ export default function CleaningCenter({
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState('');
   const [processingProgress, setProcessingProgress] = useState(0);
+  const [processedFilesCount, setProcessedFilesCount] = useState(0);
+  const [totalBatchFilesCount, setTotalBatchFilesCount] = useState(0);
+  const [currentProcessingFileName, setCurrentProcessingFileName] = useState('');
+  const [processingFilesStatus, setProcessingFilesStatus] = useState<ProcessingFileItem[]>([]);
   const [batchResult, setBatchResult] = useState<{
     success: boolean;
     filesReport: {
@@ -86,7 +93,7 @@ export default function CleaningCenter({
 
   // Pagination State for Large Datasets
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 100;
+  const [pageSize, setPageSize] = useState(50);
 
   // Conditional Column Splitter State
   const [isSplitterOpen, setIsSplitterOpen] = useState(false);
@@ -95,6 +102,27 @@ export default function CleaningCenter({
   const [customDelimiter, setCustomDelimiter] = useState('');
   const [splitCondition, setSplitCondition] = useState('always');
   const [splitColNames, setSplitColNames] = useState('');
+
+  // Column Merger State (Same Data Type)
+  const [isMergerOpen, setIsMergerOpen] = useState(false);
+  const [mergeCol1, setMergeCol1] = useState('');
+  const [mergeCol2, setMergeCol2] = useState('');
+  const [targetMergedColName, setTargetMergedColName] = useState('');
+  const [mergeDelimiter, setMergeDelimiter] = useState('space');
+  const [customMergeDelimiter, setCustomMergeDelimiter] = useState('');
+  const [keepOriginalCols, setKeepOriginalCols] = useState(false);
+  const [mergeActionsHistory, setMergeActionsHistory] = useState<{
+    id: string;
+    col1: string;
+    col2: string;
+    targetCol: string;
+    dataType: string;
+    delimiterLabel: string;
+    timestamp: string;
+    keepOriginalCols: boolean;
+    preMergeRows: Record<string, string>[];
+    preMergeHeaders: string[];
+  }[]>([]);
 
   // Smart Validation Engine State
   const [isValidationOpen, setIsValidationOpen] = useState(false);
@@ -150,6 +178,7 @@ export default function CleaningCenter({
       setPrintTitle(`CSV Auditor Report: ${activeFile.name}`);
       setCurrentPage(1);
       setCleaningMode('single');
+      setMergeActionsHistory([]);
       
       // Reset AI mapping states
       setIsMappingOpen(false);
@@ -164,20 +193,37 @@ export default function CleaningCenter({
     if (selectedFileIds.length === 0) return;
     if (selectedRoutines.length === 0) return;
 
+    const selectedFiles = files.filter(f => selectedFileIds.includes(f.id) && f.status !== 'failed');
+    if (selectedFiles.length === 0) return;
+
     setIsProcessing(true);
     setProcessingProgress(0);
+    setProcessedFilesCount(0);
+    setTotalBatchFilesCount(selectedFiles.length);
+    setCurrentProcessingFileName(selectedFiles[0]?.name || '');
+    setProcessingFilesStatus(selectedFiles.map(f => ({
+      id: f.id,
+      name: f.name,
+      status: 'pending'
+    })));
     setProcessingStep("Initializing batch processing engine...");
     setBatchResult(null);
 
     await new Promise(resolve => setTimeout(resolve, 800));
 
-    const selectedFiles = files.filter(f => selectedFileIds.includes(f.id) && f.status !== 'failed');
     const updatedFilesList: CSVFile[] = [];
     const reportList: any[] = [];
     const progressStepSize = 100 / selectedFiles.length;
 
     for (let i = 0; i < selectedFiles.length; i++) {
       const file = selectedFiles[i];
+      setCurrentProcessingFileName(file.name);
+      setProcessingFilesStatus(prev => prev.map((item, idx) => {
+        if (idx < i) return { ...item, status: 'completed' };
+        if (idx === i) return { ...item, status: 'processing' };
+        return { ...item, status: 'pending' };
+      }));
+
       setProcessingStep(`Acquiring read lock on "${file.name}"...`);
       await new Promise(resolve => setTimeout(resolve, 400));
 
@@ -194,7 +240,6 @@ export default function CleaningCenter({
           seen.add(key);
           return true;
         });
-        const removed = currentRowsList.length - unique.length;
         currentRowsList = unique;
         issues = issues.filter(issue => issue.type !== 'duplicate');
       }
@@ -317,7 +362,12 @@ export default function CleaningCenter({
         issuesSolved: solvedIssuesCount
       });
 
-      setProcessingProgress(Math.round((i + 1) * progressStepSize));
+      setProcessedFilesCount(i + 1);
+      setProcessingProgress(Math.round(((i + 1) / selectedFiles.length) * 100));
+      setProcessingFilesStatus(prev => prev.map((item, idx) => {
+        if (idx <= i) return { ...item, status: 'completed' };
+        return item;
+      }));
     }
 
     setProcessingStep("Persisting cleaned datasets to database core...");
@@ -388,14 +438,14 @@ export default function CleaningCenter({
             </p>
           </div>
 
-          <div className="flex rounded-xl p-1 bg-slate-950 border border-slate-800 w-fit">
+          <div className={`flex rounded-xl p-1 border w-fit ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
             {activeFile && (
               <button
                 onClick={() => setCleaningMode('single')}
                 className={`px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
-                  cleaningMode === 'single'
+                  (cleaningMode as string) === 'single'
                     ? 'bg-blue-600 text-white shadow'
-                    : 'text-slate-400 hover:text-white'
+                    : isDarkMode ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 Single File Hygiene
@@ -406,7 +456,7 @@ export default function CleaningCenter({
               className={`px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
                 cleaningMode === 'batch'
                   ? 'bg-blue-600 text-white shadow'
-                  : 'text-slate-400 hover:text-white'
+                  : isDarkMode ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Batch Processing Engine
@@ -414,24 +464,17 @@ export default function CleaningCenter({
           </div>
         </div>
 
-        {/* Processing Loader Overlay */}
-        {isProcessing && (
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-            <div className={`p-8 rounded-3xl border text-center max-w-md w-full space-y-6 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-              <div className="relative w-20 h-20 mx-auto flex items-center justify-center">
-                <Loader2 className="w-16 h-16 text-blue-500 animate-spin" />
-                <span className="absolute text-xs font-bold font-mono text-slate-300">{processingProgress}%</span>
-              </div>
-              <div className="space-y-2">
-                <h3 className="font-bold text-lg">Processing Active Batch</h3>
-                <p className="text-xs font-mono text-blue-400 animate-pulse">{processingStep}</p>
-              </div>
-              <div className="w-full bg-slate-800/50 rounded-full h-1.5 overflow-hidden">
-                <div className="bg-gradient-to-r from-blue-500 to-emerald-500 h-full rounded-full transition-all duration-300" style={{ width: `${processingProgress}%` }}></div>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Visual Bulk Processing Progress Bar Component */}
+        <BulkProcessingProgressBar
+          isDarkMode={isDarkMode}
+          isProcessing={isProcessing}
+          progress={processingProgress}
+          currentStep={processingStep}
+          processedCount={processedFilesCount}
+          totalCount={totalBatchFilesCount}
+          currentFileName={currentProcessingFileName}
+          filesList={processingFilesStatus}
+        />
 
         {/* main columns */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -749,7 +792,7 @@ export default function CleaningCenter({
             <button
               onClick={() => setCleaningMode('single')}
               className={`px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
-                cleaningMode === 'single'
+                (cleaningMode as string) === 'single'
                   ? 'bg-blue-600 text-white shadow'
                   : 'text-slate-400 hover:text-white'
               }`}
@@ -759,7 +802,7 @@ export default function CleaningCenter({
             <button
               onClick={() => setCleaningMode('batch')}
               className={`px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
-                cleaningMode === 'batch'
+                (cleaningMode as string) === 'batch'
                   ? 'bg-blue-600 text-white shadow'
                   : 'text-slate-400 hover:text-white'
               }`}
@@ -980,7 +1023,7 @@ export default function CleaningCenter({
     });
 
     const mappedDetails = Object.entries(mappingMap)
-      .map(([orig, dest]) => `"${orig}" ➔ "${dest}"`)
+      .map(([orig, dest]) => `"${orig}" -> "${dest}"`)
       .join(', ');
 
     pushState(
@@ -1194,6 +1237,157 @@ export default function CleaningCenter({
 
     // Reset fields
     setSplitColNames('');
+  };
+
+  const inferColumnType = (colName: string): 'Numeric' | 'Date' | 'Boolean' | 'Text' => {
+    if (!colName || !currentRows || currentRows.length === 0) return 'Text';
+    const sampleValues = currentRows
+      .map(r => (r[colName] || '').trim())
+      .filter(v => v !== '');
+    
+    if (sampleValues.length === 0) return 'Text';
+
+    let numericCount = 0;
+    let dateCount = 0;
+    let booleanCount = 0;
+
+    const samples = sampleValues.slice(0, 100);
+    samples.forEach(val => {
+      // Check Numeric
+      const cleanedNum = val.replace(/[\$,]/g, '');
+      if (!isNaN(Number(cleanedNum)) && cleanedNum !== '') {
+        numericCount++;
+      }
+
+      // Check Boolean
+      const lowerVal = val.toLowerCase();
+      if (['true', 'false', 'yes', 'no', '0', '1', 'y', 'n'].includes(lowerVal)) {
+        booleanCount++;
+      }
+
+      // Check Date
+      if (isNaN(Number(val)) && !isNaN(Date.parse(val)) && (val.includes('-') || val.includes('/') || val.includes('.'))) {
+        dateCount++;
+      }
+    });
+
+    const total = samples.length;
+    if (numericCount / total >= 0.8) return 'Numeric';
+    if (booleanCount / total >= 0.8) return 'Boolean';
+    if (dateCount / total >= 0.8) return 'Date';
+    return 'Text';
+  };
+
+  const runColumnMerger = () => {
+    if (!mergeCol1 || !mergeCol2 || !targetMergedColName.trim()) return;
+    if (mergeCol1 === mergeCol2) return;
+
+    const type1 = inferColumnType(mergeCol1);
+    const type2 = inferColumnType(mergeCol2);
+
+    if (type1 !== type2) {
+      alert(`Cannot merge columns with different data types: "${mergeCol1}" is ${type1} while "${mergeCol2}" is ${type2}. Please select two columns of the same data type.`);
+      return;
+    }
+
+    let delim = ' ';
+    if (mergeDelimiter === 'comma') delim = ', ';
+    else if (mergeDelimiter === 'dash') delim = ' - ';
+    else if (mergeDelimiter === 'slash') delim = ' / ';
+    else if (mergeDelimiter === 'underscore') delim = '_';
+    else if (mergeDelimiter === 'none') delim = '';
+    else if (mergeDelimiter === 'custom') delim = customMergeDelimiter;
+
+    const finalTargetCol = targetMergedColName.trim();
+    const preMergeRows = [...currentRows];
+    const preMergeHeaders = [...currentHeaders];
+
+    const cleaned = currentRows.map(row => {
+      const updated = { ...row };
+      const val1 = (row[mergeCol1] || '').trim();
+      const val2 = (row[mergeCol2] || '').trim();
+
+      let mergedVal = '';
+      if (val1 && val2) {
+        mergedVal = `${val1}${delim}${val2}`;
+      } else {
+        mergedVal = val1 || val2;
+      }
+
+      updated[finalTargetCol] = mergedVal;
+
+      if (!keepOriginalCols) {
+        if (finalTargetCol !== mergeCol1) delete updated[mergeCol1];
+        if (finalTargetCol !== mergeCol2) delete updated[mergeCol2];
+      }
+      return updated;
+    });
+
+    const updatedHeaders = [...currentHeaders];
+    const idx1 = updatedHeaders.indexOf(mergeCol1);
+    const idx2 = updatedHeaders.indexOf(mergeCol2);
+
+    if (!keepOriginalCols) {
+      const filteredHeaders = updatedHeaders.filter(h => h !== mergeCol1 && h !== mergeCol2);
+      const insertIdx = idx1 !== -1 ? Math.min(idx1, filteredHeaders.length) : filteredHeaders.length;
+      if (!filteredHeaders.includes(finalTargetCol)) {
+        filteredHeaders.splice(insertIdx, 0, finalTargetCol);
+      }
+      pushState(
+        cleaned,
+        `Merged columns "${mergeCol1}" (${type1}) and "${mergeCol2}" (${type2}) into "${finalTargetCol}". Removed original columns.`,
+        filteredHeaders
+      );
+    } else {
+      if (!updatedHeaders.includes(finalTargetCol)) {
+        const insertIdx = idx2 !== -1 ? idx2 + 1 : updatedHeaders.length;
+        updatedHeaders.splice(insertIdx, 0, finalTargetCol);
+      }
+      pushState(
+        cleaned,
+        `Merged columns "${mergeCol1}" (${type1}) and "${mergeCol2}" (${type2}) into new column "${finalTargetCol}". Kept original columns.`,
+        updatedHeaders
+      );
+    }
+
+    // Record Merge Action in State Array for Undo functionality
+    const newMergeRecord = {
+      id: `merge-${Date.now()}`,
+      col1: mergeCol1,
+      col2: mergeCol2,
+      targetCol: finalTargetCol,
+      dataType: type1,
+      delimiterLabel: mergeDelimiter === 'custom' ? customMergeDelimiter : mergeDelimiter,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      keepOriginalCols,
+      preMergeRows,
+      preMergeHeaders
+    };
+    setMergeActionsHistory(prev => [newMergeRecord, ...prev]);
+
+    setSelectedPrintColumns(prev => [...prev, finalTargetCol]);
+
+    setMergeCol1('');
+    setMergeCol2('');
+    setTargetMergedColName('');
+  };
+
+  const handleUndoMerge = (actionId?: string) => {
+    if (mergeActionsHistory.length === 0) return;
+
+    const targetRecord = actionId 
+      ? mergeActionsHistory.find(a => a.id === actionId)
+      : mergeActionsHistory[0];
+
+    if (!targetRecord) return;
+
+    pushState(
+      targetRecord.preMergeRows,
+      `Undid merge of "${targetRecord.col1}" & "${targetRecord.col2}" (Reverted "${targetRecord.targetCol}")`,
+      targetRecord.preMergeHeaders
+    );
+
+    setMergeActionsHistory(prev => prev.filter(a => a.id !== targetRecord.id));
   };
 
   const runValidationRule = () => {
@@ -1728,7 +1922,7 @@ export default function CleaningCenter({
         <button
           onClick={() => setCleaningMode('single')}
           className={`px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
-            cleaningMode === 'single'
+            (cleaningMode as string) === 'single'
               ? 'bg-blue-600 text-white shadow'
               : 'text-slate-400 hover:text-white'
           }`}
@@ -1738,7 +1932,7 @@ export default function CleaningCenter({
         <button
           onClick={() => setCleaningMode('batch')}
           className={`px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
-            cleaningMode === 'batch'
+            (cleaningMode as string) === 'batch'
               ? 'bg-blue-600 text-white shadow'
               : 'text-slate-400 hover:text-white'
           }`}
@@ -1761,7 +1955,7 @@ export default function CleaningCenter({
 
         {/* Undo Redo & Switch File controls */}
         <div className="flex items-center gap-3 flex-wrap md:flex-nowrap">
-          <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5">
+          <div className={`flex items-center gap-1 border rounded-xl px-2.5 py-1.5 ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
             <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider select-none mr-1">Dataset:</span>
             <select
               value={activeFile?.id || ''}
@@ -1775,10 +1969,10 @@ export default function CleaningCenter({
                   }
                 }
               }}
-              className="bg-transparent text-slate-100 font-bold text-xs focus:outline-none cursor-pointer max-w-[150px] md:max-w-[200px] truncate"
+              className={`bg-transparent font-bold text-xs focus:outline-none cursor-pointer max-w-[150px] md:max-w-[200px] truncate ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}
             >
               {files.filter(f => f.status !== 'failed').map(f => (
-                <option key={f.id} value={f.id} className="bg-slate-950 text-slate-100">
+                <option key={f.id} value={f.id} className={isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-white text-slate-900'}>
                   {f.name} ({f.score}% rating)
                 </option>
               ))}
@@ -1786,17 +1980,33 @@ export default function CleaningCenter({
           </div>
 
           <div className="flex gap-2">
+            {mergeActionsHistory.length > 0 && (
+              <button
+                onClick={() => handleUndoMerge()}
+                disabled={isViewer}
+                className={`px-3 py-2.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer ${
+                  isDarkMode 
+                    ? 'border-indigo-500/40 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20' 
+                    : 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                }`}
+                title="Revert the most recent column merge operation"
+              >
+                <GitMerge className="w-3.5 h-3.5" />
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Undo Merge ({mergeActionsHistory.length})</span>
+              </button>
+            )}
             <button 
               onClick={handleUndo}
               disabled={historyIndex === 0 || isViewer}
-              className={`p-2.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 hover:bg-slate-800/40 transition-all ${historyIndex === 0 ? 'opacity-40 cursor-not-allowed' : ''} ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-200'}`}
+              className={`p-2.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all ${historyIndex === 0 ? 'opacity-40 cursor-not-allowed' : ''} ${isDarkMode ? 'bg-slate-950 border-slate-800 hover:bg-slate-900' : 'bg-white border-slate-200 hover:bg-slate-50'}`}
             >
               <RotateCcw className="w-4 h-4" /> Undo
             </button>
             <button 
               onClick={handleRedo}
               disabled={historyIndex === history.length - 1 || isViewer}
-              className={`p-2.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 hover:bg-slate-800/40 transition-all ${historyIndex === history.length - 1 ? 'opacity-40 cursor-not-allowed' : ''} ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-200'}`}
+              className={`p-2.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all ${historyIndex === history.length - 1 ? 'opacity-40 cursor-not-allowed' : ''} ${isDarkMode ? 'bg-slate-950 border-slate-800 hover:bg-slate-900' : 'bg-white border-slate-200 hover:bg-slate-50'}`}
             >
               <RotateCw className="w-4 h-4" /> Redo
             </button>
@@ -1875,7 +2085,7 @@ export default function CleaningCenter({
               <div className={`rounded-xl border transition-all ${
                 isSplitterOpen 
                   ? 'border-blue-500/40 bg-blue-500/5 shadow-xs' 
-                  : 'hover:bg-blue-500/5 hover:border-blue-500/30 border-slate-800/80 bg-slate-950/60'
+                  : isDarkMode ? 'hover:bg-blue-500/5 hover:border-blue-500/30 border-slate-800/80 bg-slate-950/60' : 'hover:bg-blue-500/5 hover:border-blue-500/30 border-slate-200 bg-slate-50'
               }`}>
                 <button
                   type="button"
@@ -1891,7 +2101,7 @@ export default function CleaningCenter({
                   </div>
                   <div className="flex-1">
                     <div className="flex justify-between items-center">
-                      <h4 className="font-bold text-xs">Conditional Column Splitter</h4>
+                      <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Conditional Column Splitter</h4>
                       <ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isSplitterOpen ? 'rotate-90 text-blue-400' : ''}`} />
                     </div>
                     <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Divide a column into multiple sub-columns using delimiter rules conditionally.</p>
@@ -1990,11 +2200,259 @@ export default function CleaningCenter({
                 )}
               </div>
 
+              {/* Merge Columns Accordion */}
+              <div className={`rounded-xl border transition-all ${
+                isMergerOpen 
+                  ? 'border-indigo-500/40 bg-indigo-500/5 shadow-xs' 
+                  : isDarkMode ? 'hover:bg-indigo-500/5 hover:border-indigo-500/30 border-slate-800/80 bg-slate-950/60' : 'hover:bg-indigo-500/5 hover:border-indigo-500/30 border-slate-200 bg-slate-50'
+              }`}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMergerOpen(!isMergerOpen);
+                    setIsSplitterOpen(false);
+                    setIsValidationOpen(false);
+                    setIsPatternOpen(false);
+                    setIsMappingOpen(false);
+                  }}
+                  disabled={isViewer}
+                  className="w-full p-4 text-left flex gap-3.5 items-start cursor-pointer group disabled:opacity-50"
+                >
+                  <div className="p-2 bg-indigo-500/10 text-indigo-500 rounded-lg group-hover:bg-indigo-500/20">
+                    <GitMerge className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center">
+                      <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Merge Columns (Same Data Type)</h4>
+                      <ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isMergerOpen ? 'rotate-90 text-indigo-400' : ''}`} />
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Combine two columns sharing identical data types into a single merged column.</p>
+                  </div>
+                </button>
+
+                {isMergerOpen && (
+                  <div className={`p-4 border-t px-5 space-y-4 text-xs ${isDarkMode ? 'border-slate-800/80 text-slate-200' : 'border-slate-150 text-slate-700'}`}>
+                    {/* First and Second Column Selectors */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">First Column</label>
+                        <select
+                          value={mergeCol1}
+                          onChange={(e) => setMergeCol1(e.target.value)}
+                          className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500 ${
+                            isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                          }`}
+                        >
+                          <option value="">-- First Column --</option>
+                          {currentHeaders.map(h => (
+                            <option key={h} value={h}>{h}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Second Column</label>
+                        <select
+                          value={mergeCol2}
+                          onChange={(e) => setMergeCol2(e.target.value)}
+                          className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500 ${
+                            isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                          }`}
+                        >
+                          <option value="">-- Second Column --</option>
+                          {currentHeaders.map(h => (
+                            <option key={h} value={h} disabled={h === mergeCol1}>{h}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Data Type Matching Feedback Banner */}
+                    {mergeCol1 && mergeCol2 && (
+                      <div className="space-y-2">
+                        {mergeCol1 === mergeCol2 ? (
+                          <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[11px] font-medium flex items-center gap-2">
+                            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                            <span>Select two different columns to merge.</span>
+                          </div>
+                        ) : (() => {
+                          const type1 = inferColumnType(mergeCol1);
+                          const type2 = inferColumnType(mergeCol2);
+                          const isMatch = type1 === type2;
+                          return isMatch ? (
+                            <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-medium flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                                <span>Data Types Match: Both columns are <strong className="font-mono uppercase">{type1}</strong></span>
+                              </div>
+                              <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/20 uppercase">
+                                Verified
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[11px] font-medium space-y-1">
+                              <div className="flex items-center gap-2 font-bold">
+                                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                <span>Data Type Mismatch Detected</span>
+                              </div>
+                              <p className="text-[10px] text-rose-300 leading-normal pl-5">
+                                "{mergeCol1}" is <strong className="font-mono uppercase">{type1}</strong>, but "{mergeCol2}" is <strong className="font-mono uppercase">{type2}</strong>. Both columns must have identical data types to merge.
+                              </p>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+
+                    {/* Merged Column Name */}
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Merged Column Name</label>
+                      <input
+                        type="text"
+                        value={targetMergedColName}
+                        onChange={(e) => setTargetMergedColName(e.target.value)}
+                        placeholder="e.g. Full_Name or Combined_Total"
+                        className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500 ${
+                          isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                        }`}
+                      />
+                    </div>
+
+                    {/* Merge Delimiter / Joiner */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Join Separator</label>
+                        <select
+                          value={mergeDelimiter}
+                          onChange={(e) => setMergeDelimiter(e.target.value)}
+                          className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500 ${
+                            isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                          }`}
+                        >
+                          <option value="space">Space (" ")</option>
+                          <option value="comma">Comma (", ")</option>
+                          <option value="dash">Dash (" - ")</option>
+                          <option value="slash">Slash (" / ")</option>
+                          <option value="underscore">Underscore ("_")</option>
+                          <option value="none">No Separator ("")</option>
+                          <option value="custom">Custom Text...</option>
+                        </select>
+                      </div>
+
+                      <div className="space-y-1.5 flex flex-col justify-end">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Source Columns</label>
+                        <label className={`flex items-center gap-2 text-[11px] font-medium cursor-pointer select-none ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                          <input
+                            type="checkbox"
+                            checked={keepOriginalCols}
+                            onChange={(e) => setKeepOriginalCols(e.target.checked)}
+                            className={`rounded text-indigo-600 focus:ring-0 cursor-pointer ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-300'}`}
+                          />
+                          <span>Keep original columns</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {mergeDelimiter === 'custom' && (
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Custom Separator Character(s)</label>
+                        <input
+                          type="text"
+                          value={customMergeDelimiter}
+                          onChange={(e) => setCustomMergeDelimiter(e.target.value)}
+                          placeholder="e.g. :: or |"
+                          className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500 ${
+                            isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                          }`}
+                        />
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={runColumnMerger}
+                      disabled={
+                        !mergeCol1 || 
+                        !mergeCol2 || 
+                        !targetMergedColName.trim() || 
+                        mergeCol1 === mergeCol2 || 
+                        inferColumnType(mergeCol1) !== inferColumnType(mergeCol2)
+                      }
+                      className={`w-full py-2.5 rounded-lg text-xs font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 disabled:opacity-40 disabled:cursor-not-allowed`}
+                    >
+                      <GitMerge className="w-3.5 h-3.5" /> Execute Column Merge
+                    </button>
+
+                    {/* Column Merge Action History & Revert Log */}
+                    {mergeActionsHistory.length > 0 && (
+                      <div className="pt-3 border-t border-slate-800/60 space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <GitMerge className="w-3.5 h-3.5 text-indigo-400" />
+                            <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+                              Merge History ({mergeActionsHistory.length})
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleUndoMerge()}
+                            className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/20 transition-all flex items-center gap-1 cursor-pointer"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            <span>Undo Latest Merge</span>
+                          </button>
+                        </div>
+
+                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                          {mergeActionsHistory.map((rec) => (
+                            <div 
+                              key={rec.id}
+                              className={`p-2.5 rounded-lg border flex items-center justify-between gap-2 text-xs transition-colors ${
+                                isDarkMode ? 'bg-slate-950/80 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                              }`}
+                            >
+                              <div className="space-y-0.5 truncate pr-2">
+                                <div className="flex items-center gap-1.5 font-bold text-[11px]">
+                                  <span className="text-slate-300 truncate">{rec.col1}</span>
+                                  <span className="text-indigo-400 font-mono">+</span>
+                                  <span className="text-slate-300 truncate">{rec.col2}</span>
+                                  <ArrowRight className="w-3 h-3 text-slate-500 shrink-0" />
+                                  <span className="text-emerald-400 font-mono truncate">{rec.targetCol}</span>
+                                </div>
+                                <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                                  <span className="px-1.5 py-0.2 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-mono font-bold">
+                                    {rec.dataType}
+                                  </span>
+                                  <span>{rec.timestamp}</span>
+                                  {rec.keepOriginalCols && (
+                                    <span className="text-slate-500">(Kept originals)</span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => handleUndoMerge(rec.id)}
+                                title={`Revert merge into "${rec.targetCol}"`}
+                                className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 transition-all flex items-center gap-1 shrink-0 cursor-pointer"
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                                <span>Undo</span>
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* Column Validation Engine Accordion */}
               <div className={`rounded-xl border transition-all ${
                 isValidationOpen 
                   ? 'border-emerald-500/40 bg-emerald-500/5 shadow-xs' 
-                  : 'hover:bg-emerald-500/5 hover:border-emerald-500/30 border-slate-800/80 bg-slate-950/60'
+                  : isDarkMode ? 'hover:bg-emerald-500/5 hover:border-emerald-500/30 border-slate-800/80 bg-slate-950/60' : 'hover:bg-emerald-500/5 hover:border-emerald-500/30 border-slate-200 bg-slate-50'
               }`}>
                 <button
                   type="button"
@@ -2010,7 +2468,7 @@ export default function CleaningCenter({
                   </div>
                   <div className="flex-1">
                     <div className="flex justify-between items-center">
-                      <h4 className="font-bold text-xs">Smart Validation Engine</h4>
+                      <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Smart Validation Engine</h4>
                       <ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isValidationOpen ? 'rotate-90 text-emerald-400' : ''}`} />
                     </div>
                     <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Establish field assertions, flag formatting violations, or auto-coerce raw anomalies.</p>
@@ -2222,7 +2680,7 @@ export default function CleaningCenter({
               <div className={`rounded-xl border transition-all ${
                 isPatternOpen 
                   ? 'border-indigo-500/40 bg-indigo-500/5 shadow-xs' 
-                  : 'hover:bg-indigo-500/5 hover:border-indigo-500/30 border-slate-800/80 bg-slate-950/60'
+                  : isDarkMode ? 'hover:bg-indigo-500/5 hover:border-indigo-500/30 border-slate-800/80 bg-slate-950/60' : 'hover:bg-indigo-500/5 hover:border-indigo-500/30 border-slate-200 bg-slate-50'
               }`}>
                 <button
                   type="button"
@@ -2239,7 +2697,7 @@ export default function CleaningCenter({
                   </div>
                   <div className="flex-1">
                     <div className="flex justify-between items-center">
-                      <h4 className="font-bold text-xs">Pattern Sanitization Engine</h4>
+                      <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Pattern Sanitization Engine</h4>
                       <ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isPatternOpen ? 'rotate-90 text-indigo-400' : ''}`} />
                     </div>
                     <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Recognize nested patterns (Emails, Phones, Custom Regex) and isolate or split them into clean streams.</p>
@@ -2369,7 +2827,7 @@ export default function CleaningCenter({
               <div className={`rounded-xl border transition-all ${
                 isMappingOpen 
                   ? 'border-purple-500/40 bg-purple-500/5 shadow-xs' 
-                  : 'hover:bg-purple-500/5 hover:border-purple-500/30 border-slate-800/80 bg-slate-950/60'
+                  : isDarkMode ? 'hover:bg-purple-500/5 hover:border-purple-500/30 border-slate-800/80 bg-slate-950/60' : 'hover:bg-purple-500/5 hover:border-purple-500/30 border-slate-200 bg-slate-50'
               }`}>
                 <button
                   type="button"
@@ -2387,7 +2845,7 @@ export default function CleaningCenter({
                   </div>
                   <div className="flex-1">
                     <div className="flex justify-between items-center">
-                      <h4 className="font-bold text-xs flex items-center gap-1.5 text-slate-200">
+                      <h4 className={`font-bold text-xs flex items-center gap-1.5 ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
                         AI Column Mapping Standardizer
                         <Sparkles className="w-3 h-3 text-purple-400 animate-pulse" />
                       </h4>
@@ -2572,6 +3030,29 @@ export default function CleaningCenter({
                 </button>
                 <button
                   type="button"
+                  onClick={() => {
+                    if (activeFile) {
+                      const currentFileState: CSVFile = {
+                        ...activeFile,
+                        headers: currentHeaders,
+                        cleanedRows: currentRows,
+                      };
+                      exportCleanedAuditToExcel(currentFileState);
+                    }
+                  }}
+                  id="btn-export-excel-cleaned"
+                  className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    isDarkMode 
+                      ? 'bg-emerald-500/10 border-emerald-500/30 hover:border-emerald-500/60 text-emerald-400 hover:bg-emerald-500/20' 
+                      : 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100 hover:border-emerald-300 shadow-xs'
+                  }`}
+                  title="Export cleaned dataset and audit logs to structured Excel (.xlsx) workbook"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500" />
+                  Export Excel (.xlsx)
+                </button>
+                <button
+                  type="button"
                   onClick={() => setIsPrintModalOpen(true)}
                   id="btn-print-cleaned-csv"
                   className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
@@ -2634,55 +3115,98 @@ export default function CleaningCenter({
             </div>
 
             {/* Pagination Controls */}
-            {currentRows.length > pageSize && (
-              <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs border-t border-slate-800/30 pt-4">
-                <span className="text-slate-400 font-medium">
-                  Showing <span className="font-mono text-blue-500 font-bold">{Math.min(currentRows.length, (currentPage - 1) * pageSize + 1)}</span> to{' '}
-                  <span className="font-mono text-blue-500 font-bold">{Math.min(currentRows.length, currentPage * pageSize)}</span> of{' '}
-                  <span className="font-mono text-blue-500 font-bold">{currentRows.length}</span> records
-                  {activeFile.totalRowsCount && activeFile.totalRowsCount > activeFile.rows.length && (
-                    <span className="text-[10px] text-amber-500 block sm:inline sm:ml-2 font-mono">
-                      (Loaded active chunk; total {activeFile.totalRowsCount} rows)
-                    </span>
-                  )}
-                </span>
-                
-                <div className="flex flex-wrap items-center gap-1">
-                  <button
-                    type="button"
-                    disabled={currentPage === 1}
-                    onClick={() => setCurrentPage(1)}
-                    className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
-                  >
-                    « First
-                  </button>
-                  <button
-                    type="button"
-                    disabled={currentPage === 1}
-                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                    className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
-                  >
-                    ‹ Prev
-                  </button>
-                  <span className="px-2.5 py-1.5 rounded-lg bg-blue-600/10 border border-blue-500/20 text-blue-400 font-bold font-mono text-[10px]">
-                    {currentPage} / {Math.ceil(currentRows.length / pageSize)}
+            {currentRows.length > 0 && (
+              <div className="mt-4 flex flex-col md:flex-row items-center justify-between gap-4 text-xs border-t border-slate-800/30 pt-4">
+                <div className="flex flex-wrap items-center gap-4">
+                  <span className="text-slate-400 font-medium">
+                    Showing <span className="font-mono text-blue-500 font-bold">{Math.min(currentRows.length, (currentPage - 1) * pageSize + 1)}</span> to{' '}
+                    <span className="font-mono text-blue-500 font-bold">{Math.min(currentRows.length, currentPage * pageSize)}</span> of{' '}
+                    <span className="font-mono text-blue-500 font-bold">{currentRows.length}</span> records
+                    {activeFile.totalRowsCount && activeFile.totalRowsCount > activeFile.rows.length && (
+                      <span className="text-[10px] text-amber-500 block sm:inline sm:ml-2 font-mono">
+                        (Loaded active chunk; total {activeFile.totalRowsCount} rows)
+                      </span>
+                    )}
                   </span>
-                  <button
-                    type="button"
-                    disabled={currentPage >= Math.ceil(currentRows.length / pageSize)}
-                    onClick={() => setCurrentPage(prev => Math.min(Math.ceil(currentRows.length / pageSize), prev + 1))}
-                    className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
-                  >
-                    Next ›
-                  </button>
-                  <button
-                    type="button"
-                    disabled={currentPage >= Math.ceil(currentRows.length / pageSize)}
-                    onClick={() => setCurrentPage(Math.ceil(currentRows.length / pageSize))}
-                    className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
-                  >
-                    Last »
-                  </button>
+
+                  {/* Rows per page selector */}
+                  <div className="flex items-center gap-1.5 text-slate-400 font-medium">
+                    <span>Rows per page:</span>
+                    <select
+                      value={pageSize}
+                      onChange={(e) => {
+                        setPageSize(Number(e.target.value));
+                        setCurrentPage(1);
+                      }}
+                      className={`px-2 py-1 rounded-lg border text-xs font-bold font-mono focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
+                    >
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                      <option value={250}>250</option>
+                      <option value={500}>500</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Page jump selector */}
+                  <div className="flex items-center gap-1.5 text-slate-400 font-medium">
+                    <span>Jump to:</span>
+                    <select
+                      value={currentPage}
+                      onChange={(e) => setCurrentPage(Number(e.target.value))}
+                      className={`px-2 py-1 rounded-lg border text-xs font-bold font-mono focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
+                    >
+                      {Array.from({ length: Math.ceil(currentRows.length / pageSize) || 1 }, (_, i) => i + 1).map(p => (
+                        <option key={p} value={p}>
+                          Page {p} of {Math.ceil(currentRows.length / pageSize) || 1}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage(1)}
+                      className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
+                      title="First Page"
+                    >
+                      « First
+                    </button>
+                    <button
+                      type="button"
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
+                      title="Previous Page"
+                    >
+                      ‹ Prev
+                    </button>
+                    <span className="px-2.5 py-1.5 rounded-lg bg-blue-600/10 border border-blue-500/20 text-blue-400 font-bold font-mono text-[10px]">
+                      {currentPage} / {Math.ceil(currentRows.length / pageSize) || 1}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={currentPage >= Math.ceil(currentRows.length / pageSize)}
+                      onClick={() => setCurrentPage(prev => Math.min(Math.ceil(currentRows.length / pageSize), prev + 1))}
+                      className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
+                      title="Next Page"
+                    >
+                      Next ›
+                    </button>
+                    <button
+                      type="button"
+                      disabled={currentPage >= Math.ceil(currentRows.length / pageSize)}
+                      onClick={() => setCurrentPage(Math.ceil(currentRows.length / pageSize))}
+                      className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
+                      title="Last Page"
+                    >
+                      Last »
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -2996,8 +3520,9 @@ export default function CleaningCenter({
             <div className={`p-4 border-t flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 ${
               isDarkMode ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-200'
             }`}>
-              <div className="text-[10px] text-slate-400 text-center sm:text-left">
-                <span>💡 <strong>Sandbox Tip:</strong> If print blocks inside AI Studio preview, open the app in a new tab to download/print.</span>
+              <div className="text-[10px] text-slate-400 text-center sm:text-left flex items-center gap-1">
+                <HelpCircle className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                <span><strong>Sandbox Tip:</strong> If print blocks inside AI Studio preview, open the app in a new tab to download/print.</span>
               </div>
               <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
                 <button

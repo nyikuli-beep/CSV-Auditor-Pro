@@ -27,6 +27,8 @@ import { detectCSVFormats } from '../lib/formatDetector';
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import CustomValidationPanel from './CustomValidationPanel';
+import CSVTemplatesPanel from './CSVTemplatesPanel';
+import ColumnMappingPanel from './ColumnMappingPanel';
 
 
 interface UploadCenterProps {
@@ -1784,14 +1786,14 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
                                       : 'bg-white border-slate-200 text-slate-700 border hover:bg-slate-50'
                                   }`}
                                 >
-                                  <option value="None">❌ Unmapped (Skip)</option>
-                                  <option value="Transaction ID">🔑 Transaction ID</option>
-                                  <option value="Transaction Date">📅 Transaction Date</option>
-                                  <option value="Customer Name">👤 Customer Name</option>
-                                  <option value="Email / Contact">✉️ Email / Contact</option>
-                                  <option value="Amount">💰 Amount</option>
-                                  <option value="Category">🏷️ Category</option>
-                                  <option value="Country">🌐 Country</option>
+                                  <option value="None">Unmapped (Skip)</option>
+                                  <option value="Transaction ID">Transaction ID</option>
+                                  <option value="Transaction Date">Transaction Date</option>
+                                  <option value="Customer Name">Customer Name</option>
+                                  <option value="Email / Contact">Email / Contact</option>
+                                  <option value="Amount">Amount</option>
+                                  <option value="Category">Category</option>
+                                  <option value="Country">Country</option>
                                 </select>
                               </div>
                             </th>
@@ -1910,116 +1912,23 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
                 availableColumns={pendingFile.headers}
               />
 
-              <div className={`p-6 rounded-xl border ${isDarkMode ? 'bg-[#131b2e]/60 border-slate-800' : 'bg-white border-slate-200 shadow-sm'} space-y-5`}>
-                <div className="flex justify-between items-center border-b pb-3 border-slate-800/40">
-                  <h3 className="font-bold text-xs uppercase tracking-wider text-slate-400">Map Raw Columns to Canonical Entities</h3>
-                  <span className="text-[10px] font-mono text-slate-500">Total headers: {pendingFile.headers.length}</span>
-                </div>
+              {/* Explicit Column Mapping Panel */}
+              <ColumnMappingPanel
+                headers={pendingFile.headers}
+                rows={pendingFile.rows}
+                mappings={mappings}
+                onMappingsChange={(newMappings) => setMappings(newMappings)}
+                explanations={explanations}
+                onAutoMapClick={() => fetchHeaderAnalysis(pendingFile.headers, pendingFile.rows)}
+                isAnalyzing={isAnalyzing}
+                isDarkMode={isDarkMode}
+                accentClass={accentClass}
+              />
 
-                <div className="space-y-4">
-                  {pendingFile.headers.map((header) => {
-                    // Extract safe sample values from first 2 rows
-                    const samplesList = pendingFile.rows.slice(0, 2).map(r => r[header]).filter(Boolean);
-                    const samplesStr = samplesList.join(', ');
-
-                    // Check column-specific issues for the Data Sanity Check indicators
-                    const colIssues = pendingFile.issues.filter(i => i.column === header);
-                    const colMissing = colIssues.filter(i => i.type === 'missing_value');
-                    const colFormat = colIssues.filter(i => i.type === 'invalid_format');
-                    const colOutlier = colIssues.filter(i => i.type === 'outlier');
-
-                    return (
-                      <div 
-                        key={header} 
-                        className={`p-4 rounded-xl border transition-all ${
-                          isDarkMode 
-                            ? 'bg-slate-900/40 border-slate-800/80 hover:border-slate-700/80' 
-                            : 'bg-slate-50/50 border-slate-200 hover:bg-slate-50'
-                        }`}
-                      >
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                          <div className="space-y-1 min-w-0 flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className={`font-extrabold text-sm block truncate ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                                {header || '[Empty Label]'}
-                              </span>
-                              {!header && (
-                                <span className="text-[9px] bg-rose-500/10 text-rose-400 font-bold px-1.5 py-0.5 rounded flex items-center gap-1 select-none shrink-0 border border-rose-500/20">
-                                  <AlertCircle className="w-2.5 h-2.5" /> Empty Header Label
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Sanity Check Column-level Badges */}
-                            <div className="flex flex-wrap gap-1.5 my-1">
-                              {colIssues.length === 0 && header && (
-                                <span className="text-[9px] bg-emerald-500/10 text-emerald-400 font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 select-none shrink-0 border border-emerald-500/10">
-                                  <Check className="w-2.5 h-2.5 text-emerald-400" /> Clean Structure
-                                </span>
-                              )}
-                              {colMissing.length > 0 && (
-                                <span className="text-[9px] bg-amber-500/10 text-amber-400 font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 select-none shrink-0 border border-amber-500/10" title={`${colMissing.length} empty cells detected`}>
-                                  <AlertTriangle className="w-2.5 h-2.5 text-amber-400" /> {colMissing.length} Blank Rows
-                                </span>
-                              )}
-                              {colFormat.length > 0 && (
-                                <span className="text-[9px] bg-blue-500/10 text-blue-400 font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 select-none shrink-0 border border-blue-500/10" title={`${colFormat.length} format anomalies found`}>
-                                  <Clock className="w-2.5 h-2.5 text-blue-400" /> Standard Variance
-                                </span>
-                              )}
-                              {colOutlier.length > 0 && (
-                                <span className="text-[9px] bg-rose-500/10 text-rose-400 font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 select-none shrink-0 border border-rose-500/10" title={`${colOutlier.length} extreme outlier points detected`}>
-                                  <AlertCircle className="w-2.5 h-2.5 text-rose-400 animate-pulse" /> Outliers
-                                </span>
-                              )}
-                            </div>
-
-                            {samplesStr && (
-                              <span className={`text-[10px] font-mono block ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                                Samples: <span className={`${isDarkMode ? 'text-slate-300' : 'text-slate-700'} italic`}>{samplesStr}</span>
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="w-full sm:w-48 shrink-0">
-                            <select
-                              value={mappings[header] || 'None'}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setMappings(prev => ({ ...prev, [header]: val }));
-                              }}
-                              className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer ${
-                                isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-700 border'
-                              }`}
-                            >
-                              <option value="None">None (Auxiliary Column)</option>
-                              <option value="Transaction ID">Transaction ID</option>
-                              <option value="Transaction Date">Transaction Date</option>
-                              <option value="Customer Name">Customer Name</option>
-                              <option value="Email / Contact">Email / Contact</option>
-                              <option value="Amount">Amount</option>
-                              <option value="Category">Category</option>
-                              <option value="Country">Country</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        {/* AI Explanation Badge & Text */}
-                        {explanations[header] && (
-                          <div className="mt-3 pt-2.5 border-t border-dashed border-slate-800/40 flex items-start gap-1.5">
-                            <Sparkles className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
-                            <p className={`text-[10px] leading-normal ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                              {explanations[header]}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Confirmations */}
-                <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-2">
+              {/* Confirmations & Action Buttons */}
+              <div className={`p-4 rounded-xl border flex flex-col sm:flex-row justify-between items-center gap-4 ${
+                isDarkMode ? 'bg-[#131b2e]/60 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+              }`}>
                   <button
                     disabled={isActionPending}
                     onClick={async () => {
@@ -2120,7 +2029,6 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
                   </div>
                 </div>
 
-              </div>
             </div>
 
             {/* Right Reference Sidebar */}
@@ -2568,6 +2476,12 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
               </div>
             </div>
           )}
+
+          {/* Standard CSV Templates Download Panel */}
+          <CSVTemplatesPanel
+            isDarkMode={isDarkMode}
+            accentClass={accentClass}
+          />
 
           {/* Custom Validation Rules Panel */}
           <CustomValidationPanel

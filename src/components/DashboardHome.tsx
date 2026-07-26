@@ -186,7 +186,7 @@ export default function DashboardHome({ files, activeFile, activities, onNavigat
   const hoursSaved = (timeSavedMinutes / 60).toFixed(1);
 
   return (
-    <div className="space-y-8 animate-fadeIn">
+    <div className="space-y-8 animate-fadeIn w-full max-w-full overflow-x-hidden">
       {/* Welcome Banner */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>

@@ -14,6 +14,7 @@ import {
   Upload
 } from 'lucide-react';
 import { CSVFile, ReportConfig } from '../types';
+import { exportCleanedAuditToExcel } from '../lib/excelExporter';
 
 interface ReportGenProps {
   activeFile: CSVFile | null;
@@ -54,7 +55,13 @@ export default function ReportGen({ activeFile, onNavigate, isDarkMode, accentCl
   };
 
   const triggerExport = (format: 'pdf' | 'csv' | 'xlsx') => {
-    // PDF simulated print layout or CSV dynamic download
+    if (!activeFile) return;
+
+    if (format === 'xlsx') {
+      exportCleanedAuditToExcel(activeFile);
+      return;
+    }
+
     if (format === 'csv') {
       const headersStr = activeFile.headers.join(',');
       const rowsStr = (activeFile.cleanedRows || activeFile.rows)

@@ -318,7 +318,7 @@ export default function CustomValidationPanel({
                         {availableColumns.map(col => (
                           <option key={col} value={col}>{col}</option>
                         ))}
-                        <option value="__custom__">✍️ Custom Column Name...</option>
+                        <option value="__custom__">Custom Column Name...</option>
                       </select>
                       
                       {selectedColFromList === '__custom__' && (
@@ -445,9 +445,9 @@ export default function CustomValidationPanel({
                       isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-700 border'
                     }`}
                   >
-                    <option value="warning">⚠️ Warning</option>
-                    <option value="critical">🚨 Critical</option>
-                    <option value="info">ℹ️ Info</option>
+                    <option value="warning">Warning</option>
+                    <option value="critical">Critical</option>
+                    <option value="info">Info</option>
                   </select>
                 </div>
               </div>

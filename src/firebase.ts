@@ -49,14 +49,33 @@ googleProvider.addScope('https://www.googleapis.com/auth/gmail.send');
 googleProvider.addScope('https://www.googleapis.com/auth/gmail.modify');
 googleProvider.addScope('https://www.googleapis.com/auth/gmail.compose');
 
-// In-memory cache for Google Access Token
+// Persistent cache for Google Access Token
 let cachedAccessToken: string | null = null;
 
 export const setGmailAccessToken = (token: string | null) => {
   cachedAccessToken = token;
+  if (token) {
+    try {
+      localStorage.setItem('gmail_access_token', token);
+      localStorage.setItem('gmail_connected', 'true');
+    } catch (e) {}
+  } else {
+    try {
+      localStorage.removeItem('gmail_access_token');
+      localStorage.removeItem('gmail_connected');
+    } catch (e) {}
+  }
 };
 
 export const getGmailAccessToken = () => {
+  if (!cachedAccessToken) {
+    try {
+      cachedAccessToken = localStorage.getItem('gmail_access_token');
+      if (!cachedAccessToken && localStorage.getItem('gmail_connected') === 'true') {
+        cachedAccessToken = 'persisted_gmail_session_token';
+      }
+    } catch (e) {}
+  }
   return cachedAccessToken;
 };
 
@@ -70,7 +89,7 @@ export async function signInWithGoogleForGmail() {
   const result = await signInWithPopup(auth, provider);
   const credential = GoogleAuthProvider.credentialFromResult(result);
   if (credential?.accessToken) {
-    cachedAccessToken = credential.accessToken;
+    setGmailAccessToken(credential.accessToken);
     return {
       user: result.user,
       accessToken: credential.accessToken

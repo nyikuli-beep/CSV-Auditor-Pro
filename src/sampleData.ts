@@ -156,7 +156,7 @@ export const PREVIOUS_AUDITS: CSVFile[] = [
 ];
 
 export const TEAM_MEMBERS: TeamMember[] = [
-  { id: 'usr-1', name: 'Nyikuli Bramwel', email: 'nyikulibramwel@gmail.com', role: 'Owner', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face', status: 'active' },
+  { id: 'usr-1', name: 'Nyikuli Bramwel', email: 'nyikulibramwel@gmail.com', role: 'Owner', avatar: '/macbook_code.jpg', status: 'active' },
   { id: 'usr-2', name: 'Marcus Vance', email: 'marcus@company.com', role: 'Admin', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face', status: 'active' },
   { id: 'usr-3', name: 'Leila Chen', email: 'leila.c@company.com', role: 'Editor', avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=100&h=100&fit=crop&crop=face', status: 'active' },
   { id: 'usr-4', name: 'David Kim', email: 'd.kim@company.com', role: 'Viewer', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop&crop=face', status: 'invited' },

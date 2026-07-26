@@ -307,7 +307,7 @@ export default function RegexBuilder({
       ...t,
       id: `preset-${idx}-${Date.now()}`
     }));
-    setTokens(newTokens);
+    setTokens(newTokens as RegexToken[]);
     setMatchStart(preset.matchStart);
     setMatchEnd(preset.matchEnd);
     setTestValue(preset.sample);

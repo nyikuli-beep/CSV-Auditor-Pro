@@ -18,9 +18,11 @@ import {
   BrainCircuit,
   Sliders,
   Activity,
-  HelpCircle
+  HelpCircle,
+  BarChart3
 } from 'lucide-react';
 import { CSVFile, AuditIssue, Severity, IssueType } from '../types';
+import { exportCleanedAuditToExcel } from '../lib/excelExporter';
 
 interface AuditResultsProps {
   activeFile: CSVFile | null;
@@ -40,7 +42,7 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
 
   // Issues Pagination State
   const [issuesPage, setIssuesPage] = useState(1);
-  const issuesPageSize = 50;
+  const [issuesPageSize, setIssuesPageSize] = useState(25);
 
   // Smart Outlier Audit State (Number of Standard Deviations)
   const [outlierThreshold, setOutlierThreshold] = useState<number>(2.5);
@@ -811,6 +813,22 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
               <span>Download CSV (Rows with Issues)</span>
             </button>
 
+            {/* Structured Excel (.xlsx) Export Button */}
+            <button
+              type="button"
+              id="audit-results-download-excel-btn"
+              onClick={() => activeFile && exportCleanedAuditToExcel(activeFile)}
+              className={`px-3 py-1.5 rounded-lg border font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                isDarkMode 
+                  ? 'bg-emerald-500/10 border-emerald-500/30 hover:border-emerald-500/60 text-emerald-400 hover:bg-emerald-500/20' 
+                  : 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100 hover:border-emerald-300 shadow-xs'
+              }`}
+              title="Export complete cleaned dataset and issue findings into structured Excel (.xlsx) workbook"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500" />
+              <span>Export Excel (.xlsx)</span>
+            </button>
+
             {/* Export Dropdown Button */}
             <div className="relative">
               <button
@@ -848,6 +866,31 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
                     <div className="px-3 py-1.5 border-b border-slate-800/40 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                       Export Configurations
                     </div>
+
+                    {/* Option 0: Structured Excel Workbook */}
+                    <button
+                      type="button"
+                      id="export-option-excel"
+                      onClick={() => {
+                        if (activeFile) exportCleanedAuditToExcel(activeFile);
+                        setExportDropdownOpen(false);
+                      }}
+                      className={`w-full px-3 py-2 text-left transition-colors flex items-start gap-2.5 cursor-pointer bg-emerald-500/5 ${
+                        isDarkMode ? 'hover:bg-emerald-500/10' : 'hover:bg-emerald-50'
+                      }`}
+                    >
+                      <FileSpreadsheet className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-bold text-xs block text-emerald-400 flex items-center gap-1">
+                          Excel Workbook (.xlsx) <span className="px-1.5 py-0.2 rounded text-[9px] bg-emerald-500/20 uppercase font-mono">Multi-Tab</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">
+                          Multi-tab workbook with Cleaned Data, Findings Log, Issue Flags, and Executive Summary.
+                        </span>
+                      </div>
+                    </button>
+                    
+                    <div className="border-t border-slate-800/40 my-1"></div>
                     
                     {/* Option 1: Full Cleaned/Audited CSV */}
                     <button
@@ -949,9 +992,9 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
               <button
                 type="button"
                 onClick={() => setAnomalyMode('statistical')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${anomalyMode === 'statistical' ? 'bg-violet-600 text-white shadow' : 'bg-slate-800/40 text-slate-400 hover:text-white'}`}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${anomalyMode === 'statistical' ? 'bg-violet-600 text-white shadow' : 'bg-slate-800/40 text-slate-400 hover:text-white'}`}
               >
-                📊 Statistical Model
+                <BarChart3 className="w-3.5 h-3.5" /> Statistical Model
               </button>
               <button
                 type="button"
@@ -1225,9 +1268,9 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
                       </div>
 
                       {/* AI Explanations Screen 7 helper button */}
-                      <div className="space-y-3 pt-3 border-t border-slate-800/40">
+                      <div className={`space-y-3 pt-3 border-t ${isDarkMode ? 'border-slate-800/40' : 'border-slate-200'}`}>
                         <div className="flex justify-between items-center flex-wrap gap-2">
-                           <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                           <span className={`text-[10px] font-bold flex items-center gap-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
                             <Sparkles className="w-3 h-3 text-yellow-500" /> Gemini Audit Intelligence
                           </span>
                           {!aiExplanations[issue.id] && !issue.explanation && (
@@ -1260,49 +1303,92 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
         </div>
 
         {/* Issues Pagination Controls */}
-        {filteredIssues.length > issuesPageSize && (
-          <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs border-t border-slate-800/30 pt-4">
-            <span className="text-slate-400 font-medium">
-              Showing <span className="font-mono text-blue-500 font-bold">{Math.min(filteredIssues.length, (issuesPage - 1) * issuesPageSize + 1)}</span> to{' '}
-              <span className="font-mono text-blue-500 font-bold">{Math.min(filteredIssues.length, issuesPage * issuesPageSize)}</span> of{' '}
-              <span className="font-mono text-blue-500 font-bold">{filteredIssues.length}</span> compliance findings
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                disabled={issuesPage === 1}
-                onClick={() => setIssuesPage(1)}
-                className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
-              >
-                «
-              </button>
-              <button
-                type="button"
-                disabled={issuesPage === 1}
-                onClick={() => setIssuesPage(prev => Math.max(1, prev - 1))}
-                className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
-              >
-                Prev
-              </button>
-              <span className="px-2.5 py-1.5 rounded-lg bg-blue-600/10 border border-blue-500/20 text-blue-400 font-bold font-mono text-[10px]">
-                {issuesPage} / {Math.ceil(filteredIssues.length / issuesPageSize)}
+        {filteredIssues.length > 0 && (
+          <div className="mt-6 flex flex-col md:flex-row items-center justify-between gap-4 text-xs border-t border-slate-800/30 pt-4">
+            <div className="flex flex-wrap items-center gap-4">
+              <span className="text-slate-400 font-medium">
+                Showing <span className="font-mono text-blue-500 font-bold">{Math.min(filteredIssues.length, (issuesPage - 1) * issuesPageSize + 1)}</span> to{' '}
+                <span className="font-mono text-blue-500 font-bold">{Math.min(filteredIssues.length, issuesPage * issuesPageSize)}</span> of{' '}
+                <span className="font-mono text-blue-500 font-bold">{filteredIssues.length}</span> compliance findings
               </span>
-              <button
-                type="button"
-                disabled={issuesPage >= Math.ceil(filteredIssues.length / issuesPageSize)}
-                onClick={() => setIssuesPage(prev => Math.min(Math.ceil(filteredIssues.length / issuesPageSize), prev + 1))}
-                className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
-              >
-                Next
-              </button>
-              <button
-                type="button"
-                disabled={issuesPage >= Math.ceil(filteredIssues.length / issuesPageSize)}
-                onClick={() => setIssuesPage(Math.ceil(filteredIssues.length / issuesPageSize))}
-                className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
-              >
-                »
-              </button>
+
+              {/* Per page size selector */}
+              <div className="flex items-center gap-1.5 text-slate-400 font-medium">
+                <span>Per page:</span>
+                <select
+                  value={issuesPageSize}
+                  onChange={(e) => {
+                    setIssuesPageSize(Number(e.target.value));
+                    setIssuesPage(1);
+                  }}
+                  className={`px-2 py-1 rounded-lg border text-xs font-bold font-mono focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Page jump selector */}
+              <div className="flex items-center gap-1.5 text-slate-400 font-medium">
+                <span>Jump to:</span>
+                <select
+                  value={issuesPage}
+                  onChange={(e) => setIssuesPage(Number(e.target.value))}
+                  className={`px-2 py-1 rounded-lg border text-xs font-bold font-mono focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
+                >
+                  {Array.from({ length: Math.ceil(filteredIssues.length / issuesPageSize) || 1 }, (_, i) => i + 1).map(p => (
+                    <option key={p} value={p}>
+                      Page {p} of {Math.ceil(filteredIssues.length / issuesPageSize) || 1}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={issuesPage === 1}
+                  onClick={() => setIssuesPage(1)}
+                  className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
+                  title="First Page"
+                >
+                  « First
+                </button>
+                <button
+                  type="button"
+                  disabled={issuesPage === 1}
+                  onClick={() => setIssuesPage(prev => Math.max(1, prev - 1))}
+                  className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
+                  title="Previous Page"
+                >
+                  ‹ Prev
+                </button>
+                <span className="px-2.5 py-1.5 rounded-lg bg-blue-600/10 border border-blue-500/20 text-blue-400 font-bold font-mono text-[10px]">
+                  {issuesPage} / {Math.ceil(filteredIssues.length / issuesPageSize) || 1}
+                </span>
+                <button
+                  type="button"
+                  disabled={issuesPage >= Math.ceil(filteredIssues.length / issuesPageSize)}
+                  onClick={() => setIssuesPage(prev => Math.min(Math.ceil(filteredIssues.length / issuesPageSize), prev + 1))}
+                  className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
+                  title="Next Page"
+                >
+                  Next ›
+                </button>
+                <button
+                  type="button"
+                  disabled={issuesPage >= Math.ceil(filteredIssues.length / issuesPageSize)}
+                  onClick={() => setIssuesPage(Math.ceil(filteredIssues.length / issuesPageSize))}
+                  className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
+                  title="Last Page"
+                >
+                  Last »
+                </button>
+              </div>
             </div>
           </div>
         )}

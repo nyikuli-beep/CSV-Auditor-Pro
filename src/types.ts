@@ -51,7 +51,10 @@ export interface TeamMember {
   email: string;
   role: 'Owner' | 'Admin' | 'Editor' | 'Viewer';
   avatar?: string;
-  status: 'active' | 'invited';
+  status: 'active' | 'invited' | 'denied';
+  accessDenied?: boolean;
+  deniedAt?: string;
+  deniedBy?: string;
 }
 
 export interface AuditActivity {

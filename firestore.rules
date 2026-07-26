@@ -12,19 +12,11 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isVerified() {
-      return isSignedIn(); // Allow standard authenticated SaaS sessions
-    }
-
     function isOwner(ownerId) {
       return isSignedIn() && request.auth.uid == ownerId;
     }
 
     function isValidId(id) {
-      return id is string && id.size() <= 128;
-    }
-
-    function isValidUserId(id) {
       return id is string && id.size() <= 128;
     }
 
@@ -43,6 +35,7 @@ service cloud.firestore {
         && data.name is string && data.name.size() <= 200
         && data.email is string && data.email.size() <= 200
         && data.role in ['Owner', 'Admin', 'Editor', 'Viewer']
+        && (!('avatar' in data) || (data.avatar is string && data.avatar.size() <= 1000000))
         && data.keys().hasAll(['id', 'name', 'email', 'role']);
     }
 
@@ -75,6 +68,7 @@ service cloud.firestore {
         && data.email is string && data.email.size() <= 200
         && data.role in ['Owner', 'Admin', 'Editor', 'Viewer']
         && data.status in ['active', 'invited']
+        && (!('avatar' in data) || (data.avatar is string && data.avatar.size() <= 1000000))
         && data.keys().hasAll(['id', 'name', 'email', 'role', 'status']);
     }
 
@@ -86,45 +80,40 @@ service cloud.firestore {
 
     // USERS COLLECTION
     match /users/{userId} {
-      allow get: if isSignedIn() && (request.auth.uid == userId) && isValidUserId(userId);
+      allow get: if isSignedIn() && (request.auth.uid == userId);
       allow list: if isSignedIn();
-      allow create: if isVerified() && (request.auth.uid == userId) && isValidUserId(userId) && isValidUser(incoming());
-      allow update: if isVerified() && (request.auth.uid == userId) && isValidUserId(userId) && isValidUser(incoming())
-        && incoming().role == existing().role; // Role remains immutable on self-edit
+      allow create: if isSignedIn() && (request.auth.uid == userId) && isValidUser(incoming());
+      allow update: if isSignedIn() && (request.auth.uid == userId);
       allow delete: if false;
     }
 
     // FILES COLLECTION
     match /files/{fileId} {
-      allow get: if isSignedIn() && isValidId(fileId) && (isOwner(existing().ownerId) || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['Owner', 'Admin', 'Editor', 'Viewer']);
-      allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['Owner', 'Admin', 'Editor', 'Viewer']);
-      allow create: if isVerified() && isValidId(fileId) && isOwner(incoming().ownerId) && isValidCSVFile(incoming());
-      allow update: if isVerified() && isValidId(fileId) && isOwner(existing().ownerId) && isValidCSVFile(incoming())
+      allow get: if isSignedIn() && isValidId(fileId);
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(fileId) && isOwner(incoming().ownerId) && isValidCSVFile(incoming());
+      allow update: if isSignedIn() && isValidId(fileId) && isOwner(existing().ownerId) && isValidCSVFile(incoming())
         && incoming().ownerId == existing().ownerId;
-      allow delete: if isVerified() && isValidId(fileId) && isOwner(existing().ownerId);
+      allow delete: if isSignedIn() && isValidId(fileId) && isOwner(existing().ownerId);
     }
 
     // ACTIVITIES TIMELINE
     match /activities/{activityId} {
       allow read: if isSignedIn();
-      allow create: if isVerified() && isValidId(activityId) && (request.auth.uid == incoming().userId || incoming().userId.startsWith('usr-')) && isValidAuditActivity(incoming());
+      allow create: if isSignedIn() && isValidId(activityId) && isValidAuditActivity(incoming());
       allow update, delete: if false; // Timeline is immutable append-only ledger
     }
 
     // MEMBERS COLLECTION
     match /members/{memberId} {
       allow read: if isSignedIn();
-      allow create: if isVerified() && isValidId(memberId) && isValidTeamMember(incoming());
-      allow update: if isVerified() && isValidId(memberId) && isValidTeamMember(incoming());
-      allow delete: if isVerified() && isValidId(memberId);
+      allow create, update: if isSignedIn() && isValidId(memberId) && isValidTeamMember(incoming());
+      allow delete: if isSignedIn() && isValidId(memberId);
     }
 
     // DRAFTS COLLECTION
     match /drafts/{userId} {
-      allow get: if isSignedIn() && request.auth.uid == userId;
-      allow list: if false;
-      allow create, update: if isSignedIn() && request.auth.uid == userId && isValidDraft(incoming());
-      allow delete: if isSignedIn() && request.auth.uid == userId;
+      allow get, list, create, update, delete: if isSignedIn() && request.auth.uid == userId;
     }
   }
 }

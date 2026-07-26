@@ -24,10 +24,29 @@
 }
 
 /* High Density Custom Design Theme Overrides */
+html, body, #root {
+  min-height: 100%;
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+}
+
 body {
   background-color: #f8fafc;
   color: #1e293b;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+html.dark,
+body.dark,
+.dark body,
+html.dark #root,
+body.dark #root {
+  background-color: #0b0f19 !important;
+  color: #f8fafc;
 }
 
 /* Thin modern high-density scrollbars */

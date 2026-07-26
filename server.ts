@@ -90,8 +90,19 @@ app.post('/api/sql/sync-user', requireAuth, async (req: AuthRequest, res) => {
   try {
     const { name, email, role } = req.body;
     const uid = req.user?.uid;
+    const tokenEmail = (req.user?.email || '').toLowerCase().trim();
     if (!uid || !email) {
       res.status(400).json({ error: 'Missing required profile payload' });
+      return;
+    }
+
+    const protectedEmails = ['nyikulibramwel@gmail.com', 'nyikuli@company.com'];
+    const targetEmail = email.toLowerCase().trim();
+
+    if (protectedEmails.includes(targetEmail) && tokenEmail !== targetEmail) {
+      res.status(403).json({ 
+        error: `Forbidden: Cannot sync or impersonate protected owner email ${email} without a matching verified auth token.` 
+      });
       return;
     }
 
