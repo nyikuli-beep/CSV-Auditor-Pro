@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut } from 'firebase/auth';
 import { initializeFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
@@ -86,14 +86,22 @@ export async function signInWithGoogleForGmail() {
   provider.addScope('https://www.googleapis.com/auth/gmail.modify');
   provider.addScope('https://www.googleapis.com/auth/gmail.compose');
   
-  const result = await signInWithPopup(auth, provider);
-  const credential = GoogleAuthProvider.credentialFromResult(result);
-  if (credential?.accessToken) {
-    setGmailAccessToken(credential.accessToken);
-    return {
-      user: result.user,
-      accessToken: credential.accessToken
-    };
+  try {
+    const result = await signInWithPopup(auth, provider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    if (credential?.accessToken) {
+      setGmailAccessToken(credential.accessToken);
+      return {
+        user: result.user,
+        accessToken: credential.accessToken
+      };
+    }
+  } catch (err: any) {
+    if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user') {
+      await signInWithRedirect(auth, provider);
+      return { user: null, accessToken: null };
+    }
+    throw err;
   }
   throw new Error('Failed to obtain Google Access Token');
 }

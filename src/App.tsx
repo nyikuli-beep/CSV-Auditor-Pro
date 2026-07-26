@@ -69,8 +69,8 @@ function LoadingSpinner({ message }: { message: string }) {
 }
 
 // Import Firebase integration
-import { auth, db, OperationType, handleFirestoreError } from './firebase';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { auth, db, OperationType, handleFirestoreError, setGmailAccessToken } from './firebase';
+import { onAuthStateChanged, signOut, getRedirectResult, GoogleAuthProvider } from 'firebase/auth';
 import { 
   collection, 
   doc, 
@@ -397,6 +397,25 @@ export default function App() {
       document.body.style.backgroundColor = '#f8fafc';
     }
   }, [isDarkMode]);
+
+  // Capture incoming Firebase Auth redirect results (for Vercel & mobile browser OAuth redirects)
+  useEffect(() => {
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result) {
+          const credential = GoogleAuthProvider.credentialFromResult(result);
+          if (credential?.accessToken) {
+            setGmailAccessToken(credential.accessToken);
+          }
+          if (result.user) {
+            setFirebaseUser(result.user);
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn('[Firebase Auth Redirect Handler]:', err?.message || err);
+      });
+  }, []);
 
   // Monitor auth state changes
   useEffect(() => {
