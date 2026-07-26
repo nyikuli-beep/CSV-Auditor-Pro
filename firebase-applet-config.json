@@ -1,11 +1,9 @@
 {
-  "projectId": "wide-operation-x8kj5",
-  "appId": "1:542026144321:web:c40e54bb6c76824e1204c0",
-  "apiKey": "AIzaSyBwnPctQC1bfzShoTLZuqs8yNIwqF5jHGk",
-  "authDomain": "wide-operation-x8kj5.firebaseapp.com",
-  "storageBucket": "wide-operation-x8kj5.firebasestorage.app",
-  "messagingSenderId": "542026144321",
-  "measurementId": "",
-  "oAuthClientId": "542026144321-1v4gtoj482a28useo34touj8kk228l5o.apps.googleusercontent.com",
-  "recaptchaSiteKey": ""
+  "projectId": "csv-auditor-pro-cba84",
+  "appId": "1:988907896437:web:b5705abc509dcb94c8823c",
+  "apiKey": "AIzaSyCTyae4mGBxE9QlUQctU4NF9PuX4gW3Z3Q",
+  "authDomain": "csv-auditor-pro-cba84.firebaseapp.com",
+  "storageBucket": "csv-auditor-pro-cba84.firebasestorage.app",
+  "messagingSenderId": "988907896437",
+  "measurementId": "G-VZS59C94CC"
 }

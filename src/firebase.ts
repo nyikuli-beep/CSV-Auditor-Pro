@@ -1,7 +1,8 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut } from 'firebase/auth';
-import { initializeFirestore, doc, getDocFromServer } from 'firebase/firestore';
-import firebaseConfig from '../firebase-applet-config.json';
+import { doc, getDocFromServer } from 'firebase/firestore';
+import { signInWithPopup, signInWithRedirect, GoogleAuthProvider } from 'firebase/auth';
+import { app, auth, db, googleProvider } from './firebase/firebase';
+
+export { app, auth, db, googleProvider };
 
 // Monkeypatch console.error to intercept and downgrade internal Firestore reachability issues.
 // In sandboxed environments or during initial container cold-starts, Firestore may take a moment
@@ -31,23 +32,6 @@ console.error = function (...args: any[]) {
   }
   originalConsoleError.apply(console, args);
 };
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-
-// Initialize Firestore and Auth with long polling forced for secure sandboxed iframes
-const databaseId = (firebaseConfig as any).firestoreDatabaseId || 'ai-studio-18a06fb7-6d93-4f48-8713-9d60be376792';
-export const db = initializeFirestore(app, {
-  experimentalForceLongPolling: true,
-}, databaseId); /* CRITICAL: The app will break without this line */
-export const auth = getAuth(app);
-
-// Configure Auth Providers
-export const googleProvider = new GoogleAuthProvider();
-googleProvider.addScope('https://www.googleapis.com/auth/gmail.readonly');
-googleProvider.addScope('https://www.googleapis.com/auth/gmail.send');
-googleProvider.addScope('https://www.googleapis.com/auth/gmail.modify');
-googleProvider.addScope('https://www.googleapis.com/auth/gmail.compose');
 
 // Persistent cache for Google Access Token
 let cachedAccessToken: string | null = null;

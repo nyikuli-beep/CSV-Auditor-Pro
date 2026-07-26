@@ -1,5 +1,11 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
+import { useAuth } from './hooks/useAuth';
+import ProtectedRoute from './components/ProtectedRoute';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
 import { 
   FileSpreadsheet, 
   Upload, 
@@ -84,12 +90,25 @@ import {
   limit 
 } from 'firebase/firestore';
 
-export default function App() {
-  // Global View State: 'landing' | 'auth' | 'workspace'
-  const [view, setView] = useState<'landing' | 'auth' | 'workspace'>('landing');
-  
+export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: string }) {
+  const { user: authUser, logout } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
   // Tab State inside SaaS workspace
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    const path = location.pathname.substring(1);
+    return path || initialTab;
+  });
+
+  useEffect(() => {
+    const currentPath = location.pathname.substring(1);
+    if (currentPath && ['dashboard', 'upload', 'schema', 'results', 'clean', 'insights', 'gmail', 'reports', 'history', 'team', 'admin', 'settings'].includes(currentPath)) {
+      setActiveTab(currentPath);
+    } else if (currentPath === 'profile') {
+      setActiveTab('settings');
+    }
+  }, [location.pathname]);
   
   // Session / Persona State
   const [user, setUser] = useState<{ email: string; role: string; name?: string; avatar?: string } | null>(() => {
@@ -349,7 +368,7 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('app_theme', isDarkMode ? 'dark' : 'light');
     setSettings(prev => {
-      const newTheme = isDarkMode ? 'dark' : 'light';
+      const newTheme: 'dark' | 'light' = isDarkMode ? 'dark' : 'light';
       if (prev.theme === newTheme) return prev;
       const next = { ...prev, theme: newTheme };
       try {
@@ -501,11 +520,10 @@ export default function App() {
           console.warn("Error syncing user to Postgres on login (safe fallback to local state active):", dbErr);
         }
 
-        setView('workspace');
+        // On auth state change, user state synced
       } else {
         setFirebaseUser(null);
         setUser(null);
-        setView('landing');
       }
       setAuthLoading(false);
     });
@@ -706,7 +724,7 @@ export default function App() {
     }
     localStorage.setItem('user_profile_name', userInfo.name);
     setUser({ email: userInfo.email, role: userInfo.role, name: userInfo.name, avatar: savedAvatar });
-    setView('workspace');
+    navigate('/dashboard');
     setActiveTab('dashboard');
 
     // Prepend user activation activity log
@@ -728,12 +746,11 @@ export default function App() {
   // Log Out Sequence
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      await logout();
+      navigate('/login');
     } catch (err) {
       console.error("Error signing out:", err);
     }
-    setUser(null);
-    setView('landing');
   };
 
   // Add newly uploaded CSV to registry
@@ -1231,6 +1248,7 @@ export default function App() {
   // Nav helper for internal tab redirection
   const handleNavigateTab = (tab: string) => {
     setActiveTab(tab);
+    navigate(`/${tab}`);
   };
 
   // Select file from history to set as active in workspace
@@ -1244,35 +1262,7 @@ export default function App() {
 
   return (
     <div className={`min-h-screen w-full max-w-full overflow-x-hidden font-sans transition-colors duration-200 ${isDarkMode ? 'bg-[#0b0f19] text-slate-100' : 'bg-[#F8FAFC] text-[#1E293B]'}`}>
-      
-      {/* 1. Landing View */}
-      {view === 'landing' && (
-        <Suspense fallback={<LoadingSpinner message="Initializing CSV Auditor Pro..." />}>
-          <LandingPage 
-            onStartTrial={() => setView('auth')}
-            isDarkMode={isDarkMode}
-            toggleTheme={() => setIsDarkMode(!isDarkMode)}
-            accentClass={accentClass}
-          />
-        </Suspense>
-      )}
-
-      {/* 2. Authentication view */}
-      {view === 'auth' && (
-        <Suspense fallback={<LoadingSpinner message="Setting up secure workspace portal..." />}>
-          <AuthView 
-            members={members}
-            onLoginSuccess={handleAuthSuccess}
-            onBackToLanding={() => setView('landing')}
-            isDarkMode={isDarkMode}
-            accentClass={accentClass}
-          />
-        </Suspense>
-      )}
-
-      {/* 3. SaaS Active Workspace Segment */}
-      {view === 'workspace' && (
-        <div className="flex min-h-screen w-full max-w-full overflow-x-hidden">
+      <div className="flex min-h-screen w-full max-w-full overflow-x-hidden">
           
           {/* Mobile Drawer Backdrop Overlay */}
           <AnimatePresence>
@@ -1782,7 +1772,6 @@ export default function App() {
           </main>
 
         </div>
-      )}
 
       {/* Keyboard Shortcuts Guide Modal */}
       <KeyboardShortcutsModal 
@@ -1895,5 +1884,53 @@ export default function App() {
       </AnimatePresence>
 
     </div>
+  );
+}
+
+export default function App() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [isDarkMode, setIsDarkMode] = useState(true);
+
+  return (
+    <Routes>
+      <Route 
+        path="/" 
+        element={
+          user ? (
+            <Navigate to="/dashboard" replace />
+          ) : (
+            <Suspense fallback={<LoadingSpinner message="Initializing CSV Auditor Pro..." />}>
+              <LandingPage 
+                onStartTrial={() => navigate('/login')}
+                isDarkMode={isDarkMode}
+                toggleTheme={() => setIsDarkMode(!isDarkMode)}
+                accentClass="from-blue-600 to-indigo-600"
+              />
+            </Suspense>
+          )
+        } 
+      />
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+
+      {/* Protected Workspace Routes */}
+      <Route path="/dashboard" element={<ProtectedRoute><WorkspaceContent initialTab="dashboard" /></ProtectedRoute>} />
+      <Route path="/upload" element={<ProtectedRoute><WorkspaceContent initialTab="upload" /></ProtectedRoute>} />
+      <Route path="/schema" element={<ProtectedRoute><WorkspaceContent initialTab="schema" /></ProtectedRoute>} />
+      <Route path="/results" element={<ProtectedRoute><WorkspaceContent initialTab="results" /></ProtectedRoute>} />
+      <Route path="/clean" element={<ProtectedRoute><WorkspaceContent initialTab="clean" /></ProtectedRoute>} />
+      <Route path="/insights" element={<ProtectedRoute><WorkspaceContent initialTab="insights" /></ProtectedRoute>} />
+      <Route path="/gmail" element={<ProtectedRoute><WorkspaceContent initialTab="gmail" /></ProtectedRoute>} />
+      <Route path="/reports" element={<ProtectedRoute><WorkspaceContent initialTab="reports" /></ProtectedRoute>} />
+      <Route path="/history" element={<ProtectedRoute><WorkspaceContent initialTab="history" /></ProtectedRoute>} />
+      <Route path="/team" element={<ProtectedRoute><WorkspaceContent initialTab="team" /></ProtectedRoute>} />
+      <Route path="/settings" element={<ProtectedRoute><WorkspaceContent initialTab="settings" /></ProtectedRoute>} />
+      <Route path="/profile" element={<ProtectedRoute><WorkspaceContent initialTab="settings" /></ProtectedRoute>} />
+      <Route path="/admin" element={<ProtectedRoute><WorkspaceContent initialTab="admin" /></ProtectedRoute>} />
+
+      <Route path="*" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
+    </Routes>
   );
 }
