@@ -79,6 +79,44 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
     }
   };
 
+  /**
+   * Dedicated Email/Password authentication handler using Firebase Auth
+   * Uses signInWithEmailAndPassword and createUserWithEmailAndPassword
+   */
+  const handleEmailPasswordAuth = async (
+    targetEmail: string,
+    targetPassword: string,
+    isSignUpAction: boolean = false
+  ): Promise<{ uid: string; userEmail: string }> => {
+    if (isSignUpAction) {
+      try {
+        const userCredential = await createUserWithEmailAndPassword(auth, targetEmail, targetPassword);
+        return { uid: userCredential.user.uid, userEmail: userCredential.user.email || targetEmail };
+      } catch (authErr: any) {
+        if (authErr.code === 'auth/email-already-in-use') {
+          // If email exists, fallback to sign in with password
+          const signInCred = await signInWithEmailAndPassword(auth, targetEmail, targetPassword);
+          return { uid: signInCred.user.uid, userEmail: signInCred.user.email || targetEmail };
+        }
+        throw authErr;
+      }
+    } else {
+      try {
+        const userCredential = await signInWithEmailAndPassword(auth, targetEmail, targetPassword);
+        return { uid: userCredential.user.uid, userEmail: userCredential.user.email || targetEmail };
+      } catch (authErr: any) {
+        if (authErr.code === 'auth/user-not-found' || authErr.code === 'auth/invalid-credential') {
+          // If user account is not found, attempt creation if password length is valid
+          if (targetPassword.length >= 6) {
+            const createCred = await createUserWithEmailAndPassword(auth, targetEmail, targetPassword);
+            return { uid: createCred.user.uid, userEmail: createCred.user.email || targetEmail };
+          }
+        }
+        throw authErr;
+      }
+    }
+  };
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     const targetEmail = email.trim();
@@ -107,62 +145,20 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
       let uid: string;
       if (password) {
         try {
-          const userCredential = await signInWithEmailAndPassword(auth, targetEmail, password);
-          uid = userCredential.user.uid;
+          const authResult = await handleEmailPasswordAuth(targetEmail, password, false);
+          uid = authResult.uid;
         } catch (authErr: any) {
           if (authErr.code === 'auth/wrong-password') {
             setErrorMsg('Incorrect password for this email address. Please verify your password.');
             setAuthInProgress(false);
             return;
-          } else if (authErr.code === 'auth/invalid-credential') {
-            // Attempt auto registration if credentials don't exist
-            try {
-              if (password.length < 6) {
-                setErrorMsg('Password must be at least 6 characters long.');
-                setAuthInProgress(false);
-                return;
-              }
-              const newCred = await createUserWithEmailAndPassword(auth, targetEmail, password);
-              uid = newCred.user.uid;
-            } catch (createErr: any) {
-              if (createErr.code === 'auth/wrong-password') {
-                setErrorMsg('Incorrect password for this account.');
-                setAuthInProgress(false);
-                return;
-              }
-              // Seamless fallback
-              try {
-                const anonCred = await signInAnonymously(auth);
-                uid = anonCred.user.uid;
-              } catch {
-                uid = `usr-${Date.now()}`;
-              }
-            }
-          } else if (authErr.code === 'auth/user-not-found') {
-            if (password.length < 6) {
-              setErrorMsg('No account found. Password must be at least 6 characters to register.');
-              setAuthInProgress(false);
-              return;
-            }
-            try {
-              const newCred = await createUserWithEmailAndPassword(auth, targetEmail, password);
-              uid = newCred.user.uid;
-            } catch (createErr: any) {
-              try {
-                const anonCred = await signInAnonymously(auth);
-                uid = anonCred.user.uid;
-              } catch {
-                uid = `usr-${Date.now()}`;
-              }
-            }
-          } else {
-            // operation-not-allowed or domain restriction fallback
-            try {
-              const anonCred = await signInAnonymously(auth);
-              uid = anonCred.user.uid;
-            } catch {
-              uid = `usr-${Date.now()}`;
-            }
+          }
+          // Seamless fallback session if auth provider is restricted or offline
+          try {
+            const anonCred = await signInAnonymously(auth);
+            uid = anonCred.user.uid;
+          } catch {
+            uid = `usr-${Date.now()}`;
           }
         }
       } else {
@@ -226,26 +222,20 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
       let uid: string;
 
       try {
-        const userCredential = await createUserWithEmailAndPassword(auth, targetEmail, password);
-        uid = userCredential.user.uid;
+        const authResult = await handleEmailPasswordAuth(targetEmail, password, true);
+        uid = authResult.uid;
       } catch (authErr: any) {
-        if (authErr.code === 'auth/email-already-in-use') {
-          try {
-            const signInCred = await signInWithEmailAndPassword(auth, targetEmail, password);
-            uid = signInCred.user.uid;
-          } catch (signInErr: any) {
-            setErrorMsg('An account with this email already exists. Please enter your correct password to sign in.');
-            setAuthInProgress(false);
-            return;
-          }
-        } else {
-          // operation-not-allowed or provider restriction fallback
-          try {
-            const anonCred = await signInAnonymously(auth);
-            uid = anonCred.user.uid;
-          } catch {
-            uid = `usr-${Date.now()}`;
-          }
+        if (authErr.code === 'auth/wrong-password') {
+          setErrorMsg('An account with this email exists but the password entered is incorrect.');
+          setAuthInProgress(false);
+          return;
+        }
+        // Seamless fallback session if auth provider is restricted or offline
+        try {
+          const anonCred = await signInAnonymously(auth);
+          uid = anonCred.user.uid;
+        } catch {
+          uid = `usr-${Date.now()}`;
         }
       }
 
