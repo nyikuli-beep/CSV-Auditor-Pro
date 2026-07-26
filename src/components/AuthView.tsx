@@ -124,32 +124,37 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
           if (authErr.code === 'auth/unauthorized-domain') {
             setUnauthorizedDomainError(true);
             setShowDomainGuide(true);
-          }
-          if (authErr.code === 'auth/user-not-found' || authErr.code === 'auth/invalid-credential') {
+            setErrorMsg(`Unauthorized Domain: Origin "${currentHost}" is not authorized in Firebase Auth. Please follow the setup guide below.`);
+            setAuthInProgress(false);
+            return;
+          } else if (authErr.code === 'auth/user-not-found' || authErr.code === 'auth/invalid-credential') {
             // Attempt to create user account seamlessly with email & password
             try {
               userCredential = await createUserWithEmailAndPassword(auth, email, password);
             } catch (createErr: any) {
               if (createErr.code === 'auth/wrong-password') {
                 setErrorMsg('Incorrect password for this email address.');
-                setAuthInProgress(false);
-                return;
+              } else {
+                setErrorMsg(createErr.message || 'Invalid email or password.');
               }
-              userCredential = await signInAnonymously(auth);
+              setAuthInProgress(false);
+              return;
             }
           } else if (authErr.code === 'auth/wrong-password') {
             setErrorMsg('Incorrect password. Please verify your password or use Forgot Password.');
             setAuthInProgress(false);
             return;
           } else {
-            userCredential = await signInAnonymously(auth);
+            setErrorMsg(authErr.message || 'Authentication failed. Please check your credentials.');
+            setAuthInProgress(false);
+            return;
           }
         }
       } else {
         userCredential = await signInAnonymously(auth);
       }
 
-      const uid = userCredential?.user?.uid || `usr-${Date.now()}`;
+      const uid = userCredential.user.uid;
       const userName = name || email.split('@')[0] || (isOwnerAccount ? 'Nyikuli Bramwel' : 'Workspace User');
       await syncUserProfile(uid, email, userName, assignedRole);
 
@@ -159,12 +164,7 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
         role: assignedRole
       });
     } catch (err: any) {
-      const userName = name || email.split('@')[0] || (isOwnerAccount ? 'Nyikuli Bramwel' : 'Workspace User');
-      onLoginSuccess({
-        name: userName,
-        email: email || 'user@company.com',
-        role: assignedRole
-      });
+      setErrorMsg(err.message || 'Authentication failed. Please try again.');
     } finally {
       setAuthInProgress(false);
     }
@@ -208,13 +208,17 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
         } else if (authErr.code === 'auth/unauthorized-domain') {
           setUnauthorizedDomainError(true);
           setShowDomainGuide(true);
-          userCredential = await signInAnonymously(auth);
+          setErrorMsg(`Unauthorized Domain: Origin "${currentHost}" is not authorized in Firebase Auth. Please follow the setup guide below.`);
+          setAuthInProgress(false);
+          return;
         } else {
-          userCredential = await signInAnonymously(auth);
+          setErrorMsg(authErr.message || 'Failed to create account.');
+          setAuthInProgress(false);
+          return;
         }
       }
 
-      const uid = userCredential?.user?.uid || `usr-${Date.now()}`;
+      const uid = userCredential.user.uid;
       await syncUserProfile(uid, email, name, assignedRole);
 
       onLoginSuccess({
@@ -223,11 +227,7 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
         role: assignedRole
       });
     } catch (err: any) {
-      onLoginSuccess({
-        name: name,
-        email: email,
-        role: assignedRole
-      });
+      setErrorMsg(err.message || 'Sign-up failed. Please check your information and try again.');
     } finally {
       setAuthInProgress(false);
     }
@@ -311,7 +311,7 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
       } else if (err.code === 'auth/operation-not-allowed') {
         setErrorMsg('Google Sign-In is disabled in Firebase Console. Please enable Google provider under Authentication -> Sign-in method.');
       } else {
-        setErrorMsg(err.message || 'Google Login error. You can continue with direct workspace login.');
+        setErrorMsg(err.message || 'Google Login error. Please try again or use Email & Password.');
       }
     } finally {
       setAuthInProgress(false);
@@ -462,22 +462,6 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
                 <p>1. Open <a href="https://console.firebase.google.com/" target="_blank" rel="noreferrer" className="underline font-semibold hover:text-amber-300 inline-flex items-center gap-0.5">Firebase Console <ExternalLink className="w-3 h-3 inline" /></a></p>
                 <p>2. Select project <strong>wide-operation-x8kj5</strong> &rarr; <strong>Authentication</strong> &rarr; <strong>Settings</strong> &rarr; <strong>Authorized domains</strong></p>
                 <p>3. Click <strong>Add domain</strong> and paste <code className="bg-amber-500/20 px-1 rounded">{currentHost}</code></p>
-              </div>
-
-              <div className="pt-2 border-t border-amber-500/20">
-                <button
-                  type="button"
-                  onClick={() => {
-                    onLoginSuccess({
-                      name: name || 'Vercel Workspace User',
-                      email: email || `user@${currentHost}`,
-                      role: role
-                    });
-                  }}
-                  className="w-full py-2.5 px-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all"
-                >
-                  <Zap className="w-3.5 h-3.5 fill-slate-950" /> Continue to Workspace (Bypass Vercel Lockout)
-                </button>
               </div>
             </div>
           )}
