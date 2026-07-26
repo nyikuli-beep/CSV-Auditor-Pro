@@ -104,63 +104,46 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
     setErrorMsg('');
 
     try {
-      let uid: string | undefined;
-
+      let uid: string;
       if (password) {
         try {
-          // Attempt standard sign-in
           const userCredential = await signInWithEmailAndPassword(auth, targetEmail, password);
           uid = userCredential.user.uid;
         } catch (authErr: any) {
-          if (authErr.code === 'auth/wrong-password') {
-            setErrorMsg('Incorrect password. Please verify your password or use Forgot Password.');
+          if (authErr.code === 'auth/wrong-password' || authErr.code === 'auth/invalid-credential') {
+            setErrorMsg('Invalid email or password. Please check your credentials and try again.');
             setAuthInProgress(false);
             return;
-          } else if (authErr.code === 'auth/user-not-found' || authErr.code === 'auth/invalid-credential') {
-            // Attempt to create user account automatically
+          } else if (authErr.code === 'auth/user-not-found') {
+            if (password.length < 6) {
+              setErrorMsg('No account found for this email. To register a new account, password must be at least 6 characters.');
+              setAuthInProgress(false);
+              return;
+            }
             try {
-              if (password.length < 6) {
-                setErrorMsg('Password must be at least 6 characters long.');
-                setAuthInProgress(false);
-                return;
-              }
               const newCred = await createUserWithEmailAndPassword(auth, targetEmail, password);
               uid = newCred.user.uid;
             } catch (createErr: any) {
-              if (createErr.code === 'auth/weak-password') {
-                setErrorMsg('Password must be at least 6 characters long.');
-                setAuthInProgress(false);
-                return;
-              }
-              // Seamless fallback to anonymous session
-              try {
-                const anonCred = await signInAnonymously(auth);
-                uid = anonCred.user.uid;
-              } catch {
-                uid = `usr-${Date.now()}`;
-              }
+              setErrorMsg(createErr.message || 'Failed to create user account with provided credentials.');
+              setAuthInProgress(false);
+              return;
             }
+          } else if (authErr.code === 'auth/operation-not-allowed') {
+            setErrorMsg('Email/Password provider is disabled in Firebase Console. Please enable Email/Password in Authentication settings.');
+            setAuthInProgress(false);
+            return;
           } else {
-            // For operation-not-allowed or provider/domain restriction, fallback gracefully
-            try {
-              const anonCred = await signInAnonymously(auth);
-              uid = anonCred.user.uid;
-            } catch {
-              uid = `usr-${Date.now()}`;
-            }
+            setErrorMsg(authErr.message || 'Authentication failed. Please check your credentials.');
+            setAuthInProgress(false);
+            return;
           }
         }
       } else {
-        // Passwordless / direct sign in
-        try {
-          const anonCred = await signInAnonymously(auth);
-          uid = anonCred.user.uid;
-        } catch {
-          uid = `usr-${Date.now()}`;
-        }
+        // Direct passwordless attempt - check if user can sign in or prompt for password
+        setErrorMsg('Please enter your password to sign in.');
+        setAuthInProgress(false);
+        return;
       }
-
-      if (!uid) uid = `usr-${Date.now()}`;
 
       await syncUserProfile(uid, targetEmail, userName, assignedRole);
 
@@ -180,7 +163,7 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
     e.preventDefault();
     const targetEmail = email.trim();
     if (!targetEmail || !password || !name) {
-      setErrorMsg('Please fill in all details.');
+      setErrorMsg('Please fill in all details (Name, Email, and Password).');
       return;
     }
 
@@ -205,7 +188,7 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
     setErrorMsg('');
 
     try {
-      let uid: string | undefined;
+      let uid: string;
 
       try {
         const userCredential = await createUserWithEmailAndPassword(auth, targetEmail, password);
@@ -220,18 +203,16 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
             setAuthInProgress(false);
             return;
           }
+        } else if (authErr.code === 'auth/operation-not-allowed') {
+          setErrorMsg('Email/Password sign-up is disabled in Firebase Console. Please enable Email/Password in Authentication settings.');
+          setAuthInProgress(false);
+          return;
         } else {
-          // Graceful fallback session if provider disabled or restricted
-          try {
-            const anonCred = await signInAnonymously(auth);
-            uid = anonCred.user.uid;
-          } catch {
-            uid = `usr-${Date.now()}`;
-          }
+          setErrorMsg(authErr.message || 'Sign-up failed. Please check your information and try again.');
+          setAuthInProgress(false);
+          return;
         }
       }
-
-      if (!uid) uid = `usr-${Date.now()}`;
 
       await syncUserProfile(uid, targetEmail, name, assignedRole);
 
@@ -286,8 +267,13 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
       }
       
       const uid = result.user.uid;
-      const uEmail = result.user.email || 'google.user@company.com';
+      const uEmail = result.user.email || '';
       const uName = result.user.displayName || uEmail.split('@')[0] || 'Nyikuli Bramwel';
+
+      if (!uEmail) {
+        setErrorMsg('Google Sign-In did not return a valid email address.');
+        return;
+      }
 
       const isOwnerAccount = PROTECTED_EMAILS.some(
         p => p.toLowerCase() === uEmail.trim().toLowerCase()
@@ -309,29 +295,17 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
         role: assignedRole
       });
     } catch (err: any) {
-      console.warn('Google Auth Popup Error:', err?.code, err?.message);
-      // Fallback workspace session if popup is blocked or provider restricted
-      const targetEmail = email.trim() || 'google.user@company.com';
-      const isOwnerAccount = PROTECTED_EMAILS.some(
-        p => p.toLowerCase() === targetEmail.toLowerCase()
-      );
-      const assignedRole = isOwnerAccount ? 'Owner' : role;
-      
-      try {
-        const anonCred = await signInAnonymously(auth);
-        const uid = anonCred.user.uid;
-        await syncUserProfile(uid, targetEmail, name || 'Google User', assignedRole);
-        onLoginSuccess({
-          name: name || 'Google User',
-          email: targetEmail,
-          role: assignedRole
-        });
-      } catch {
-        onLoginSuccess({
-          name: name || 'Workspace User',
-          email: targetEmail,
-          role: assignedRole
-        });
+      console.warn('Google Auth Error:', err?.code, err?.message);
+      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+        setErrorMsg('Google sign-in popup was closed before completing authentication.');
+      } else if (err.code === 'auth/popup-blocked') {
+        setErrorMsg('Google sign-in popup was blocked by your browser. Please allow popups for this domain.');
+      } else if (err.code === 'auth/unauthorized-domain') {
+        setErrorMsg(`Unauthorized Domain: Current domain (${window.location.hostname}) is not authorized in Firebase Console -> Authentication -> Settings -> Authorized domains.`);
+      } else if (err.code === 'auth/operation-not-allowed') {
+        setErrorMsg('Google Sign-In is disabled in Firebase Console. Please enable Google provider under Authentication -> Sign-in method.');
+      } else {
+        setErrorMsg(err.message || 'Google authentication failed. Please try again.');
       }
     } finally {
       setAuthInProgress(false);
