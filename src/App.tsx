@@ -440,15 +440,19 @@ export default function App() {
         
         // Fetch or create user doc
         const userRef = doc(db, 'users', fUser.uid);
-        let userRole = 'Owner';
-        let userName = localStorage.getItem('user_profile_name') || fUser.displayName || 'Nyikuli Bramwel';
-        let userAvatar = localStorage.getItem('user_profile_avatar') || '/macbook_code.jpg';
+        const isOwnerEmail = ['nyikulibramwel@gmail.com', 'nyikuli@company.com'].some(
+          p => p.toLowerCase() === (fUser.email || '').trim().toLowerCase()
+        );
+
+        let userRole = isOwnerEmail ? 'Owner' : 'Editor';
+        let userName = localStorage.getItem('user_profile_name') || fUser.displayName || fUser.email?.split('@')[0] || (isOwnerEmail ? 'Nyikuli Bramwel' : 'Workspace User');
+        let userAvatar = localStorage.getItem('user_profile_avatar') || (isOwnerEmail ? '/macbook_code.jpg' : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150');
 
         try {
           const userSnap = await getDoc(userRef);
           if (userSnap.exists()) {
             const data = userSnap.data();
-            userRole = data.role || 'Owner';
+            userRole = isOwnerEmail ? 'Owner' : (data.role || 'Editor');
             if (data.avatar) {
               userAvatar = data.avatar;
               localStorage.setItem('user_profile_avatar', data.avatar);
@@ -462,7 +466,7 @@ export default function App() {
               id: fUser.uid,
               name: userName,
               email: fUser.email || `${fUser.uid}@demo.com`,
-              role: 'Owner',
+              role: userRole,
               avatar: userAvatar
             };
             await setDoc(userRef, newProfile);

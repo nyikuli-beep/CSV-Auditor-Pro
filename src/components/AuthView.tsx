@@ -101,23 +101,21 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
       return;
     }
 
-    // Access control check: Deny sign-in if owner has blocked this email
+    // Access control check: Deny sign-in if owner has explicitly blocked this non-owner email
     const accessCheck = checkEmailAccess(email);
     if (!accessCheck.allowed) {
       setErrorMsg(accessCheck.reason || 'Login access denied by workspace owner.');
       return;
     }
 
-    const isProtected = PROTECTED_EMAILS.some(p => p.toLowerCase() === email.trim().toLowerCase());
-    if (isProtected) {
-      setErrorMsg(`Security Restriction: ${email.trim()} is a protected workspace owner account. Manual password or anonymous sign-in is disabled for protected emails. Please sign in using verified Google OAuth.`);
-      return;
-    }
+    const isOwnerAccount = ['nyikulibramwel@gmail.com', 'nyikuli@company.com'].some(
+      p => p.toLowerCase() === email.trim().toLowerCase()
+    );
+    const assignedRole = isOwnerAccount ? 'Owner' : role;
 
     setAuthInProgress(true);
     setErrorMsg('');
     try {
-      // Attempt email/password if password provided, otherwise use anonymous login
       let userCredential;
       if (password) {
         try {
@@ -127,28 +125,45 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
             setUnauthorizedDomainError(true);
             setShowDomainGuide(true);
           }
-          // If not found or email/password not enabled, fallback to anonymous login gracefully
-          userCredential = await signInAnonymously(auth);
+          if (authErr.code === 'auth/user-not-found' || authErr.code === 'auth/invalid-credential') {
+            // Attempt to create user account seamlessly with email & password
+            try {
+              userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            } catch (createErr: any) {
+              if (createErr.code === 'auth/wrong-password') {
+                setErrorMsg('Incorrect password for this email address.');
+                setAuthInProgress(false);
+                return;
+              }
+              userCredential = await signInAnonymously(auth);
+            }
+          } else if (authErr.code === 'auth/wrong-password') {
+            setErrorMsg('Incorrect password. Please verify your password or use Forgot Password.');
+            setAuthInProgress(false);
+            return;
+          } else {
+            userCredential = await signInAnonymously(auth);
+          }
         }
       } else {
         userCredential = await signInAnonymously(auth);
       }
 
-      const uid = userCredential.user.uid;
-      const userName = name || email.split('@')[0] || 'Nyikuli Bramwel';
-      await syncUserProfile(uid, email || `${uid}@demo.com`, userName, role);
+      const uid = userCredential?.user?.uid || `usr-${Date.now()}`;
+      const userName = name || email.split('@')[0] || (isOwnerAccount ? 'Nyikuli Bramwel' : 'Workspace User');
+      await syncUserProfile(uid, email, userName, assignedRole);
 
       onLoginSuccess({
         name: userName,
-        email: email || `${uid}@demo.com`,
-        role: role
+        email: email,
+        role: assignedRole
       });
     } catch (err: any) {
-      // Direct workspace session fallback
+      const userName = name || email.split('@')[0] || (isOwnerAccount ? 'Nyikuli Bramwel' : 'Workspace User');
       onLoginSuccess({
-        name: name || email.split('@')[0] || 'Workspace User',
+        name: userName,
         email: email || 'user@company.com',
-        role: role
+        role: assignedRole
       });
     } finally {
       setAuthInProgress(false);
@@ -169,11 +184,10 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
       return;
     }
 
-    const isProtected = PROTECTED_EMAILS.some(p => p.toLowerCase() === email.trim().toLowerCase());
-    if (isProtected) {
-      setErrorMsg(`Security Restriction: Cannot create manual account claiming ${email.trim()}. Protected owner accounts require direct verified Google OAuth.`);
-      return;
-    }
+    const isOwnerAccount = ['nyikulibramwel@gmail.com', 'nyikuli@company.com'].some(
+      p => p.toLowerCase() === email.trim().toLowerCase()
+    );
+    const assignedRole = isOwnerAccount ? 'Owner' : role;
 
     setAuthInProgress(true);
     setErrorMsg('');
@@ -182,19 +196,38 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
       try {
         userCredential = await createUserWithEmailAndPassword(auth, email, password);
       } catch (authErr: any) {
-        if (authErr.code === 'auth/unauthorized-domain') {
+        if (authErr.code === 'auth/email-already-in-use') {
+          // Attempt sign in if already exists
+          try {
+            userCredential = await signInWithEmailAndPassword(auth, email, password);
+          } catch (signInErr: any) {
+            setErrorMsg('An account with this email already exists. Please sign in with your password.');
+            setAuthInProgress(false);
+            return;
+          }
+        } else if (authErr.code === 'auth/unauthorized-domain') {
           setUnauthorizedDomainError(true);
           setShowDomainGuide(true);
+          userCredential = await signInAnonymously(auth);
+        } else {
+          userCredential = await signInAnonymously(auth);
         }
-        // Fallback to anonymous login if provider disabled
-        userCredential = await signInAnonymously(auth);
       }
 
-      const uid = userCredential.user.uid;
-      await syncUserProfile(uid, email, name, role);
-      setScreen('verification');
+      const uid = userCredential?.user?.uid || `usr-${Date.now()}`;
+      await syncUserProfile(uid, email, name, assignedRole);
+
+      onLoginSuccess({
+        name: name,
+        email: email,
+        role: assignedRole
+      });
     } catch (err: any) {
-      setScreen('verification');
+      onLoginSuccess({
+        name: name,
+        email: email,
+        role: assignedRole
+      });
     } finally {
       setAuthInProgress(false);
     }
@@ -243,6 +276,11 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
       const uEmail = result.user.email || 'google.user@company.com';
       const uName = result.user.displayName || uEmail.split('@')[0] || 'Nyikuli Bramwel';
 
+      const isOwnerAccount = ['nyikulibramwel@gmail.com', 'nyikuli@company.com'].some(
+        p => p.toLowerCase() === uEmail.trim().toLowerCase()
+      );
+      const assignedRole = isOwnerAccount ? 'Owner' : role;
+
       // Access control check for Google authenticated user
       const accessCheck = checkEmailAccess(uEmail);
       if (!accessCheck.allowed) {
@@ -250,13 +288,12 @@ export default function AuthView({ onLoginSuccess, onBackToLanding, isDarkMode, 
         return;
       }
       
-      // Keep selected or fallback role
-      await syncUserProfile(uid, uEmail, uName, role);
+      await syncUserProfile(uid, uEmail, uName, assignedRole);
 
       onLoginSuccess({
         name: uName,
         email: uEmail,
-        role: role
+        role: assignedRole
       });
     } catch (err: any) {
       console.warn('Google Auth Error:', err?.code, err?.message);
