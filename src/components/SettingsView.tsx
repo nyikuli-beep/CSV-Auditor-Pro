@@ -1266,7 +1266,7 @@ export default function SettingsView({
                 ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
                 : cleaningStatus.gc === 'success'
                   ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                  : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white border-blue-500/20'
+                  : 'bg-blue-600 hover:bg-blue-700 text-white border-blue-500/20'
             }`}
           >
             <Layers className={`w-3.5 h-3.5 ${cleaningStatus.gc === 'cleaning' ? 'animate-spin' : ''}`} />

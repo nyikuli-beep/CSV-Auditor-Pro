@@ -76,11 +76,9 @@ export default function BulkProcessingProgressBar({
             isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'
           }`}>
             <div 
-              className="h-full rounded-full bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-500 transition-all duration-300 relative overflow-hidden"
+              className="h-full rounded-full bg-blue-600 transition-all duration-300 relative overflow-hidden"
               style={{ width: `${progress}%` }}
             >
-              {/* Shimmer effect */}
-              <div className="absolute inset-0 bg-white/20 animate-[pulse_1.5s_infinite]" />
             </div>
           </div>
 

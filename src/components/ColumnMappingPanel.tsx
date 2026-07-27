@@ -448,7 +448,7 @@ export default function ColumnMappingPanel({
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer shadow-sm flex items-center gap-1.5 ${
               isAnalyzing 
                 ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' 
-                : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white hover:scale-[1.02]'
+                : 'bg-blue-600 hover:bg-blue-700 text-white hover:scale-[1.02]'
             }`}
           >
             {isAnalyzing ? (

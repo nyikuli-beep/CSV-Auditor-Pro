@@ -637,7 +637,7 @@ export default function CleaningCenter({
               <button
                 onClick={handleRunBatchClean}
                 disabled={isViewer || selectedFileIds.length === 0 || selectedRoutines.length === 0}
-                className="w-full py-3.5 rounded-2xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow cursor-pointer disabled:opacity-40 disabled:pointer-events-none hover:scale-[1.02] active:scale-[0.99] transition-all bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500 text-white"
+                className="w-full py-3.5 rounded-2xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow cursor-pointer disabled:opacity-40 disabled:pointer-events-none hover:scale-[1.02] active:scale-[0.99] transition-all bg-blue-600 hover:bg-blue-700 text-white"
               >
                 <Play className="w-4 h-4 text-white fill-white" />
                 Run Batch Clean Routine
@@ -865,7 +865,7 @@ export default function CleaningCenter({
                 setCleaningMode('batch');
                 setSelectedFileIds(files.filter(f => f.status !== 'failed').map(f => f.id));
               }}
-              className="w-full py-3 text-xs font-bold uppercase rounded-xl tracking-wider text-white shadow cursor-pointer text-center bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500"
+              className="w-full py-3 text-xs font-bold uppercase rounded-xl tracking-wider text-white shadow cursor-pointer text-center bg-blue-600 hover:bg-blue-700"
             >
               Configure Batch Routine
             </button>
@@ -2378,7 +2378,7 @@ export default function CleaningCenter({
                         mergeCol1 === mergeCol2 || 
                         inferColumnType(mergeCol1) !== inferColumnType(mergeCol2)
                       }
-                      className={`w-full py-2.5 rounded-lg text-xs font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 disabled:opacity-40 disabled:cursor-not-allowed`}
+                      className={`w-full py-2.5 rounded-lg text-xs font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed`}
                     >
                       <GitMerge className="w-3.5 h-3.5" /> Execute Column Merge
                     </button>

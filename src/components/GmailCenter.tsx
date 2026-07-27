@@ -364,7 +364,7 @@ export default function GmailCenter({
     <div className="space-y-6">
       
       {/* Top Banner introducing Gmail Integration */}
-      <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-gradient-to-br from-indigo-950/20 to-slate-900 border-slate-800' : 'bg-gradient-to-br from-indigo-50 to-white border-slate-200'} shadow-xs flex flex-col md:flex-row gap-6 justify-between items-start md:items-center`}>
+      <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-sm flex flex-col md:flex-row gap-6 justify-between items-start md:items-center`}>
         <div className="space-y-1.5 max-w-2xl">
           <div className="flex items-center gap-2">
             <div className="p-1.5 bg-indigo-500/10 text-indigo-500 rounded-lg">

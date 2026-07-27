@@ -1653,7 +1653,7 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
                   setMappings({});
                   setExplanations({});
                 }}
-                className="px-4 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 border border-emerald-500/20 rounded-lg transition-all cursor-pointer shadow-sm flex items-center gap-1.5 hover:scale-[1.01]"
+                className="px-4 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 border border-emerald-500/20 rounded-lg transition-all cursor-pointer shadow-sm flex items-center gap-1.5 hover:scale-[1.01]"
               >
                 <Check className="w-3.5 h-3.5" /> Skip & Ingest All
               </button>

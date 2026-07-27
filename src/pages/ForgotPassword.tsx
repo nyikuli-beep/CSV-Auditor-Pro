@@ -54,7 +54,7 @@ export const ForgotPassword: React.FC = () => {
             <Sparkles className="w-3.5 h-3.5" /> Password Recovery Service
           </div>
           <div className="flex items-center justify-center gap-3 mb-2">
-            <div className="p-2.5 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25">
+            <div className="p-2.5 rounded-xl bg-blue-600 text-white shadow-md">
               <FileSpreadsheet className="w-7 h-7" />
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-white">Reset Password</h1>
@@ -63,7 +63,7 @@ export const ForgotPassword: React.FC = () => {
         </div>
 
         {/* Card Box */}
-        <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl">
+        <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 sm:p-8 shadow-xl">
           {errorMsg && (
             <div className="mb-6 p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-start gap-3">
               <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />

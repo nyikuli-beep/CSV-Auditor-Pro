@@ -215,7 +215,7 @@ export default function OnboardingTourModal({
         {/* Tour Body */}
         <div className="p-6 md:p-8 space-y-6">
           <div className="flex items-start gap-4">
-            <div className="p-3.5 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg shrink-0">
+            <div className="p-3.5 rounded-2xl bg-blue-600 text-white shadow-md shrink-0">
               <StepIcon className="w-7 h-7" />
             </div>
 

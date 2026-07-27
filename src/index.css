@@ -45,7 +45,7 @@ body.dark,
 .dark body,
 html.dark #root,
 body.dark #root {
-  background-color: #0b0f19 !important;
+  background-color: #0f172a !important;
   color: #f8fafc;
 }
 
@@ -78,8 +78,8 @@ body.dark #root {
 }
 
 .dark .hd-card {
-  background-color: #131b2e;
-  border-color: #1e293b;
+  background-color: #1e293b;
+  border-color: #334155;
   box-shadow: none;
 }
 
@@ -88,7 +88,7 @@ body.dark #root {
 }
 
 .dark .hd-border {
-  border-color: #1e293b;
+  border-color: #334155;
 }
 
 .hd-bg-sidebar {
@@ -104,6 +104,6 @@ body.dark #root {
 }
 
 .dark .hd-bg-app {
-  background-color: #0b0f19;
+  background-color: #0f172a;
 }
 

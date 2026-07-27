@@ -392,8 +392,8 @@ export default function TeamCollaboration({
               transition={{ duration: 0.6 }}
               className={`h-full rounded-full ${
                 occupancyPercentage >= 100 
-                  ? 'bg-gradient-to-r from-amber-500 to-red-500' 
-                  : 'bg-gradient-to-r from-blue-600 to-emerald-500'
+                  ? 'bg-amber-500' 
+                  : 'bg-blue-600'
               }`}
             />
           </div>

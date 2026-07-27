@@ -123,7 +123,7 @@ export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, acc
               transition={{ duration: 0.5, delay: 0.1 }}
               className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight leading-[1.1] mb-6"
             >
-              Audit CSV Files in <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-emerald-400">Minutes</span>, Not Hours.
+              Audit CSV Files in <span className="text-blue-600">Minutes</span>, Not Hours.
             </motion.h1>
 
             <motion.p 
@@ -191,11 +191,11 @@ export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, acc
 
               {/* Transformation Indicator */}
               <div className="flex flex-col items-center justify-center py-2 text-blue-500">
-                <div className="w-0.5 h-6 bg-gradient-to-b from-rose-500 via-blue-500 to-emerald-500 animate-pulse"></div>
+                <div className="w-0.5 h-6 bg-blue-600"></div>
                 <div className="my-1 text-xs font-mono font-medium tracking-wide flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 animate-spin" /> Gemini Engine Audit
+                  <Sparkles className="w-3.5 h-3.5" /> Gemini Engine Audit
                 </div>
-                <div className="w-0.5 h-6 bg-gradient-to-b from-blue-500 to-emerald-500"></div>
+                <div className="w-0.5 h-6 bg-blue-600"></div>
               </div>
 
               {/* After Section */}

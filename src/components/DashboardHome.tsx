@@ -675,7 +675,7 @@ export default function DashboardHome({ files, activeFile, activities, onNavigat
             </div>
 
             {/* Incurred ROI Banner */}
-            <div className="md:col-span-5 bg-gradient-to-br from-violet-600 to-indigo-700 p-5 rounded-xl text-white shadow-lg space-y-4">
+            <div className="md:col-span-5 bg-blue-600 p-5 rounded-xl text-white shadow-md space-y-4">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-violet-100">Estimated Reclaimed Value</p>
                 <h4 className="text-3xl font-black tracking-tight mt-1">
