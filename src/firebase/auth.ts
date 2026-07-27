@@ -4,60 +4,18 @@ import {
   signInWithPopup,
   signOut,
   sendPasswordResetEmail,
-  sendEmailVerification,
+  sendEmailVerification as firebaseSendEmailVerification,
   updateProfile,
-  User,
-  AuthError
+  User
 } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
-import { auth, googleProvider, db } from './firebase';
+import { auth, googleProvider } from './firebase';
+import { syncUserProfileToFirestore } from '../utils/authHelpers';
+import { getFriendlyErrorMessage } from '../utils/firebaseErrors';
+
+export { getFriendlyErrorMessage };
 
 /**
- * Friendly Error Message Translator for Firebase Authentication
- */
-export function getFriendlyErrorMessage(error: any): string {
-  if (!error) return 'An unexpected error occurred. Please try again.';
-  
-  const code = error.code || (typeof error === 'string' ? error : '');
-  
-  switch (code) {
-    case 'auth/invalid-email':
-      return 'Please enter a valid email address.';
-    case 'auth/user-not-found':
-      return 'No account was found with this email address.';
-    case 'auth/wrong-password':
-    case 'auth/invalid-credential':
-      return 'Invalid email or password. Please check your credentials.';
-    case 'auth/email-already-in-use':
-      return 'An account with this email address already exists. Please sign in instead.';
-    case 'auth/weak-password':
-      return 'Password should be at least 6 characters long.';
-    case 'auth/popup-closed-by-user':
-    case 'auth/cancelled-popup-request':
-      return 'Sign-in popup was closed before completing authentication.';
-    case 'auth/popup-blocked':
-      return 'Sign-in popup was blocked by your browser. Please allow popups for this domain.';
-    case 'auth/network-request-failed':
-      return 'Network connection error. Please check your internet connection.';
-    case 'auth/too-many-requests':
-      return 'Too many unsuccessful attempts. Access temporarily disabled. Please reset password or try again later.';
-    case 'auth/operation-not-allowed':
-      return 'This sign-in method is currently disabled in your Firebase console settings.';
-    case 'auth/unauthorized-domain':
-      return 'Domain not authorized in Firebase Console. Add this domain to Authorized Domains in Firebase Auth settings.';
-    case 'auth/requires-recent-login':
-      return 'Please log in again before attempting this security-sensitive action.';
-    default:
-      if (error.message && typeof error.message === 'string') {
-        // Strip out Firebase internal error code prefixes if present
-        return error.message.replace(/^Firebase:\mn Error \([^)]+\): /, '').replace(/^Firebase: /, '');
-      }
-      return 'Authentication failed. Please try again.';
-  }
-}
-
-/**
- * Email Registration
+ * Email Registration with verification email trigger
  */
 export async function registerWithEmailPassword(
   email: string,
@@ -76,30 +34,22 @@ export async function registerWithEmailPassword(
     try {
       await updateProfile(user, { displayName: trimmedName });
     } catch (e) {
-      console.warn("Could not update Firebase user display name:", e);
+      console.warn('Could not update Firebase user display name:', e);
     }
   }
 
-  // Send Email Verification safely
+  // Send Email Verification
   try {
-    await sendEmailVerification(user);
+    await firebaseSendEmailVerification(user);
   } catch (e) {
-    console.warn("Could not send email verification link:", e);
+    console.warn('Could not send initial email verification:', e);
   }
 
-  // Sync User Document to Firestore
-  try {
-    const userRef = doc(db, 'users', user.uid);
-    await setDoc(userRef, {
-      id: user.uid,
-      name: trimmedName || trimmedEmail.split('@')[0],
-      email: trimmedEmail,
-      role: 'Editor',
-      createdAt: new Date().toISOString()
-    }, { merge: true });
-  } catch (e) {
-    console.warn("Firestore user sync failed on registration:", e);
-  }
+  // Sync initial User Document to Firestore
+  await syncUserProfileToFirestore(user, {
+    displayName: trimmedName,
+    provider: 'password',
+  });
 
   return user;
 }
@@ -110,7 +60,14 @@ export async function registerWithEmailPassword(
 export async function loginWithEmailPassword(email: string, password: string): Promise<User> {
   const trimmedEmail = email.trim();
   const userCredential = await signInWithEmailAndPassword(auth, trimmedEmail, password);
-  return userCredential.user;
+  const user = userCredential.user;
+
+  // Sync lastLogin and emailVerified to Firestore
+  await syncUserProfileToFirestore(user, {
+    provider: 'password',
+  });
+
+  return user;
 }
 
 /**
@@ -121,19 +78,9 @@ export async function signInWithGoogle(): Promise<User> {
   const user = result.user;
 
   // Sync to Firestore
-  try {
-    const userRef = doc(db, 'users', user.uid);
-    await setDoc(userRef, {
-      id: user.uid,
-      name: user.displayName || user.email?.split('@')[0] || 'User',
-      email: user.email || '',
-      avatar: user.photoURL || undefined,
-      role: 'Editor',
-      lastLogin: new Date().toISOString()
-    }, { merge: true });
-  } catch (e) {
-    console.warn("Firestore user sync failed on Google Login:", e);
-  }
+  await syncUserProfileToFirestore(user, {
+    provider: 'google.com',
+  });
 
   return user;
 }
@@ -147,15 +94,33 @@ export async function sendPasswordReset(email: string): Promise<void> {
 }
 
 /**
+ * Resend Verification Email with error catching
+ */
+export async function sendUserEmailVerification(user: User): Promise<void> {
+  if (!user) throw new Error('No active authenticated user found.');
+  await firebaseSendEmailVerification(user);
+}
+
+/**
+ * Reloads user instance and checks emailVerified status
+ */
+export async function reloadUserAndCheckVerification(user: User): Promise<boolean> {
+  if (!user) return false;
+
+  await user.reload();
+  const updatedUser = auth.currentUser;
+
+  if (updatedUser) {
+    await syncUserProfileToFirestore(updatedUser);
+    return updatedUser.emailVerified;
+  }
+
+  return false;
+}
+
+/**
  * Logout User
  */
 export async function logoutUser(): Promise<void> {
   await signOut(auth);
-}
-
-/**
- * Send Verification Email manually
- */
-export async function sendUserEmailVerification(user: User): Promise<void> {
-  await sendEmailVerification(user);
 }
