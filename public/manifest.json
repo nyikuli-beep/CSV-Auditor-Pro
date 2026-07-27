@@ -1,0 +1,16 @@
+{
+  "short_name": "CSV Auditor",
+  "name": "CSV Auditor Pro",
+  "icons": [
+    {
+      "src": "/macbook_code.jpg",
+      "type": "image/jpeg",
+      "sizes": "192x192 512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0b0f19",
+  "theme_color": "#0b0f19",
+  "display": "standalone",
+  "orientation": "portrait"
+}

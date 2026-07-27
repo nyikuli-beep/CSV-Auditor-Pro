@@ -1905,7 +1905,7 @@ export default function App() {
                 onStartTrial={() => navigate('/login')}
                 isDarkMode={isDarkMode}
                 toggleTheme={() => setIsDarkMode(!isDarkMode)}
-                accentClass="from-blue-600 to-indigo-600"
+                accentClass="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
               />
             </Suspense>
           )

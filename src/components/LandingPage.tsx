@@ -65,22 +65,22 @@ export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, acc
               <FileSpreadsheet className="w-6 h-6" id="app-logo-icon" />
             </div>
             <div>
-              <span className="font-bold tracking-tight text-lg">CSV Auditor</span>
-              <span className={`ml-1 px-1.5 py-0.5 text-xs font-semibold rounded-md ${isDarkMode ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-100 text-blue-700'}`}>PRO</span>
+              <span className={`font-bold tracking-tight text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>CSV Auditor</span>
+              <span className={`ml-1 px-1.5 py-0.5 text-xs font-semibold rounded-md ${isDarkMode ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-100 text-blue-800'}`}>PRO</span>
             </div>
           </div>
 
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium">
-            <a href="#features" className={`hover:opacity-80 transition-opacity ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>Features</a>
-            <a href="#testimonials" className={`hover:opacity-80 transition-opacity ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>Customers</a>
-            <a href="#pricing" className={`hover:opacity-80 transition-opacity ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>Pricing</a>
-            <a href="#faq" className={`hover:opacity-80 transition-opacity ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>FAQ</a>
+            <a href="#features" className={`hover:opacity-80 transition-opacity ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>Features</a>
+            <a href="#testimonials" className={`hover:opacity-80 transition-opacity ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>Customers</a>
+            <a href="#pricing" className={`hover:opacity-80 transition-opacity ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>Pricing</a>
+            <a href="#faq" className={`hover:opacity-80 transition-opacity ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>FAQ</a>
           </nav>
 
           <div className="flex items-center gap-4">
             <button 
               onClick={toggleTheme} 
-              className={`p-2 rounded-lg border transition-all hover:scale-105 ${isDarkMode ? 'bg-slate-900 border-slate-800 text-amber-400' : 'bg-white border-slate-200 text-slate-600'}`}
+              className={`p-2 rounded-lg border transition-all hover:scale-105 cursor-pointer ${isDarkMode ? 'bg-slate-900 border-slate-800 text-amber-400 hover:bg-slate-800' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900 shadow-sm'}`}
               aria-label="Toggle theme"
               id="theme-toggle"
             >
@@ -88,14 +88,14 @@ export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, acc
             </button>
             <button 
               onClick={onStartTrial}
-              className={`hidden sm:inline-flex px-4 py-2 text-sm font-medium text-white rounded-lg transition-all hover:shadow-lg ${accentClass}`}
+              className={`hidden sm:inline-flex px-4 py-2 text-sm font-semibold text-white rounded-lg transition-all shadow-md hover:shadow-lg cursor-pointer ${accentClass}`}
               id="btn-header-try-free"
             >
               Sign In
             </button>
             <button 
               onClick={onStartTrial}
-              className="sm:hidden px-3.5 py-1.5 text-xs font-medium text-white rounded-lg bg-blue-600 hover:bg-blue-700"
+              className={`sm:hidden px-3.5 py-1.5 text-xs font-semibold text-white rounded-lg transition-all shadow-md cursor-pointer ${accentClass}`}
             >
               Sign In
             </button>
@@ -143,7 +143,7 @@ export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, acc
             >
               <button 
                 onClick={onStartTrial}
-                className={`px-8 py-4 text-base font-medium text-white rounded-xl flex items-center justify-center gap-2 shadow-xl hover:scale-[1.02] transition-all cursor-pointer ${accentClass}`}
+                className={`px-8 py-4 text-base font-semibold text-white rounded-xl flex items-center justify-center gap-2 shadow-xl shadow-blue-600/25 hover:scale-[1.02] transition-all cursor-pointer ${accentClass}`}
                 id="hero-start-trial-btn"
               >
                 Start Free Trial
@@ -151,10 +151,10 @@ export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, acc
               </button>
               <button 
                 onClick={onStartTrial}
-                className={`px-6 py-4 text-base font-medium rounded-xl flex items-center justify-center gap-2 border transition-all hover:scale-[1.02] ${isDarkMode ? 'bg-slate-900 border-slate-800 hover:bg-slate-800' : 'bg-white border-slate-200 hover:bg-slate-50'}`}
+                className={`px-6 py-4 text-base font-semibold rounded-xl flex items-center justify-center gap-2 border transition-all hover:scale-[1.02] cursor-pointer ${isDarkMode ? 'bg-slate-900 border-slate-800 hover:bg-slate-800 text-slate-200' : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-800 shadow-sm'}`}
                 id="hero-watch-demo-btn"
               >
-                <Play className="w-4 h-4 fill-current text-slate-500" />
+                <Play className={`w-4 h-4 fill-current ${isDarkMode ? 'text-slate-400' : 'text-blue-600'}`} />
                 Watch Demo
               </button>
             </motion.div>
@@ -323,7 +323,7 @@ export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, acc
               </div>
               <button 
                 onClick={onStartTrial}
-                className={`w-full py-2.5 rounded-lg border text-sm font-medium transition-all ${isDarkMode ? 'border-slate-700 hover:bg-slate-800 text-white' : 'border-slate-200 hover:bg-slate-50 text-slate-700'}`}
+                className={`w-full py-2.5 rounded-lg border text-sm font-semibold transition-all cursor-pointer ${isDarkMode ? 'border-slate-700 hover:bg-slate-800 text-white' : 'border-slate-300 bg-white hover:bg-slate-100 text-slate-800 shadow-sm'}`}
               >
                 Get Started
               </button>
@@ -350,7 +350,7 @@ export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, acc
               </div>
               <button 
                 onClick={onStartTrial}
-                className={`w-full py-2.5 text-white text-sm font-medium rounded-lg transition-all shadow-md hover:shadow-lg ${accentClass}`}
+                className={`w-full py-2.5 text-white text-sm font-semibold rounded-lg transition-all shadow-md hover:shadow-lg cursor-pointer ${accentClass}`}
               >
                 Start Free Trial
               </button>
@@ -374,7 +374,7 @@ export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, acc
               </div>
               <button 
                 onClick={onStartTrial}
-                className={`w-full py-2.5 rounded-lg border text-sm font-medium transition-all ${isDarkMode ? 'border-slate-700 hover:bg-slate-800 text-white' : 'border-slate-200 hover:bg-slate-50 text-slate-700'}`}
+                className={`w-full py-2.5 rounded-lg border text-sm font-semibold transition-all cursor-pointer ${isDarkMode ? 'border-slate-700 hover:bg-slate-800 text-white' : 'border-slate-300 bg-white hover:bg-slate-100 text-slate-800 shadow-sm'}`}
               >
                 Contact Sales
               </button>
@@ -430,7 +430,7 @@ export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, acc
             </p>
             <button 
               onClick={onStartTrial}
-              className={`px-8 py-3.5 text-base font-semibold text-white rounded-xl shadow-lg hover:scale-[1.02] transition-all cursor-pointer ${accentClass}`}
+              className={`px-8 py-3.5 text-base font-semibold text-white rounded-xl shadow-xl shadow-blue-600/25 hover:scale-[1.02] transition-all cursor-pointer ${accentClass}`}
               id="cta-bottom-btn"
             >
               Get Started with CSV Auditor Pro
@@ -495,7 +495,7 @@ export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, acc
                 <button 
                   type="submit"
                   disabled={newsletterStatus === 'loading' || newsletterStatus === 'success'}
-                  className={`px-3 py-2 text-xs font-semibold text-white rounded-lg transition-all shrink-0 flex items-center justify-center min-w-[80px] cursor-pointer disabled:opacity-85 ${accentClass}`}
+                  className={`px-4 py-2 text-xs font-semibold text-white rounded-lg transition-all shrink-0 flex items-center justify-center min-w-[85px] cursor-pointer disabled:opacity-85 shadow-md ${accentClass}`}
                 >
                   {newsletterStatus === 'loading' ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -570,7 +570,7 @@ export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, acc
                 className={`p-2 rounded-lg border transition-all hover:scale-105 cursor-pointer ${
                   isDarkMode 
                     ? 'bg-slate-900 border-slate-800 hover:bg-slate-800 text-slate-400 hover:text-white' 
-                    : 'bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-500 hover:text-slate-800'
+                    : 'bg-slate-100 border-slate-300 hover:bg-slate-200 text-slate-700 hover:text-slate-900'
                 }`}
               >
                 <X className="w-4 h-4" />
@@ -611,10 +611,10 @@ export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, acc
               <button
                 type="button"
                 onClick={() => setActiveModalKey(null)}
-                className={`px-4 py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
+                className={`px-4 py-2 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
                   isDarkMode 
                     ? 'bg-slate-900 border-slate-800 hover:bg-slate-800 text-slate-300' 
-                    : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
+                    : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-800 shadow-sm'
                 }`}
               >
                 Close Document
@@ -625,7 +625,7 @@ export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, acc
                   setActiveModalKey(null);
                   onStartTrial();
                 }}
-                className={`px-4 py-2 text-xs font-bold text-white rounded-lg transition-all shadow-md cursor-pointer ${accentClass}`}
+                className={`px-4 py-2 text-xs font-semibold text-white rounded-lg transition-all shadow-md cursor-pointer ${accentClass}`}
               >
                 Start Auditing Now
               </button>
