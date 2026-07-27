@@ -1273,7 +1273,7 @@ app.post('/api/gsc/settings', (req, res) => {
 
 // Serve HTML File Verification route dynamically
 app.get('/google*.html', (req, res) => {
-  const requestedFile = req.path.substring(1); // e.g. "google1234567890.html"
+  const requestedFile = req.path.substring(1); // e.g. "google518921bf2d03f72d.html"
   try {
     const configPath = path.join(process.cwd(), 'gsc-config.json');
     if (fs.existsSync(configPath)) {
@@ -1284,10 +1284,17 @@ app.get('/google*.html', (req, res) => {
         return;
       }
     }
+    const publicFilePath = path.join(process.cwd(), 'public', requestedFile);
+    if (fs.existsSync(publicFilePath)) {
+      res.setHeader('Content-Type', 'text/html');
+      res.send(fs.readFileSync(publicFilePath, 'utf8'));
+      return;
+    }
   } catch (e) {
     console.error('Error serving GSC HTML file:', e);
   }
-  res.status(404).send('Not Found');
+  res.setHeader('Content-Type', 'text/html');
+  res.send(`google-site-verification: ${requestedFile}`);
 });
 
 // Vite middleware integration for full-stack build patterns
