@@ -79,22 +79,25 @@ self.addEventListener('fetch', (event) => {
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
-        .then((response) => {
-          if (response && response.status === 200) {
+        .then(async (response) => {
+          if (response && response.status >= 200 && response.status < 300) {
             const responseToCache = response.clone();
             caches.open(CACHE_NAME).then((cache) => {
               cache.put('/', responseToCache);
+              cache.put('/index.html', responseToCache);
             });
+            return response;
           }
+          // If server returned non-200 (like 404/500/502/503), fall back to cached SPA index.html
+          const cachedRoot = (await caches.match('/')) || (await caches.match('/index.html'));
+          if (cachedRoot) return cachedRoot;
           return response;
         })
         .catch(async () => {
-          const cachedRoot = await caches.match('/');
+          const cachedRoot = (await caches.match('/')) || (await caches.match('/index.html'));
           if (cachedRoot) return cachedRoot;
-          const cachedIndex = await caches.match('/index.html');
-          if (cachedIndex) return cachedIndex;
           return new Response(
-            '<!DOCTYPE html><html><head><title>Offline</title></head><body><div style="padding:2rem;font-family:sans-serif;"><h2>You are offline</h2><p>CSV Auditor Pro is currently running in offline mode. Please reconnect to access online cloud sync.</p></div></body></html>',
+            '<!DOCTYPE html><html><head><title>CSV Auditor Pro</title></head><body><div id="root"></div></body></html>',
             { headers: { 'Content-Type': 'text/html' } }
           );
         })

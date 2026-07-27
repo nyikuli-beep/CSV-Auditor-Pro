@@ -1298,11 +1298,32 @@ async function startServer() {
       appType: 'spa',
     });
     app.use(vite.middlewares);
+
+    // Fallback for SPA routing in development mode if a request bypasses Vite or requests a subpath directly
+    app.get('*', async (req, res, next) => {
+      if (req.path.startsWith('/api/')) {
+        res.status(404).json({ error: 'API route not found' });
+        return;
+      }
+      try {
+        const url = req.originalUrl;
+        let template = fs.readFileSync(path.join(process.cwd(), 'index.html'), 'utf8');
+        template = await vite.transformIndexHtml(url, template);
+        res.status(200).set({ 'Content-Type': 'text/html' }).end(template);
+      } catch (e) {
+        vite.ssrFixStacktrace(e as Error);
+        next(e);
+      }
+    });
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     
-    // Intercept Root URL to inject GSC Meta-Tag dynamically on production
-    app.get('/', (req, res, next) => {
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      if (req.path.startsWith('/api/')) {
+        res.status(404).json({ error: 'API route not found' });
+        return;
+      }
       const indexPath = path.join(distPath, 'index.html');
       if (fs.existsSync(indexPath)) {
         let html = fs.readFileSync(indexPath, 'utf8');
@@ -1320,15 +1341,10 @@ async function startServer() {
         } catch (e) {
           console.error('Error injecting GSC meta tag on server:', e);
         }
-        res.send(html);
+        res.status(200).set({ 'Content-Type': 'text/html' }).send(html);
       } else {
-        next();
+        res.sendFile(indexPath);
       }
-    });
-
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
     });
   }
 

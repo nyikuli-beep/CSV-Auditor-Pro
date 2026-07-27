@@ -47,21 +47,38 @@ import OnboardingTourModal from './components/OnboardingTourModal';
 // Import Mock Initial Data
 import { SAMPLE_MESSY_FILE, TEAM_MEMBERS, AUDIT_ACTIVITIES } from './sampleData';
 
+// Safe lazy import wrapper that auto-reloads if dynamic module fetch fails after long idle/deployment
+function safeLazy<T extends React.ComponentType<any>>(
+  factory: () => Promise<{ default: T }>
+) {
+  return lazy(() =>
+    factory().catch((err) => {
+      console.warn('Dynamic chunk import failed (likely stale bundle after idle period). Recovering...', err);
+      const reloaded = sessionStorage.getItem('chunk_reload_attempted');
+      if (!reloaded) {
+        sessionStorage.setItem('chunk_reload_attempted', 'true');
+        window.location.reload();
+      }
+      throw err;
+    })
+  );
+}
+
 // Import Views (Lazy Loaded for Low-Memory Devices & Mobile Startup Performance)
-const LandingPage = lazy(() => import('./components/LandingPage'));
-const AuthView = lazy(() => import('./components/AuthView'));
-const DashboardHome = lazy(() => import('./components/DashboardHome'));
-const UploadCenter = lazy(() => import('./components/UploadCenter'));
-const AuditResults = lazy(() => import('./components/AuditResults'));
-const CleaningCenter = lazy(() => import('./components/CleaningCenter'));
-const InsightsCenter = lazy(() => import('./components/InsightsCenter'));
-const ReportGen = lazy(() => import('./components/ReportGen'));
-const AuditHistory = lazy(() => import('./components/AuditHistory'));
-const TeamCollaboration = lazy(() => import('./components/TeamCollaboration'));
-const SettingsView = lazy(() => import('./components/SettingsView'));
-const AdminPanel = lazy(() => import('./components/AdminPanel'));
-const GmailCenter = lazy(() => import('./components/GmailCenter'));
-const SchemaManager = lazy(() => import('./components/SchemaManager'));
+const LandingPage = safeLazy(() => import('./components/LandingPage'));
+const AuthView = safeLazy(() => import('./components/AuthView'));
+const DashboardHome = safeLazy(() => import('./components/DashboardHome'));
+const UploadCenter = safeLazy(() => import('./components/UploadCenter'));
+const AuditResults = safeLazy(() => import('./components/AuditResults'));
+const CleaningCenter = safeLazy(() => import('./components/CleaningCenter'));
+const InsightsCenter = safeLazy(() => import('./components/InsightsCenter'));
+const ReportGen = safeLazy(() => import('./components/ReportGen'));
+const AuditHistory = safeLazy(() => import('./components/AuditHistory'));
+const TeamCollaboration = safeLazy(() => import('./components/TeamCollaboration'));
+const SettingsView = safeLazy(() => import('./components/SettingsView'));
+const AdminPanel = safeLazy(() => import('./components/AdminPanel'));
+const GmailCenter = safeLazy(() => import('./components/GmailCenter'));
+const SchemaManager = safeLazy(() => import('./components/SchemaManager'));
 import CookieBanner, { getCookie, setCookie } from './components/CookieBanner';
 
 // Loading spinner fallback optimized for instant render on 2GB RAM devices
@@ -1891,6 +1908,10 @@ export default function App() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [isDarkMode, setIsDarkMode] = useState(true);
+
+  useEffect(() => {
+    sessionStorage.removeItem('chunk_reload_attempted');
+  }, []);
 
   return (
     <Routes>
