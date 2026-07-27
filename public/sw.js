@@ -88,8 +88,15 @@ self.addEventListener('fetch', (event) => {
           }
           return response;
         })
-        .catch(() => {
-          return caches.match('/') || caches.match('/index.html');
+        .catch(async () => {
+          const cachedRoot = await caches.match('/');
+          if (cachedRoot) return cachedRoot;
+          const cachedIndex = await caches.match('/index.html');
+          if (cachedIndex) return cachedIndex;
+          return new Response(
+            '<!DOCTYPE html><html><head><title>Offline</title></head><body><div style="padding:2rem;font-family:sans-serif;"><h2>You are offline</h2><p>CSV Auditor Pro is currently running in offline mode. Please reconnect to access online cloud sync.</p></div></body></html>',
+            { headers: { 'Content-Type': 'text/html' } }
+          );
         })
     );
     return;

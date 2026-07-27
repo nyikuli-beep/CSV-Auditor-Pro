@@ -216,12 +216,14 @@ export default function SchemaManager({
       missingColumns: [], 
       typeErrors: [],
       score: 100, 
-      totalChecked: 0 
+      totalChecked: 0,
+      columnStats: []
     };
 
     const fileHeaders = currentFile.headers || [];
     const fileRows = currentFile.rows || [];
     const fields = currentSchema.fields;
+    const MAX_ERRORS_STORED = 150;
 
     const errors: {
       id: string;
@@ -235,13 +237,20 @@ export default function SchemaManager({
       suggestion: string;
     }[] = [];
 
+    // Track column stats in a single pass
+    const colStatsMap: Record<string, { validRows: number; invalidRows: number; isMissing: boolean }> = {};
+    fields.forEach(f => {
+      const match = fileHeaders.find(h => h.toLowerCase() === f.name.toLowerCase());
+      colStatsMap[f.id] = { validRows: 0, invalidRows: 0, isMissing: !match };
+    });
+
     // 1. Check Missing Columns
     const missingColumns: string[] = [];
     fields.forEach(field => {
       const match = fileHeaders.find(h => h.toLowerCase() === field.name.toLowerCase());
       if (!match) {
         missingColumns.push(field.name);
-        if (field.required) {
+        if (field.required && errors.length < MAX_ERRORS_STORED) {
           errors.push({
             id: `err-col-missing-${field.id}`,
             column: field.name,
@@ -258,9 +267,11 @@ export default function SchemaManager({
 
     const typeErrors: any[] = [];
     let totalCheckedCells = 0;
+    let totalErrorCount = missingColumns.length;
 
     // 2. Row level validation
-    fileRows.forEach((row, rowIndex) => {
+    for (let rowIndex = 0; rowIndex < fileRows.length; rowIndex++) {
+      const row = fileRows[rowIndex];
       const humanRow = rowIndex + 2; // Rows are 1-indexed, header is row 1
 
       fields.forEach(field => {
@@ -275,19 +286,25 @@ export default function SchemaManager({
 
         if (isEmpty) {
           if (field.required) {
-            const err = {
-              id: `err-val-req-${rowIndex}-${field.id}`,
-              row: humanRow,
-              column: actualHeader,
-              type: 'missing_required_val' as const,
-              severity: 'critical' as const,
-              expected: `Non-empty value of type ${field.type}`,
-              found: 'Empty Cell',
-              description: `Required field "${actualHeader}" has a blank cell at row ${humanRow}.`,
-              suggestion: `Input a valid fallback value or impute it during the Hygiene Workspace clean loop.`
-            };
-            errors.push(err);
-            typeErrors.push(err);
+            totalErrorCount++;
+            colStatsMap[field.id].invalidRows++;
+            if (errors.length < MAX_ERRORS_STORED) {
+              const err = {
+                id: `err-val-req-${rowIndex}-${field.id}`,
+                row: humanRow,
+                column: actualHeader,
+                type: 'missing_required_val' as const,
+                severity: 'critical' as const,
+                expected: `Non-empty value of type ${field.type}`,
+                found: 'Empty Cell',
+                description: `Required field "${actualHeader}" has a blank cell at row ${humanRow}.`,
+                suggestion: `Input a valid fallback value or impute it during the Hygiene Workspace clean loop.`
+              };
+              errors.push(err);
+              typeErrors.push(err);
+            }
+          } else {
+            colStatsMap[field.id].validRows++;
           }
           return;
         }
@@ -299,9 +316,8 @@ export default function SchemaManager({
 
         switch (field.type) {
           case 'number': {
-            // Remove currency symbol, commas, and trailing percentages
             const numVal = Number(cleanVal.replace(/[^0-9.-]/g, ''));
-            isValid = !isNaN(numVal) && cleanVal.replace(/[^a-zA-Z]/g, '').length < 3; // ensure it doesn't contain heavy alphabetical characters
+            isValid = !isNaN(numVal) && cleanVal.replace(/[^a-zA-Z]/g, '').length < 3;
             details = 'Expected numeric format (e.g., 42, -1.5, 1,000.5)';
             break;
           }
@@ -312,14 +328,10 @@ export default function SchemaManager({
             break;
           }
           case 'date': {
-            // Checks for YYYY-MM-DD or standard parsable dates
             const dateParsed = Date.parse(cleanVal);
             isValid = !isNaN(dateParsed);
-            // Additionally let's enforce some structural integrity for standard dash/slash separation
             if (isValid) {
-              const hasDateSeps = cleanVal.includes('-') || cleanVal.includes('/') || cleanVal.includes('.');
               const hasLetters = /[a-zA-Z]/.test(cleanVal);
-              // if it's long letters e.g. "Completed", Date.parse might say invalid or valid depending on browsers, we guard it
               if (cleanVal.length > 25 && hasLetters) {
                 isValid = false;
               }
@@ -345,144 +357,76 @@ export default function SchemaManager({
             break;
         }
 
-        if (!isValid) {
-          const err = {
-            id: `err-type-${rowIndex}-${field.id}`,
-            row: humanRow,
-            column: actualHeader,
-            type: 'type_mismatch' as const,
-            severity: 'warning' as const,
-            expected: field.type.toUpperCase(),
-            found: cellValue,
-            description: `Type mismatch in column "${actualHeader}". Found "${cellValue}" which is not a valid ${field.type}.`,
-            suggestion: `${details}. Standardize format using mapping rules or bulk edits.`
-          };
-          errors.push(err);
-          typeErrors.push(err);
+        if (isValid) {
+          colStatsMap[field.id].validRows++;
+        } else {
+          totalErrorCount++;
+          colStatsMap[field.id].invalidRows++;
+          if (errors.length < MAX_ERRORS_STORED) {
+            const err = {
+              id: `err-type-${rowIndex}-${field.id}`,
+              row: humanRow,
+              column: actualHeader,
+              type: 'type_mismatch' as const,
+              severity: 'warning' as const,
+              expected: field.type.toUpperCase(),
+              found: cellValue,
+              description: `Type mismatch in column "${actualHeader}". Found "${cellValue}" which is not a valid ${field.type}.`,
+              suggestion: `${details}. Standardize format using mapping rules or bulk edits.`
+            };
+            errors.push(err);
+            typeErrors.push(err);
+          }
         }
       });
-    });
+    }
 
     const totalCells = totalCheckedCells || 1;
-    const score = Math.max(0, Math.min(100, Math.round(100 - (errors.length / totalCells) * 100)));
+    const score = Math.max(0, Math.min(100, Math.round(100 - (totalErrorCount / totalCells) * 100)));
+
+    const columnStats = fields.map(field => {
+      const actualHeader = fileHeaders.find(h => h.toLowerCase() === field.name.toLowerCase());
+      const stats = colStatsMap[field.id];
+      const isMissing = stats.isMissing;
+      const total = fileRows.length || 1;
+      const passRate = isMissing ? 0 : Math.round((stats.validRows / total) * 100);
+
+      return {
+        field,
+        headerName: actualHeader || field.name,
+        isMissing,
+        totalRows: fileRows.length,
+        validRows: stats.validRows,
+        invalidRows: stats.invalidRows,
+        passRate,
+        errorTypes: isMissing ? { missing_column: 1 } : { type_mismatch: stats.invalidRows }
+      };
+    });
 
     return {
       errors,
-      errorCount: errors.length,
+      errorCount: totalErrorCount,
       missingColumns,
       typeErrors,
       score,
-      totalChecked: totalCheckedCells
+      totalChecked: totalCheckedCells,
+      columnStats
     };
   }, [currentFile, currentSchema]);
 
   // Compute stats per column for the validation heatmap
-  const columnStats = useMemo(() => {
-    if (!currentFile || !currentSchema) return [];
+  const columnStats = validationResults.columnStats;
 
-    const fileHeaders = currentFile.headers || [];
-    const fileRows = currentFile.rows || [];
-    const fields = currentSchema.fields;
-
-    return fields.map(field => {
-      const actualHeader = fileHeaders.find(h => h.toLowerCase() === field.name.toLowerCase());
-      
-      if (!actualHeader) {
-        return {
-          field,
-          headerName: field.name,
-          isMissing: true,
-          totalRows: fileRows.length,
-          validRows: 0,
-          invalidRows: fileRows.length,
-          passRate: 0,
-          errorTypes: { missing_column: 1 }
-        };
+  // Build an O(1) cell error lookup map
+  const cellErrorMap = useMemo(() => {
+    const map = new Map<string, typeof validationResults.errors[0]>();
+    validationResults.errors.forEach(err => {
+      if (err.row && err.column) {
+        map.set(`${err.row - 2}-${err.column.toLowerCase()}`, err);
       }
-
-      let validCount = 0;
-      let invalidCount = 0;
-      const errorDetails: { [key: string]: number } = {};
-
-      fileRows.forEach((row) => {
-        const cellValue = row[actualHeader];
-        const isEmpty = cellValue === undefined || cellValue === null || cellValue.trim() === '';
-
-        if (isEmpty) {
-          if (field.required) {
-            invalidCount++;
-            errorDetails['missing_required'] = (errorDetails['missing_required'] || 0) + 1;
-          } else {
-            // Empty but optional is valid
-            validCount++;
-          }
-          return;
-        }
-
-        const cleanVal = cellValue.trim();
-        let isValid = true;
-
-        switch (field.type) {
-          case 'number': {
-            const numVal = Number(cleanVal.replace(/[^0-9.-]/g, ''));
-            isValid = !isNaN(numVal) && cleanVal.replace(/[^a-zA-Z]/g, '').length < 3;
-            break;
-          }
-          case 'currency': {
-            const numVal = Number(cleanVal.replace(/[^0-9.-]/g, ''));
-            isValid = !isNaN(numVal);
-            break;
-          }
-          case 'date': {
-            const dateParsed = Date.parse(cleanVal);
-            isValid = !isNaN(dateParsed);
-            if (isValid) {
-              const hasLetters = /[a-zA-Z]/.test(cleanVal);
-              if (cleanVal.length > 25 && hasLetters) {
-                isValid = false;
-              }
-            }
-            break;
-          }
-          case 'boolean': {
-            const lower = cleanVal.toLowerCase();
-            isValid = ['true', 'false', '1', '0', 'yes', 'no', 'y', 'n', 'active', 'inactive'].includes(lower);
-            break;
-          }
-          case 'email': {
-            const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-            isValid = emailRegex.test(cleanVal);
-            break;
-          }
-          case 'string':
-          default:
-            isValid = true;
-            break;
-        }
-
-        if (isValid) {
-          validCount++;
-        } else {
-          invalidCount++;
-          errorDetails['type_mismatch'] = (errorDetails['type_mismatch'] || 0) + 1;
-        }
-      });
-
-      const total = fileRows.length || 1;
-      const passRate = Math.round((validCount / total) * 100);
-
-      return {
-        field,
-        headerName: actualHeader,
-        isMissing: false,
-        totalRows: fileRows.length,
-        validRows: validCount,
-        invalidRows: invalidCount,
-        passRate,
-        errorTypes: errorDetails
-      };
     });
-  }, [currentFile, currentSchema]);
+    return map;
+  }, [validationResults.errors]);
 
   // Create Schema function
   const handleCreateSchema = (e: React.FormEvent) => {
@@ -568,8 +512,7 @@ export default function SchemaManager({
 
   // Check if a cell fails validation (for highlighted table)
   const getCellValidationError = (rowIndex: number, columnName: string) => {
-    const humanRow = rowIndex + 2;
-    return validationResults.errors.find(err => err.row === humanRow && err.column.toLowerCase() === columnName.toLowerCase());
+    return cellErrorMap.get(`${rowIndex}-${columnName.toLowerCase()}`);
   };
 
   return (

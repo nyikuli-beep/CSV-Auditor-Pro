@@ -88,16 +88,16 @@ export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, acc
             </button>
             <button 
               onClick={onStartTrial}
-              className={`hidden sm:inline-flex px-4 py-2 text-sm font-semibold text-white rounded-lg transition-all shadow-md hover:shadow-lg cursor-pointer ${accentClass}`}
+              className={`hidden sm:inline-flex px-4 py-2 text-sm font-bold text-white rounded-xl transition-all shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] cursor-pointer ${accentClass}`}
               id="btn-header-try-free"
             >
-              Sign In
+              Start Free Trial
             </button>
             <button 
               onClick={onStartTrial}
-              className={`sm:hidden px-3.5 py-1.5 text-xs font-semibold text-white rounded-lg transition-all shadow-md cursor-pointer ${accentClass}`}
+              className={`sm:hidden px-3.5 py-1.5 text-xs font-bold text-white rounded-xl transition-all shadow-md cursor-pointer ${accentClass}`}
             >
-              Sign In
+              Start Trial
             </button>
           </div>
         </div>
@@ -143,7 +143,7 @@ export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, acc
             >
               <button 
                 onClick={onStartTrial}
-                className={`px-8 py-4 text-base font-semibold text-white rounded-xl flex items-center justify-center gap-2 shadow-xl shadow-blue-600/25 hover:scale-[1.02] transition-all cursor-pointer ${accentClass}`}
+                className={`px-8 py-4 text-base font-bold text-white rounded-xl flex items-center justify-center gap-2 shadow-xl shadow-blue-600/30 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer ${accentClass}`}
                 id="hero-start-trial-btn"
               >
                 Start Free Trial
@@ -151,10 +151,10 @@ export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, acc
               </button>
               <button 
                 onClick={onStartTrial}
-                className={`px-6 py-4 text-base font-semibold rounded-xl flex items-center justify-center gap-2 border transition-all hover:scale-[1.02] cursor-pointer ${isDarkMode ? 'bg-slate-900 border-slate-800 hover:bg-slate-800 text-slate-200' : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-800 shadow-sm'}`}
+                className={`px-6 py-4 text-base font-bold rounded-xl flex items-center justify-center gap-2 border transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer ${isDarkMode ? 'bg-slate-900 border-slate-800 hover:bg-slate-800 text-slate-200' : 'bg-slate-900 border-slate-900 hover:bg-slate-800 text-white shadow-md'}`}
                 id="hero-watch-demo-btn"
               >
-                <Play className={`w-4 h-4 fill-current ${isDarkMode ? 'text-slate-400' : 'text-blue-600'}`} />
+                <Play className={`w-4 h-4 fill-current ${isDarkMode ? 'text-slate-400' : 'text-blue-400'}`} />
                 Watch Demo
               </button>
             </motion.div>
@@ -323,15 +323,15 @@ export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, acc
               </div>
               <button 
                 onClick={onStartTrial}
-                className={`w-full py-2.5 rounded-lg border text-sm font-semibold transition-all cursor-pointer ${isDarkMode ? 'border-slate-700 hover:bg-slate-800 text-white' : 'border-slate-300 bg-white hover:bg-slate-100 text-slate-800 shadow-sm'}`}
+                className={`w-full py-3 rounded-xl text-sm font-bold transition-all cursor-pointer hover:scale-[1.01] active:scale-[0.99] ${isDarkMode ? 'border border-slate-700 bg-slate-800 hover:bg-slate-700 text-white' : 'bg-slate-900 border border-slate-900 hover:bg-slate-800 text-white shadow-md'}`}
               >
                 Get Started
               </button>
             </div>
 
             {/* Pro - Featured */}
-            <div className={`p-8 rounded-2xl border flex flex-col justify-between relative scale-105 transition-all shadow-xl ${isDarkMode ? 'bg-slate-900 border-blue-500 shadow-blue-500/5' : 'bg-white border-blue-600'}`}>
-              <div className="absolute top-0 right-1/2 translate-x-1/2 -translate-y-1/2 bg-blue-600 text-white text-[11px] font-bold uppercase tracking-widest px-3 py-1 rounded-full shadow-lg">
+            <div className={`p-8 rounded-2xl border flex flex-col justify-between relative scale-105 transition-all shadow-xl ${isDarkMode ? 'bg-slate-900 border-blue-500 shadow-blue-500/5' : 'bg-white border-blue-600 shadow-blue-600/10'}`}>
+              <div className="absolute top-0 right-1/2 translate-x-1/2 -translate-y-1/2 bg-blue-600 text-white text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full shadow-lg">
                 Most Popular
               </div>
               <div>
@@ -350,7 +350,7 @@ export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, acc
               </div>
               <button 
                 onClick={onStartTrial}
-                className={`w-full py-2.5 text-white text-sm font-semibold rounded-lg transition-all shadow-md hover:shadow-lg cursor-pointer ${accentClass}`}
+                className={`w-full py-3 text-white text-sm font-bold rounded-xl transition-all shadow-lg hover:shadow-xl cursor-pointer hover:scale-[1.01] active:scale-[0.99] ${accentClass}`}
               >
                 Start Free Trial
               </button>
@@ -374,7 +374,7 @@ export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, acc
               </div>
               <button 
                 onClick={onStartTrial}
-                className={`w-full py-2.5 rounded-lg border text-sm font-semibold transition-all cursor-pointer ${isDarkMode ? 'border-slate-700 hover:bg-slate-800 text-white' : 'border-slate-300 bg-white hover:bg-slate-100 text-slate-800 shadow-sm'}`}
+                className={`w-full py-3 rounded-xl text-sm font-bold transition-all cursor-pointer hover:scale-[1.01] active:scale-[0.99] ${isDarkMode ? 'border border-slate-700 bg-slate-800 hover:bg-slate-700 text-white' : 'bg-slate-900 border border-slate-900 hover:bg-slate-800 text-white shadow-md'}`}
               >
                 Contact Sales
               </button>

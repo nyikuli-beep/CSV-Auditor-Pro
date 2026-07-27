@@ -388,24 +388,45 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
   ): AuditIssue[] => {
     const generatedIssues: AuditIssue[] = [];
     const seenRows = new Set<string>();
+    const MAX_ISSUES_STORED = 500;
 
-    rows.forEach((row, rowIndex) => {
+    // Pre-compile active custom regex rules once outside row loop
+    const activeRulesWithRegex = rules
+      .filter(rule => rule.isActive)
+      .map(rule => {
+        if (rule.type === 'regex' && rule.regexPattern) {
+          try {
+            return { ...rule, compiledRegex: new RegExp(rule.regexPattern) };
+          } catch (e) {
+            return { ...rule, compiledRegex: null };
+          }
+        }
+        return { ...rule, compiledRegex: null };
+      });
+
+    // Limit deep check for duplicate rows if dataset is huge to prevent UI freezes
+    const maxRowsToCheck = rows.length > 15000 ? 10000 : rows.length;
+
+    for (let rowIndex = 0; rowIndex < maxRowsToCheck; rowIndex++) {
+      const row = rows[rowIndex];
       const humanRowIndex = rowIndex + 2; // 1-indexed accounting for headers
       
-      // 1. Check Duplicates
-      const rowString = JSON.stringify(row);
+      // 1. Check Duplicates with fast value joining
+      const rowString = Object.values(row).slice(0, 15).join('│');
       if (seenRows.has(rowString)) {
-        generatedIssues.push({
-          id: `dynamic-issue-dup-${rowIndex}`,
-          type: 'duplicate',
-          column: headers[0] || 'Row',
-          row: humanRowIndex,
-          value: 'Duplicate Row content',
-          severity: 'critical',
-          description: `Entire row matches a previous record exactly.`,
-          suggestion: 'Deduplicate row during clean phase.',
-          status: 'open'
-        });
+        if (generatedIssues.length < MAX_ISSUES_STORED) {
+          generatedIssues.push({
+            id: `dynamic-issue-dup-${rowIndex}`,
+            type: 'duplicate',
+            column: headers[0] || 'Row',
+            row: humanRowIndex,
+            value: 'Duplicate Row content',
+            severity: 'critical',
+            description: `Entire row matches a previous record exactly.`,
+            suggestion: 'Deduplicate row during clean phase.',
+            status: 'open'
+          });
+        }
       } else {
         seenRows.add(rowString);
       }
@@ -418,33 +439,37 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
         if (cellVal === undefined || cellVal === '') {
           const isCrucial = h.toLowerCase().includes('id') || h.toLowerCase().includes('amount') || h.toLowerCase().includes('date') || h.toLowerCase().includes('email') ||
                             mappedCanonical === 'Transaction ID' || mappedCanonical === 'Amount' || mappedCanonical === 'Transaction Date' || mappedCanonical === 'Email / Contact';
-          generatedIssues.push({
-            id: `dynamic-issue-missing-${rowIndex}-${h}`,
-            type: 'missing_value',
-            column: h,
-            row: humanRowIndex,
-            value: '',
-            severity: isCrucial ? 'critical' : 'warning',
-            description: `Missing cell value found in column "${h}".`,
-            suggestion: isCrucial ? 'Required data. Impute value or contact editor.' : 'Fill with standard category or text.',
-            status: 'open'
-          });
+          if (generatedIssues.length < MAX_ISSUES_STORED) {
+            generatedIssues.push({
+              id: `dynamic-issue-missing-${rowIndex}-${h}`,
+              type: 'missing_value',
+              column: h,
+              row: humanRowIndex,
+              value: '',
+              severity: isCrucial ? 'critical' : 'warning',
+              description: `Missing cell value found in column "${h}".`,
+              suggestion: isCrucial ? 'Required data. Impute value or contact editor.' : 'Fill with standard category or text.',
+              status: 'open'
+            });
+          }
         } else {
           // Check outliers on numerical columns
           if (h.toLowerCase().includes('amount') || h.toLowerCase().includes('pay') || h.toLowerCase().includes('price') || mappedCanonical === 'Amount') {
             const num = parseFloat(cellVal.replace(/[^0-9.-]/g, ''));
             if (!isNaN(num) && num > 100000) {
-              generatedIssues.push({
-                id: `dynamic-issue-outlier-${rowIndex}-${h}`,
-                type: 'outlier',
-                column: h,
-                row: humanRowIndex,
-                value: cellVal,
-                severity: 'warning',
-                description: `High numerical outlier found: ${cellVal}.`,
-                suggestion: 'Check if transaction matches correct ledger approvals.',
-                status: 'open'
-              });
+              if (generatedIssues.length < MAX_ISSUES_STORED) {
+                generatedIssues.push({
+                  id: `dynamic-issue-outlier-${rowIndex}-${h}`,
+                  type: 'outlier',
+                  column: h,
+                  row: humanRowIndex,
+                  value: cellVal,
+                  severity: 'warning',
+                  description: `High numerical outlier found: ${cellVal}.`,
+                  suggestion: 'Check if transaction matches correct ledger approvals.',
+                  status: 'open'
+                });
+              }
             }
           }
           // Check date format
@@ -460,50 +485,52 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
                 suggestion = `Auto-standardize this column from "${expectedFormat}" during cleaning.`;
               }
 
-              generatedIssues.push({
-                id: `dynamic-issue-date-${rowIndex}-${h}`,
-                type: 'invalid_format',
-                column: h,
-                row: humanRowIndex,
-                value: cellVal,
-                severity: 'warning',
-                description: description,
-                suggestion: suggestion,
-                status: 'open'
-              });
+              if (generatedIssues.length < MAX_ISSUES_STORED) {
+                generatedIssues.push({
+                  id: `dynamic-issue-date-${rowIndex}-${h}`,
+                  type: 'invalid_format',
+                  column: h,
+                  row: humanRowIndex,
+                  value: cellVal,
+                  severity: 'warning',
+                  description: description,
+                  suggestion: suggestion,
+                  status: 'open'
+                });
+              }
             }
           }
           // Check email format if mapped to Email / Contact
           if (mappedCanonical === 'Email / Contact' || h.toLowerCase().includes('email')) {
             const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
             if (!emailRegex.test(cellVal)) {
-              generatedIssues.push({
-                id: `dynamic-issue-email-${rowIndex}-${h}`,
-                type: 'invalid_format',
-                column: h,
-                row: humanRowIndex,
-                value: cellVal,
-                severity: 'warning',
-                description: `Value "${cellVal}" does not follow standard email formats.`,
-                suggestion: 'Verify address syntax or fix empty placeholders.',
-                status: 'open'
-              });
+              if (generatedIssues.length < MAX_ISSUES_STORED) {
+                generatedIssues.push({
+                  id: `dynamic-issue-email-${rowIndex}-${h}`,
+                  type: 'invalid_format',
+                  column: h,
+                  row: humanRowIndex,
+                  value: cellVal,
+                  severity: 'warning',
+                  description: `Value "${cellVal}" does not follow standard email formats.`,
+                  suggestion: 'Verify address syntax or fix empty placeholders.',
+                  status: 'open'
+                });
+              }
             }
           }
         }
       });
 
       // 3. Apply custom validation rules
-      rules.filter(rule => rule.isActive).forEach(rule => {
-        // Find matching header case-insensitively
+      activeRulesWithRegex.forEach(rule => {
         const matchedHeader = headers.find(h => h.toLowerCase() === rule.columnName.toLowerCase());
         if (matchedHeader) {
           const cellVal = row[matchedHeader];
           if (cellVal !== undefined && cellVal !== '') {
-            if (rule.type === 'regex' && rule.regexPattern) {
-              try {
-                const regex = new RegExp(rule.regexPattern);
-                if (!regex.test(cellVal)) {
+            if (rule.type === 'regex' && rule.compiledRegex) {
+              if (!rule.compiledRegex.test(cellVal)) {
+                if (generatedIssues.length < MAX_ISSUES_STORED) {
                   generatedIssues.push({
                     id: `custom-issue-regex-${rowIndex}-${matchedHeader}-${rule.id}`,
                     type: 'invalid_format',
@@ -516,24 +543,24 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
                     status: 'open'
                   });
                 }
-              } catch (err) {
-                console.error("Invalid custom regex pattern:", rule.regexPattern, err);
               }
             } else if (rule.type === 'range') {
               const cleanNumStr = cellVal.replace(/[^0-9.-]/g, '');
               const num = parseFloat(cleanNumStr);
               if (isNaN(num)) {
-                generatedIssues.push({
-                  id: `custom-issue-range-nan-${rowIndex}-${matchedHeader}-${rule.id}`,
-                  type: 'invalid_format',
-                  column: matchedHeader,
-                  row: humanRowIndex,
-                  value: cellVal,
-                  severity: rule.severity,
-                  description: `Value "${cellVal}" could not be parsed as a number for range validation.`,
-                  suggestion: `Ensure value is a valid numeric format.`,
-                  status: 'open'
-                });
+                if (generatedIssues.length < MAX_ISSUES_STORED) {
+                  generatedIssues.push({
+                    id: `custom-issue-range-nan-${rowIndex}-${matchedHeader}-${rule.id}`,
+                    type: 'invalid_format',
+                    column: matchedHeader,
+                    row: humanRowIndex,
+                    value: cellVal,
+                    severity: rule.severity,
+                    description: `Value "${cellVal}" could not be parsed as a number for range validation.`,
+                    suggestion: `Ensure value is a valid numeric format.`,
+                    status: 'open'
+                  });
+                }
               } else {
                 let failed = false;
                 let desc = '';
@@ -546,24 +573,26 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
                   desc = `Value ${num} is above custom maximum threshold of ${rule.rangeMax}.`;
                 }
                 if (failed) {
-                  generatedIssues.push({
-                    id: `custom-issue-range-limit-${rowIndex}-${matchedHeader}-${rule.id}`,
-                    type: 'outlier',
-                    column: matchedHeader,
-                    row: humanRowIndex,
-                    value: cellVal,
-                    severity: rule.severity,
-                    description: rule.description || desc,
-                    suggestion: `Verify or update cell value to sit within allowed bounds.`,
-                    status: 'open'
-                  });
+                  if (generatedIssues.length < MAX_ISSUES_STORED) {
+                    generatedIssues.push({
+                      id: `custom-issue-range-limit-${rowIndex}-${matchedHeader}-${rule.id}`,
+                      type: 'outlier',
+                      column: matchedHeader,
+                      row: humanRowIndex,
+                      value: cellVal,
+                      severity: rule.severity,
+                      description: rule.description || desc,
+                      suggestion: `Verify or update cell value to sit within allowed bounds.`,
+                      status: 'open'
+                    });
+                  }
                 }
               }
             }
           }
         }
       });
-    });
+    }
 
     return generatedIssues;
   };
@@ -1038,12 +1067,17 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
 
   const fetchHeaderAnalysis = async (headers: string[], sampleRows: any[]) => {
     setIsAnalyzing(true);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
+
     try {
       const response = await fetch('/api/gemini/analyze-headers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ headers, sampleRows: sampleRows.slice(0, 3) })
+        body: JSON.stringify({ headers, sampleRows: sampleRows.slice(0, 3) }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
       if (response.ok) {
         const data = await response.json();
         setMappings(data.mappings || {});
@@ -1052,7 +1086,8 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
         throw new Error('Failed to analyze headers');
       }
     } catch (e) {
-      console.error('Error analyzing headers:', e);
+      clearTimeout(timeoutId);
+      console.warn('Error/timeout analyzing headers with AI, using fast rule matcher:', e);
       // Fast high-fidelity local rules backup
       const defaultMappings: Record<string, string> = {};
       const defaultExplanations: Record<string, string> = {};
@@ -1931,19 +1966,14 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
               }`}>
                   <button
                     disabled={isActionPending}
-                    onClick={async () => {
+                    onClick={() => {
                       setIsActionPending(true);
-                      try {
-                        const currentUser = auth?.currentUser;
-                        if (currentUser && db) {
-                          await deleteDoc(doc(db, 'drafts', currentUser.uid));
-                        }
-                      } catch (e) {
-                        console.error("Failed to delete draft:", e);
-                      } finally {
-                        removePendingFileAtIndex(activePendingIndex);
-                        setIsActionPending(false);
+                      const currentUser = auth?.currentUser;
+                      if (currentUser && db) {
+                        deleteDoc(doc(db, 'drafts', currentUser.uid)).catch(e => console.warn("Failed to delete draft:", e));
                       }
+                      removePendingFileAtIndex(activePendingIndex);
+                      setIsActionPending(false);
                     }}
                     className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all duration-200 cursor-pointer hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-red-500/50 disabled:opacity-50 disabled:pointer-events-none ${
                       isDarkMode ? 'border-slate-800 text-slate-400 hover:text-slate-200 bg-slate-900/40 hover:bg-slate-900' : 'border-slate-200 text-slate-600 bg-white hover:bg-slate-50'
@@ -1955,21 +1985,16 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
                   <div className="flex gap-3">
                     <button
                       disabled={isActionPending}
-                      onClick={async () => {
+                      onClick={() => {
                         setIsActionPending(true);
-                        try {
-                          const currentUser = auth?.currentUser;
-                          if (currentUser && db) {
-                            await deleteDoc(doc(db, 'drafts', currentUser.uid));
-                          }
-                        } catch (e) {
-                          console.error("Failed to delete draft:", e);
-                        } finally {
-                          if (pendingFile) {
-                            removePendingFileAtIndex(activePendingIndex, pendingFile);
-                          }
-                          setIsActionPending(false);
+                        const currentUser = auth?.currentUser;
+                        if (currentUser && db) {
+                          deleteDoc(doc(db, 'drafts', currentUser.uid)).catch(e => console.warn("Failed to delete draft:", e));
                         }
+                        if (pendingFile) {
+                          removePendingFileAtIndex(activePendingIndex, pendingFile);
+                        }
+                        setIsActionPending(false);
                       }}
                       className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all duration-200 cursor-pointer hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-slate-500/50 disabled:opacity-50 disabled:pointer-events-none ${
                         isDarkMode ? 'border-slate-800 text-slate-300 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-700 hover:bg-slate-50'
@@ -1980,7 +2005,7 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
 
                     <button
                       disabled={isActionPending}
-                      onClick={async () => {
+                      onClick={() => {
                         if (!pendingFile) return;
                         setIsActionPending(true);
 
@@ -2005,7 +2030,7 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
 
                           const currentUser = auth?.currentUser;
                           if (currentUser && db) {
-                            await deleteDoc(doc(db, 'drafts', currentUser.uid));
+                            deleteDoc(doc(db, 'drafts', currentUser.uid)).catch(e => console.warn("Failed to delete draft:", e));
                           }
                           removePendingFileAtIndex(activePendingIndex, finalFile);
                         } catch (e) {
