@@ -43,6 +43,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (currentUser) {
         // Sync profile state safely
         syncUserProfileToFirestore(currentUser).catch(() => {});
+      } else {
+        localStorage.removeItem('user_profile_uid');
+        localStorage.removeItem('user_profile_avatar');
+        localStorage.removeItem('user_profile_name');
       }
       setLoading(false);
     });
@@ -75,6 +79,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = async (): Promise<void> => {
     await logoutUser();
     setUser(null);
+    localStorage.removeItem('user_profile_uid');
+    localStorage.removeItem('user_profile_avatar');
+    localStorage.removeItem('user_profile_name');
   };
 
   const forgotPassword = async (email: string): Promise<void> => {

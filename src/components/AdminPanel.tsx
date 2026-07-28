@@ -35,14 +35,15 @@ interface AdminPanelProps {
   isDarkMode: boolean;
   accentClass: string;
   currentUserEmail?: string;
+  currentUserRole?: string;
   activities?: AuditActivity[];
 }
 
-export default function AdminPanel({ isDarkMode, accentClass, currentUserEmail, activities = [] }: AdminPanelProps) {
+export default function AdminPanel({ isDarkMode, accentClass, currentUserEmail, currentUserRole, activities = [] }: AdminPanelProps) {
   const AUTHORIZED_ADMIN_EMAILS = ['nyikulibramwel@gmail.com', 'nyikuli@company.com'];
-  const isAuthorizedAdmin = currentUserEmail
+  const isAuthorizedAdmin = (currentUserRole === 'Owner' || currentUserRole === 'Admin') || (currentUserEmail
     ? AUTHORIZED_ADMIN_EMAILS.some(e => e.toLowerCase() === currentUserEmail.toLowerCase().trim())
-    : false;
+    : false);
 
   // Feature flags toggles state
   const [flags, setFlags] = useState({

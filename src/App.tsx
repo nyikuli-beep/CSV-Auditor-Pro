@@ -129,16 +129,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   }, [location.pathname]);
   
   // Session / Persona State
-  const [user, setUser] = useState<{ email: string; role: string; name?: string; avatar?: string } | null>(() => {
-    const savedAvatar = localStorage.getItem('user_profile_avatar') || '/macbook_code.jpg';
-    const savedName = localStorage.getItem('user_profile_name') || 'Nyikuli Bramwel';
-    return { 
-      email: 'nyikulibramwel@gmail.com', 
-      role: 'Owner', 
-      name: savedName, 
-      avatar: savedAvatar 
-    };
-  });
+  const [user, setUser] = useState<{ email: string; role: string; name?: string; avatar?: string } | null>(null);
   const [profileModalOpen, setProfileModalOpen] = useState<boolean>(false);
   const [shortcutsModalOpen, setShortcutsModalOpen] = useState<boolean>(false);
   const [tourModalOpen, setTourModalOpen] = useState<boolean>(() => {
@@ -482,8 +473,8 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
         );
 
         let userRole = isOwnerEmail ? 'Owner' : 'Editor';
-        let userName = localStorage.getItem('user_profile_name') || fUser.displayName || fUser.email?.split('@')[0] || (isOwnerEmail ? 'Nyikuli Bramwel' : 'Workspace User');
-        let userAvatar = localStorage.getItem('user_profile_avatar') || (isOwnerEmail ? '/macbook_code.jpg' : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150');
+        let userName = fUser.displayName || fUser.email?.split('@')[0] || (isOwnerEmail ? 'Nyikuli Bramwel' : 'Workspace User');
+        let userAvatar = fUser.photoURL || (isOwnerEmail ? '/macbook_code.jpg' : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150');
 
         try {
           const userSnap = await getDoc(userRef);
@@ -492,11 +483,9 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
             userRole = isOwnerEmail ? 'Owner' : (data.role || 'Editor');
             if (data.avatar) {
               userAvatar = data.avatar;
-              localStorage.setItem('user_profile_avatar', data.avatar);
             }
             if (data.name) {
               userName = data.name;
-              localStorage.setItem('user_profile_name', data.name);
             }
           } else {
             const newProfile = {
@@ -504,13 +493,19 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
               name: userName,
               email: fUser.email || `${fUser.uid}@demo.com`,
               role: userRole,
-              avatar: userAvatar
+              avatar: userAvatar,
+              createdAt: new Date().toISOString()
             };
             await setDoc(userRef, newProfile);
           }
         } catch (err) {
           console.warn("Firestore profile sync fallback (using local session defaults):", err);
         }
+
+        // Write to localStorage ONLY for current active user uid
+        localStorage.setItem('user_profile_uid', fUser.uid);
+        localStorage.setItem('user_profile_avatar', userAvatar);
+        localStorage.setItem('user_profile_name', userName);
         
         setUser({ 
           email: fUser.email || `${fUser.uid}@demo.com`, 
@@ -529,7 +524,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
               'Authorization': `Bearer ${idToken}`
             },
             body: JSON.stringify({
-              name: fUser.displayName || fUser.email?.split('@')[0] || 'Nyikuli Bramwel',
+              name: userName,
               email: fUser.email || `${fUser.uid}@demo.com`,
               role: userRole
             })
@@ -542,6 +537,12 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       } else {
         setFirebaseUser(null);
         setUser(null);
+        setFiles([]);
+        setActivities([]);
+        setMembers([]);
+        localStorage.removeItem('user_profile_uid');
+        localStorage.removeItem('user_profile_avatar');
+        localStorage.removeItem('user_profile_name');
       }
       setAuthLoading(false);
     });
@@ -765,9 +766,18 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   const handleLogout = async () => {
     try {
       await logout();
-      navigate('/login');
     } catch (err) {
       console.error("Error signing out:", err);
+    } finally {
+      setUser(null);
+      setFirebaseUser(null);
+      setFiles([]);
+      setActivities([]);
+      setMembers([]);
+      localStorage.removeItem('user_profile_uid');
+      localStorage.removeItem('user_profile_avatar');
+      localStorage.removeItem('user_profile_name');
+      navigate('/login', { replace: true });
     }
   };
 
@@ -1734,7 +1744,8 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                         activities={activities}
                         isDarkMode={isDarkMode}
                         accentClass={accentClass}
-                        currentUserEmail={user?.email || 'nyikulibramwel@gmail.com'}
+                        currentUserEmail={user?.email || ''}
+                        currentUserRole={user?.role}
                         onSwitchActiveUser={handleSwitchActiveUser}
                       />
                     )}
@@ -1762,7 +1773,8 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                       <AdminPanel 
                         isDarkMode={isDarkMode}
                         accentClass={accentClass}
-                        currentUserEmail={user?.email || 'nyikulibramwel@gmail.com'}
+                        currentUserEmail={user?.email || ''}
+                        currentUserRole={user?.role}
                         activities={activities}
                       />
                     )}

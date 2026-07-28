@@ -88,9 +88,9 @@ export default function SettingsView({
 
   // Owner Permission Check
   const AUTHORIZED_OWNER_EMAILS = ['nyikulibramwel@gmail.com', 'nyikuli@company.com'];
-  const isOwner = currentUser?.email
+  const isOwner = currentUser?.role === 'Owner' || (currentUser?.email
     ? AUTHORIZED_OWNER_EMAILS.some(e => e.toLowerCase() === currentUser.email.toLowerCase().trim())
-    : false;
+    : false);
 
   // Restricted Features & Access Security Policy State
   const [selectedCategory, setSelectedCategory] = useState<string>('all');

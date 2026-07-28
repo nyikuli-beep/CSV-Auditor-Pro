@@ -33,6 +33,7 @@ interface TeamCollaborationProps {
   isDarkMode: boolean;
   accentClass: string;
   currentUserEmail?: string;
+  currentUserRole?: string;
   onSwitchActiveUser?: (member: TeamMember) => void;
 }
 
@@ -52,11 +53,12 @@ export default function TeamCollaboration({
   activities, 
   isDarkMode, 
   accentClass,
-  currentUserEmail = 'nyikulibramwel@gmail.com',
+  currentUserEmail = '',
+  currentUserRole,
   onSwitchActiveUser
 }: TeamCollaborationProps) {
   const AUTHORIZED_EMAILS = ['nyikulibramwel@gmail.com', 'nyikuli@company.com'];
-  const isAuthorizedUser = AUTHORIZED_EMAILS.some(e => e.toLowerCase() === (currentUserEmail || '').toLowerCase().trim());
+  const isAuthorizedUser = (currentUserRole === 'Owner' || currentUserRole === 'Admin') || AUTHORIZED_EMAILS.some(e => e.toLowerCase() === (currentUserEmail || '').toLowerCase().trim());
 
   // Email validator to enforce only real, working email addresses
   const isValidWorkingEmail = (email: string): { valid: boolean; reason?: string } => {

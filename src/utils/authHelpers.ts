@@ -14,7 +14,7 @@ export interface UserProfileDocument {
   lastLogin: string;
   emailVerified: boolean;
   provider: string;
-  role: 'Admin' | 'Editor' | 'Viewer';
+  role: 'Owner' | 'Admin' | 'Editor' | 'Viewer';
 }
 
 /**
@@ -26,7 +26,7 @@ export async function syncUserProfileToFirestore(
   customData?: {
     displayName?: string;
     provider?: string;
-    role?: 'Admin' | 'Editor' | 'Viewer';
+    role?: 'Owner' | 'Admin' | 'Editor' | 'Viewer';
   }
 ): Promise<void> {
   if (!user || !user.uid) return;
@@ -36,10 +36,14 @@ export async function syncUserProfileToFirestore(
     const existingSnap = await getDoc(userRef);
 
     const providerId = customData?.provider || user.providerData[0]?.providerId || 'password';
-    const displayName = customData?.displayName || user.displayName || user.email?.split('@')[0] || 'User';
     const email = user.email || '';
+    const AUTHORIZED_OWNER_EMAILS = ['nyikulibramwel@gmail.com', 'nyikuli@company.com'];
+    const isOwnerEmail = AUTHORIZED_OWNER_EMAILS.some(e => e.toLowerCase() === email.toLowerCase().trim());
+    
+    const displayName = customData?.displayName || user.displayName || email.split('@')[0] || (isOwnerEmail ? 'Nyikuli Bramwel' : 'User');
     const photoURL = user.photoURL || undefined;
     const nowIso = new Date().toISOString();
+    const assignedRole: 'Owner' | 'Admin' | 'Editor' | 'Viewer' = isOwnerEmail ? 'Owner' : (customData?.role || 'Editor');
 
     if (!existingSnap.exists()) {
       // Create new profile document
@@ -55,17 +59,21 @@ export async function syncUserProfileToFirestore(
         lastLogin: nowIso,
         emailVerified: user.emailVerified,
         provider: providerId,
-        role: customData?.role || 'Editor',
+        role: assignedRole,
       };
 
       await setDoc(userRef, newProfile);
     } else {
       // Update existing document with latest lastLogin & emailVerified
+      const existingData = existingSnap.data();
+      const currentRole = isOwnerEmail ? 'Owner' : (existingData?.role || assignedRole);
+
       await updateDoc(userRef, {
         lastLogin: nowIso,
         emailVerified: user.emailVerified,
-        displayName: displayName || existingSnap.data()?.displayName || 'User',
-        name: displayName || existingSnap.data()?.name || 'User',
+        displayName: displayName || existingData?.displayName || 'User',
+        name: displayName || existingData?.name || 'User',
+        role: currentRole,
         ...(photoURL ? { photoURL, avatar: photoURL } : {}),
       });
     }
