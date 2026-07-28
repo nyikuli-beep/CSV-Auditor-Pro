@@ -11,7 +11,6 @@ import {
   Users, 
   Activity, 
   ArrowUpRight, 
-  Star, 
   Plus, 
   Minus, 
   Sun, 
@@ -23,8 +22,27 @@ import {
   Check,
   Loader2
 } from 'lucide-react';
-import { TESTIMONIALS, FAQ_ITEMS } from '../sampleData';
+import { FAQ_ITEMS } from '../sampleData';
 import { FOOTER_DOCS } from '../data/footerDocs';
+
+const VALUE_BLOCKS = [
+  {
+    title: 'Save Hours Every Week',
+    description: 'Automate tedious CSV validation tasks and eliminate repetitive manual data cleaning across your workflows.'
+  },
+  {
+    title: 'Improve Data Accuracy',
+    description: 'Detect missing values, duplicate records, invalid formats, inconsistent data types, and schema issues before they impact your business.'
+  },
+  {
+    title: 'Maintain Schema Integrity',
+    description: 'Ensure every uploaded CSV follows a consistent structure, making your datasets reliable for reporting, analytics, AI models, and database imports.'
+  },
+  {
+    title: 'Export With Confidence',
+    description: 'Generate professional validation reports and export clean, trusted CSV files that are ready for analysis or production use.'
+  }
+];
 
 interface LandingPageProps {
   onStartTrial: () => void;
@@ -71,7 +89,7 @@ export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, acc
 
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium">
             <a href="#features" className={`hover:opacity-80 transition-opacity ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>Features</a>
-            <a href="#testimonials" className={`hover:opacity-80 transition-opacity ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>Customers</a>
+            <a href="#value-proposition" className={`hover:opacity-80 transition-opacity ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>Why CSV Auditor</a>
             <a href="#pricing" className={`hover:opacity-80 transition-opacity ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>Pricing</a>
             <a href="#faq" className={`hover:opacity-80 transition-opacity ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>FAQ</a>
           </nav>
@@ -250,38 +268,62 @@ export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, acc
         </div>
       </section>
 
-      {/* Customer Testimonials Section */}
-      <section id="testimonials" className="py-20">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center max-w-2xl mx-auto mb-16">
-            <h2 className="text-3xl font-bold tracking-tight mb-4">Trusted by modern finance & engineering squads.</h2>
-            <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>
-              See how business professionals utilize our platform to maintain complete schema sanity and export ready-for-ingestion datasets.
+      {/* Value Proposition Section */}
+      <section id="value-proposition" className={`py-24 border-t border-b transition-colors ${isDarkMode ? 'bg-[#0B1020] border-slate-800/80' : 'bg-[#0B1020] border-slate-800 text-white'}`}>
+        <div className="max-w-4xl mx-auto px-6">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="text-center max-w-3xl mx-auto mb-16"
+          >
+            <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white mb-6">
+              Built for Reliable Data Quality
+            </h2>
+            <p className="text-base md:text-lg text-slate-300 leading-relaxed">
+              Every CSV deserves accurate validation. CSV Auditor Pro helps businesses, analysts, developers, researchers, and operations teams detect errors, validate data, and generate clean, analysis-ready datasets in seconds. Eliminate manual spreadsheet work and improve confidence in every dataset.
             </p>
-          </div>
+          </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {TESTIMONIALS.map((t, idx) => (
-              <div 
+          {/* Vertically Stacked Feature Rows (separated by subtle dividers) */}
+          <div className="divide-y divide-slate-800/80 border-t border-b border-slate-800/80 mb-16">
+            {VALUE_BLOCKS.map((block, idx) => (
+              <motion.div 
                 key={idx}
-                className={`p-6 rounded-2xl border flex flex-col justify-between ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}
+                initial={{ opacity: 0, y: 15 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.4, delay: idx * 0.1 }}
+                className="py-8 flex flex-col sm:flex-row items-start gap-5 sm:gap-6 group"
               >
-                <div>
-                  <div className="flex gap-1 mb-4 text-amber-400">
-                    {[...Array(t.rating)].map((_, i) => <Star key={i} className="w-4 h-4 fill-current" />)}
-                  </div>
-                  <p className={`italic mb-6 text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>"{t.quote}"</p>
+                <div className="w-10 h-10 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-blue-500/20 group-hover:border-blue-500/50 transition-all shadow-sm shadow-blue-500/10">
+                  <CheckCircle2 className="w-5 h-5 text-blue-400" />
                 </div>
-                <div className="flex items-center gap-3">
-                  <img src={t.avatar} alt={t.author} className="w-10 h-10 rounded-full object-cover" />
-                  <div>
-                    <h4 className="text-sm font-bold">{t.author}</h4>
-                    <span className="text-xs text-slate-400">{t.role}</span>
-                  </div>
+                <div className="space-y-2">
+                  <h3 className="text-xl font-bold text-white tracking-tight">
+                    {block.title}
+                  </h3>
+                  <p className="text-sm md:text-base text-slate-300 leading-relaxed">
+                    {block.description}
+                  </p>
                 </div>
-              </div>
+              </motion.div>
             ))}
           </div>
+
+          {/* Bottom Statement */}
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+            className="text-center pt-2"
+          >
+            <p className="text-xl md:text-2xl font-bold text-blue-400 tracking-tight">
+              Clean Data. Trusted Decisions. Better Outcomes.
+            </p>
+          </motion.div>
         </div>
       </section>
 
