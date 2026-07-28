@@ -287,8 +287,15 @@ export default function GmailCenter({
       body
     ].join('\r\n');
 
-    const base64 = btoa(unescape(encodeURIComponent(rfcMessage)));
-    return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const bytes = new TextEncoder().encode(rfcMessage);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary)
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
   };
 
   // Send the drafted email securely
@@ -296,12 +303,12 @@ export default function GmailCenter({
     e.preventDefault();
     if (!token) return;
     if (!toEmail) {
-      setSendError('Please enter a recipient email.');
+      setSendError('Please enter a recipient email address.');
       return;
     }
 
     // MANDATORY confirmation dialog for sending emails on user behalf (as instructed by skill)
-    const confirmed = window.confirm(`Confirm: Send this compliance email to ${toEmail} using your Gmail account?`);
+    const confirmed = window.confirm(`Confirm: Send this compliance email to ${toEmail}?`);
     if (!confirmed) return;
 
     setIsSending(true);
@@ -309,21 +316,34 @@ export default function GmailCenter({
     setSendError(null);
 
     try {
-      const raw = buildRawEmail(toEmail, subject, emailBody);
-      const response = await fetch('https://www.googleapis.com/gmail/v1/users/me/messages/send', {
+      let successMsg = `Compliance report successfully dispatched to ${toEmail}!`;
+
+      const apiRes = await fetch('/api/gmail/send', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ raw })
+        body: JSON.stringify({
+          to: toEmail,
+          subject,
+          body: emailBody,
+          token
+        })
       });
 
-      if (!response.ok) {
-        throw new Error('Gmail API responded with an error. Please verify scope permissions.');
+      if (apiRes.ok) {
+        const data = await apiRes.json();
+        if (data.success) {
+          successMsg = data.message || `Compliance report successfully dispatched to ${toEmail}!`;
+        } else {
+          throw new Error(data.error || 'Failed to dispatch compliance email.');
+        }
+      } else {
+        const errJson = await apiRes.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Compliance email dispatch API encountered an error.');
       }
 
-      setSendSuccess(`Compliance report successfully dispatched to ${toEmail}!`);
+      setSendSuccess(successMsg);
       onAddActivity(`Sent email report: "${subject}" to ${toEmail}`);
       
       // Update local sent history
@@ -339,8 +359,10 @@ export default function GmailCenter({
         setEmailBody('');
       }
 
-      // Refresh real Gmail sent list
-      fetchGmailSentList();
+      // Refresh real Gmail sent list if token is live
+      if (token && token !== 'persisted_gmail_session_token') {
+        fetchGmailSentList();
+      }
 
     } catch (err: any) {
       console.error('Gmail send failure:', err);

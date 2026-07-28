@@ -5,7 +5,6 @@ import {
   Sparkles, 
   CheckCircle2, 
   ArrowRight, 
-  Play, 
   FileCheck, 
   ShieldAlert, 
   Database, 
@@ -148,14 +147,6 @@ export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, acc
               >
                 Start Free Trial
                 <ArrowRight className="w-5 h-5" />
-              </button>
-              <button 
-                onClick={onStartTrial}
-                className={`px-6 py-4 text-base font-bold rounded-xl flex items-center justify-center gap-2 border transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer ${isDarkMode ? 'bg-slate-900 border-slate-800 hover:bg-slate-800 text-slate-200' : 'bg-slate-900 border-slate-900 hover:bg-slate-800 text-white shadow-md'}`}
-                id="hero-watch-demo-btn"
-              >
-                <Play className={`w-4 h-4 fill-current ${isDarkMode ? 'text-slate-400' : 'text-blue-400'}`} />
-                Watch Demo
               </button>
             </motion.div>
           </div>
