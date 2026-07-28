@@ -107,91 +107,13 @@ export const SAMPLE_MESSY_FILE: CSVFile = {
   issues: MESSY_ISSUES,
 };
 
-export const PREVIOUS_AUDITS: CSVFile[] = [
-  {
-    id: 'file-1',
-    name: 'Payroll_May_2026_Standardized.csv',
-    size: 45120,
-    uploadedAt: '2026-05-30 04:32 PM',
-    status: 'completed',
-    score: 98,
-    headers: ['Employee_ID', 'Name', 'Gross_Pay', 'Tax_Deducted', 'Net_Pay', 'Department'],
-    rows: [],
-    issues: [
-      {
-        id: 'file-1-issue-1',
-        type: 'outlier',
-        column: 'Gross_Pay',
-        row: 45,
-        value: '18500.00',
-        severity: 'info',
-        description: 'Monthly payroll outlier flagged.',
-        suggestion: 'No action required, executive salary verified.',
-        status: 'resolved'
-      }
-    ]
-  },
-  {
-    id: 'file-2',
-    name: 'NGO_Donor_Report_Unclean.csv',
-    size: 18240,
-    uploadedAt: '2026-06-15 09:12 AM',
-    status: 'completed',
-    score: 75,
-    headers: ['Donor_ID', 'First_Name', 'Last_Name', 'Email', 'Contribution', 'Designation'],
-    rows: [],
-    issues: []
-  },
-  {
-    id: 'file-3',
-    name: 'Inventory_Audit_Raw.csv',
-    size: 110450,
-    uploadedAt: '2026-06-21 11:45 AM',
-    status: 'failed',
-    score: 0,
-    headers: [],
-    rows: [],
-    issues: []
-  }
-];
+export const PREVIOUS_AUDITS: CSVFile[] = [];
 
-export const TEAM_MEMBERS: TeamMember[] = [
-  { id: 'usr-1', name: 'Nyikuli Bramwel', email: 'nyikulibramwel@gmail.com', role: 'Owner', avatar: '/macbook_code.jpg', status: 'active' },
-  { id: 'usr-2', name: 'Marcus Vance', email: 'marcus@company.com', role: 'Admin', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face', status: 'active' },
-  { id: 'usr-3', name: 'Leila Chen', email: 'leila.c@company.com', role: 'Editor', avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=100&h=100&fit=crop&crop=face', status: 'active' },
-  { id: 'usr-4', name: 'David Kim', email: 'd.kim@company.com', role: 'Viewer', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop&crop=face', status: 'invited' },
-];
+export const TEAM_MEMBERS: TeamMember[] = [];
 
-export const AUDIT_ACTIVITIES: AuditActivity[] = [
-  { id: 'act-1', userId: 'usr-1', userName: 'Nyikuli Bramwel', action: 'Uploaded a new CSV dataset for auditing', timestamp: '2026-06-23 10:15 AM', fileName: 'Company_Q2_Transactions_Messy.csv' },
-  { id: 'act-2', userId: 'usr-2', userName: 'Marcus Vance', action: 'Resolved 3 invalid email formatting errors', timestamp: '2026-06-22 03:40 PM', fileName: 'NGO_Donor_Report_Unclean.csv' },
-  { id: 'act-3', userId: 'usr-3', userName: 'Leila Chen', action: 'Downloaded PDF audit compliance report', timestamp: '2026-06-22 11:24 AM', fileName: 'Payroll_May_2026_Standardized.csv' },
-  { id: 'act-4', userId: 'usr-1', userName: 'Nyikuli Bramwel', action: 'Invited David Kim to join company project workspace', timestamp: '2026-06-21 02:15 PM' },
-];
+export const AUDIT_ACTIVITIES: AuditActivity[] = [];
 
-export const TESTIMONIALS = [
-  {
-    quote: "CSV Auditor Pro saved our accounting team over 15 hours a week of manual VLOOKUP operations. The AI-generated corrections are incredibly accurate.",
-    author: "Elena Rostova",
-    role: "Head of Finance, DevFlow",
-    rating: 5,
-    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=face"
-  },
-  {
-    quote: "Our donor lists are always a complete mess. Standardizing dates and geocodes has gone from a dreaded task to a 2-minute automated audit.",
-    author: "Julian Rivers",
-    role: "Data Lead, Global Hope NGO",
-    rating: 5,
-    avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face"
-  },
-  {
-    quote: "An absolute lifesaver before ingestion into Postgres. It flags extreme outliers, missing values, and corrupted text fields that used to crash our db pipelines.",
-    author: "Sanjay Mehta",
-    role: "DevOps Engineer, Hooli",
-    rating: 5,
-    avatar: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=100&h=100&fit=crop&crop=face"
-  }
-];
+export const TESTIMONIALS: any[] = [];
 
 export const FAQ_ITEMS = [
   {

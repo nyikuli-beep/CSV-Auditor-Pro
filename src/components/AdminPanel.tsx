@@ -57,10 +57,7 @@ export default function AdminPanel({ isDarkMode, accentClass, currentUserEmail, 
     setFlags(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const supportTickets = [
-    { id: 't-201', user: 'dave@waynecorp.com', issue: 'Large 80MB CSV upload keeps timing out during parsing', time: '1 hour ago', status: 'open', priority: 'high' },
-    { id: 't-202', user: 'julian@globalhope.org', issue: 'Incorrect character encoding when importing Spanish accented letters', time: '5 hours ago', status: 'resolved', priority: 'medium' },
-  ];
+  const supportTickets: any[] = [];
 
   // State for Firestore queried activities
   const [firestoreActivities, setFirestoreActivities] = useState<AuditActivity[]>([]);
@@ -93,63 +90,9 @@ export default function AdminPanel({ isDarkMode, accentClass, currentUserEmail, 
     };
   }, []);
 
-  // Built-in high-privilege baseline activities to seed or supplement real-time records
-  const defaultHighPrivilegeLogs: AuditActivity[] = useMemo(() => [
-    {
-      id: 'act-sec-101',
-      userId: 'usr-1',
-      userName: 'Nyikuli Bramwel',
-      userAvatar: '/macbook_code.jpg',
-      action: 'Accessed Direct SQL Query Console on Production Database (postgres-replica-3)',
-      timestamp: '10 mins ago',
-      fileName: 'schema:public.audits'
-    },
-    {
-      id: 'act-sec-102',
-      userId: 'usr-2',
-      userName: 'Marcus Vance',
-      userAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face',
-      action: 'Modified user role for marcus@company.com to Admin',
-      timestamp: '25 mins ago'
-    },
-    {
-      id: 'act-sec-103',
-      userId: 'usr-1',
-      userName: 'Nyikuli Bramwel',
-      userAvatar: '/macbook_code.jpg',
-      action: 'Updated Security Policy: Enforced strict MFA & Owner-Only SQL Endpoints',
-      timestamp: '1 hour ago'
-    },
-    {
-      id: 'act-sec-104',
-      userId: 'usr-1',
-      userName: 'Nyikuli Bramwel',
-      userAvatar: '/macbook_code.jpg',
-      action: 'Rotated Gemini Server-side API Secret Key & Model Routing Policy',
-      timestamp: '2 hours ago'
-    },
-    {
-      id: 'act-sec-105',
-      userId: 'usr-3',
-      userName: 'Leila Chen',
-      userAvatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=100&h=100&fit=crop&crop=face',
-      action: 'Toggled feature flag: highCapacityIngest on Sandbox-Cluster-3',
-      timestamp: '3 hours ago'
-    },
-    {
-      id: 'act-sec-106',
-      userId: 'usr-1',
-      userName: 'Nyikuli Bramwel',
-      userAvatar: '/macbook_code.jpg',
-      action: 'Executed Database Schema Migration & Drizzle ORM Table Index Optimization',
-      timestamp: '4 hours ago',
-      fileName: 'schema.ts'
-    }
-  ], []);
-
-  // Merge all activity sources (Firestore snapshot, props.activities, default baseline)
+  // Merge real activity sources (Firestore snapshot & props.activities)
   const allMergedActivities = useMemo(() => {
-    const combined = [...firestoreActivities, ...activities, ...defaultHighPrivilegeLogs];
+    const combined = [...firestoreActivities, ...activities];
     const map = new Map<string, AuditActivity>();
     combined.forEach(act => {
       if (act && act.action) {
@@ -160,7 +103,7 @@ export default function AdminPanel({ isDarkMode, accentClass, currentUserEmail, 
       }
     });
     return Array.from(map.values());
-  }, [firestoreActivities, activities, defaultHighPrivilegeLogs]);
+  }, [firestoreActivities, activities]);
 
   // Helper to test if an activity qualifies as high-privilege
   const isHighPrivilegeAction = (act: AuditActivity) => {

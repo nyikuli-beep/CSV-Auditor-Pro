@@ -37,24 +37,12 @@ interface DashboardHomeProps {
 }
 
 export default function DashboardHome({ files, activeFile, activities, onNavigate, onSelectFile, isDarkMode, accentClass }: DashboardHomeProps) {
-  // Formulate data points for the last 30 days
+  // Formulate data points for the last 30 days based exclusively on real user files
   const trendData = useMemo(() => {
-    // Base historical audits over last 30 days
-    const baseAudits = [
-      { name: 'marketing_leads_raw.csv', date: '06-12', score: 45, errors: 28 },
-      { name: 'ngo_donors_v1.csv', date: '06-16', score: 58, errors: 19 },
-      { name: 'payroll_temp_unclean.csv', date: '06-20', score: 72, errors: 11 },
-      { name: 'Company_Q2_Transactions_Messy.csv', date: '06-23', score: 68, errors: 12 },
-      { name: 'office_supplies_invent.csv', date: '06-28', score: 84, errors: 6 },
-      { name: 'billing_statement_q2.csv', date: '07-02', score: 91, errors: 4 },
-      { name: 'employee_roster_final.csv', date: '07-08', score: 97, errors: 1 },
-    ];
-
-    // Map any files that are currently uploaded and completed/failed
-    const userAudits = files
+    return files
       .filter(f => f.status === 'completed' || f.status === 'failed')
       .map(f => {
-        let displayDate = '07-10';
+        let displayDate = 'Today';
         try {
           if (f.uploadedAt) {
             const parts = f.uploadedAt.split(' ');
@@ -81,16 +69,8 @@ export default function DashboardHome({ files, activeFile, activities, onNavigat
           errors: f.issues ? f.issues.filter(i => i.status === 'open').length : 0,
           id: f.id
         };
-      });
-
-    // Merge them: filter out base audits that have the same name as user uploaded files
-    const userFileNames = new Set(userAudits.map(u => u.name));
-    const cleanBaseAudits = baseAudits.filter(b => !userFileNames.has(b.name));
-
-    const combined = [...cleanBaseAudits, ...userAudits];
-
-    // Sort by date (MM-DD)
-    return combined.sort((a, b) => a.date.localeCompare(b.date));
+      })
+      .sort((a, b) => a.date.localeCompare(b.date));
   }, [files]);
 
   // Custom Tooltip for recharts
@@ -805,37 +785,43 @@ export default function DashboardHome({ files, activeFile, activities, onNavigat
           <div>
             <h3 className={`font-bold text-sm mb-3.5 ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Audited Datasets</h3>
             <div className="space-y-3">
-              {files.map((file) => (
-                <div 
-                  key={file.id}
-                  onClick={() => {
-                    if (onSelectFile) {
-                      onSelectFile(file);
-                    }
-                    onNavigate('clean');
-                  }}
-                  className={`p-3 rounded-lg border transition-all cursor-pointer hover:scale-[1.01] ${activeFile?.id === file.id ? isDarkMode ? 'bg-blue-500/10 border-blue-500/40' : 'bg-blue-50 border-blue-200' : isDarkMode ? 'bg-[#1e293b]/30 border-slate-800/80 hover:bg-[#1e293b]/50' : 'bg-slate-50 border-slate-100 hover:bg-slate-100/50'}`}
-                >
-                  <div className="flex justify-between items-start mb-1">
-                    <span className="text-xs font-bold truncate max-w-[130px]">{file.name}</span>
-                    {file.status === 'completed' ? (
-                      <span className={`text-[9px] px-1.5 py-0.25 rounded font-bold ${file.score > 80 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
-                        Score {file.score}
-                      </span>
-                    ) : (
-                      <span className="text-[9px] px-1.5 py-0.25 rounded bg-rose-500/10 text-rose-400 font-bold">Failed</span>
-                    )}
-                  </div>
-                  <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono">
-                    <span>
-                      {file.size > 1024 * 1024 
-                        ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 
-                        : `${(file.size / 1024).toFixed(1)} KB`}
-                    </span>
-                    <span>{file.uploadedAt.split(' ')[0]}</span>
-                  </div>
+              {files.length === 0 ? (
+                <div className="p-6 text-center text-xs text-slate-400 border border-dashed rounded-lg border-slate-700/50">
+                  No CSV files uploaded yet. Upload your first CSV to begin.
                 </div>
-              ))}
+              ) : (
+                files.map((file) => (
+                  <div 
+                    key={file.id}
+                    onClick={() => {
+                      if (onSelectFile) {
+                        onSelectFile(file);
+                      }
+                      onNavigate('clean');
+                    }}
+                    className={`p-3 rounded-lg border transition-all cursor-pointer hover:scale-[1.01] ${activeFile?.id === file.id ? isDarkMode ? 'bg-blue-500/10 border-blue-500/40' : 'bg-blue-50 border-blue-200' : isDarkMode ? 'bg-[#1e293b]/30 border-slate-800/80 hover:bg-[#1e293b]/50' : 'bg-slate-50 border-slate-100 hover:bg-slate-100/50'}`}
+                  >
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="text-xs font-bold truncate max-w-[130px]">{file.name}</span>
+                      {file.status === 'completed' ? (
+                        <span className={`text-[9px] px-1.5 py-0.25 rounded font-bold ${file.score > 80 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                          Score {file.score}
+                        </span>
+                      ) : (
+                        <span className="text-[9px] px-1.5 py-0.25 rounded bg-rose-500/10 text-rose-400 font-bold">Failed</span>
+                      )}
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono">
+                      <span>
+                        {file.size > 1024 * 1024 
+                          ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 
+                          : `${(file.size / 1024).toFixed(1)} KB`}
+                      </span>
+                      <span>{file.uploadedAt.split(' ')[0]}</span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
@@ -863,23 +849,29 @@ export default function DashboardHome({ files, activeFile, activities, onNavigat
         </div>
 
         <div className="space-y-4">
-          {activities.slice(0, 3).map((act) => (
-            <div key={act.id} className="flex gap-3 text-xs items-start">
-              <div className="w-7 h-7 rounded-full bg-slate-800 shrink-0 font-bold text-[9px] flex items-center justify-center text-white border border-slate-700/50">
-                {act.userName.split(' ').map(n => n[0]).join('')}
-              </div>
-              <div className="flex-1 space-y-0.5">
-                <div className="flex flex-wrap justify-between gap-1 items-baseline">
-                  <span className="font-bold">{act.userName}</span>
-                  <span className="text-[9px] text-slate-400 font-mono flex items-center gap-1"><Clock className="w-3 h-3" /> {act.timestamp}</span>
-                </div>
-                <p className={isDarkMode ? 'text-slate-300' : 'text-slate-600'}>
-                  {act.action}
-                  {act.fileName && <span className="font-bold text-blue-500 ml-1">({act.fileName})</span>}
-                </p>
-              </div>
+          {activities.length === 0 ? (
+            <div className="p-6 text-center text-xs text-slate-400 border border-dashed rounded-lg border-slate-700/50">
+              No activity recorded yet. Your validation history will appear here.
             </div>
-          ))}
+          ) : (
+            activities.slice(0, 3).map((act) => (
+              <div key={act.id} className="flex gap-3 text-xs items-start">
+                <div className="w-7 h-7 rounded-full bg-slate-800 shrink-0 font-bold text-[9px] flex items-center justify-center text-white border border-slate-700/50">
+                  {act.userName.split(' ').map(n => n[0]).join('')}
+                </div>
+                <div className="flex-1 space-y-0.5">
+                  <div className="flex flex-wrap justify-between gap-1 items-baseline">
+                    <span className="font-bold">{act.userName}</span>
+                    <span className="text-[9px] text-slate-400 font-mono flex items-center gap-1"><Clock className="w-3 h-3" /> {act.timestamp}</span>
+                  </div>
+                  <p className={isDarkMode ? 'text-slate-300' : 'text-slate-600'}>
+                    {act.action}
+                    {act.fileName && <span className="font-bold text-blue-500 ml-1">({act.fileName})</span>}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>

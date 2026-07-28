@@ -14,6 +14,7 @@ export interface UserProfileDocument {
   lastLogin: string;
   emailVerified: boolean;
   provider: string;
+  plan: string;
   role: 'Owner' | 'Admin' | 'Editor' | 'Viewer';
 }
 
@@ -40,7 +41,7 @@ export async function syncUserProfileToFirestore(
     const AUTHORIZED_OWNER_EMAILS = ['nyikulibramwel@gmail.com', 'nyikuli@company.com'];
     const isOwnerEmail = AUTHORIZED_OWNER_EMAILS.some(e => e.toLowerCase() === email.toLowerCase().trim());
     
-    const displayName = customData?.displayName || user.displayName || email.split('@')[0] || (isOwnerEmail ? 'Nyikuli Bramwel' : 'User');
+    const displayName = customData?.displayName || user.displayName || email.split('@')[0] || 'User';
     const photoURL = user.photoURL || undefined;
     const nowIso = new Date().toISOString();
     const assignedRole: 'Owner' | 'Admin' | 'Editor' | 'Viewer' = isOwnerEmail ? 'Owner' : (customData?.role || 'Editor');
@@ -59,6 +60,7 @@ export async function syncUserProfileToFirestore(
         lastLogin: nowIso,
         emailVerified: user.emailVerified,
         provider: providerId,
+        plan: 'Free',
         role: assignedRole,
       };
 
@@ -74,6 +76,7 @@ export async function syncUserProfileToFirestore(
         displayName: displayName || existingData?.displayName || 'User',
         name: displayName || existingData?.name || 'User',
         role: currentRole,
+        plan: existingData?.plan || 'Free',
         ...(photoURL ? { photoURL, avatar: photoURL } : {}),
       });
     }

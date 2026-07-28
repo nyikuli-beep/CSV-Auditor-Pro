@@ -188,7 +188,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     { 
       id: 'm-init', 
       role: 'assistant', 
-      content: 'Greetings Nyikuli! I have analyzed "Company_Q2_Transactions_Messy.csv". I found 3 critical duplicate transaction keys, missing budget metrics, and outdated ISO calendar formatting. How shall we begin clean operations?', 
+      content: 'Greetings! I am ready to analyze your CSV datasets and guide you through data hygiene and compliance validation. Upload a CSV file to get started.', 
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
     }
   ]);
@@ -473,8 +473,8 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
         );
 
         let userRole = isOwnerEmail ? 'Owner' : 'Editor';
-        let userName = fUser.displayName || fUser.email?.split('@')[0] || (isOwnerEmail ? 'Nyikuli Bramwel' : 'Workspace User');
-        let userAvatar = fUser.photoURL || (isOwnerEmail ? '/macbook_code.jpg' : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150');
+        let userName = fUser.displayName || fUser.email?.split('@')[0] || 'Authenticated User';
+        let userAvatar = fUser.photoURL || '';
 
         try {
           const userSnap = await getDoc(userRef);
@@ -562,19 +562,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       });
 
       if (filesList.length === 0) {
-        if (!snapshot.metadata.fromCache) {
-          try {
-            const seedFile: CSVFile = {
-              ...SAMPLE_MESSY_FILE,
-              id: 'file-active-' + firebaseUser.uid,
-              ownerId: firebaseUser.uid,
-              uploadedAt: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            };
-            await setDoc(doc(db, 'files', 'file-active-' + firebaseUser.uid), seedFile);
-          } catch (err) {
-            handleFirestoreError(err, OperationType.WRITE, 'files/file-active-' + firebaseUser.uid);
-          }
-        }
+        setFiles([]);
       } else {
         // Keep any unsynced local files that haven't registered in the Firestore snapshot yet
         setFiles(prev => {
@@ -618,28 +606,19 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       const membersList: TeamMember[] = [];
       snapshot.forEach((docSnap) => {
         const data = docSnap.data() as TeamMember;
-        const lowerName = (data.name || '').toLowerCase();
-        const lowerEmail = (data.email || '').toLowerCase();
-        if (lowerName.includes('sarah') || lowerEmail.includes('sarah') || lowerName.includes('jenkins') || lowerEmail.includes('jenkins')) {
-          // Permanently purge Sarah Jenkins if present in Firestore
-          deleteDoc(doc(db, 'members', docSnap.id)).catch(() => {});
-        } else {
-          membersList.push(data);
-        }
+        membersList.push(data);
       });
 
       if (membersList.length === 0) {
-        if (!snapshot.metadata.fromCache) {
-          try {
-            for (const m of TEAM_MEMBERS) {
-              if (!m.name.toLowerCase().includes('sarah') && !m.email.toLowerCase().includes('sarah') && !m.name.toLowerCase().includes('jenkins')) {
-                await setDoc(doc(db, 'members', m.id), m);
-              }
-            }
-          } catch (err) {
-            handleFirestoreError(err, OperationType.WRITE, 'members');
-          }
-        }
+        const currentMember: TeamMember = {
+          id: firebaseUser.uid,
+          name: user?.name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+          email: firebaseUser.email || '',
+          role: (user?.role || 'Owner') as any,
+          status: 'active',
+          avatar: user?.avatar || ''
+        };
+        setMembers([currentMember]);
       } else {
         setMembers(membersList);
       }
@@ -656,20 +635,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       });
 
       if (activitiesList.length === 0) {
-        if (!snapshot.metadata.fromCache) {
-          try {
-            const currentUid = firebaseUser?.uid || auth.currentUser?.uid;
-            for (const act of AUDIT_ACTIVITIES) {
-              const seedAct = {
-                ...act,
-                userId: currentUid || act.userId
-              };
-              await setDoc(doc(db, 'activities', act.id), seedAct);
-            }
-          } catch (err) {
-            handleFirestoreError(err, OperationType.WRITE, 'activities');
-          }
-        }
+        setActivities([]);
       } else {
         setActivities(activitiesList.sort((a, b) => b.id.localeCompare(a.id)));
       }
@@ -845,8 +811,8 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
 
     const cleanLog: AuditActivity = {
       id: `act-${Date.now()}`,
-      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-nyikuli',
-      userName: user?.email || 'Nyikuli Bramwel',
+      userId: firebaseUser?.uid || auth.currentUser?.uid || '',
+      userName: user?.name || user?.email?.split('@')[0] || 'User',
       action: `Executed data hygiene algorithms on "${updatedFile.name}"`,
       timestamp: 'Just now'
     };
@@ -879,8 +845,8 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
 
     const batchCleanLog: AuditActivity = {
       id: `act-${Date.now()}`,
-      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-nyikuli',
-      userName: user?.email || 'Nyikuli Bramwel',
+      userId: firebaseUser?.uid || auth.currentUser?.uid || '',
+      userName: user?.name || user?.email?.split('@')[0] || 'User',
       action: `Executed batch data hygiene algorithms on ${updatedFiles.length} file(s)`,
       timestamp: 'Just now'
     };
@@ -929,8 +895,8 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
 
     const deleteLog: AuditActivity = {
       id: `act-${Date.now()}`,
-      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-nyikuli',
-      userName: user?.email || 'Nyikuli Bramwel',
+      userId: firebaseUser?.uid || auth.currentUser?.uid || '',
+      userName: user?.name || user?.email?.split('@')[0] || 'User',
       action: `Deleted dataset file "${name}"`,
       timestamp: 'Just now'
     };
@@ -955,8 +921,8 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
 
     const inviteLog: AuditActivity = {
       id: `act-${Date.now()}`,
-      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-nyikuli',
-      userName: user?.email || 'Nyikuli Bramwel',
+      userId: firebaseUser?.uid || auth.currentUser?.uid || '',
+      userName: user?.name || user?.email?.split('@')[0] || 'User',
       action: `Dispatched tenancy invitation to ${newMember.email}`,
       timestamp: 'Just now'
     };
@@ -979,8 +945,8 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
 
     const deleteLog: AuditActivity = {
       id: `act-${Date.now()}`,
-      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-nyikuli',
-      userName: user?.email || 'Nyikuli Bramwel',
+      userId: firebaseUser?.uid || auth.currentUser?.uid || '',
+      userName: user?.name || user?.email?.split('@')[0] || 'User',
       action: `Deleted workspace member ${email}`,
       timestamp: 'Just now'
     };
@@ -1011,7 +977,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       status: accessDenied ? 'denied' : 'active',
       accessDenied: accessDenied,
       deniedAt: accessDenied ? new Date().toISOString() : undefined,
-      deniedBy: accessDenied ? (user?.email || 'nyikulibramwel@gmail.com') : undefined
+      deniedBy: accessDenied ? (user?.email || 'admin') : undefined
     };
 
     // Optimistically update local members state
@@ -1030,8 +996,8 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
 
     const accessLog: AuditActivity = {
       id: `act-${Date.now()}`,
-      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-nyikuli',
-      userName: user?.email || 'Nyikuli Bramwel',
+      userId: firebaseUser?.uid || auth.currentUser?.uid || '',
+      userName: user?.name || user?.email?.split('@')[0] || 'User',
       action: logAction,
       timestamp: 'Just now'
     };
@@ -1098,8 +1064,8 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
 
   // Profile Picture Upload and Account Sync handler
   const handleSaveProfile = async (updated: { name?: string; avatar?: string }) => {
-    const newAvatar = updated.avatar || user?.avatar || localStorage.getItem('user_profile_avatar') || '/macbook_code.jpg';
-    const newName = updated.name || user?.name || user?.email.split('@')[0] || 'Nyikuli Bramwel';
+    const newAvatar = updated.avatar || user?.avatar || localStorage.getItem('user_profile_avatar') || '';
+    const newName = updated.name || user?.name || user?.email.split('@')[0] || 'User';
 
     localStorage.setItem('user_profile_avatar', newAvatar);
     localStorage.setItem('user_profile_name', newName);
@@ -1123,7 +1089,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     // Append activity log
     const profileLog: AuditActivity = {
       id: `act-${Date.now()}`,
-      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-nyikuli',
+      userId: firebaseUser?.uid || auth.currentUser?.uid || '',
       userName: newName,
       action: 'Updated profile picture photo & account avatar',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -1148,8 +1114,8 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   const handleAddNewActivity = async (actionText: string) => {
     const newLog: AuditActivity = {
       id: `act-${Date.now()}`,
-      userId: firebaseUser?.uid || auth.currentUser?.uid || 'usr-nyikuli',
-      userName: user?.email || 'Nyikuli Bramwel',
+      userId: firebaseUser?.uid || auth.currentUser?.uid || '',
+      userName: user?.name || user?.email?.split('@')[0] || 'User',
       action: actionText,
       timestamp: 'Just now'
     };
@@ -1178,7 +1144,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       { 
         id: 'm-init', 
         role: 'assistant', 
-        content: 'Greetings Nyikuli! I have analyzed "Company_Q2_Transactions_Messy.csv". I found 3 critical duplicate transaction keys, missing budget metrics, and outdated ISO calendar formatting. How shall we begin clean operations?', 
+        content: 'Greetings! I am ready to analyze your CSV datasets and guide you through data hygiene and compliance validation. Upload a CSV file to get started.', 
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
       }
     ]);

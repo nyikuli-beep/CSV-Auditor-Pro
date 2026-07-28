@@ -139,10 +139,7 @@ export default function TeamCollaboration({
   }, []);
 
   // Local comments state
-  const [comments, setComments] = useState<CommentThread[]>([
-    { id: 'c1', author: 'Marcus Vance', role: 'Admin', text: 'Nyikuli, I noticed row 7 has an extreme transaction outlier of 1.5M. Let\'s verify this with the sales ledger before pushing.', time: '2026-06-23 10:45 AM' },
-    { id: 'c2', author: 'Leila Chen', role: 'Editor', text: 'Agreed, I am on hold on that row. I standardized the country abbreviations in row 6 to capital US.', time: '2026-06-23 11:15 AM' }
-  ]);
+  const [comments, setComments] = useState<CommentThread[]>([]);
   const [newCommentText, setNewCommentText] = useState('');
 
   const handleAddUserForSlot = (e: React.FormEvent) => {
@@ -209,11 +206,11 @@ export default function TeamCollaboration({
         id: `c-${Date.now()}`,
         author: activeMemberName,
         role: 'Member',
-        text: `@nyikuli@company.com - Requested authorization/additional user slot allocation for team expansion.`,
+        text: `@admin - Requested authorization/additional user slot allocation for team expansion.`,
         time: 'Just now'
       }
     ]);
-    setSuccessMsg('Slot request transmitted to Nyikuli Bramwel on the annotation board.');
+    setSuccessMsg('Slot request transmitted to workspace administrator on the annotation board.');
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => setSuccessMsg(''), 4000);
   };
@@ -223,7 +220,7 @@ export default function TeamCollaboration({
     if (!newCommentText.trim()) return;
 
     const activeMember = members.find(m => m.email.toLowerCase() === currentUserEmail.toLowerCase());
-    const authorName = activeMember?.name || currentUserEmail.split('@')[0] || 'Nyikuli Bramwel';
+    const authorName = activeMember?.name || currentUserEmail.split('@')[0] || 'User';
     const authorRole = activeMember?.role || (isAuthorizedUser ? 'Owner' : 'Member');
 
     setComments([
