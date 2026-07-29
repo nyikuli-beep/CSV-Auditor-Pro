@@ -34,7 +34,10 @@ import {
   ShieldAlert,
   Camera,
   Keyboard,
-  Compass
+  Compass,
+  Wand2,
+  AlertTriangle,
+  RefreshCw
 } from 'lucide-react';
 
 // Import Types
@@ -178,6 +181,8 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   const [files, setFiles] = useState<CSVFile[]>([]);
   const [activeFileIndex, setActiveFileIndex] = useState<number>(0);
   const [activeFileId, setActiveFileId] = useState<string>('file-active');
+  const [isFixingActiveFile, setIsFixingActiveFile] = useState<boolean>(false);
+  const [fixAllSuccessMsg, setFixAllSuccessMsg] = useState<string>('');
 
   // Collaboration registry
   const [members, setMembers] = useState<TeamMember[]>([]);
@@ -826,6 +831,309 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     setActivities(prev => [cleanLog, ...prev]);
   };
 
+  // Batch repair all open auto-fixable issues for the currently active file
+  const handleAutoFixAllActiveFile = async () => {
+    if (!activeFile) return;
+    const openIssues = activeFile.issues ? activeFile.issues.filter(i => i.status === 'open') : [];
+    if (openIssues.length === 0) return;
+
+    setIsFixingActiveFile(true);
+
+    // Brief delay to provide tactile visual feedback during cleaning
+    await new Promise(r => setTimeout(r, 400));
+
+    let currentRows = [...(activeFile.cleanedRows || activeFile.rows)];
+
+    openIssues.forEach(issue => {
+      const targetIdx = issue.row ? issue.row - 1 : -1;
+
+      switch (issue.type) {
+        case 'duplicate': {
+          if (targetIdx !== -1 && targetIdx < currentRows.length) {
+            currentRows = currentRows.filter((_, idx) => idx !== targetIdx);
+          } else {
+            const seen = new Set();
+            currentRows = currentRows.filter(r => {
+              const val = r[issue.column];
+              if (val === issue.value) {
+                if (seen.has(val)) return false;
+                seen.add(val);
+              }
+              return true;
+            });
+          }
+          break;
+        }
+
+        case 'missing_value': {
+          let fillValue = 'N/A';
+          const isNumeric = issue.column.toLowerCase().includes('amount') || 
+                            issue.column.toLowerCase().includes('price') || 
+                            issue.column.toLowerCase().includes('quantity') ||
+                            issue.column.toLowerCase().includes('gross') ||
+                            issue.column.toLowerCase().includes('pay') ||
+                            issue.column.toLowerCase().includes('tax');
+          if (isNumeric) {
+            const numbers = currentRows
+              .map(r => r[issue.column])
+              .filter(v => v !== undefined && v !== null && String(v).trim() !== '')
+              .map(v => Number(v))
+              .filter(n => !isNaN(n));
+            if (numbers.length > 0) {
+              const avg = numbers.reduce((a, b) => a + b, 0) / numbers.length;
+              fillValue = avg.toFixed(2);
+            } else {
+              fillValue = '0.00';
+            }
+          } else if (issue.column.toLowerCase().includes('category') || issue.column.toLowerCase().includes('department')) {
+            fillValue = 'Uncategorized';
+          }
+
+          if (targetIdx !== -1 && targetIdx < currentRows.length) {
+            currentRows = currentRows.map((row, idx) => 
+              idx === targetIdx ? { ...row, [issue.column]: fillValue } : row
+            );
+          } else {
+            currentRows = currentRows.map(row => 
+              (!row[issue.column] || String(row[issue.column]).trim() === '') ? { ...row, [issue.column]: fillValue } : row
+            );
+          }
+          break;
+        }
+
+        case 'invalid_format': {
+          const formatVal = (rawVal: string) => {
+            if (!rawVal) return rawVal;
+            if (rawVal.includes('/')) {
+              const parts = rawVal.split('/');
+              if (parts.length === 3) {
+                const p0 = parseInt(parts[0]);
+                const p1 = parseInt(parts[1]);
+                const year = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
+                const mm = p0 < 10 ? `0${p0}` : `${p0}`;
+                const dd = p1 < 10 ? `0${p1}` : `${p1}`;
+                return `${year}-${mm}-${dd}`;
+              }
+            }
+            return rawVal;
+          };
+
+          if (targetIdx !== -1 && targetIdx < currentRows.length) {
+            currentRows = currentRows.map((row, idx) => 
+              idx === targetIdx ? { ...row, [issue.column]: formatVal(row[issue.column] || '') } : row
+            );
+          } else {
+            currentRows = currentRows.map(row => ({
+              ...row,
+              [issue.column]: formatVal(row[issue.column] || '')
+            }));
+          }
+          break;
+        }
+
+        case 'column_inconsistency': {
+          const fixInconsistency = (val: string) => {
+            if (!val) return val;
+            if (issue.column.toLowerCase() === 'country') {
+              if (val.toLowerCase() === 'us' || val.toLowerCase() === 'united states') return 'United States';
+              if (val.toLowerCase() === 'uk' || val.toLowerCase() === 'united kingdom') return 'United Kingdom';
+            }
+            return val.charAt(0).toUpperCase() + val.slice(1).toLowerCase();
+          };
+
+          if (targetIdx !== -1 && targetIdx < currentRows.length) {
+            currentRows = currentRows.map((row, idx) => 
+              idx === targetIdx ? { ...row, [issue.column]: fixInconsistency(row[issue.column] || '') } : row
+            );
+          } else {
+            currentRows = currentRows.map(row => {
+              const val = row[issue.column] || '';
+              if (val === issue.value) {
+                return { ...row, [issue.column]: fixInconsistency(val) };
+              }
+              return row;
+            });
+          }
+          break;
+        }
+
+        case 'outlier': {
+          const numericValues = currentRows
+            .map(r => Number(r[issue.column]))
+            .filter(n => !isNaN(n))
+            .sort((a, b) => a - b);
+          const median = numericValues.length > 0 ? numericValues[Math.floor(numericValues.length / 2)] : 1250;
+          const cappedVal = (median * 3.5).toFixed(2);
+
+          if (targetIdx !== -1 && targetIdx < currentRows.length) {
+            currentRows = currentRows.map((row, idx) => 
+              idx === targetIdx ? { ...row, [issue.column]: cappedVal } : row
+            );
+          }
+          break;
+        }
+      }
+    });
+
+    const updatedIssues = activeFile.issues.map(i => ({
+      ...i,
+      status: 'resolved' as const
+    }));
+
+    const updatedFile: CSVFile = {
+      ...activeFile,
+      cleanedRows: currentRows,
+      issues: updatedIssues,
+      score: 100,
+      status: 'completed'
+    };
+
+    await handleUpdateFile(updatedFile);
+    setIsFixingActiveFile(false);
+    setFixAllSuccessMsg(`Auto-fixed ${openIssues.length} issue(s)!`);
+    setTimeout(() => setFixAllSuccessMsg(''), 4000);
+  };
+
+  // Render Miniature Active File Gauge Component with Hover Fix-All Action
+  const renderActiveFileGauge = (file: CSVFile) => {
+    const openIssuesCount = file.issues ? file.issues.filter(i => i.status === 'open').length : 0;
+    const isAuditingOrProcessing = file.status === 'auditing' || file.status === 'pending' || (isFixingActiveFile && activeFile?.id === file.id);
+
+    return (
+      <motion.div 
+        whileHover={{ scale: 1.02 }}
+        animate={isAuditingOrProcessing ? {
+          boxShadow: [
+            isDarkMode ? "0 0 0px rgba(59, 130, 246, 0.2)" : "0 0 0px rgba(59, 130, 246, 0.15)",
+            isDarkMode ? "0 0 18px rgba(59, 130, 246, 0.6)" : "0 0 14px rgba(59, 130, 246, 0.45)",
+            isDarkMode ? "0 0 0px rgba(59, 130, 246, 0.2)" : "0 0 0px rgba(59, 130, 246, 0.15)",
+          ],
+          borderColor: [
+            isDarkMode ? "rgba(59, 130, 246, 0.3)" : "rgba(59, 130, 246, 0.3)",
+            isDarkMode ? "rgba(59, 130, 246, 0.95)" : "rgba(59, 130, 246, 0.8)",
+            isDarkMode ? "rgba(59, 130, 246, 0.3)" : "rgba(59, 130, 246, 0.3)",
+          ]
+        } : {}}
+        transition={isAuditingOrProcessing ? {
+          boxShadow: { duration: 1.8, repeat: Infinity, ease: "easeInOut" },
+          borderColor: { duration: 1.8, repeat: Infinity, ease: "easeInOut" }
+        } : { type: "spring", stiffness: 400, damping: 25 }}
+        onClick={() => {
+          setActiveFileId(file.id);
+          setActiveTab('clean');
+        }}
+        className={`group relative p-3.5 rounded-xl border space-y-2 text-xs text-left transition-all cursor-pointer overflow-hidden ${
+          isDarkMode 
+            ? 'bg-[#1e293b]/40 border-slate-800/80 hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-500/10' 
+            : 'bg-slate-50 border-slate-200/80 hover:border-blue-400 hover:shadow-md'
+        }`}
+      >
+        {/* Subtle glowing animated backdrop overlay during processing */}
+        {isAuditingOrProcessing && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0.25, 0.6, 0.25] }}
+            transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/20 via-indigo-500/25 to-cyan-500/20 pointer-events-none blur-xs"
+          />
+        )}
+
+        <div className="flex justify-between items-center relative z-10">
+          <span className={`font-bold block max-w-[125px] truncate transition-colors ${isDarkMode ? 'text-slate-300 group-hover:text-white' : 'text-slate-700 group-hover:text-slate-900'}`} title={file.name}>
+            {file.name}
+          </span>
+          {isAuditingOrProcessing ? (
+            <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-blue-500/20 text-blue-400 flex items-center gap-1 border border-blue-500/30 animate-pulse">
+              <RefreshCw className="w-2.5 h-2.5 animate-spin text-blue-400" />
+              <span>{file.status === 'auditing' ? 'Auditing...' : isFixingActiveFile ? 'Fixing...' : 'Processing...'}</span>
+            </span>
+          ) : (
+            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${isDarkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-700'}`}>
+              {file.rows.length} rows
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between text-[10px] relative z-10">
+          <span className="text-slate-400 font-semibold">Integrity rating:</span>
+          <span className={`font-black ${file.score > 80 ? 'text-emerald-500' : 'text-amber-500'}`}>
+            {file.score}%
+          </span>
+        </div>
+
+        <div className={`w-full h-1.5 rounded-full overflow-hidden relative z-10 ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`}>
+          <div 
+            className={`h-full rounded-full transition-all duration-500 ${isAuditingOrProcessing ? 'bg-gradient-to-r from-blue-500 to-indigo-500 animate-pulse' : file.score > 80 ? 'bg-emerald-500' : 'bg-amber-500'}`} 
+            style={{ width: `${file.score}%` }}
+          />
+        </div>
+
+        {/* Action Row / Hover Fix All Button */}
+        <AnimatePresence mode="wait">
+          {fixAllSuccessMsg ? (
+            <motion.div
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              className="pt-1 flex items-center justify-between text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20"
+            >
+              <span className="flex items-center gap-1 truncate">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>{fixAllSuccessMsg}</span>
+              </span>
+            </motion.div>
+          ) : openIssuesCount > 0 ? (
+            <motion.div 
+              initial={{ opacity: 0.9 }}
+              animate={{ opacity: 1 }}
+              className="pt-1 flex items-center justify-between gap-1"
+            >
+              <span className="text-[10px] font-semibold text-rose-400/90 group-hover:text-rose-400 flex items-center gap-1 truncate">
+                <AlertTriangle className="w-3 h-3 shrink-0" />
+                <span>{openIssuesCount} issue{openIssuesCount > 1 ? 's' : ''}</span>
+              </span>
+
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleAutoFixAllActiveFile();
+                }}
+                disabled={isFixingActiveFile}
+                className={`px-2.5 py-1 rounded-lg font-bold text-[10px] flex items-center gap-1 transition-all shadow-md shrink-0 cursor-pointer ${
+                  isFixingActiveFile
+                    ? 'bg-blue-600 text-white opacity-80 cursor-wait'
+                    : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white border border-blue-400/30 group-hover:shadow-blue-500/20 group-hover:ring-2 group-hover:ring-blue-500/20'
+                }`}
+                title="Batch repair all auto-fixable issues"
+              >
+                {isFixingActiveFile ? (
+                  <>
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                    <span>Fixing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Wand2 className="w-3 h-3 text-amber-300" />
+                    <span>Fix All</span>
+                  </>
+                )}
+              </motion.button>
+            </motion.div>
+          ) : (
+            <div className="pt-1 flex items-center justify-between text-[10px] text-emerald-500 font-semibold">
+              <span className="flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" /> All issues resolved
+              </span>
+              <span className="text-[9px] text-slate-400 font-mono">100% Clean</span>
+            </div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    );
+  };
+
   // Update multiple files post batch cleaning
   const handleUpdateFiles = async (updatedFiles: CSVFile[]) => {
     try {
@@ -1255,7 +1563,12 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   };
 
   return (
-    <div className={`min-h-screen w-full max-w-full overflow-x-hidden font-sans transition-colors duration-200 ${isDarkMode ? 'bg-[#0b0f19] text-slate-100' : 'bg-[#F8FAFC] text-[#1E293B]'}`}>
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.99 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+      className={`min-h-screen w-full max-w-full overflow-x-hidden font-sans transition-colors duration-200 ${isDarkMode ? 'bg-[#0b0f19] text-slate-100' : 'bg-[#F8FAFC] text-[#1E293B]'}`}
+    >
       <div className="flex min-h-screen w-full max-w-full overflow-x-hidden">
           
           {/* Mobile Drawer Backdrop Overlay */}
@@ -1299,23 +1612,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                     </div>
 
                     {/* Mapped Active File Miniature Gauge */}
-                    {activeFile && (
-                      <div className={`p-3.5 rounded-xl border space-y-2 text-xs text-left ${isDarkMode ? 'bg-[#1e293b]/40 border-slate-800/80' : 'bg-slate-50 border-slate-200/80'}`}>
-                        <div className="flex justify-between items-center">
-                          <span className={`font-bold block max-w-[125px] truncate ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`} title={activeFile.name}>
-                            {activeFile.name}
-                          </span>
-                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${isDarkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-700'}`}>{activeFile.rows.length} rows</span>
-                        </div>
-                        <div className="flex items-center justify-between text-[10px]">
-                          <span className="text-slate-400 font-semibold">Integrity rating:</span>
-                          <span className={`font-black ${activeFile.score > 80 ? 'text-emerald-500' : 'text-amber-500'}`}>{activeFile.score}%</span>
-                        </div>
-                        <div className={`w-full h-1 rounded-full ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`}>
-                          <div className={`h-full rounded-full ${activeFile.score > 80 ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${activeFile.score}%` }}></div>
-                        </div>
-                      </div>
-                    )}
+                    {activeFile && renderActiveFileGauge(activeFile)}
 
                     {/* Mobile Navigation Tabs Stack */}
                     <nav className="space-y-1">
@@ -1392,7 +1689,12 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
           </AnimatePresence>
           
           {/* Left Navigation Sidebar */}
-          <aside className={`w-64 border-r hidden md:flex flex-col justify-between p-5 shrink-0 ${isDarkMode ? 'bg-[#0f172a] border-slate-800' : 'bg-white border-slate-200'}`}>
+          <motion.aside 
+            initial={{ opacity: 0, x: -16 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.45, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
+            className={`w-64 border-r hidden md:flex flex-col justify-between p-5 shrink-0 ${isDarkMode ? 'bg-[#0f172a] border-slate-800' : 'bg-white border-slate-200'}`}
+          >
             <div className="space-y-6">
               
               {/* Branding Header */}
@@ -1407,23 +1709,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
               </div>
 
               {/* Mapped Active File Miniature Gauge */}
-              {activeFile && (
-                <div className={`p-3.5 rounded-xl border space-y-2 text-xs text-left ${isDarkMode ? 'bg-[#1e293b]/40 border-slate-800/80' : 'bg-slate-50 border-slate-200/80'}`}>
-                  <div className="flex justify-between items-center">
-                    <span className={`font-bold block max-w-[125px] truncate ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`} title={activeFile.name}>
-                      {activeFile.name}
-                    </span>
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${isDarkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-700'}`}>{activeFile.rows.length} rows</span>
-                  </div>
-                  <div className="flex items-center justify-between text-[10px]">
-                    <span className="text-slate-400 font-semibold">Integrity rating:</span>
-                    <span className={`font-black ${activeFile.score > 80 ? 'text-emerald-500' : 'text-amber-500'}`}>{activeFile.score}%</span>
-                  </div>
-                  <div className={`w-full h-1 rounded-full ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`}>
-                    <div className={`h-full rounded-full ${activeFile.score > 80 ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${activeFile.score}%` }}></div>
-                  </div>
-                </div>
-              )}
+              {activeFile && renderActiveFileGauge(activeFile)}
 
               {/* Navigation Tabs Stack */}
               <nav className="space-y-1">
@@ -1497,10 +1783,15 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                 <LogOut className="w-3.5 h-3.5" /> Logout Session
               </button>
             </div>
-          </aside>
+          </motion.aside>
 
           {/* Right Workstation frame */}
-          <main className={`flex-1 flex flex-col min-w-0 max-w-full overflow-x-hidden ${isDarkMode ? 'bg-[#0b0f19]' : 'bg-[#F8FAFC]'}`}>
+          <motion.main 
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
+            className={`flex-1 flex flex-col min-w-0 max-w-full overflow-x-hidden ${isDarkMode ? 'bg-[#0b0f19]' : 'bg-[#F8FAFC]'}`}
+          >
             {/* Top Workspace Header */}
             <header className={`h-14 px-3 sm:px-6 border-b flex items-center justify-between gap-2 sm:gap-4 shrink-0 max-w-full overflow-x-hidden ${isDarkMode ? 'bg-[#0f172a] border-slate-800' : 'bg-white border-slate-200'}`}>
               <div className="flex items-center gap-4">
@@ -1765,7 +2056,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                 </div>
               </div>
             </footer>
-          </main>
+          </motion.main>
 
         </div>
 
@@ -1879,7 +2170,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
         )}
       </AnimatePresence>
 
-    </div>
+    </motion.div>
   );
 }
 
