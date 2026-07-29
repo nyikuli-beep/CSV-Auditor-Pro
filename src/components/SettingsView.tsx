@@ -87,7 +87,7 @@ export default function SettingsView({
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
   // Owner Permission Check
-  const AUTHORIZED_OWNER_EMAILS = ['nyikulibramwel@gmail.com', 'nyikuli@company.com'];
+  const AUTHORIZED_OWNER_EMAILS = ['nyikulibramwel@gmail.com'];
   const isOwner = currentUser?.role === 'Owner' || (currentUser?.email
     ? AUTHORIZED_OWNER_EMAILS.some(e => e.toLowerCase() === currentUser.email.toLowerCase().trim())
     : false);
@@ -526,7 +526,7 @@ export default function SettingsView({
                       {currentUser?.role || 'Owner'}
                     </span>
                   </h4>
-                  <p className={`text-xs font-mono mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{currentUser?.email || 'nyikuli@company.com'}</p>
+                  <p className={`text-xs font-mono mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{currentUser?.email || 'nyikulibramwel@gmail.com'}</p>
                   <p className="text-[10px] text-emerald-500 font-mono mt-1 flex items-center gap-1 font-semibold">
                     <CheckCircle2 className="w-3 h-3" /> Profile Picture Synchronized
                   </p>
@@ -986,7 +986,7 @@ export default function SettingsView({
                   isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'
                 }`}>
                   <Lock className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                  <span>Protected Owners: <strong className="text-blue-400">nyikulibramwel@gmail.com</strong> / <strong className="text-blue-400">nyikuli@company.com</strong></span>
+                  <span>Protected Owner: <strong className="text-blue-400">nyikulibramwel@gmail.com</strong></span>
                 </div>
                 
                 <button

@@ -69,7 +69,7 @@ export default function TeamCollaboration({
   currentUserRole,
   onSwitchActiveUser
 }: TeamCollaborationProps) {
-  const AUTHORIZED_EMAILS = ['nyikulibramwel@gmail.com', 'nyikuli@company.com'];
+  const AUTHORIZED_EMAILS = ['nyikulibramwel@gmail.com'];
   const isAuthorizedUser = (currentUserRole === 'Owner' || currentUserRole === 'Admin') || AUTHORIZED_EMAILS.some(e => e.toLowerCase() === (currentUserEmail || '').toLowerCase().trim());
 
   // Email validator to enforce only real, working email addresses
@@ -764,7 +764,7 @@ export default function TeamCollaboration({
                       User Slot Provisioning Restricted
                     </h4>
                     <p className={`text-xs mt-1 leading-relaxed ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                      Only authorized owner emails <strong className="text-blue-400 underline font-mono">nyikulibramwel@gmail.com</strong> and <strong className="text-blue-400 underline font-mono">nyikuli@company.com</strong> have permission to access user slot provisioning, add new team collaborators, and delete workspace members.
+                      Only authorized owner email <strong className="text-blue-400 underline font-mono">nyikulibramwel@gmail.com</strong> has permission to access user slot provisioning, add new team collaborators, and delete workspace members.
                     </p>
                     <p className="text-[11px] text-slate-400 mt-2 font-mono">
                       Current authenticated user: <span className="font-bold text-amber-300">{currentUserEmail}</span>
@@ -841,7 +841,7 @@ export default function TeamCollaboration({
                 })
                 .map((m, idx) => {
                   const isDenied = m.status === 'denied' || m.accessDenied;
-                  const isPrimaryOwner = ['nyikulibramwel@gmail.com', 'nyikuli@company.com'].includes(m.email.toLowerCase());
+                  const isPrimaryOwner = ['nyikulibramwel@gmail.com'].includes(m.email.toLowerCase());
 
                   return (
                     <div key={m.id} className="py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-800/10 px-2 rounded-xl transition-colors">

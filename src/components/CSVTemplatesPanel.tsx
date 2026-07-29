@@ -46,7 +46,7 @@ export const STANDARD_CSV_TEMPLATES: CSVTemplate[] = [
     description: 'Structured layout for employee IDs, departments, emails, job titles, and hire dates.',
     filename: 'Standard_Employee_Roster_Template.csv',
     headers: ['Employee_ID', 'First_Name', 'Last_Name', 'Email', 'Department', 'Job_Title', 'Salary', 'Hire_Date', 'Status'],
-    sampleRow: ['EMP-042', 'Bramwel', 'Nyikuli', 'nyikuli@company.com', 'Engineering', 'Lead Architect', '125000', '2024-03-01', 'Active']
+    sampleRow: ['EMP-042', 'Bramwel', 'Nyikuli', 'nyikulibramwel@gmail.com', 'Engineering', 'Lead Architect', '125000', '2024-03-01', 'Active']
   },
   {
     id: 'invoices',

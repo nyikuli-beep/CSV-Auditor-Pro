@@ -141,7 +141,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   const [shortcutToast, setShortcutToast] = useState<{ message: string; keyCombo: string } | null>(null);
   const [securityAlert, setSecurityAlert] = useState<{ title: string; message: string } | null>(null);
 
-  const PROTECTED_ADMIN_EMAILS = ['nyikulibramwel@gmail.com', 'nyikuli@company.com'];
+  const PROTECTED_ADMIN_EMAILS = ['nyikulibramwel@gmail.com'];
 
   const triggerShortcutToast = (message: string, keyCombo: string) => {
     setShortcutToast({ message, keyCombo });
@@ -473,7 +473,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
         
         // Fetch or create user doc
         const userRef = doc(db, 'users', fUser.uid);
-        const isOwnerEmail = ['nyikulibramwel@gmail.com', 'nyikuli@company.com'].some(
+        const isOwnerEmail = ['nyikulibramwel@gmail.com'].some(
           p => p.toLowerCase() === (fUser.email || '').trim().toLowerCase()
         );
 
@@ -1739,7 +1739,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                         </div>
                       </div>
                       <div className="min-w-0 flex-1">
-                        <span className="font-bold block truncate max-w-[120px]">{user?.name || user?.email || 'nyikuli@company.com'}</span>
+                        <span className="font-bold block truncate max-w-[120px]">{user?.name || user?.email || 'nyikulibramwel@gmail.com'}</span>
                         <span className="text-[9px] text-blue-400 block font-mono font-bold uppercase">{user?.role || 'Owner'} • Edit Avatar</span>
                       </div>
                     </button>
