@@ -28,7 +28,7 @@ import {
   Volume2
 } from 'lucide-react';
 import { TeamMember, AuditActivity } from '../types';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 import { collection, doc, setDoc, onSnapshot, query, limit } from 'firebase/firestore';
 
 interface TeamCollaborationProps {
@@ -150,6 +150,39 @@ export default function TeamCollaboration({
     };
   }, []);
 
+  // Dynamically resolve user Google account profile picture or personalized profile avatar
+  const resolveUserAvatar = (email?: string, providedAvatar?: string, name?: string): string => {
+    const userEmail = (email || '').toLowerCase().trim();
+    
+    // 1. If this matches the current authenticated Google user and photoURL exists, return live Google profile picture
+    if (auth.currentUser?.email?.toLowerCase() === userEmail && auth.currentUser?.photoURL) {
+      return auth.currentUser.photoURL;
+    }
+
+    // 2. Check if a team member matches with a non-generic avatar
+    const matchingMember = members.find(m => m.email.toLowerCase() === userEmail);
+    if (matchingMember?.avatar && !matchingMember.avatar.includes('photo-1534528741775-53994a69daeb')) {
+      return matchingMember.avatar;
+    }
+
+    // 3. Check provided avatar if it's a real user image / Google URL and not the stale generic unsplash image
+    if (providedAvatar && !providedAvatar.includes('photo-1534528741775-53994a69daeb')) {
+      return providedAvatar;
+    }
+
+    // 4. Check localStorage user profile avatar if current user
+    if (auth.currentUser?.email?.toLowerCase() === userEmail) {
+      const localAvatar = localStorage.getItem('user_profile_avatar');
+      if (localAvatar && !localAvatar.includes('photo-1534528741775-53994a69daeb')) {
+        return localAvatar;
+      }
+    }
+
+    // 5. Generate distinct SVG initials badge URL derived uniquely from identity
+    const seed = name || matchingMember?.name || (userEmail ? userEmail.split('@')[0] : 'User');
+    return `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(seed)}&backgroundColor=3b82f6`;
+  };
+
   // Helper to filter out fictitious user comments
   const isRealUserComment = (comment: CommentThread): boolean => {
     if (!comment) return false;
@@ -165,14 +198,14 @@ export default function TeamCollaboration({
   const SEED_ANNOTATIONS: CommentThread[] = [
     {
       id: 'c-seed-1',
-      author: members.find(m => m.email.toLowerCase() === (currentUserEmail || '').toLowerCase())?.name || 'Nyikuli Bramwel',
+      author: members.find(m => m.email.toLowerCase() === (currentUserEmail || '').toLowerCase())?.name || auth.currentUser?.displayName || 'Nyikuli Bramwel',
       role: 'Owner',
       text: 'Verified Row #14 Gross Pay calculation anomaly against Q3 tax receipts.',
       time: '10:15 AM',
       timestamp: Date.now() - 3600000,
       userEmail: currentUserEmail || 'nyikulibramwel@gmail.com',
       cellRef: 'Row 14, Col B',
-      avatar: members.find(m => m.email.toLowerCase() === (currentUserEmail || '').toLowerCase())?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=face'
+      avatar: resolveUserAvatar(currentUserEmail || 'nyikulibramwel@gmail.com')
     }
   ];
 
@@ -323,7 +356,7 @@ export default function TeamCollaboration({
       email: inviteEmail.trim(),
       role: inviteRole,
       status: inviteStatus,
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=face'
+      avatar: resolveUserAvatar(inviteEmail.trim(), undefined, inviteName.trim())
     };
 
     onInviteMember(newMemberRecord);
@@ -341,9 +374,9 @@ export default function TeamCollaboration({
     if (!rawText.trim()) return;
 
     const activeMember = members.find(m => m.email.toLowerCase() === currentUserEmail.toLowerCase());
-    const authorName = activeMember?.name || currentUserEmail.split('@')[0] || 'Active User';
+    const authorName = activeMember?.name || auth.currentUser?.displayName || currentUserEmail.split('@')[0] || 'Active User';
     const authorRole = activeMember?.role || (isAuthorizedUser ? 'Owner' : 'Member');
-    const authorAvatar = activeMember?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=face';
+    const authorAvatar = resolveUserAvatar(currentUserEmail, activeMember?.avatar, authorName);
 
     const newComment: CommentThread = {
       id: `c-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -819,13 +852,14 @@ export default function TeamCollaboration({
 
                         {/* Avatar with Online Presence Ring */}
                         <div className="relative shrink-0">
-                          {m.avatar ? (
-                            <img src={m.avatar} alt={m.name} className="w-8 h-8 rounded-full object-cover border border-slate-800" />
-                          ) : (
-                            <div className="w-8 h-8 rounded-full bg-slate-800 font-bold text-[10px] flex items-center justify-center text-white border border-slate-700">
-                              {m.name.split(' ').map(n => n[0]).join('')}
-                            </div>
-                          )}
+                          <img 
+                            src={resolveUserAvatar(m.email, m.avatar, m.name)} 
+                            alt={m.name} 
+                            className="w-8 h-8 rounded-full object-cover border border-slate-800" 
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(m.name)}&backgroundColor=3b82f6`;
+                            }}
+                          />
                           {m.status === 'active' && !isDenied && (
                             <span className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3" title="Actively Online Now">
                               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -1051,13 +1085,14 @@ export default function TeamCollaboration({
                     >
                       <div className="flex justify-between items-baseline gap-1 flex-wrap mb-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          {comment.avatar ? (
-                            <img src={comment.avatar} alt={comment.author} className="w-5 h-5 rounded-full object-cover border border-slate-700 shrink-0" />
-                          ) : (
-                            <div className="w-5 h-5 rounded-full bg-slate-800 font-bold text-[9px] flex items-center justify-center text-white border border-slate-700 shrink-0">
-                              {comment.author.charAt(0)}
-                            </div>
-                          )}
+                          <img 
+                            src={resolveUserAvatar(comment.userEmail, comment.avatar, comment.author)} 
+                            alt={comment.author} 
+                            className="w-5 h-5 rounded-full object-cover border border-slate-700 shrink-0" 
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(comment.author)}&backgroundColor=3b82f6`;
+                            }}
+                          />
 
                           <span className={`font-bold ${isCurrentAuthor ? 'text-emerald-400' : 'text-blue-400'}`}>
                             {comment.author}

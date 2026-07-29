@@ -486,7 +486,9 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
           if (userSnap.exists()) {
             const data = userSnap.data();
             userRole = isOwnerEmail ? 'Owner' : (data.role || 'Editor');
-            if (data.avatar) {
+            if (fUser.photoURL) {
+              userAvatar = fUser.photoURL;
+            } else if (data.avatar && !data.avatar.includes('photo-1534528741775-53994a69daeb')) {
               userAvatar = data.avatar;
             }
             if (data.name) {
@@ -621,10 +623,18 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
           email: firebaseUser.email || '',
           role: (user?.role || 'Owner') as any,
           status: 'active',
-          avatar: user?.avatar || ''
+          avatar: firebaseUser.photoURL || user?.avatar || ''
         };
         setMembers([currentMember]);
       } else {
+        const activeEmail = (firebaseUser.email || '').toLowerCase();
+        const activePhoto = firebaseUser.photoURL || user?.avatar;
+        if (activePhoto && activeEmail) {
+          const matchIdx = membersList.findIndex(m => m.email.toLowerCase() === activeEmail);
+          if (matchIdx >= 0 && membersList[matchIdx].avatar !== activePhoto) {
+            membersList[matchIdx].avatar = activePhoto;
+          }
+        }
         setMembers(membersList);
       }
     }, (err) => {

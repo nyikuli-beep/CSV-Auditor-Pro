@@ -165,7 +165,7 @@ export default function ProfileUploadModal({
   };
 
   const handleRemoveAvatar = () => {
-    const defaultAvatar = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=250&h=250&fit=crop&crop=face';
+    const defaultAvatar = currentUser?.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(currentUser?.name || currentUser?.email || 'User')}&backgroundColor=3b82f6`;
     setAvatarPreview(defaultAvatar);
     setSuccessMsg('Reset avatar to default picture.');
   };
