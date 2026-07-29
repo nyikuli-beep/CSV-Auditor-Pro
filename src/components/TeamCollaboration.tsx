@@ -76,7 +76,7 @@ export default function TeamCollaboration({
   onApproveSlotRequest,
   onDeclineSlotRequest
 }: TeamCollaborationProps) {
-  const AUTHORIZED_EMAILS = ['nyikulibramwel@gmail.com'];
+  const AUTHORIZED_EMAILS = ['nyikulibramwel@gmail.com', 'osanojunior38@gmail.com'];
   const isAuthorizedUser = (currentUserRole === 'Owner' || currentUserRole === 'Admin') || AUTHORIZED_EMAILS.some(e => e.toLowerCase() === (currentUserEmail || '').toLowerCase().trim());
   const pendingRequests = slotRequests.filter(r => r.status === 'pending');
 
@@ -1016,7 +1016,7 @@ export default function TeamCollaboration({
                 })
                 .map((m, idx) => {
                   const isDenied = m.status === 'denied' || m.accessDenied;
-                  const isPrimaryOwner = ['nyikulibramwel@gmail.com'].includes(m.email.toLowerCase());
+                  const isPrimaryOwner = ['nyikulibramwel@gmail.com', 'osanojunior38@gmail.com'].includes(m.email.toLowerCase());
                   const latestAct = getLatestMemberActivity(m);
 
                   return (

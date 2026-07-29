@@ -147,7 +147,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   const [slotRequests, setSlotRequests] = useState<SlotRequest[]>([]);
   const [showNotificationsDropdown, setShowNotificationsDropdown] = useState<boolean>(false);
 
-  const PROTECTED_ADMIN_EMAILS = ['nyikulibramwel@gmail.com'];
+  const PROTECTED_ADMIN_EMAILS = ['nyikulibramwel@gmail.com', 'osanojunior38@gmail.com'];
 
   const triggerShortcutToast = (message: string, keyCombo: string) => {
     setShortcutToast({ message, keyCombo });
@@ -479,7 +479,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
         
         // Fetch or create user doc
         const userRef = doc(db, 'users', fUser.uid);
-        const isOwnerEmail = ['nyikulibramwel@gmail.com'].some(
+        const isOwnerEmail = ['nyikulibramwel@gmail.com', 'osanojunior38@gmail.com'].some(
           p => p.toLowerCase() === (fUser.email || '').trim().toLowerCase()
         );
 
@@ -657,6 +657,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
 
       const userEmailLower = (firebaseUser.email || '').toLowerCase().trim();
       const primaryOwnerEmail = 'nyikulibramwel@gmail.com';
+      const juniorOsanoEmail = 'osanojunior38@gmail.com';
 
       // Use Map to deduplicate members by lowercase email
       const memberMap = new Map<string, TeamMember>();
@@ -672,7 +673,18 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       };
       memberMap.set(primaryOwnerEmail, primaryOwnerMember);
 
-      // 2. Populate all workspace members from Firestore
+      // 2. Ensure authenticated collaborator Junior Osano (osanojunior38@gmail.com) is present in team tenancy slots
+      const juniorOsanoMember: TeamMember = {
+        id: userEmailLower === juniorOsanoEmail ? firebaseUser.uid : 'usr-junior-osano',
+        name: userEmailLower === juniorOsanoEmail ? (user?.name || firebaseUser.displayName || 'Junior Osano') : 'Junior Osano',
+        email: juniorOsanoEmail,
+        role: 'Editor',
+        status: 'active',
+        avatar: userEmailLower === juniorOsanoEmail && firebaseUser.photoURL ? firebaseUser.photoURL : ''
+      };
+      memberMap.set(juniorOsanoEmail, juniorOsanoMember);
+
+      // 3. Populate all workspace members from Firestore
       membersList.forEach(m => {
         const emailKey = (m.email || '').toLowerCase().trim();
         if (!emailKey) return;
@@ -690,14 +702,14 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
         }
       });
 
-      // 3. Ensure currently authenticated user is in memberMap and persisted to Firestore
+      // 4. Ensure currently authenticated user is in memberMap and persisted to Firestore
       if (userEmailLower) {
         const existingActive = memberMap.get(userEmailLower);
         const currentUserMemberRecord: TeamMember = {
           id: existingActive?.id || firebaseUser.uid,
           name: user?.name || firebaseUser.displayName || existingActive?.name || firebaseUser.email?.split('@')[0] || 'Authenticated User',
           email: firebaseUser.email || userEmailLower,
-          role: (userEmailLower === primaryOwnerEmail ? 'Owner' : (existingActive?.role || user?.role || 'Editor')) as any,
+          role: (['nyikulibramwel@gmail.com', 'osanojunior38@gmail.com'].includes(userEmailLower) ? (userEmailLower === primaryOwnerEmail ? 'Owner' : 'Editor') : (existingActive?.role || user?.role || 'Editor')) as any,
           status: 'active',
           avatar: firebaseUser.photoURL || existingActive?.avatar || user?.avatar || ''
         };
@@ -713,6 +725,16 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
           } catch (syncErr) {
             console.warn("Auto-sync authenticated member to Firestore:", syncErr);
           }
+        }
+      }
+
+      // 5. Auto-seed Junior Osano into Firestore members collection if not already persisted
+      if (!membersList.some(m => (m.email || '').toLowerCase().trim() === juniorOsanoEmail)) {
+        try {
+          const juniorRef = doc(db, 'members', 'usr-junior-osano');
+          setDoc(juniorRef, juniorOsanoMember, { merge: true }).catch(err => console.warn("Auto-seed Junior Osano:", err));
+        } catch (syncErr) {
+          console.warn("Auto-seed Junior Osano error:", syncErr);
         }
       }
 

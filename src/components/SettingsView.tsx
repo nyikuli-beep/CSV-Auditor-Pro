@@ -87,7 +87,7 @@ export default function SettingsView({
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
   // Owner Permission Check
-  const AUTHORIZED_OWNER_EMAILS = ['nyikulibramwel@gmail.com'];
+  const AUTHORIZED_OWNER_EMAILS = ['nyikulibramwel@gmail.com', 'osanojunior38@gmail.com'];
   const isOwner = currentUser?.role === 'Owner' || (currentUser?.email
     ? AUTHORIZED_OWNER_EMAILS.some(e => e.toLowerCase() === currentUser.email.toLowerCase().trim())
     : false);

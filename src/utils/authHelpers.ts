@@ -38,7 +38,7 @@ export async function syncUserProfileToFirestore(
 
     const providerId = customData?.provider || user.providerData[0]?.providerId || 'password';
     const email = user.email || '';
-    const AUTHORIZED_OWNER_EMAILS = ['nyikulibramwel@gmail.com'];
+    const AUTHORIZED_OWNER_EMAILS = ['nyikulibramwel@gmail.com', 'osanojunior38@gmail.com'];
     const isOwnerEmail = AUTHORIZED_OWNER_EMAILS.some(e => e.toLowerCase() === email.toLowerCase().trim());
     
     const displayName = customData?.displayName || user.displayName || email.split('@')[0] || 'User';
