@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from './hooks/useAuth';
@@ -193,6 +193,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   // Collaboration registry
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [activities, setActivities] = useState<AuditActivity[]>([]);
+  const knownActiveMemberEmailsRef = useRef<Set<string>>(new Set());
 
   // Chat message stack
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
@@ -564,16 +565,17 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                 }, { merge: true });
               }
             } else {
-              // Account was deleted by owner or is not in workspace team tenancy
-              setSecurityAlert({
-                title: 'Access Restricted: Account Removed',
-                message: `Security Protocol Active: Account '${emailLower}' is not part of workspace team tenancy or was deleted by owner (${primaryOwnerEmail}).`
-              });
-              await logout();
-              setUser(null);
-              setFirebaseUser(null);
-              setAuthLoading(false);
-              return;
+              // New or returning non-owner member logging in -> Create their member document in Firestore
+              const memberRef = doc(db, 'members', fUser.uid);
+              const memberRecord: TeamMember = {
+                id: fUser.uid,
+                name: userName,
+                email: emailLower,
+                role: (userRole as any) || 'Editor',
+                status: 'active',
+                avatar: userAvatar
+              };
+              await setDoc(memberRef, memberRecord);
             }
           } else {
             // Owner
@@ -728,13 +730,18 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
           return;
         }
 
-        // If active user was deleted from members collection by the owner
+        // Track active workspace presence and enforce real-time security
         const existsInFirestore = membersList.some(m => (m.email || '').toLowerCase().trim() === userEmailLower);
-        if (!existsInFirestore) {
+
+        if (existsInFirestore) {
+          knownActiveMemberEmailsRef.current.add(userEmailLower);
+        } else if (knownActiveMemberEmailsRef.current.has(userEmailLower)) {
+          // User WAS present in members collection during this active session, but was deleted by the owner!
           setSecurityAlert({
             title: 'Account Deleted in Real Time',
             message: `Your workspace account (${userEmailLower}) was removed from team tenancy slots by owner ${primaryOwnerEmail}. You have been signed out.`
           });
+          knownActiveMemberEmailsRef.current.delete(userEmailLower);
           handleLogout();
           return;
         }
