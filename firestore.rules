@@ -116,5 +116,10 @@ service cloud.firestore {
     match /drafts/{userId} {
       allow get, list, create, update, delete: if isSignedIn() && request.auth.uid == userId;
     }
+
+    // ANNOTATIONS COLLECTION
+    match /annotations/{annotationId} {
+      allow read, create, update, delete: if true;
+    }
   }
 }
