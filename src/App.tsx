@@ -147,7 +147,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   const [slotRequests, setSlotRequests] = useState<SlotRequest[]>([]);
   const [showNotificationsDropdown, setShowNotificationsDropdown] = useState<boolean>(false);
 
-  const PROTECTED_ADMIN_EMAILS = ['nyikulibramwel@gmail.com', 'osanojunior38@gmail.com'];
+  const PROTECTED_ADMIN_EMAILS = ['nyikulibramwel@gmail.com'];
 
   const triggerShortcutToast = (message: string, keyCombo: string) => {
     setShortcutToast({ message, keyCombo });
@@ -479,7 +479,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
         
         // Fetch or create user doc
         const userRef = doc(db, 'users', fUser.uid);
-        const isOwnerEmail = ['nyikulibramwel@gmail.com', 'osanojunior38@gmail.com'].some(
+        const isOwnerEmail = ['nyikulibramwel@gmail.com'].some(
           p => p.toLowerCase() === (fUser.email || '').trim().toLowerCase()
         );
 
@@ -709,7 +709,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
           id: existingActive?.id || firebaseUser.uid,
           name: user?.name || firebaseUser.displayName || existingActive?.name || firebaseUser.email?.split('@')[0] || 'Authenticated User',
           email: firebaseUser.email || userEmailLower,
-          role: (['nyikulibramwel@gmail.com', 'osanojunior38@gmail.com'].includes(userEmailLower) ? (userEmailLower === primaryOwnerEmail ? 'Owner' : 'Editor') : (existingActive?.role || user?.role || 'Editor')) as any,
+          role: (userEmailLower === primaryOwnerEmail ? 'Owner' : (existingActive?.role || user?.role || 'Editor')) as any,
           status: 'active',
           avatar: firebaseUser.photoURL || existingActive?.avatar || user?.avatar || ''
         };

@@ -40,7 +40,7 @@ interface AdminPanelProps {
 }
 
 export default function AdminPanel({ isDarkMode, accentClass, currentUserEmail, currentUserRole, activities = [] }: AdminPanelProps) {
-  const AUTHORIZED_ADMIN_EMAILS = ['nyikulibramwel@gmail.com', 'osanojunior38@gmail.com'];
+  const AUTHORIZED_ADMIN_EMAILS = ['nyikulibramwel@gmail.com'];
   const isAuthorizedAdmin = (currentUserRole === 'Owner' || currentUserRole === 'Admin') || (currentUserEmail
     ? AUTHORIZED_ADMIN_EMAILS.some(e => e.toLowerCase() === currentUserEmail.toLowerCase().trim())
     : false);

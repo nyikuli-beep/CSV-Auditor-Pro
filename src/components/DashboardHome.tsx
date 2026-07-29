@@ -183,7 +183,7 @@ export default function DashboardHome({
   }, [files]);
 
   const hoursSaved = (timeSavedMinutes / 60).toFixed(1);
-  const isOwner = ['nyikulibramwel@gmail.com', 'osanojunior38@gmail.com'].includes(currentUserEmail.toLowerCase());
+  const isOwner = currentUserEmail.toLowerCase() === 'nyikulibramwel@gmail.com';
   const pendingRequests = slotRequests.filter(r => r.status === 'pending');
 
   return (
