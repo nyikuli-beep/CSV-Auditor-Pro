@@ -150,40 +150,29 @@ export default function TeamCollaboration({
     };
   }, []);
 
-  // Seed cell annotations for rich initial discussion context
+  // Helper to filter out fictitious user comments
+  const isRealUserComment = (comment: CommentThread): boolean => {
+    if (!comment) return false;
+    const email = (comment.userEmail || '').toLowerCase();
+    const id = comment.id || '';
+    if (id === 'c-seed-2' || id === 'c-seed-3') return false;
+    if (email === 'sarah.j@company.com' || email === 'alex.r@company.com') return false;
+    if (comment.author === 'Sarah Jenkins' || comment.author === 'Alex Rivera') return false;
+    return true;
+  };
+
+  // Seed cell annotations with only real active user entries
   const SEED_ANNOTATIONS: CommentThread[] = [
     {
       id: 'c-seed-1',
-      author: 'Nyikuli Bramwel',
+      author: members.find(m => m.email.toLowerCase() === (currentUserEmail || '').toLowerCase())?.name || 'Nyikuli Bramwel',
       role: 'Owner',
       text: 'Verified Row #14 Gross Pay calculation anomaly against Q3 tax receipts.',
       time: '10:15 AM',
       timestamp: Date.now() - 3600000,
-      userEmail: 'nyikulibramwel@gmail.com',
+      userEmail: currentUserEmail || 'nyikulibramwel@gmail.com',
       cellRef: 'Row 14, Col B',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=face'
-    },
-    {
-      id: 'c-seed-2',
-      author: 'Sarah Jenkins',
-      role: 'Admin',
-      text: 'Allocated Workspace Slot #2 for financial audit. Data cleaning pipeline is active.',
-      time: '11:30 AM',
-      timestamp: Date.now() - 1800000,
-      userEmail: 'sarah.j@company.com',
-      cellRef: 'Slot #2',
-      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face'
-    },
-    {
-      id: 'c-seed-3',
-      author: 'Alex Rivera',
-      role: 'Editor',
-      text: '@admin - Batch duplicate cleanup complete across active dataset. Rating improved to 96%.',
-      time: 'Just now',
-      timestamp: Date.now() - 300000,
-      userEmail: 'alex.r@company.com',
-      cellRef: 'Column C',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face'
+      avatar: members.find(m => m.email.toLowerCase() === (currentUserEmail || '').toLowerCase())?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=face'
     }
   ];
 
@@ -193,7 +182,11 @@ export default function TeamCollaboration({
       const saved = localStorage.getItem('cell_annotations_store');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) {
+          const cleaned = parsed.filter(isRealUserComment);
+          localStorage.setItem('cell_annotations_store', JSON.stringify(cleaned));
+          if (cleaned.length > 0) return cleaned;
+        }
       }
     } catch (e) {}
     return SEED_ANNOTATIONS;
@@ -211,13 +204,16 @@ export default function TeamCollaboration({
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const remoteComments: CommentThread[] = [];
         snapshot.forEach((docSnap) => {
-          remoteComments.push(docSnap.data() as CommentThread);
+          const data = docSnap.data() as CommentThread;
+          if (isRealUserComment(data)) {
+            remoteComments.push(data);
+          }
         });
 
         if (remoteComments.length > 0) {
           setComments(prev => {
             const map = new Map<string, CommentThread>();
-            [...prev, ...remoteComments].forEach(c => map.set(c.id, c));
+            [...prev, ...remoteComments].filter(isRealUserComment).forEach(c => map.set(c.id, c));
             const merged = Array.from(map.values()).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
             try {
               localStorage.setItem('cell_annotations_store', JSON.stringify(merged));
@@ -244,9 +240,11 @@ export default function TeamCollaboration({
         channel.onmessage = (event) => {
           if (event.data && event.data.type === 'NEW_ANNOTATION' && event.data.comment) {
             const incomingComment: CommentThread = event.data.comment;
+            if (!isRealUserComment(incomingComment)) return;
+
             setComments(prev => {
               if (prev.some(c => c.id === incomingComment.id)) return prev;
-              const updated = [...prev, { ...incomingComment, isLiveBroadcast: true }];
+              const updated = [...prev, { ...incomingComment, isLiveBroadcast: true }].filter(isRealUserComment);
               try {
                 localStorage.setItem('cell_annotations_store', JSON.stringify(updated));
               } catch (e) {}
@@ -265,7 +263,8 @@ export default function TeamCollaboration({
         try {
           const parsed = JSON.parse(e.newValue);
           if (Array.isArray(parsed)) {
-            setComments(parsed);
+            const cleaned = parsed.filter(isRealUserComment);
+            setComments(cleaned);
             setLivePulse(true);
             setTimeout(() => setLivePulse(false), 2000);
           }
