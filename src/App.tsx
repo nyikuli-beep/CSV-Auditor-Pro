@@ -564,17 +564,16 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                 }, { merge: true });
               }
             } else {
-              // Create new member doc using fUser.uid
-              const memberRef = doc(db, 'members', fUser.uid);
-              const memberRecord: TeamMember = {
-                id: fUser.uid,
-                name: userName,
-                email: fUser.email || `${fUser.uid}@demo.com`,
-                role: userRole as any,
-                status: 'active',
-                avatar: userAvatar
-              };
-              await setDoc(memberRef, memberRecord);
+              // Account was deleted by owner or is not in workspace team tenancy
+              setSecurityAlert({
+                title: 'Access Restricted: Account Removed',
+                message: `Security Protocol Active: Account '${emailLower}' is not part of workspace team tenancy or was deleted by owner (${primaryOwnerEmail}).`
+              });
+              await logout();
+              setUser(null);
+              setFirebaseUser(null);
+              setAuthLoading(false);
+              return;
             }
           } else {
             // Owner
@@ -687,7 +686,6 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
 
       const userEmailLower = (firebaseUser.email || '').toLowerCase().trim();
       const primaryOwnerEmail = 'nyikulibramwel@gmail.com';
-      const juniorOsanoEmail = 'osanojunior38@gmail.com';
 
       // Use Map to deduplicate members by lowercase email
       const memberMap = new Map<string, TeamMember>();
@@ -717,26 +715,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
         });
       });
 
-      // 3. Auto-seed Junior Osano ONCE if Firestore is clean/empty and not seeded yet
-      if (membersList.length === 0 && !membersList.some(m => (m.email || '').toLowerCase().trim() === juniorOsanoEmail)) {
-        const juniorOsanoMember: TeamMember = {
-          id: 'usr-junior-osano',
-          name: 'Junior Osano',
-          email: juniorOsanoEmail,
-          role: 'Editor',
-          status: 'active',
-          avatar: ''
-        };
-        memberMap.set(juniorOsanoEmail, juniorOsanoMember);
-        try {
-          const juniorRef = doc(db, 'members', 'usr-junior-osano');
-          setDoc(juniorRef, juniorOsanoMember, { merge: true }).catch(err => console.warn("Auto-seed Junior Osano:", err));
-        } catch (syncErr) {
-          console.warn("Auto-seed Junior Osano error:", syncErr);
-        }
-      }
-
-      // 4. REAL-TIME SECURITY ENFORCEMENT for active non-owner session
+      // 3. REAL-TIME SECURITY ENFORCEMENT for active non-owner session
       if (userEmailLower && userEmailLower !== primaryOwnerEmail) {
         const activeUserRecord = memberMap.get(userEmailLower);
 
@@ -751,7 +730,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
 
         // If active user was deleted from members collection by the owner
         const existsInFirestore = membersList.some(m => (m.email || '').toLowerCase().trim() === userEmailLower);
-        if (!existsInFirestore && membersList.length > 0) {
+        if (!existsInFirestore) {
           setSecurityAlert({
             title: 'Account Deleted in Real Time',
             message: `Your workspace account (${userEmailLower}) was removed from team tenancy slots by owner ${primaryOwnerEmail}. You have been signed out.`
