@@ -520,6 +520,31 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
           name: userName,
           avatar: userAvatar
         });
+
+        // Also sync authenticated user into members collection so they occupy team workspace tenancy slot
+        try {
+          const memberRef = doc(db, 'members', fUser.uid);
+          const memberSnap = await getDoc(memberRef);
+          if (!memberSnap.exists()) {
+            const memberRecord: TeamMember = {
+              id: fUser.uid,
+              name: userName,
+              email: fUser.email || `${fUser.uid}@demo.com`,
+              role: userRole as any,
+              status: 'active',
+              avatar: userAvatar
+            };
+            await setDoc(memberRef, memberRecord);
+          } else {
+            await setDoc(memberRef, {
+              status: 'active',
+              ...(userAvatar ? { avatar: userAvatar } : {}),
+              ...(userName ? { name: userName } : {})
+            }, { merge: true });
+          }
+        } catch (memberSyncErr) {
+          console.warn("Firestore member sync fallback:", memberSyncErr);
+        }
         
         // Sync user profile to Postgres
         try {
@@ -616,27 +641,62 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
         membersList.push(data);
       });
 
-      if (membersList.length === 0) {
-        const currentMember: TeamMember = {
-          id: firebaseUser.uid,
-          name: user?.name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-          email: firebaseUser.email || '',
-          role: (user?.role || 'Owner') as any,
-          status: 'active',
-          avatar: firebaseUser.photoURL || user?.avatar || ''
-        };
-        setMembers([currentMember]);
-      } else {
-        const activeEmail = (firebaseUser.email || '').toLowerCase();
-        const activePhoto = firebaseUser.photoURL || user?.avatar;
-        if (activePhoto && activeEmail) {
-          const matchIdx = membersList.findIndex(m => m.email.toLowerCase() === activeEmail);
-          if (matchIdx >= 0 && membersList[matchIdx].avatar !== activePhoto) {
-            membersList[matchIdx].avatar = activePhoto;
-          }
+      const userEmailLower = (firebaseUser.email || '').toLowerCase().trim();
+      const primaryOwnerEmail = 'nyikulibramwel@gmail.com';
+
+      // Use Map to deduplicate members by lowercase email
+      const memberMap = new Map<string, TeamMember>();
+
+      // 1. Ensure primary owner (nyikulibramwel@gmail.com) is present at slot #1
+      const primaryOwnerMember: TeamMember = {
+        id: userEmailLower === primaryOwnerEmail ? firebaseUser.uid : 'usr-primary-owner',
+        name: userEmailLower === primaryOwnerEmail ? (user?.name || firebaseUser.displayName || 'Nyikuli Bramwel') : 'Nyikuli Bramwel',
+        email: primaryOwnerEmail,
+        role: 'Owner',
+        status: 'active',
+        avatar: userEmailLower === primaryOwnerEmail && firebaseUser.photoURL ? firebaseUser.photoURL : ''
+      };
+      memberMap.set(primaryOwnerEmail, primaryOwnerMember);
+
+      // 2. Populate all workspace members from Firestore
+      membersList.forEach(m => {
+        const emailKey = (m.email || '').toLowerCase().trim();
+        if (!emailKey) return;
+        const existing = memberMap.get(emailKey);
+        if (existing) {
+          memberMap.set(emailKey, {
+            ...existing,
+            ...m,
+            role: emailKey === primaryOwnerEmail ? 'Owner' : (m.role || existing.role),
+            avatar: m.avatar || existing.avatar
+          });
+        } else {
+          memberMap.set(emailKey, m);
         }
-        setMembers(membersList);
+      });
+
+      // 3. Ensure currently authenticated user is marked active with synchronized Google avatar
+      if (userEmailLower) {
+        const existingActive = memberMap.get(userEmailLower);
+        if (existingActive) {
+          memberMap.set(userEmailLower, {
+            ...existingActive,
+            status: 'active',
+            avatar: firebaseUser.photoURL || existingActive.avatar || user?.avatar || ''
+          });
+        } else {
+          memberMap.set(userEmailLower, {
+            id: firebaseUser.uid,
+            name: user?.name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Authenticated User',
+            email: firebaseUser.email || '',
+            role: (user?.role || (userEmailLower === primaryOwnerEmail ? 'Owner' : 'Editor')) as any,
+            status: 'active',
+            avatar: firebaseUser.photoURL || user?.avatar || ''
+          });
+        }
       }
+
+      setMembers(Array.from(memberMap.values()));
     }, (err) => {
       handleFirestoreError(err, OperationType.LIST, 'members');
     });
