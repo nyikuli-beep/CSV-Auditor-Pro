@@ -530,31 +530,61 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
         // Also sync authenticated user into members collection so they occupy team workspace tenancy slot
         try {
           const emailLower = (fUser.email || `${fUser.uid}@demo.com`).toLowerCase().trim();
-          const membersColl = collection(db, 'members');
-          const q = query(membersColl, where('email', '==', emailLower));
-          const querySnap = await getDocs(q);
+          const primaryOwnerEmail = 'nyikulibramwel@gmail.com';
 
-          if (!querySnap.empty) {
-            // Update existing member document(s) for this email
-            for (const docSnap of querySnap.docs) {
-              await setDoc(doc(db, 'members', docSnap.id), {
-                status: 'active',
+          if (emailLower !== primaryOwnerEmail) {
+            const membersColl = collection(db, 'members');
+            const q = query(membersColl, where('email', '==', emailLower));
+            const querySnap = await getDocs(q);
+
+            if (!querySnap.empty) {
+              const isDenied = querySnap.docs.some(docSnap => {
+                const d = docSnap.data();
+                return d.status === 'denied' || d.accessDenied === true;
+              });
+
+              if (isDenied) {
+                setSecurityAlert({
+                  title: 'Access Restricted: Login Denied',
+                  message: `Security Protocol Active: Login access for '${emailLower}' has been revoked by workspace owner (${primaryOwnerEmail}). Access to the application is blocked.`
+                });
+                await logout();
+                setUser(null);
+                setFirebaseUser(null);
+                setAuthLoading(false);
+                return;
+              }
+
+              // Update existing active member document(s) for this email
+              for (const docSnap of querySnap.docs) {
+                await setDoc(doc(db, 'members', docSnap.id), {
+                  status: 'active',
+                  name: userName,
+                  ...(userAvatar ? { avatar: userAvatar } : {})
+                }, { merge: true });
+              }
+            } else {
+              // Create new member doc using fUser.uid
+              const memberRef = doc(db, 'members', fUser.uid);
+              const memberRecord: TeamMember = {
+                id: fUser.uid,
                 name: userName,
-                ...(userAvatar ? { avatar: userAvatar } : {})
-              }, { merge: true });
+                email: fUser.email || `${fUser.uid}@demo.com`,
+                role: userRole as any,
+                status: 'active',
+                avatar: userAvatar
+              };
+              await setDoc(memberRef, memberRecord);
             }
           } else {
-            // Create new member doc using fUser.uid
+            // Owner
             const memberRef = doc(db, 'members', fUser.uid);
-            const memberRecord: TeamMember = {
-              id: fUser.uid,
-              name: userName,
-              email: fUser.email || `${fUser.uid}@demo.com`,
-              role: userRole as any,
+            await setDoc(memberRef, {
               status: 'active',
-              avatar: userAvatar
-            };
-            await setDoc(memberRef, memberRecord);
+              name: userName,
+              role: 'Owner',
+              ...(userAvatar ? { avatar: userAvatar } : {})
+            }, { merge: true });
           }
         } catch (memberSyncErr) {
           console.warn("Firestore member sync fallback:", memberSyncErr);
@@ -673,68 +703,61 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       };
       memberMap.set(primaryOwnerEmail, primaryOwnerMember);
 
-      // 2. Ensure authenticated collaborator Junior Osano (osanojunior38@gmail.com) is present in team tenancy slots
-      const juniorOsanoMember: TeamMember = {
-        id: userEmailLower === juniorOsanoEmail ? firebaseUser.uid : 'usr-junior-osano',
-        name: userEmailLower === juniorOsanoEmail ? (user?.name || firebaseUser.displayName || 'Junior Osano') : 'Junior Osano',
-        email: juniorOsanoEmail,
-        role: 'Editor',
-        status: 'active',
-        avatar: userEmailLower === juniorOsanoEmail && firebaseUser.photoURL ? firebaseUser.photoURL : ''
-      };
-      memberMap.set(juniorOsanoEmail, juniorOsanoMember);
-
-      // 3. Populate all workspace members from Firestore
+      // 2. Process all members from Firestore snapshot
       membersList.forEach(m => {
         const emailKey = (m.email || '').toLowerCase().trim();
-        if (!emailKey) return;
-        const existing = memberMap.get(emailKey);
-        if (existing) {
-          memberMap.set(emailKey, {
-            ...existing,
-            ...m,
-            role: emailKey === primaryOwnerEmail ? 'Owner' : (m.role || existing.role),
-            status: (existing.status === 'active' || m.status === 'active') ? 'active' : (m.status || existing.status),
-            avatar: m.avatar || existing.avatar
-          });
-        } else {
-          memberMap.set(emailKey, m);
-        }
+        if (!emailKey || emailKey === primaryOwnerEmail) return;
+
+        const isDenied = m.status === 'denied' || m.accessDenied === true;
+        memberMap.set(emailKey, {
+          ...m,
+          role: m.role || 'Editor',
+          status: isDenied ? 'denied' : (m.status || 'active'),
+          accessDenied: isDenied
+        });
       });
 
-      // 4. Ensure currently authenticated user is in memberMap and persisted to Firestore
-      if (userEmailLower) {
-        const existingActive = memberMap.get(userEmailLower);
-        const currentUserMemberRecord: TeamMember = {
-          id: existingActive?.id || firebaseUser.uid,
-          name: user?.name || firebaseUser.displayName || existingActive?.name || firebaseUser.email?.split('@')[0] || 'Authenticated User',
-          email: firebaseUser.email || userEmailLower,
-          role: (userEmailLower === primaryOwnerEmail ? 'Owner' : (existingActive?.role || user?.role || 'Editor')) as any,
+      // 3. Auto-seed Junior Osano ONCE if Firestore is clean/empty and not seeded yet
+      if (membersList.length === 0 && !membersList.some(m => (m.email || '').toLowerCase().trim() === juniorOsanoEmail)) {
+        const juniorOsanoMember: TeamMember = {
+          id: 'usr-junior-osano',
+          name: 'Junior Osano',
+          email: juniorOsanoEmail,
+          role: 'Editor',
           status: 'active',
-          avatar: firebaseUser.photoURL || existingActive?.avatar || user?.avatar || ''
+          avatar: ''
         };
-
-        memberMap.set(userEmailLower, currentUserMemberRecord);
-
-        // Auto-persist active authenticated member to Firestore 'members' collection
-        // so that the Owner and all other clients receive this user in real time
-        if (!existingActive || existingActive.status !== 'active') {
-          try {
-            const memberRef = doc(db, 'members', firebaseUser.uid);
-            await setDoc(memberRef, currentUserMemberRecord, { merge: true });
-          } catch (syncErr) {
-            console.warn("Auto-sync authenticated member to Firestore:", syncErr);
-          }
-        }
-      }
-
-      // 5. Auto-seed Junior Osano into Firestore members collection if not already persisted
-      if (!membersList.some(m => (m.email || '').toLowerCase().trim() === juniorOsanoEmail)) {
+        memberMap.set(juniorOsanoEmail, juniorOsanoMember);
         try {
           const juniorRef = doc(db, 'members', 'usr-junior-osano');
           setDoc(juniorRef, juniorOsanoMember, { merge: true }).catch(err => console.warn("Auto-seed Junior Osano:", err));
         } catch (syncErr) {
           console.warn("Auto-seed Junior Osano error:", syncErr);
+        }
+      }
+
+      // 4. REAL-TIME SECURITY ENFORCEMENT for active non-owner session
+      if (userEmailLower && userEmailLower !== primaryOwnerEmail) {
+        const activeUserRecord = memberMap.get(userEmailLower);
+
+        if (activeUserRecord && (activeUserRecord.status === 'denied' || activeUserRecord.accessDenied)) {
+          setSecurityAlert({
+            title: 'Access Revoked in Real Time',
+            message: `Your login permissions for (${userEmailLower}) have been revoked/denied by workspace owner ${primaryOwnerEmail}. You have been signed out.`
+          });
+          handleLogout();
+          return;
+        }
+
+        // If active user was deleted from members collection by the owner
+        const existsInFirestore = membersList.some(m => (m.email || '').toLowerCase().trim() === userEmailLower);
+        if (!existsInFirestore && membersList.length > 0) {
+          setSecurityAlert({
+            title: 'Account Deleted in Real Time',
+            message: `Your workspace account (${userEmailLower}) was removed from team tenancy slots by owner ${primaryOwnerEmail}. You have been signed out.`
+          });
+          handleLogout();
+          return;
         }
       }
 
