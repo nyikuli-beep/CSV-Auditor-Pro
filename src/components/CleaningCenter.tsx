@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { 
   FileSpreadsheet, 
@@ -26,7 +26,8 @@ import {
   Shield,
   SlidersHorizontal,
   AlertCircle,
-  GitMerge
+  GitMerge,
+  Search
 } from 'lucide-react';
 import { CSVFile, AuditIssue } from '../types';
 import { exportCleanedAuditToExcel } from '../lib/excelExporter';
@@ -164,8 +165,81 @@ export default function CleaningCenter({
   const [selectedPrintColumns, setSelectedPrintColumns] = useState<string[]>(activeFile ? activeFile.headers : []);
   const [printLimit, setPrintLimit] = useState<number>(50);
 
+  // Single-File Hygiene Table Search & Column Filter state
+  const [rowSearchQuery, setRowSearchQuery] = useState('');
+  const [filterColumn, setFilterColumn] = useState<string>('all');
+  const [filterOperator, setFilterOperator] = useState<'contains' | 'equals' | 'starts_with' | 'ends_with' | 'is_empty' | 'is_not_empty'>('contains');
+  const [filterValue, setFilterValue] = useState('');
+
   const currentRows = activeFile ? (history[historyIndex] || activeFile.rows) : [];
   const currentHeaders = activeFile ? (headersHistory[historyIndex] || activeFile.headers) : [];
+
+  // Filtered Rows computation preserving original row index (for issue mapping and row numbering)
+  const filteredRowsWithIndices = useMemo(() => {
+    return currentRows.map((row, idx) => ({ row, originalIndex: idx })).filter(({ row }) => {
+      // 1. Text Search across all columns or selected column
+      const searchTrimmed = rowSearchQuery.trim().toLowerCase();
+      if (searchTrimmed) {
+        if (filterColumn !== 'all' && row[filterColumn] !== undefined) {
+          const val = String(row[filterColumn] || '').toLowerCase();
+          if (!val.includes(searchTrimmed)) return false;
+        } else {
+          const matchesAnyCol = Object.values(row).some(cell =>
+            String(cell || '').toLowerCase().includes(searchTrimmed)
+          );
+          if (!matchesAnyCol) return false;
+        }
+      }
+
+      // 2. Column Value Filter
+      if (filterColumn !== 'all' && row[filterColumn] !== undefined) {
+        const cellVal = String(row[filterColumn] || '');
+        const valLower = cellVal.toLowerCase();
+        const filterValLower = filterValue.trim().toLowerCase();
+
+        switch (filterOperator) {
+          case 'contains':
+            if (filterValLower && !valLower.includes(filterValLower)) return false;
+            break;
+          case 'equals':
+            if (filterValLower && valLower !== filterValLower) return false;
+            break;
+          case 'starts_with':
+            if (filterValLower && !valLower.startsWith(filterValLower)) return false;
+            break;
+          case 'ends_with':
+            if (filterValLower && !valLower.endsWith(filterValLower)) return false;
+            break;
+          case 'is_empty':
+            if (cellVal.trim() !== '') return false;
+            break;
+          case 'is_not_empty':
+            if (cellVal.trim() === '') return false;
+            break;
+        }
+      } else if (filterColumn === 'all' && filterValue.trim() !== '') {
+        const filterValLower = filterValue.trim().toLowerCase();
+        const matchesAnyCol = Object.values(row).some(cell =>
+          String(cell || '').toLowerCase().includes(filterValLower)
+        );
+        if (!matchesAnyCol) return false;
+      }
+
+      return true;
+    });
+  }, [currentRows, rowSearchQuery, filterColumn, filterOperator, filterValue]);
+
+  // Unique non-empty sample values for selected filter column (for quick-pick chips)
+  const uniqueColumnValues = useMemo(() => {
+    if (filterColumn === 'all' || !currentRows.length) return [];
+    const setVals = new Set<string>();
+    for (const r of currentRows) {
+      const v = String(r[filterColumn] || '').trim();
+      if (v) setVals.add(v);
+      if (setVals.size >= 25) break;
+    }
+    return Array.from(setVals);
+  }, [currentRows, filterColumn]);
 
   // Sync state and clean history upon activating a different file
   useEffect(() => {
@@ -179,6 +253,10 @@ export default function CleaningCenter({
       setCurrentPage(1);
       setCleaningMode('single');
       setMergeActionsHistory([]);
+      setRowSearchQuery('');
+      setFilterColumn('all');
+      setFilterOperator('contains');
+      setFilterValue('');
       
       // Reset AI mapping states
       setIsMappingOpen(false);
@@ -3064,10 +3142,191 @@ export default function CleaningCenter({
                   <Printer className="w-3.5 h-3.5 text-blue-500" />
                   Print Cleaned Sheet
                 </button>
-                <span className={`text-[10px] px-2.5 py-2 rounded font-bold uppercase tracking-wider ${isDarkMode ? 'bg-slate-950 text-slate-300' : 'bg-slate-100 text-slate-700'}`}>
-                  {currentRows.length} Rows remaining
+                <span className={`text-[10px] px-2.5 py-2 rounded font-bold uppercase tracking-wider ${
+                  (rowSearchQuery || filterColumn !== 'all' || filterValue)
+                    ? 'bg-blue-500/10 border border-blue-500/30 text-blue-400'
+                    : isDarkMode ? 'bg-slate-950 text-slate-300' : 'bg-slate-100 text-slate-700'
+                }`}>
+                  {filteredRowsWithIndices.length === currentRows.length
+                    ? `${currentRows.length} Rows remaining`
+                    : `${filteredRowsWithIndices.length} / ${currentRows.length} Filtered`}
                 </span>
               </div>
+            </div>
+
+            {/* Interactive Hygiene Workspace Row Search & Column Filter Bar */}
+            <div className={`p-4 rounded-xl border mb-5 ${isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+              <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+                
+                {/* Global or Column-Specific Text Search */}
+                <div className="relative flex-1 min-w-[220px]">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={rowSearchQuery}
+                    onChange={(e) => {
+                      setRowSearchQuery(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    placeholder={filterColumn === 'all' ? "Search all row cell values..." : `Search row values in '${filterColumn}'...`}
+                    className={`w-full pl-9 pr-8 py-2 text-xs rounded-lg border font-mono transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                      isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-200 placeholder-slate-500' : 'bg-white border-slate-300 text-slate-800 placeholder-slate-400'
+                    }`}
+                  />
+                  {rowSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRowSearchQuery('');
+                        setCurrentPage(1);
+                      }}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Column Selector & Condition Filter */}
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-1.5">
+                    <Filter className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                    <select
+                      value={filterColumn}
+                      onChange={(e) => {
+                        setFilterColumn(e.target.value);
+                        setFilterValue('');
+                        setCurrentPage(1);
+                      }}
+                      className={`px-2.5 py-2 text-xs rounded-lg border font-medium focus:outline-none ${
+                        isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-white border-slate-300 text-slate-700'
+                      }`}
+                    >
+                      <option value="all">All Columns</option>
+                      {currentHeaders.map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {filterColumn !== 'all' && (
+                    <>
+                      <select
+                        value={filterOperator}
+                        onChange={(e) => {
+                          setFilterOperator(e.target.value as any);
+                          setCurrentPage(1);
+                        }}
+                        className={`px-2.5 py-2 text-xs rounded-lg border font-medium focus:outline-none ${
+                          isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-white border-slate-300 text-slate-700'
+                        }`}
+                      >
+                        <option value="contains">Contains</option>
+                        <option value="equals">Equals</option>
+                        <option value="starts_with">Starts With</option>
+                        <option value="ends_with">Ends With</option>
+                        <option value="is_empty">Is Empty</option>
+                        <option value="is_not_empty">Is Not Empty</option>
+                      </select>
+
+                      {filterOperator !== 'is_empty' && filterOperator !== 'is_not_empty' && (
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={filterValue}
+                            onChange={(e) => {
+                              setFilterValue(e.target.value);
+                              setCurrentPage(1);
+                            }}
+                            placeholder="Filter value..."
+                            className={`px-2.5 py-2 pr-7 text-xs rounded-lg border font-mono focus:outline-none ${
+                              isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-white border-slate-300 text-slate-800'
+                            }`}
+                          />
+                          {filterValue && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFilterValue('');
+                                setCurrentPage(1);
+                              }}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* Reset Search / Filter Button */}
+                  {(rowSearchQuery || filterColumn !== 'all' || filterValue) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRowSearchQuery('');
+                        setFilterColumn('all');
+                        setFilterOperator('contains');
+                        setFilterValue('');
+                        setCurrentPage(1);
+                      }}
+                      className="px-2.5 py-2 text-xs font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg hover:bg-rose-500/20 transition-all flex items-center gap-1 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      Reset
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Quick Sample Value Selector Chips for Selected Column */}
+              {filterColumn !== 'all' && uniqueColumnValues.length > 0 && filterOperator !== 'is_empty' && filterOperator !== 'is_not_empty' && (
+                <div className="mt-3 pt-2.5 border-t border-slate-800/60 flex flex-wrap items-center gap-1.5 text-[11px]">
+                  <span className="text-slate-400 font-medium text-[10px] uppercase tracking-wider mr-1">Quick Values:</span>
+                  {uniqueColumnValues.slice(0, 8).map(val => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => {
+                        setFilterValue(val);
+                        setCurrentPage(1);
+                      }}
+                      className={`px-2 py-0.5 rounded-md border text-[10px] font-mono transition-all cursor-pointer ${
+                        filterValue === val
+                          ? 'bg-blue-500/20 border-blue-500 text-blue-300 font-bold'
+                          : isDarkMode
+                            ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      {val.length > 18 ? val.substring(0, 18) + '...' : val}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Active Filters Summary Tag */}
+              {(rowSearchQuery || (filterColumn !== 'all' && (filterValue || filterOperator === 'is_empty' || filterOperator === 'is_not_empty'))) && (
+                <div className="mt-3 pt-2 border-t border-slate-800/60 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-slate-400 font-medium">Active criteria:</span>
+                    {filterColumn !== 'all' && (
+                      <span className="px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/30 text-blue-400 font-mono font-bold">
+                        Column: {filterColumn} ({filterOperator})
+                      </span>
+                    )}
+                    {(rowSearchQuery || filterValue) && (
+                      <span className="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-mono font-bold">
+                        Match: "{rowSearchQuery || filterValue}"
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-slate-400 font-mono font-semibold text-[11px]">
+                    Matched <strong className="text-cyan-400">{filteredRowsWithIndices.length}</strong> of {currentRows.length} rows
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Responsive Comparison Table Container */}
@@ -3082,49 +3341,75 @@ export default function CleaningCenter({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
-                  {currentRows.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((row, relativeIdx) => {
-                    const rIdx = (currentPage - 1) * pageSize + relativeIdx;
-                    // Check if entire row was deduplicated/matches a duplicate row
-                    const isDup = activeFile.issues.some(i => i.type === 'duplicate' && i.row === rIdx + 2);
-                    
-                    return (
-                      <tr 
-                        key={rIdx} 
-                        className={`transition-colors hover:bg-slate-800/10 ${isDup ? 'opacity-70 border-l-2 border-rose-500 bg-rose-500/5' : ''}`}
-                      >
-                        <td className="p-3 text-slate-500">{rIdx + 2}</td>
-                        {currentHeaders.map((col) => {
-                          const val = row[col] || '';
-                          const isModified = isValueModified(rIdx, col, val);
-                          const isFilledVal = isModified && (val === 'Uncategorized' || val === '0.00');
+                  {filteredRowsWithIndices.length === 0 ? (
+                    <tr>
+                      <td colSpan={currentHeaders.length + 1} className="p-8 text-center text-slate-400 italic">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <AlertCircle className="w-6 h-6 text-amber-500/80" />
+                          <p className="font-sans font-semibold text-xs">No matching dataset rows found.</p>
+                          <p className="text-[11px] text-slate-500 font-sans">Try adjusting your search keywords or column filter criteria.</p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRowSearchQuery('');
+                              setFilterColumn('all');
+                              setFilterOperator('contains');
+                              setFilterValue('');
+                              setCurrentPage(1);
+                            }}
+                            className="mt-2 px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400 font-sans text-xs font-bold hover:bg-blue-500/20 transition-all cursor-pointer"
+                          >
+                            Reset Search & Filters
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredRowsWithIndices
+                      .slice((currentPage - 1) * pageSize, currentPage * pageSize)
+                      .map(({ row, originalIndex }) => {
+                        const rIdx = originalIndex;
+                        const isDup = activeFile ? activeFile.issues.some(i => i.type === 'duplicate' && i.row === rIdx + 2) : false;
+                        
+                        return (
+                          <tr 
+                            key={rIdx} 
+                            className={`transition-colors hover:bg-slate-800/10 ${isDup ? 'opacity-70 border-l-2 border-rose-500 bg-rose-500/5' : ''}`}
+                          >
+                            <td className="p-3 text-slate-500">{rIdx + 2}</td>
+                            {currentHeaders.map((col) => {
+                              const val = row[col] || '';
+                              const isModified = isValueModified(rIdx, col, val);
+                              const isFilledVal = isModified && (val === 'Uncategorized' || val === '0.00');
 
-                          return (
-                            <td 
-                              key={col} 
-                              className={`p-3 truncate max-w-[150px] ${isFilledVal ? 'text-emerald-400 font-bold bg-emerald-500/5' : isModified ? 'text-amber-400 font-bold bg-amber-500/5' : ''}`}
-                            >
-                              {val === '' ? <span className="text-rose-500/40 italic">empty</span> : val}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    );
-                  })}
+                              return (
+                                <td 
+                                  key={col} 
+                                  className={`p-3 truncate max-w-[150px] ${isFilledVal ? 'text-emerald-400 font-bold bg-emerald-500/5' : isModified ? 'text-amber-400 font-bold bg-amber-500/5' : ''}`}
+                                >
+                                  {val === '' ? <span className="text-rose-500/40 italic">empty</span> : val}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })
+                  )}
                 </tbody>
               </table>
             </div>
 
             {/* Pagination Controls */}
-            {currentRows.length > 0 && (
+            {filteredRowsWithIndices.length > 0 && (
               <div className="mt-4 flex flex-col md:flex-row items-center justify-between gap-4 text-xs border-t border-slate-800/30 pt-4">
                 <div className="flex flex-wrap items-center gap-4">
                   <span className="text-slate-400 font-medium">
-                    Showing <span className="font-mono text-blue-500 font-bold">{Math.min(currentRows.length, (currentPage - 1) * pageSize + 1)}</span> to{' '}
-                    <span className="font-mono text-blue-500 font-bold">{Math.min(currentRows.length, currentPage * pageSize)}</span> of{' '}
-                    <span className="font-mono text-blue-500 font-bold">{currentRows.length}</span> records
-                    {activeFile.totalRowsCount && activeFile.totalRowsCount > activeFile.rows.length && (
-                      <span className="text-[10px] text-amber-500 block sm:inline sm:ml-2 font-mono">
-                        (Loaded active chunk; total {activeFile.totalRowsCount} rows)
+                    Showing <span className="font-mono text-blue-500 font-bold">{Math.min(filteredRowsWithIndices.length, (currentPage - 1) * pageSize + 1)}</span> to{' '}
+                    <span className="font-mono text-blue-500 font-bold">{Math.min(filteredRowsWithIndices.length, currentPage * pageSize)}</span> of{' '}
+                    <span className="font-mono text-blue-500 font-bold">{filteredRowsWithIndices.length}</span> records
+                    {filteredRowsWithIndices.length !== currentRows.length && (
+                      <span className="text-[10px] text-cyan-400 font-mono ml-2">
+                        (filtered from {currentRows.length} total)
                       </span>
                     )}
                   </span>
@@ -3158,9 +3443,9 @@ export default function CleaningCenter({
                       onChange={(e) => setCurrentPage(Number(e.target.value))}
                       className={`px-2 py-1 rounded-lg border text-xs font-bold font-mono focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
                     >
-                      {Array.from({ length: Math.ceil(currentRows.length / pageSize) || 1 }, (_, i) => i + 1).map(p => (
+                      {Array.from({ length: Math.ceil(filteredRowsWithIndices.length / pageSize) || 1 }, (_, i) => i + 1).map(p => (
                         <option key={p} value={p}>
-                          Page {p} of {Math.ceil(currentRows.length / pageSize) || 1}
+                          Page {p} of {Math.ceil(filteredRowsWithIndices.length / pageSize) || 1}
                         </option>
                       ))}
                     </select>
@@ -3186,12 +3471,12 @@ export default function CleaningCenter({
                       ‹ Prev
                     </button>
                     <span className="px-2.5 py-1.5 rounded-lg bg-blue-600/10 border border-blue-500/20 text-blue-400 font-bold font-mono text-[10px]">
-                      {currentPage} / {Math.ceil(currentRows.length / pageSize) || 1}
+                      {currentPage} / {Math.ceil(filteredRowsWithIndices.length / pageSize) || 1}
                     </span>
                     <button
                       type="button"
-                      disabled={currentPage >= Math.ceil(currentRows.length / pageSize)}
-                      onClick={() => setCurrentPage(prev => Math.min(Math.ceil(currentRows.length / pageSize), prev + 1))}
+                      disabled={currentPage >= Math.ceil(filteredRowsWithIndices.length / pageSize)}
+                      onClick={() => setCurrentPage(prev => Math.min(Math.ceil(filteredRowsWithIndices.length / pageSize), prev + 1))}
                       className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
                       title="Next Page"
                     >
@@ -3199,8 +3484,8 @@ export default function CleaningCenter({
                     </button>
                     <button
                       type="button"
-                      disabled={currentPage >= Math.ceil(currentRows.length / pageSize)}
-                      onClick={() => setCurrentPage(Math.ceil(currentRows.length / pageSize))}
+                      disabled={currentPage >= Math.ceil(filteredRowsWithIndices.length / pageSize)}
+                      onClick={() => setCurrentPage(Math.ceil(filteredRowsWithIndices.length / pageSize))}
                       className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
                       title="Last Page"
                     >

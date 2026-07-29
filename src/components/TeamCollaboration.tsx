@@ -191,6 +191,49 @@ export default function TeamCollaboration({
     return `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(seed)}&backgroundColor=3b82f6`;
   };
 
+  // Helper to retrieve user's latest activity document from Firestore activities
+  const getLatestMemberActivity = (m: TeamMember) => {
+    const memberEmail = (m.email || '').toLowerCase().trim();
+    const memberName = (m.name || '').toLowerCase().trim();
+    const memberId = m.id;
+
+    // Search real-time activities array from Firestore
+    const userActivities = (activities || []).filter(act => {
+      if (!act) return false;
+      const actUserId = act.userId;
+      const actUserName = (act.userName || '').toLowerCase().trim();
+      const actUserEmail = (act.userEmail || '').toLowerCase().trim();
+
+      if (actUserId && actUserId === memberId) return true;
+      if (actUserEmail && actUserEmail === memberEmail) return true;
+      if (actUserName && (actUserName === memberEmail || actUserName === memberName)) return true;
+      return false;
+    });
+
+    if (userActivities.length > 0) {
+      const latest = userActivities[0];
+      return {
+        timestamp: latest.timestamp || 'Just now',
+        action: latest.action || 'Active in workspace',
+        hasDoc: true
+      };
+    }
+
+    if (m.status === 'active' && !m.accessDenied) {
+      return {
+        timestamp: 'Just now',
+        action: 'Session active',
+        hasDoc: false
+      };
+    }
+
+    return {
+      timestamp: 'No recorded activity',
+      action: 'Offline / No activity log',
+      hasDoc: false
+    };
+  };
+
   // Helper to filter out fictitious user comments
   const isRealUserComment = (comment: CommentThread): boolean => {
     if (!comment) return false;
@@ -941,6 +984,28 @@ export default function TeamCollaboration({
               </div>
             </div>
 
+            {/* Column Header Bar */}
+            <div className="hidden md:flex items-center justify-between px-3 py-2 bg-slate-950/60 rounded-lg text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 border border-slate-800/80">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Users className="w-3.5 h-3.5 text-violet-400" />
+                <span>Member Slot & Identity</span>
+              </div>
+              <div className="flex items-center gap-6 shrink-0">
+                <span className="w-20 text-center flex items-center justify-center gap-1">
+                  <ShieldCheck className="w-3 h-3 text-sky-400" /> Role
+                </span>
+                <span className="w-24 text-center flex items-center justify-center gap-1">
+                  <KeyRound className="w-3 h-3 text-emerald-400" /> Access Status
+                </span>
+                <span className="w-36 text-center flex items-center justify-center gap-1">
+                  <Clock className="w-3 h-3 text-cyan-400" /> Last Active
+                </span>
+                <span className="w-28 text-right">
+                  Manage Access
+                </span>
+              </div>
+            </div>
+
             <div className="divide-y divide-slate-800/60 text-xs">
               {members
                 .filter(m => {
@@ -952,6 +1017,7 @@ export default function TeamCollaboration({
                 .map((m, idx) => {
                   const isDenied = m.status === 'denied' || m.accessDenied;
                   const isPrimaryOwner = ['nyikulibramwel@gmail.com'].includes(m.email.toLowerCase());
+                  const latestAct = getLatestMemberActivity(m);
 
                   return (
                     <div key={m.id} className="py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-800/10 px-2 rounded-xl transition-colors">
@@ -1000,7 +1066,7 @@ export default function TeamCollaboration({
                       <div className="flex items-center gap-3 shrink-0 flex-wrap">
                         {getRoleBadge(m.role)}
                         
-                        {/* Status Badge */}
+                        {/* Access Status Badge */}
                         {isDenied ? (
                           <span className="text-[10px] font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded-md flex items-center gap-1">
                             <UserX className="w-3 h-3 text-rose-400" /> Access Denied
@@ -1014,6 +1080,28 @@ export default function TeamCollaboration({
                             <Mail className="w-3 h-3 text-sky-400" /> Invited
                           </span>
                         )}
+
+                        {/* Last Active Column Badge (Pulls timestamp from user's latest Firestore activity document) */}
+                        <div 
+                          className="group relative flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-950/80 border border-slate-800 text-[10px] font-mono shrink-0 cursor-help transition-colors hover:border-cyan-500/50"
+                          title={`Latest Firestore Activity: ${latestAct.action} (${latestAct.timestamp})`}
+                        >
+                          <Clock className={`w-3 h-3 ${latestAct.hasDoc || m.status === 'active' ? 'text-cyan-400 animate-pulse' : 'text-slate-500'}`} />
+                          <span className="text-slate-400 font-sans font-semibold text-[9px] uppercase tracking-wider hidden sm:inline">Last Active:</span>
+                          <span className={`font-bold ${latestAct.hasDoc || m.status === 'active' ? 'text-cyan-300' : 'text-slate-400'}`}>
+                            {latestAct.timestamp}
+                          </span>
+
+                          {/* Hover Tooltip displaying real-time activity details from Firestore */}
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col gap-1 bg-slate-900 text-slate-200 border border-slate-700/80 p-2.5 rounded-xl text-[10px] shadow-2xl z-30 pointer-events-none min-w-[200px]">
+                            <div className="flex items-center gap-1.5 font-bold text-cyan-400 border-b border-slate-800 pb-1">
+                              <Activity className="w-3 h-3 text-cyan-400 animate-spin" />
+                              <span>Firestore Presence Log</span>
+                            </div>
+                            <p className="text-slate-300 font-sans leading-tight">{latestAct.action}</p>
+                            <span className="text-[9px] text-cyan-400/90 font-mono text-right mt-0.5">Timestamp: {latestAct.timestamp}</span>
+                          </div>
+                        </div>
 
                         {/* Owner Management Controls: Toggle Deny/Allow & Delete */}
                         {!isPrimaryOwner && (

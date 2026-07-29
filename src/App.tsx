@@ -106,6 +106,7 @@ import {
   doc, 
   setDoc, 
   getDoc,
+  getDocs,
   deleteDoc,
   onSnapshot, 
   query, 
@@ -528,9 +529,23 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
 
         // Also sync authenticated user into members collection so they occupy team workspace tenancy slot
         try {
-          const memberRef = doc(db, 'members', fUser.uid);
-          const memberSnap = await getDoc(memberRef);
-          if (!memberSnap.exists()) {
+          const emailLower = (fUser.email || `${fUser.uid}@demo.com`).toLowerCase().trim();
+          const membersColl = collection(db, 'members');
+          const q = query(membersColl, where('email', '==', emailLower));
+          const querySnap = await getDocs(q);
+
+          if (!querySnap.empty) {
+            // Update existing member document(s) for this email
+            for (const docSnap of querySnap.docs) {
+              await setDoc(doc(db, 'members', docSnap.id), {
+                status: 'active',
+                name: userName,
+                ...(userAvatar ? { avatar: userAvatar } : {})
+              }, { merge: true });
+            }
+          } else {
+            // Create new member doc using fUser.uid
+            const memberRef = doc(db, 'members', fUser.uid);
             const memberRecord: TeamMember = {
               id: fUser.uid,
               name: userName,
@@ -540,12 +555,6 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
               avatar: userAvatar
             };
             await setDoc(memberRef, memberRecord);
-          } else {
-            await setDoc(memberRef, {
-              status: 'active',
-              ...(userAvatar ? { avatar: userAvatar } : {}),
-              ...(userName ? { name: userName } : {})
-            }, { merge: true });
           }
         } catch (memberSyncErr) {
           console.warn("Firestore member sync fallback:", memberSyncErr);
@@ -643,7 +652,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       const membersList: TeamMember[] = [];
       snapshot.forEach((docSnap) => {
         const data = docSnap.data() as TeamMember;
-        membersList.push(data);
+        membersList.push({ ...data, id: docSnap.id || data.id });
       });
 
       const userEmailLower = (firebaseUser.email || '').toLowerCase().trim();
@@ -673,6 +682,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
             ...existing,
             ...m,
             role: emailKey === primaryOwnerEmail ? 'Owner' : (m.role || existing.role),
+            status: (existing.status === 'active' || m.status === 'active') ? 'active' : (m.status || existing.status),
             avatar: m.avatar || existing.avatar
           });
         } else {
@@ -680,24 +690,29 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
         }
       });
 
-      // 3. Ensure currently authenticated user is marked active with synchronized Google avatar
+      // 3. Ensure currently authenticated user is in memberMap and persisted to Firestore
       if (userEmailLower) {
         const existingActive = memberMap.get(userEmailLower);
-        if (existingActive) {
-          memberMap.set(userEmailLower, {
-            ...existingActive,
-            status: 'active',
-            avatar: firebaseUser.photoURL || existingActive.avatar || user?.avatar || ''
-          });
-        } else {
-          memberMap.set(userEmailLower, {
-            id: firebaseUser.uid,
-            name: user?.name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Authenticated User',
-            email: firebaseUser.email || '',
-            role: (user?.role || (userEmailLower === primaryOwnerEmail ? 'Owner' : 'Editor')) as any,
-            status: 'active',
-            avatar: firebaseUser.photoURL || user?.avatar || ''
-          });
+        const currentUserMemberRecord: TeamMember = {
+          id: existingActive?.id || firebaseUser.uid,
+          name: user?.name || firebaseUser.displayName || existingActive?.name || firebaseUser.email?.split('@')[0] || 'Authenticated User',
+          email: firebaseUser.email || userEmailLower,
+          role: (userEmailLower === primaryOwnerEmail ? 'Owner' : (existingActive?.role || user?.role || 'Editor')) as any,
+          status: 'active',
+          avatar: firebaseUser.photoURL || existingActive?.avatar || user?.avatar || ''
+        };
+
+        memberMap.set(userEmailLower, currentUserMemberRecord);
+
+        // Auto-persist active authenticated member to Firestore 'members' collection
+        // so that the Owner and all other clients receive this user in real time
+        if (!existingActive || existingActive.status !== 'active') {
+          try {
+            const memberRef = doc(db, 'members', firebaseUser.uid);
+            await setDoc(memberRef, currentUserMemberRecord, { merge: true });
+          } catch (syncErr) {
+            console.warn("Auto-sync authenticated member to Firestore:", syncErr);
+          }
         }
       }
 
@@ -1363,8 +1378,41 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
 
   // Invite user to group workspace
   const handleInviteMember = async (newMember: TeamMember) => {
+    const emailLower = (newMember.email || '').toLowerCase().trim();
+    if (!emailLower) return;
+
+    // Optimistically update local members state
+    setMembers(prev => {
+      const filtered = prev.filter(m => m.email.toLowerCase().trim() !== emailLower);
+      return [...filtered, newMember];
+    });
+
     try {
-      await setDoc(doc(db, 'members', newMember.id), newMember);
+      const membersColl = collection(db, 'members');
+      const q = query(membersColl, where('email', '==', emailLower));
+      const querySnap = await getDocs(q);
+
+      if (!querySnap.empty) {
+        let isFirst = true;
+        for (const docSnap of querySnap.docs) {
+          if (isFirst) {
+            await setDoc(doc(db, 'members', docSnap.id), {
+              ...newMember,
+              id: docSnap.id
+            }, { merge: true });
+            isFirst = false;
+          } else {
+            await deleteDoc(doc(db, 'members', docSnap.id));
+          }
+        }
+      } else {
+        const newDocId = newMember.id || `usr-${Date.now()}`;
+        await setDoc(doc(db, 'members', newDocId), {
+          ...newMember,
+          id: newDocId
+        });
+      }
+
       await syncToPostgres('sync-member', 'POST', newMember);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `members/${newMember.id}`);
@@ -1387,8 +1435,24 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
 
   // Delete user from group workspace
   const handleDeleteMember = async (id: string, email: string) => {
+    const emailLower = (email || '').toLowerCase().trim();
+
+    // Optimistically update local members state
+    setMembers(prev => prev.filter(m => m.id !== id && m.email.toLowerCase().trim() !== emailLower));
+
     try {
-      await deleteDoc(doc(db, 'members', id));
+      if (id) {
+        await deleteDoc(doc(db, 'members', id));
+      }
+
+      if (emailLower) {
+        const q = query(collection(db, 'members'), where('email', '==', emailLower));
+        const querySnap = await getDocs(q);
+        for (const docSnap of querySnap.docs) {
+          await deleteDoc(doc(db, 'members', docSnap.id));
+        }
+      }
+
       await syncToPostgres(`delete-member/${id}`, 'DELETE');
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `members/${id}`);
@@ -1409,7 +1473,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     }
 
     // If currently logged-in user email was deleted, evict session immediately
-    if (user?.email.toLowerCase() === email.toLowerCase()) {
+    if (user?.email.toLowerCase() === emailLower) {
       setSecurityAlert({
         title: 'Account Deleted',
         message: `Your workspace account (${email}) has been deleted by the owner. You have been signed out.`
@@ -1420,7 +1484,8 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
 
   // Toggle member logging access (Allow vs Deny sign-in access)
   const handleToggleMemberAccess = async (id: string, email: string, accessDenied: boolean) => {
-    const targetMember = members.find(m => m.id === id || m.email.toLowerCase() === email.toLowerCase());
+    const emailLower = (email || '').toLowerCase().trim();
+    const targetMember = members.find(m => m.id === id || m.email.toLowerCase().trim() === emailLower);
     if (!targetMember) return;
 
     const updatedMember: TeamMember = {
@@ -1432,10 +1497,21 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     };
 
     // Optimistically update local members state
-    setMembers(prev => prev.map(m => m.id === id ? updatedMember : m));
+    setMembers(prev => prev.map(m => (m.id === id || m.email.toLowerCase().trim() === emailLower) ? updatedMember : m));
 
     try {
-      await setDoc(doc(db, 'members', id), updatedMember, { merge: true });
+      if (id) {
+        await setDoc(doc(db, 'members', id), updatedMember, { merge: true });
+      }
+
+      if (emailLower) {
+        const q = query(collection(db, 'members'), where('email', '==', emailLower));
+        const querySnap = await getDocs(q);
+        for (const docSnap of querySnap.docs) {
+          await setDoc(doc(db, 'members', docSnap.id), updatedMember, { merge: true });
+        }
+      }
+
       await syncToPostgres('sync-member', 'POST', updatedMember);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `members/${id}`);

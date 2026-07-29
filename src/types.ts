@@ -72,6 +72,7 @@ export interface AuditActivity {
   id: string;
   userId: string;
   userName: string;
+  userEmail?: string;
   userAvatar?: string;
   action: string;
   timestamp: string;
