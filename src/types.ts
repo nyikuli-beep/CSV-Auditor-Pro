@@ -57,6 +57,17 @@ export interface TeamMember {
   deniedBy?: string;
 }
 
+export interface SlotRequest {
+  id: string;
+  userEmail: string;
+  userName: string;
+  userAvatar?: string;
+  requestedAt: string;
+  timestamp: number;
+  status: 'pending' | 'approved' | 'declined';
+  message?: string;
+}
+
 export interface AuditActivity {
   id: string;
   userId: string;

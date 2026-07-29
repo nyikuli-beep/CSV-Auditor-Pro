@@ -37,11 +37,14 @@ import {
   Compass,
   Wand2,
   AlertTriangle,
-  RefreshCw
+  RefreshCw,
+  Bell,
+  UserPlus,
+  UserX
 } from 'lucide-react';
 
 // Import Types
-import { CSVFile, TeamMember, AuditActivity, ChatMessage, SystemSettings } from './types';
+import { CSVFile, TeamMember, AuditActivity, ChatMessage, SystemSettings, SlotRequest } from './types';
 
 // Import Profile Upload, Keyboard Shortcuts & Onboarding Tour Modals
 import ProfileUploadModal from './components/ProfileUploadModal';
@@ -140,6 +143,8 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   });
   const [shortcutToast, setShortcutToast] = useState<{ message: string; keyCombo: string } | null>(null);
   const [securityAlert, setSecurityAlert] = useState<{ title: string; message: string } | null>(null);
+  const [slotRequests, setSlotRequests] = useState<SlotRequest[]>([]);
+  const [showNotificationsDropdown, setShowNotificationsDropdown] = useState<boolean>(false);
 
   const PROTECTED_ADMIN_EMAILS = ['nyikulibramwel@gmail.com'];
 
@@ -718,12 +723,80 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       handleFirestoreError(err, OperationType.LIST, 'activities');
     });
 
+    // 4. Slot requests snapshot
+    const slotReqQuery = query(collection(db, 'slot_requests'), limit(50));
+    const unsubscribeSlotReq = onSnapshot(slotReqQuery, (snapshot) => {
+      const reqList: SlotRequest[] = [];
+      snapshot.forEach((docSnap) => {
+        reqList.push({ id: docSnap.id, ...docSnap.data() } as SlotRequest);
+      });
+      setSlotRequests(reqList.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
+    }, (err) => {
+      console.warn("Firestore slot_requests subscription warning:", err);
+    });
+
     return () => {
       unsubscribeFiles();
       unsubscribeMembers();
       unsubscribeActivities();
+      unsubscribeSlotReq();
     };
   }, [firebaseUser]);
+
+  const handleApproveSlotRequest = async (req: SlotRequest) => {
+    try {
+      // 1. Update slot request status in Firestore
+      await setDoc(doc(db, 'slot_requests', req.id), { status: 'approved' }, { merge: true });
+
+      // 2. Automatically invite / provision user in members
+      const newMember: TeamMember = {
+        id: `usr-${Date.now()}`,
+        name: req.userName,
+        email: req.userEmail,
+        role: 'Editor',
+        status: 'active',
+        avatar: req.userAvatar || ''
+      };
+      await handleInviteMember(newMember);
+
+      // 3. Log audit activity
+      const activityLog: AuditActivity = {
+        id: `act-${Date.now()}`,
+        userId: auth.currentUser?.uid || 'owner',
+        userName: user?.name || 'Nyikuli Bramwel',
+        userAvatar: user?.avatar || '',
+        action: `Approved & provisioned team tenancy user slot for ${req.userName} (${req.userEmail})`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      await setDoc(doc(db, 'activities', activityLog.id), activityLog);
+
+      triggerShortcutToast(`Approved & provisioned team slot for ${req.userEmail}`, 'SLOT #APPROVED');
+    } catch (err) {
+      console.error("Error approving slot request:", err);
+    }
+  };
+
+  const handleDeclineSlotRequest = async (req: SlotRequest) => {
+    try {
+      // 1. Update slot request status in Firestore
+      await setDoc(doc(db, 'slot_requests', req.id), { status: 'declined' }, { merge: true });
+
+      // 2. Log audit activity
+      const activityLog: AuditActivity = {
+        id: `act-${Date.now()}`,
+        userId: auth.currentUser?.uid || 'owner',
+        userName: user?.name || 'Nyikuli Bramwel',
+        userAvatar: user?.avatar || '',
+        action: `Declined team tenancy user slot request from ${req.userName} (${req.userEmail})`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      await setDoc(doc(db, 'activities', activityLog.id), activityLog);
+
+      triggerShortcutToast(`Declined slot request from ${req.userEmail}`, 'SLOT #DECLINED');
+    } catch (err) {
+      console.error("Error declining slot request:", err);
+    }
+  };
 
   // Map accents to Tailwind classes
   const getAccentColorClass = () => {
@@ -1926,6 +1999,86 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                   <span className="hidden md:inline text-[11px] font-mono font-bold">Alt+K</span>
                 </button>
 
+                {/* Notification Bell for Owner Slot Requests */}
+                {user?.email?.toLowerCase() === 'nyikulibramwel@gmail.com' && (
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowNotificationsDropdown(!showNotificationsDropdown)}
+                      className={`p-1.5 rounded-lg border cursor-pointer hover:scale-[1.03] transition-all relative ${
+                        isDarkMode ? 'bg-[#1e293b]/50 border-slate-800 text-slate-400 hover:text-white' : 'bg-white border-slate-200 text-slate-500 hover:text-slate-900'
+                      }`}
+                      title="Team Tenancy Slot Notifications"
+                    >
+                      <Bell className="w-4 h-4 text-amber-400" />
+                      {slotRequests.filter(r => r.status === 'pending').length > 0 && (
+                        <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 text-slate-950 font-black text-[9px] flex items-center justify-center animate-bounce">
+                          {slotRequests.filter(r => r.status === 'pending').length}
+                        </span>
+                      )}
+                    </button>
+
+                    {/* Notification Dropdown Popover */}
+                    {showNotificationsDropdown && (
+                      <div className={`absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl border shadow-2xl p-4 z-50 animate-fadeIn ${
+                        isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
+                      }`}>
+                        <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-800/60">
+                          <div className="flex items-center gap-2">
+                            <Bell className="w-4 h-4 text-amber-400" />
+                            <span className="font-extrabold text-xs uppercase tracking-wider">Owner Notifications</span>
+                          </div>
+                          <button 
+                            onClick={() => setShowNotificationsDropdown(false)}
+                            className="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {slotRequests.filter(r => r.status === 'pending').length === 0 ? (
+                          <div className="py-6 text-center text-xs text-slate-400 font-mono">
+                            No pending user slot requests.
+                          </div>
+                        ) : (
+                          <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                            {slotRequests.filter(r => r.status === 'pending').map(req => (
+                              <div key={req.id} className="p-3 rounded-xl bg-slate-900/90 border border-amber-500/30 text-left space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-bold text-xs text-amber-300 truncate">{req.userName}</span>
+                                  <span className="text-[9px] text-slate-400 font-mono">{req.requestedAt}</span>
+                                </div>
+                                <p className="text-[11px] text-slate-300 font-mono truncate">{req.userEmail}</p>
+                                <p className="text-[10px] text-slate-400">{req.message || 'Requested team slot invitation.'}</p>
+                                
+                                <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-800">
+                                  <button
+                                    onClick={() => {
+                                      handleApproveSlotRequest(req);
+                                      setShowNotificationsDropdown(false);
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <UserPlus className="w-3 h-3" /> Approve & Provision
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      handleDeclineSlotRequest(req);
+                                      setShowNotificationsDropdown(false);
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-rose-900/40 text-slate-300 hover:text-rose-300 font-bold text-[10px] flex items-center gap-1 cursor-pointer border border-slate-700"
+                                  >
+                                    <UserX className="w-3 h-3" /> Decline
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Mode toggle */}
                 <button 
                   onClick={() => setIsDarkMode(!isDarkMode)}
@@ -1975,6 +2128,10 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                         onSelectFile={handleSelectActiveFile}
                         isDarkMode={isDarkMode}
                         accentClass={accentClass}
+                        slotRequests={slotRequests}
+                        onApproveSlotRequest={handleApproveSlotRequest}
+                        onDeclineSlotRequest={handleDeclineSlotRequest}
+                        currentUserEmail={user?.email || ''}
                       />
                     )}
 
@@ -2074,6 +2231,9 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                         currentUserEmail={user?.email || ''}
                         currentUserRole={user?.role}
                         onSwitchActiveUser={handleSwitchActiveUser}
+                        slotRequests={slotRequests}
+                        onApproveSlotRequest={handleApproveSlotRequest}
+                        onDeclineSlotRequest={handleDeclineSlotRequest}
                       />
                     )}
 

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { CSVFile, AuditActivity } from '../types';
+import { CSVFile, AuditActivity, SlotRequest } from '../types';
 import { 
   ResponsiveContainer, 
   AreaChart, 
@@ -23,7 +23,10 @@ import {
   Activity,
   ArrowUpRight,
   Database,
-  Calculator
+  Calculator,
+  Bell,
+  UserPlus,
+  UserX
 } from 'lucide-react';
 
 interface DashboardHomeProps {
@@ -34,9 +37,25 @@ interface DashboardHomeProps {
   onSelectFile?: (file: CSVFile) => void;
   isDarkMode: boolean;
   accentClass: string;
+  slotRequests?: SlotRequest[];
+  onApproveSlotRequest?: (req: SlotRequest) => void;
+  onDeclineSlotRequest?: (req: SlotRequest) => void;
+  currentUserEmail?: string;
 }
 
-export default function DashboardHome({ files, activeFile, activities, onNavigate, onSelectFile, isDarkMode, accentClass }: DashboardHomeProps) {
+export default function DashboardHome({ 
+  files, 
+  activeFile, 
+  activities, 
+  onNavigate, 
+  onSelectFile, 
+  isDarkMode, 
+  accentClass,
+  slotRequests = [],
+  onApproveSlotRequest,
+  onDeclineSlotRequest,
+  currentUserEmail = ''
+}: DashboardHomeProps) {
   // Formulate data points for the last 30 days based exclusively on real user files
   const trendData = useMemo(() => {
     return files
@@ -164,6 +183,8 @@ export default function DashboardHome({ files, activeFile, activities, onNavigat
   }, [files]);
 
   const hoursSaved = (timeSavedMinutes / 60).toFixed(1);
+  const isOwner = currentUserEmail.toLowerCase() === 'nyikulibramwel@gmail.com';
+  const pendingRequests = slotRequests.filter(r => r.status === 'pending');
 
   return (
     <div className="space-y-8 animate-fadeIn w-full max-w-full overflow-x-hidden">
@@ -190,6 +211,76 @@ export default function DashboardHome({ files, activeFile, activities, onNavigat
           </button>
         </div>
       </div>
+
+      {/* OWNER NOTIFICATION BANNER FOR TEAM TENANCY SLOT REQUESTS */}
+      {isOwner && pendingRequests.length > 0 && (
+        <div className="p-4 rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent text-left space-y-3 shadow-md animate-fadeIn">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-amber-500 text-slate-950 rounded-xl font-black text-xs flex items-center justify-center animate-pulse shrink-0">
+                <Bell className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-xs text-amber-400 uppercase tracking-wider flex items-center gap-2">
+                  <span>Owner Notification: Team Tenancy Slot Requests</span>
+                  <span className="px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 font-black text-[10px]">
+                    {pendingRequests.length} Pending
+                  </span>
+                </h3>
+                <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                  Non-owner team members requested authorization & user slot invitations in team tenancy.
+                </p>
+              </div>
+            </div>
+            <button 
+              onClick={() => onNavigate('team')} 
+              className="text-xs text-amber-300 hover:underline font-bold hidden md:inline shrink-0 cursor-pointer"
+            >
+              Manage Team Tenancy →
+            </button>
+          </div>
+
+          <div className="space-y-2 pt-2 border-t border-amber-500/20">
+            {pendingRequests.map(req => (
+              <div key={req.id} className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-full bg-amber-500/20 text-amber-300 font-bold text-xs flex items-center justify-center border border-amber-500/40 shrink-0">
+                    {req.userName.split(' ').map(n => n[0]).join('')}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-xs text-white">{req.userName}</span>
+                      <span className="text-[10px] text-amber-300 font-mono font-bold">{req.userEmail}</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 font-mono mt-0.5 truncate">
+                      Requested at {req.requestedAt} • {req.message || 'Requesting team slot invitation'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                  <button
+                    type="button"
+                    onClick={() => onApproveSlotRequest && onApproveSlotRequest(req)}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>Approve & Provision</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDeclineSlotRequest && onDeclineSlotRequest(req)}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-rose-900/40 text-slate-300 hover:text-rose-300 border border-slate-700 font-bold text-xs flex items-center gap-1 transition-all cursor-pointer"
+                  >
+                    <UserX className="w-3.5 h-3.5" />
+                    <span>Decline</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Interactive KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">

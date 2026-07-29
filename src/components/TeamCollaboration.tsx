@@ -25,9 +25,10 @@ import {
   AtSign,
   Tag,
   Wifi,
-  Volume2
+  Volume2,
+  Bell
 } from 'lucide-react';
-import { TeamMember, AuditActivity } from '../types';
+import { TeamMember, AuditActivity, SlotRequest } from '../types';
 import { db, auth } from '../firebase';
 import { collection, doc, setDoc, onSnapshot, query, limit } from 'firebase/firestore';
 
@@ -42,6 +43,9 @@ interface TeamCollaborationProps {
   currentUserEmail?: string;
   currentUserRole?: string;
   onSwitchActiveUser?: (member: TeamMember) => void;
+  slotRequests?: SlotRequest[];
+  onApproveSlotRequest?: (req: SlotRequest) => void;
+  onDeclineSlotRequest?: (req: SlotRequest) => void;
 }
 
 interface CommentThread {
@@ -67,10 +71,14 @@ export default function TeamCollaboration({
   accentClass,
   currentUserEmail = '',
   currentUserRole,
-  onSwitchActiveUser
+  onSwitchActiveUser,
+  slotRequests = [],
+  onApproveSlotRequest,
+  onDeclineSlotRequest
 }: TeamCollaborationProps) {
   const AUTHORIZED_EMAILS = ['nyikulibramwel@gmail.com'];
   const isAuthorizedUser = (currentUserRole === 'Owner' || currentUserRole === 'Admin') || AUTHORIZED_EMAILS.some(e => e.toLowerCase() === (currentUserEmail || '').toLowerCase().trim());
+  const pendingRequests = slotRequests.filter(r => r.status === 'pending');
 
   // Email validator to enforce only real, working email addresses
   const isValidWorkingEmail = (email: string): { valid: boolean; reason?: string } => {
@@ -420,11 +428,47 @@ export default function TeamCollaboration({
     setTimeout(() => setLivePulse(false), 2000);
   };
 
-  const handleRequestSlotFromAdmin = () => {
-    const activeMemberName = members.find(m => m.email.toLowerCase() === currentUserEmail.toLowerCase())?.name || currentUserEmail;
-    const msgText = `@admin - Requested authorization/additional user slot allocation for team expansion.`;
-    postAnnotationMessage(msgText, 'Slot #Req');
-    setSuccessMsg('Slot request transmitted to workspace administrator on the annotation board.');
+  const handleRequestSlotFromAdmin = async () => {
+    const activeMemberName = members.find(m => m.email.toLowerCase() === currentUserEmail.toLowerCase())?.name || auth.currentUser?.displayName || (currentUserEmail ? currentUserEmail.split('@')[0] : 'Team Member');
+    const userAvatar = auth.currentUser?.photoURL || resolveUserAvatar(currentUserEmail, undefined, activeMemberName);
+    
+    const reqId = `req-${Date.now()}`;
+    const newReq: SlotRequest = {
+      id: reqId,
+      userEmail: currentUserEmail,
+      userName: activeMemberName,
+      userAvatar,
+      requestedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timestamp: Date.now(),
+      status: 'pending',
+      message: 'Requested team tenancy invitation & slot allocation from Protected Owner'
+    };
+
+    try {
+      // 1. Dispatch slot request document to Firestore 'slot_requests' collection
+      await setDoc(doc(db, 'slot_requests', reqId), newReq);
+
+      // 2. Dispatch real-time audit activity to Firestore 'activities'
+      const activityLog: AuditActivity = {
+        id: `act-${Date.now()}`,
+        userId: auth.currentUser?.uid || 'usr-req',
+        userName: activeMemberName,
+        userAvatar,
+        action: `Requested user slot invitation from Protected Owner (nyikulibramwel@gmail.com)`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      await setDoc(doc(db, 'activities', activityLog.id), activityLog);
+
+      // 3. Post annotation message to cell board
+      const msgText = `@admin - Requested authorization / user slot allocation for ${currentUserEmail}.`;
+      postAnnotationMessage(msgText, 'Slot #Req');
+
+      setSuccessMsg('Invitation request sent! Notification dispatched to Protected Owner (nyikulibramwel@gmail.com) dashboard.');
+    } catch (err) {
+      console.warn("Firestore slot request write fallback:", err);
+      setSuccessMsg('Invitation request transmitted to Protected Owner on workspace board.');
+    }
+
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => setSuccessMsg(''), 4000);
   };
@@ -656,6 +700,72 @@ export default function TeamCollaboration({
               <div className="p-3 mb-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2 animate-fadeIn">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
                 <span>{errorMsg}</span>
+              </div>
+            )}
+
+            {/* OWNER NOTIFICATION CENTER: PENDING TEAM TENANCY SLOT REQUESTS */}
+            {isAuthorizedUser && pendingRequests.length > 0 && (
+              <div className="p-4 mb-6 rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent text-left space-y-3 shadow-md animate-fadeIn">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-amber-500 text-slate-950 rounded-xl font-black text-xs flex items-center justify-center animate-pulse">
+                      <Bell className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="font-extrabold text-xs text-amber-400 uppercase tracking-wider flex items-center gap-2">
+                        <span>Pending User Slot Invitations</span>
+                        <span className="px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 font-black text-[10px]">
+                          {pendingRequests.length} Pending
+                        </span>
+                      </h4>
+                      <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                        Non-owner users requested permission to join team tenancy slots.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2 pt-2 border-t border-amber-500/20">
+                  {pendingRequests.map(req => (
+                    <div key={req.id} className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <img 
+                          src={resolveUserAvatar(req.userEmail, req.userAvatar, req.userName)} 
+                          alt={req.userName} 
+                          className="w-9 h-9 rounded-full object-cover border border-amber-500/50 shrink-0" 
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-xs text-white">{req.userName}</span>
+                            <span className="text-[10px] text-amber-300 font-mono font-bold">{req.userEmail}</span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 font-mono mt-0.5 truncate">
+                            Requested at {req.requestedAt} • {req.message || 'Requesting user slot invitation'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                        <button
+                          type="button"
+                          onClick={() => onApproveSlotRequest && onApproveSlotRequest(req)}
+                          className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                        >
+                          <UserPlus className="w-3.5 h-3.5" />
+                          <span>Approve & Provision</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDeclineSlotRequest && onDeclineSlotRequest(req)}
+                          className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-rose-900/40 text-slate-300 hover:text-rose-300 border border-slate-700 font-bold text-xs flex items-center gap-1 transition-all cursor-pointer"
+                        >
+                          <UserX className="w-3.5 h-3.5" />
+                          <span>Decline</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
