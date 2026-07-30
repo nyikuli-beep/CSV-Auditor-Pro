@@ -1817,7 +1817,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       initial={{ opacity: 0, scale: 0.99 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-      className={`min-h-screen w-full max-w-full overflow-x-hidden font-sans transition-colors duration-200 ${isDarkMode ? 'bg-[#0b0f19] text-slate-100' : 'bg-[#F8FAFC] text-[#1E293B]'}`}
+      className={`min-h-screen w-full max-w-full overflow-x-hidden font-sans transition-colors duration-500 ease-in-out ${isDarkMode ? 'bg-[#0b0f19] text-slate-100' : 'bg-[#F8FAFC] text-[#1E293B]'}`}
     >
       <div className="flex min-h-screen w-full max-w-full overflow-x-hidden">
           
@@ -2186,14 +2186,27 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                   </div>
                 )}
 
-                {/* Mode toggle */}
-                <button 
+                {/* Mode toggle with subtle cross-fade animation */}
+                <motion.button 
                   onClick={() => setIsDarkMode(!isDarkMode)}
-                  className={`p-1.5 rounded-lg border cursor-pointer hover:scale-[1.03] transition-all ${isDarkMode ? 'bg-[#1e293b]/50 border-slate-800 text-slate-400 hover:text-white' : 'bg-white border-slate-200 text-slate-500 hover:text-slate-900'}`}
+                  whileTap={{ scale: 0.92 }}
+                  whileHover={{ scale: 1.05 }}
+                  className={`p-1.5 rounded-lg border cursor-pointer transition-colors duration-300 relative overflow-hidden ${isDarkMode ? 'bg-[#1e293b]/50 border-slate-800 text-amber-400 hover:text-amber-300 hover:bg-[#1e293b]' : 'bg-white border-slate-200 text-indigo-600 hover:text-indigo-800 hover:bg-slate-50'}`}
                   title="Toggle Light / Dark Mode (Alt + Shift + L)"
                 >
-                  {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-                </button>
+                  <AnimatePresence mode="wait" initial={false}>
+                    <motion.div
+                      key={isDarkMode ? 'dark' : 'light'}
+                      initial={{ opacity: 0, rotate: -90, scale: 0.5 }}
+                      animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                      exit={{ opacity: 0, rotate: 90, scale: 0.5 }}
+                      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                      className="flex items-center justify-center"
+                    >
+                      {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                    </motion.div>
+                  </AnimatePresence>
+                </motion.button>
 
                 <button 
                   onClick={() => setProfileModalOpen(true)}

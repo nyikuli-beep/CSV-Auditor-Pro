@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   FileSpreadsheet, 
   Sparkles, 
@@ -95,14 +95,27 @@ export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, acc
           </nav>
 
           <div className="flex items-center gap-4">
-            <button 
+            <motion.button 
               onClick={toggleTheme} 
-              className={`p-2 rounded-lg border transition-all hover:scale-105 cursor-pointer ${isDarkMode ? 'bg-slate-900 border-slate-800 text-amber-400 hover:bg-slate-800' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900 shadow-sm'}`}
+              whileTap={{ scale: 0.92 }}
+              whileHover={{ scale: 1.05 }}
+              className={`p-2 rounded-lg border transition-colors duration-300 relative overflow-hidden cursor-pointer ${isDarkMode ? 'bg-slate-900 border-slate-800 text-amber-400 hover:bg-slate-800' : 'bg-white border-slate-300 text-indigo-600 hover:bg-slate-100 hover:text-indigo-800 shadow-sm'}`}
               aria-label="Toggle theme"
               id="theme-toggle"
             >
-              {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            </button>
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={isDarkMode ? 'dark' : 'light'}
+                  initial={{ opacity: 0, rotate: -90, scale: 0.5 }}
+                  animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                  exit={{ opacity: 0, rotate: 90, scale: 0.5 }}
+                  transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                  className="flex items-center justify-center"
+                >
+                  {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                </motion.div>
+              </AnimatePresence>
+            </motion.button>
             <button 
               onClick={onStartTrial}
               className={`hidden sm:inline-flex px-4 py-2 text-sm font-bold text-white rounded-xl transition-all shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] cursor-pointer ${accentClass}`}

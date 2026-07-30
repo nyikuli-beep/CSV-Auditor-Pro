@@ -472,19 +472,20 @@ export default function TeamCollaboration({
   };
 
   const handleRequestSlotFromAdmin = async () => {
-    const activeMemberName = members.find(m => m.email.toLowerCase() === currentUserEmail.toLowerCase())?.name || auth.currentUser?.displayName || (currentUserEmail ? currentUserEmail.split('@')[0] : 'Team Member');
-    const userAvatar = auth.currentUser?.photoURL || resolveUserAvatar(currentUserEmail, undefined, activeMemberName);
+    const syncEmail = auth.currentUser?.email || currentUserEmail || '';
+    const activeMemberName = auth.currentUser?.displayName || members.find(m => m.email.toLowerCase() === syncEmail.toLowerCase())?.name || (syncEmail ? syncEmail.split('@')[0] : 'Team Member');
+    const userAvatar = auth.currentUser?.photoURL || resolveUserAvatar(syncEmail, undefined, activeMemberName);
     
     const reqId = `req-${Date.now()}`;
     const newReq: SlotRequest = {
       id: reqId,
-      userEmail: currentUserEmail,
+      userEmail: syncEmail,
       userName: activeMemberName,
       userAvatar,
       requestedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       timestamp: Date.now(),
       status: 'pending',
-      message: 'Requested team tenancy invitation & slot allocation from Protected Owner'
+      message: `Requested team tenancy slot allocation for ${syncEmail} (Email synchronized from Google)`
     };
 
     try {
@@ -497,23 +498,23 @@ export default function TeamCollaboration({
         userId: auth.currentUser?.uid || 'usr-req',
         userName: activeMemberName,
         userAvatar,
-        action: `Requested user slot invitation from Protected Owner (nyikulibramwel@gmail.com)`,
+        action: `Requested user slot invitation for ${syncEmail} (Synchronized from Google) from Protected Owner (nyikulibramwel@gmail.com)`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       await setDoc(doc(db, 'activities', activityLog.id), activityLog);
 
       // 3. Post annotation message to cell board
-      const msgText = `@admin - Requested authorization / user slot allocation for ${currentUserEmail}.`;
+      const msgText = `@admin - Requested authorization & user slot allocation for ${syncEmail} (Email synchronized from Google).`;
       postAnnotationMessage(msgText, 'Slot #Req');
 
-      setSuccessMsg('Invitation request sent! Notification dispatched to Protected Owner (nyikulibramwel@gmail.com) dashboard.');
+      setSuccessMsg(`Invitation request sent! Protected Owner (nyikulibramwel@gmail.com) notified with email ${syncEmail} (Synchronized from Google).`);
     } catch (err) {
       console.warn("Firestore slot request write fallback:", err);
-      setSuccessMsg('Invitation request transmitted to Protected Owner on workspace board.');
+      setSuccessMsg(`Invitation request transmitted to Protected Owner for ${syncEmail} (Synchronized from Google).`);
     }
 
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => setSuccessMsg(''), 4000);
+    timeoutRef.current = setTimeout(() => setSuccessMsg(''), 5000);
   };
 
   const handleAddComment = (e: React.FormEvent) => {
@@ -919,16 +920,24 @@ export default function TeamCollaboration({
                     <p className={`text-xs mt-1 leading-relaxed ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
                       Only authorized owner email <strong className="text-blue-400 underline font-mono">nyikulibramwel@gmail.com</strong> has permission to access user slot provisioning, add new team collaborators, and delete workspace members.
                     </p>
-                    <p className="text-[11px] text-slate-400 mt-2 font-mono">
-                      Current authenticated user: <span className="font-bold text-amber-300">{currentUserEmail}</span>
+                    <p className="text-[11px] text-slate-400 mt-2 font-mono flex items-center gap-1.5 flex-wrap">
+                      <span>Authenticated account:</span>
+                      <span className="font-bold text-amber-300">{auth.currentUser?.email || currentUserEmail}</span>
+                      <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[9px] font-sans font-bold border border-emerald-500/20 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        Synchronized from Google
+                      </span>
                     </p>
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-amber-500/20 flex justify-end">
+                <div className="pt-2 border-t border-amber-500/20 flex items-center justify-between flex-wrap gap-2">
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    Email requested will be synchronized from Google ({auth.currentUser?.email || currentUserEmail})
+                  </span>
                   <button
                     onClick={handleRequestSlotFromAdmin}
-                    className="px-4 py-2 rounded-xl bg-amber-500/20 text-amber-300 hover:bg-amber-500 hover:text-slate-950 font-bold text-xs transition-all flex items-center gap-2 cursor-pointer"
+                    className="px-4 py-2 rounded-xl bg-amber-500/20 text-amber-300 hover:bg-amber-500 hover:text-slate-950 font-bold text-xs transition-all flex items-center gap-2 cursor-pointer shadow-sm active:scale-95"
                   >
                     <Mail className="w-3.5 h-3.5" />
                     <span>Request User Slot from Protected Owner</span>

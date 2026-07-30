@@ -23,7 +23,7 @@
   }
 }
 
-/* High Density Custom Design Theme Overrides */
+/* High Density Custom Design Theme Overrides with Smooth Cross-Fade Transitions */
 html, body, #root {
   min-height: 100%;
   width: 100%;
@@ -37,7 +37,7 @@ body {
   background-color: #f8fafc;
   color: #1e293b;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition: background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 html.dark,
@@ -45,8 +45,16 @@ body.dark,
 .dark body,
 html.dark #root,
 body.dark #root {
-  background-color: #0f172a !important;
+  background-color: #0b0f19 !important;
   color: #f8fafc;
+}
+
+/* Smooth cross-fade transition for cards, sidebars, borders, and main containers */
+header, aside, main, footer, nav, .hd-card, .hd-border, .hd-bg-sidebar, .hd-bg-app {
+  transition: background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1), 
+              border-color 0.35s cubic-bezier(0.4, 0, 0.2, 1), 
+              color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Thin modern high-density scrollbars */

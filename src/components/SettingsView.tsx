@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Settings, 
   Palette, 
@@ -33,7 +33,9 @@ import {
   Layers,
   Trash2,
   Flame,
-  Camera
+  Camera,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { SystemSettings, CSVFile, AuditActivity, ChatMessage } from '../types';
 
@@ -579,13 +581,27 @@ export default function SettingsView({
                   <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>Light / Dark Toggle</h4>
                   <p className={`text-[10px] mt-0.5 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Instantly switch between white and charcoal dark backgrounds.</p>
                 </div>
-                <button
+                <motion.button
                   type="button"
                   onClick={toggleTheme}
-                  className={`px-4 py-2 text-xs font-bold rounded-xl border cursor-pointer hover:bg-slate-800/20 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'}`}
+                  whileTap={{ scale: 0.94 }}
+                  whileHover={{ scale: 1.02 }}
+                  className={`px-4 py-2 text-xs font-bold rounded-xl border cursor-pointer transition-colors duration-300 relative overflow-hidden flex items-center gap-2 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-amber-300 hover:bg-slate-900' : 'bg-slate-50 border-slate-300 text-indigo-700 hover:bg-slate-100'}`}
                 >
-                  {isDarkMode ? 'Dark Mode Active' : 'Light Mode Active'}
-                </button>
+                  <AnimatePresence mode="wait" initial={false}>
+                    <motion.div
+                      key={isDarkMode ? 'dark' : 'light'}
+                      initial={{ opacity: 0, rotate: -90, scale: 0.6 }}
+                      animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                      exit={{ opacity: 0, rotate: 90, scale: 0.6 }}
+                      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                      className="flex items-center gap-1.5"
+                    >
+                      {isDarkMode ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-indigo-600" />}
+                      <span>{isDarkMode ? 'Dark Mode Active' : 'Light Mode Active'}</span>
+                    </motion.div>
+                  </AnimatePresence>
+                </motion.button>
               </div>
             </div>
           </div>
