@@ -813,36 +813,38 @@ export default function SettingsView({
                 </p>
 
                 {/* API Key Input and Actions */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
                     <label className={`block text-[10px] font-bold uppercase tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>API Secret Key</label>
                     <span className="text-[9px] font-mono font-bold text-emerald-500 flex items-center gap-1">
                       <Database className="w-3 h-3" /> Database Persisted
                     </span>
                   </div>
-                  <div className="flex gap-2">
-                    <input 
-                      type={showKey ? "text" : "password"}
-                      value={tempApiKey}
-                      onChange={(e) => {
-                        setTempApiKey(e.target.value);
-                        setApiKeyTestResult(null);
-                      }}
-                      placeholder="AIzaSy..." 
-                      className={`flex-1 px-3.5 py-2.5 rounded-xl text-xs border focus:outline-none font-mono ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-950'}`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowKey(!showKey)}
-                      className={`px-3 py-2.5 text-xs font-semibold rounded-xl border hover:bg-slate-800/20 transition-all cursor-pointer ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
-                    >
-                      {showKey ? 'Hide' : 'Show'}
-                    </button>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="flex flex-1 min-w-0 gap-2">
+                      <input 
+                        type={showKey ? "text" : "password"}
+                        value={tempApiKey}
+                        onChange={(e) => {
+                          setTempApiKey(e.target.value);
+                          setApiKeyTestResult(null);
+                        }}
+                        placeholder="AIzaSy..." 
+                        className={`flex-1 min-w-0 px-3.5 py-2.5 rounded-xl text-xs border focus:outline-none font-mono ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-950'}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowKey(!showKey)}
+                        className={`px-3 py-2.5 text-xs font-semibold rounded-xl border hover:bg-slate-800/20 transition-all cursor-pointer shrink-0 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
+                      >
+                        {showKey ? 'Hide' : 'Show'}
+                      </button>
+                    </div>
                     <button
                       type="button"
                       onClick={handleTestApiKey}
                       disabled={apiKeyTesting}
-                      className={`px-3.5 py-2.5 text-xs font-bold rounded-xl border bg-violet-600 hover:bg-violet-500 text-white shadow transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${apiKeyTesting ? 'opacity-70 cursor-wait' : ''}`}
+                      className={`px-3.5 py-2.5 text-xs font-bold rounded-xl border bg-violet-600 hover:bg-violet-500 text-white shadow transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap ${apiKeyTesting ? 'opacity-70 cursor-wait' : ''}`}
                     >
                       {apiKeyTesting ? (
                         <>
