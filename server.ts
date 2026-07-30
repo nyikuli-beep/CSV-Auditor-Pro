@@ -339,6 +339,43 @@ app.delete('/api/sql/delete-file/:id', requireAuth, async (req: AuthRequest, res
   }
 });
 
+// 11. System & API Settings Persistence Endpoint
+let globalSettingsStore: Record<string, any> = {
+  theme: 'light',
+  accentColor: 'blue',
+  apiKey: '',
+  emailNotifications: {
+    auditCompleted: true,
+    teamInvites: true,
+    weeklyDigest: false
+  },
+  language: 'en',
+  timezone: 'UTC'
+};
+
+app.get('/api/sql/settings', async (req, res) => {
+  try {
+    res.json({ success: true, settings: globalSettingsStore });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/sql/settings', async (req, res) => {
+  try {
+    const updated = req.body;
+    if (updated && typeof updated === 'object') {
+      globalSettingsStore = {
+        ...globalSettingsStore,
+        ...updated
+      };
+    }
+    res.json({ success: true, settings: globalSettingsStore });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Initialize Gemini client lazily to avoid crash if variable is omitted during boot
 let aiClient: GoogleGenAI | null = null;
 

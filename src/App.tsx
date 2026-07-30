@@ -501,6 +501,9 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
             if (data.name) {
               userName = data.name;
             }
+            if (data.settings && typeof data.settings === 'object') {
+              setSettings(prev => ({ ...prev, ...data.settings }));
+            }
           } else {
             const newProfile = {
               id: fUser.uid,
@@ -1669,6 +1672,30 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     }
   };
 
+  // Sync user and API settings to Firestore and backend Postgres database
+  const handleUpdateSettings = async (newSettings: SystemSettings) => {
+    setSettings(newSettings);
+    try {
+      localStorage.setItem('app_system_settings', JSON.stringify(newSettings));
+    } catch (e) {}
+
+    const activeUid = firebaseUser?.uid || auth.currentUser?.uid;
+    if (activeUid) {
+      try {
+        const userRef = doc(db, 'users', activeUid);
+        await setDoc(userRef, { settings: newSettings }, { merge: true });
+      } catch (err) {
+        console.warn("Firestore settings sync fallback:", err);
+      }
+    }
+
+    try {
+      await syncToPostgres('settings', 'POST', newSettings);
+    } catch (err) {
+      console.warn("Postgres settings sync fallback:", err);
+    }
+  };
+
   const handleAddNewActivity = async (actionText: string) => {
     const newLog: AuditActivity = {
       id: `act-${Date.now()}`,
@@ -2360,7 +2387,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                     {activeTab === 'settings' && (
                       <SettingsView 
                         settings={settings}
-                        onUpdateSettings={setSettings}
+                        onUpdateSettings={handleUpdateSettings}
                         isDarkMode={isDarkMode}
                         toggleTheme={() => setIsDarkMode(!isDarkMode)}
                         accentClass={accentClass}

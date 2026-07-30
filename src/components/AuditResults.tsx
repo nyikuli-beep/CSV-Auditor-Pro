@@ -19,7 +19,10 @@ import {
   Sliders,
   Activity,
   HelpCircle,
-  BarChart3
+  BarChart3,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import { CSVFile, AuditIssue, Severity, IssueType } from '../types';
 import { exportCleanedAuditToExcel } from '../lib/excelExporter';
@@ -32,9 +35,14 @@ interface AuditResultsProps {
   onUpdateFile: (updatedFile: CSVFile) => void;
 }
 
+export type SortField = 'type' | 'row' | 'column' | 'severity' | 'status' | 'value' | 'description';
+
 export default function AuditResults({ activeFile, onNavigate, isDarkMode, accentClass, onUpdateFile }: AuditResultsProps) {
   const [severityFilter, setSeverityFilter] = useState<'all' | Severity>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | IssueType>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortColumn, setSortColumn] = useState<SortField>('row');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [expandedIssue, setExpandedIssue] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState<string | null>(null);
   const [aiExplanations, setAiExplanations] = useState<Record<string, string>>({});
@@ -43,6 +51,26 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
   // Issues Pagination State
   const [issuesPage, setIssuesPage] = useState(1);
   const [issuesPageSize, setIssuesPageSize] = useState(25);
+
+  const handleSort = (col: SortField) => {
+    if (sortColumn === col) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(col);
+      setSortDirection('asc');
+    }
+  };
+
+  const renderSortIcon = (col: SortField) => {
+    if (sortColumn !== col) {
+      return <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-50 shrink-0 ml-1" />;
+    }
+    return sortDirection === 'asc' ? (
+      <ArrowUp className="w-3 h-3 text-blue-400 font-bold shrink-0 ml-1" />
+    ) : (
+      <ArrowDown className="w-3 h-3 text-blue-400 font-bold shrink-0 ml-1" />
+    );
+  };
 
   // Smart Outlier Audit State (Number of Standard Deviations)
   const [outlierThreshold, setOutlierThreshold] = useState<number>(2.5);
@@ -83,7 +111,7 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
 
   useEffect(() => {
     setIssuesPage(1);
-  }, [severityFilter, typeFilter, outlierThreshold, anomalyMode]);
+  }, [severityFilter, typeFilter, outlierThreshold, anomalyMode, sortColumn, sortDirection, searchQuery]);
 
   useEffect(() => {
     setAiAnomalies([]);
@@ -215,11 +243,46 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
     );
   }
 
-  // Filter issues
+  // Filter issues with search and active severity/type filters
   const filteredIssues = mergedIssues.filter(issue => {
     if (severityFilter !== 'all' && issue.severity !== severityFilter) return false;
     if (typeFilter !== 'all' && issue.type !== typeFilter) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const matchCol = issue.column.toLowerCase().includes(q);
+      const matchType = issue.type.toLowerCase().includes(q);
+      const matchDesc = issue.description.toLowerCase().includes(q);
+      const matchVal = issue.value !== undefined && String(issue.value).toLowerCase().includes(q);
+      const matchRow = issue.row !== undefined && String(issue.row).includes(q);
+      const matchSev = issue.severity.toLowerCase().includes(q);
+      const matchStatus = issue.status.toLowerCase().includes(q);
+      if (!matchCol && !matchType && !matchDesc && !matchVal && !matchRow && !matchSev && !matchStatus) {
+        return false;
+      }
+    }
     return true;
+  });
+
+  // Sort issues by selected column and direction
+  const sortedIssues = [...filteredIssues].sort((a, b) => {
+    let valA: any = a[sortColumn];
+    let valB: any = b[sortColumn];
+
+    if (sortColumn === 'row') {
+      valA = a.row ?? Number.MAX_SAFE_INTEGER;
+      valB = b.row ?? Number.MAX_SAFE_INTEGER;
+    } else if (sortColumn === 'severity') {
+      const severityOrder = { critical: 3, warning: 2, info: 1 };
+      valA = severityOrder[a.severity] || 0;
+      valB = severityOrder[b.severity] || 0;
+    } else if (sortColumn === 'type' || sortColumn === 'column' || sortColumn === 'status' || sortColumn === 'value' || sortColumn === 'description') {
+      valA = String(valA || '').toLowerCase();
+      valB = String(valB || '').toLowerCase();
+    }
+
+    if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+    if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+    return 0;
   });
 
   const criticalCount = mergedIssues.filter(i => i.severity === 'critical' && i.status === 'open').length;
@@ -772,11 +835,23 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
           <h3 className="font-bold text-base flex items-center gap-2"><Filter className="w-4 h-4 text-blue-500" /> Compliance Findings ({filteredIssues.length})</h3>
           
           <div className="flex flex-wrap gap-2 text-xs items-center">
+            {/* Search Input */}
+            <div className="relative flex-1 sm:flex-none min-w-[160px]">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search issues, columns, rows..."
+                className={`w-full pl-8 pr-3 py-1.5 rounded-lg border text-xs focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200 placeholder-slate-500' : 'bg-white border-slate-200 text-slate-700 placeholder-slate-400'}`}
+              />
+            </div>
+
             {/* Severity Filter */}
             <select 
               value={severityFilter} 
               onChange={(e) => setSeverityFilter(e.target.value as any)}
-              className={`px-3 py-1.5 rounded-lg border focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
+              className={`px-3 py-1.5 rounded-lg border focus:outline-none cursor-pointer ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
             >
               <option value="all">All Severities</option>
               <option value="critical">Critical</option>
@@ -788,7 +863,7 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
             <select 
               value={typeFilter} 
               onChange={(e) => setTypeFilter(e.target.value as any)}
-              className={`px-3 py-1.5 rounded-lg border focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
+              className={`px-3 py-1.5 rounded-lg border focus:outline-none cursor-pointer ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
             >
               <option value="all">All Issue Types</option>
               <option value="duplicate">Duplicates</option>
@@ -796,6 +871,37 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
               <option value="invalid_format">Formats</option>
               <option value="outlier">Outliers</option>
             </select>
+
+            {/* Column Sort Field Selector */}
+            <select 
+              value={sortColumn} 
+              onChange={(e) => setSortColumn(e.target.value as SortField)}
+              className={`px-3 py-1.5 rounded-lg border focus:outline-none font-bold cursor-pointer ${isDarkMode ? 'bg-slate-950 border-slate-800 text-blue-400' : 'bg-white border-slate-200 text-blue-600'}`}
+              title="Sort table by selected column"
+            >
+              <option value="row">Sort by Row #</option>
+              <option value="column">Sort by Column Name</option>
+              <option value="type">Sort by Issue Type</option>
+              <option value="value">Sort by Value</option>
+              <option value="description">Sort by Description</option>
+              <option value="severity">Sort by Severity</option>
+              <option value="status">Sort by Status</option>
+            </select>
+
+            {/* Sort Order Direction Toggle */}
+            <button
+              type="button"
+              onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
+              className={`px-2.5 py-1.5 rounded-lg border font-bold flex items-center gap-1 cursor-pointer transition-all ${
+                isDarkMode 
+                  ? 'bg-slate-950 border-slate-800 text-slate-200 hover:bg-slate-900 hover:border-slate-700' 
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+              }`}
+              title={`Toggle sort direction (Currently ${sortDirection.toUpperCase()})`}
+            >
+              {sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-400" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-400" />}
+              <span className="uppercase text-[10px] font-mono">{sortDirection}</span>
+            </button>
 
             {/* Download CSV (Rows with Issues) Button */}
             <button
@@ -1195,9 +1301,86 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
           </div>
         )}
 
+        {/* Interactive Column Header Bar for Table Sorting */}
+        {filteredIssues.length > 0 && (
+          <div className={`hidden md:grid grid-cols-12 gap-2 px-4 py-2.5 rounded-xl border text-[11px] font-bold uppercase tracking-wider mb-3 select-none ${
+            isDarkMode ? 'bg-slate-950/80 border-slate-800/80 text-slate-300' : 'bg-slate-100/80 border-slate-200 text-slate-700'
+          }`}>
+            <button
+              type="button"
+              onClick={() => handleSort('type')}
+              className={`col-span-2 flex items-center gap-1 hover:text-blue-400 transition-colors cursor-pointer text-left ${sortColumn === 'type' ? 'text-blue-400 font-extrabold' : ''}`}
+              title="Click to sort by Issue Type"
+            >
+              <span>Type</span>
+              {renderSortIcon('type')}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSort('column')}
+              className={`col-span-2 flex items-center gap-1 hover:text-blue-400 transition-colors cursor-pointer text-left ${sortColumn === 'column' ? 'text-blue-400 font-extrabold' : ''}`}
+              title="Click to sort by Column Name"
+            >
+              <span>Column</span>
+              {renderSortIcon('column')}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSort('row')}
+              className={`col-span-1 flex items-center gap-1 hover:text-blue-400 transition-colors cursor-pointer text-left ${sortColumn === 'row' ? 'text-blue-400 font-extrabold' : ''}`}
+              title="Click to sort by Row Number"
+            >
+              <span>Row #</span>
+              {renderSortIcon('row')}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSort('value')}
+              className={`col-span-2 flex items-center gap-1 hover:text-blue-400 transition-colors cursor-pointer text-left ${sortColumn === 'value' ? 'text-blue-400 font-extrabold' : ''}`}
+              title="Click to sort by Value"
+            >
+              <span>Value</span>
+              {renderSortIcon('value')}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSort('description')}
+              className={`col-span-3 flex items-center gap-1 hover:text-blue-400 transition-colors cursor-pointer text-left ${sortColumn === 'description' ? 'text-blue-400 font-extrabold' : ''}`}
+              title="Click to sort by Description"
+            >
+              <span>Description</span>
+              {renderSortIcon('description')}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSort('severity')}
+              className={`col-span-1 flex items-center justify-center gap-1 hover:text-blue-400 transition-colors cursor-pointer text-center ${sortColumn === 'severity' ? 'text-blue-400 font-extrabold' : ''}`}
+              title="Click to sort by Severity"
+            >
+              <span>Severity</span>
+              {renderSortIcon('severity')}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSort('status')}
+              className={`col-span-1 flex items-center justify-end gap-1 hover:text-blue-400 transition-colors cursor-pointer text-right ${sortColumn === 'status' ? 'text-blue-400 font-extrabold' : ''}`}
+              title="Click to sort by Status"
+            >
+              <span>Status</span>
+              {renderSortIcon('status')}
+            </button>
+          </div>
+        )}
+
         {/* Issues Stack */}
         <div className="space-y-4">
-          {filteredIssues.slice((issuesPage - 1) * issuesPageSize, issuesPage * issuesPageSize).map((issue) => {
+          {sortedIssues.slice((issuesPage - 1) * issuesPageSize, issuesPage * issuesPageSize).map((issue) => {
             const isExpanded = expandedIssue === issue.id;
             return (
               <div 
