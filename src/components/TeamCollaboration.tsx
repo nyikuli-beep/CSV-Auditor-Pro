@@ -561,53 +561,30 @@ export default function TeamCollaboration({
             </div>
           </div>
 
-          {onSwitchActiveUser && (
+          {onSwitchActiveUser && isAuthorizedUser && (
             <div className={`pl-3 border-l flex items-center gap-1.5 min-w-0 max-w-full shrink ${
               isDarkMode ? 'border-slate-800' : 'border-slate-200'
             }`}>
               <label className="text-[10px] font-bold text-slate-400 uppercase shrink-0 flex items-center gap-1">
-                {!isAuthorizedUser && <Lock className="w-3 h-3 text-amber-500 shrink-0" />}
                 Test As:
               </label>
               <select
                 value={currentUserEmail}
                 onChange={(e) => {
                   const targetMember = members.find(m => m.email === e.target.value);
-                  if (targetMember) {
-                    const isTargetProtected = AUTHORIZED_EMAILS.some(
-                      email => email.toLowerCase() === targetMember.email.toLowerCase().trim()
-                    );
-                    if (isTargetProtected && !isAuthorizedUser) {
-                      setErrorMsg(`Security Blocked: Your session email (${currentUserEmail}) is not authorized to access or switch to protected owner account (${targetMember.email}).`);
-                      return;
-                    }
-                    if (onSwitchActiveUser) {
-                      onSwitchActiveUser(targetMember);
-                    }
+                  if (targetMember && onSwitchActiveUser) {
+                    onSwitchActiveUser(targetMember);
                   }
                 }}
                 className={`text-xs font-semibold px-2 py-1 rounded-lg border focus:outline-none cursor-pointer truncate max-w-[170px] sm:max-w-[220px] md:max-w-[260px] ${
                   isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-slate-100 border-slate-300 text-slate-900'
                 }`}
               >
-                {members.map(m => {
-                  const isProtected = AUTHORIZED_EMAILS.some(
-                    email => email.toLowerCase() === m.email.toLowerCase().trim()
-                  );
-                  const isDisabled = isProtected && !isAuthorizedUser;
-                  return (
-                    <option 
-                      key={m.id} 
-                      value={m.email}
-                      disabled={isDisabled}
-                      className={isDisabled ? 'opacity-40 text-slate-400 bg-slate-900 font-mono' : ''}
-                    >
-                      {isDisabled 
-                        ? `[Locked] ${m.name} (${m.email}) - Access Restricted` 
-                        : `${m.name} (${m.email})`}
-                    </option>
-                  );
-                })}
+                {members.map(m => (
+                  <option key={m.id} value={m.email}>
+                    {m.name} ({m.email})
+                  </option>
+                ))}
               </select>
             </div>
           )}

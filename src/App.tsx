@@ -1593,15 +1593,15 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     );
 
     // Get active authenticated session email (firebase authenticated user or active session)
-    const activeAuthEmail = firebaseUser?.email || '';
+    const activeAuthEmail = firebaseUser?.email || user?.email || '';
     const isSessionAuthorized = PROTECTED_ADMIN_EMAILS.some(
       e => e.toLowerCase() === activeAuthEmail.toLowerCase().trim()
     );
 
-    if (isTargetProtected && !isSessionAuthorized) {
+    if (!isSessionAuthorized) {
       setSecurityAlert({
-        title: 'Access Restricted: Protected Owner Account',
-        message: `Security Protocol Active: Account '${member.email}' is a protected owner email address. Your current session (${activeAuthEmail || 'Unverified User'}) is not authorized to access or impersonate this persona. Access is strictly limited to authentic logins for this email.`
+        title: 'Access Restricted: Persona Switcher',
+        message: `Security Protocol Active: Persona switching is strictly restricted to workspace owners. Non-owner accounts cannot test or switch active email sessions.`
       });
       return;
     }
