@@ -1226,7 +1226,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
             initial={{ opacity: 0 }}
             animate={{ opacity: [0.25, 0.6, 0.25] }}
             transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
-            className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/20 via-indigo-500/25 to-cyan-500/20 pointer-events-none blur-xs"
+            className="absolute inset-0 rounded-xl bg-blue-500/10 pointer-events-none"
           />
         )}
 
@@ -1255,7 +1255,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
 
         <div className={`w-full h-1.5 rounded-full overflow-hidden relative z-10 ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`}>
           <div 
-            className={`h-full rounded-full transition-all duration-500 ${isAuditingOrProcessing ? 'bg-gradient-to-r from-blue-500 to-indigo-500 animate-pulse' : file.score > 80 ? 'bg-emerald-500' : 'bg-amber-500'}`} 
+            className={`h-full rounded-full transition-all duration-500 ${isAuditingOrProcessing ? 'bg-blue-600 animate-pulse' : file.score > 80 ? 'bg-emerald-500' : 'bg-amber-500'}`} 
             style={{ width: `${file.score}%` }}
           />
         </div>
@@ -1296,7 +1296,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                 className={`px-2.5 py-1 rounded-lg font-bold text-[10px] flex items-center gap-1 transition-all shadow-md shrink-0 cursor-pointer ${
                   isFixingActiveFile
                     ? 'bg-blue-600 text-white opacity-80 cursor-wait'
-                    : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white border border-blue-400/30 group-hover:shadow-blue-500/20 group-hover:ring-2 group-hover:ring-blue-500/20'
+                    : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white border border-blue-500/30'
                 }`}
                 title="Batch repair all auto-fixable issues"
               >

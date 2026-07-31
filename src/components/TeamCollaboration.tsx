@@ -726,7 +726,7 @@ export default function TeamCollaboration({
 
             {/* OWNER NOTIFICATION CENTER: PENDING TEAM TENANCY SLOT REQUESTS */}
             {isAuthorizedUser && pendingRequests.length > 0 && (
-              <div className="p-4 mb-6 rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent text-left space-y-3 shadow-md animate-fadeIn">
+              <div className="p-4 mb-6 rounded-xl border border-amber-500/40 bg-amber-500/10 text-left space-y-3 shadow-md animate-fadeIn">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5">
                     <div className="p-2 bg-amber-500 text-slate-950 rounded-xl font-black text-xs flex items-center justify-center animate-pulse">
