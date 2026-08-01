@@ -1,6 +1,6 @@
 export type Severity = 'critical' | 'warning' | 'info';
 
-export type IssueType = 'duplicate' | 'missing_value' | 'invalid_format' | 'outlier' | 'column_inconsistency';
+export type IssueType = 'duplicate' | 'missing_value' | 'invalid_format' | 'outlier' | 'column_inconsistency' | 'formula_injection' | 'malicious_content' | 'security_violation';
 
 export interface AuditIssue {
   id: string;
@@ -43,6 +43,13 @@ export interface CSVFile {
   headerMappings?: Record<string, string>;
   mappingExplanations?: Record<string, string>;
   isQuickCleaned?: boolean;
+  securityScanSummary?: {
+    formulasSanitized: number;
+    maliciousThreatsDetected: number;
+    securityWarnings: number;
+    scanPassed: boolean;
+    sanitizedAt?: string;
+  };
 }
 
 export interface TeamMember {

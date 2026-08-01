@@ -24,6 +24,15 @@ import {
 } from 'lucide-react';
 import { CSVFile, AuditIssue, Severity, IssueType, CustomValidationRule } from '../types';
 import { detectCSVFormats } from '../lib/formatDetector';
+import {
+  checkUserUploadPermission,
+  checkUploadRateLimit,
+  recordUploadTimestamp,
+  validateFilePreFlight,
+  parseCSVContentRFC4180,
+  runSecurityAndStructureScan,
+  logSecurityAuditTelemetry
+} from '../lib/csvSecurityValidator';
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import CustomValidationPanel from './CustomValidationPanel';
@@ -41,6 +50,7 @@ interface UploadCenterProps {
 export default function UploadCenter({ onFileUpload, files = [], isDarkMode, accentClass }: UploadCenterProps) {
   const [dragActive, setDragActive] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [processingStageMessage, setProcessingStageMessage] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState('');
   const [fileDetails, setFileDetails] = useState<{ name: string; size: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -164,6 +174,28 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     setErrorMsg('');
     setFileDetails({ name: file.name, size: file.size });
     
+    // 1. Check Auth & Email Verification
+    const authCheck = checkUserUploadPermission(auth?.currentUser);
+    if (!authCheck.allowed) {
+      setErrorMsg(authCheck.message || 'Please verify your email before uploading files.');
+      return;
+    }
+
+    // 2. Check Rate Limit
+    const userId = auth?.currentUser?.uid || 'anonymous';
+    const rateCheck = checkUploadRateLimit(userId);
+    if (!rateCheck.allowed) {
+      setErrorMsg(rateCheck.message || 'Upload limit reached. Please wait before uploading another file.');
+      return;
+    }
+
+    // 3. Pre-flight File Validation (Max size 25MB, extension, MIME type, empty file)
+    const preFlight = validateFilePreFlight(file);
+    if (!preFlight.valid) {
+      setErrorMsg(preFlight.errorMessage || 'The uploaded file exceeds the maximum allowed size of 25 MB.');
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
@@ -188,6 +220,31 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
 
   const initiateMultipleFilesConfiguration = (filesList: File[]) => {
     setErrorMsg('');
+    
+    // 1. Check Auth & Email Verification
+    const authCheck = checkUserUploadPermission(auth?.currentUser);
+    if (!authCheck.allowed) {
+      setErrorMsg(authCheck.message || 'Please verify your email before uploading files.');
+      return;
+    }
+
+    // 2. Check Rate Limit
+    const userId = auth?.currentUser?.uid || 'anonymous';
+    const rateCheck = checkUploadRateLimit(userId);
+    if (!rateCheck.allowed) {
+      setErrorMsg(rateCheck.message || 'Upload limit reached. Please wait before uploading another file.');
+      return;
+    }
+
+    // 3. Pre-flight check on all queued files
+    for (const f of filesList) {
+      const preFlight = validateFilePreFlight(f);
+      if (!preFlight.valid) {
+        setErrorMsg(`Skipped "${f.name}": ${preFlight.errorMessage}`);
+        return;
+      }
+    }
+
     const firstFile = filesList[0];
     setFileDetails({ name: `${filesList.length} files queued`, size: filesList.reduce((acc, f) => acc + f.size, 0) });
     
@@ -1319,137 +1376,198 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     setErrorMsg('');
     setFileDetails(null);
     setUploadProgress(null);
+    setProcessingStageMessage('');
 
-    // Validate type
-    if (!file.name.endsWith('.csv') && file.type !== 'text/csv') {
-      setErrorMsg('Invalid file format. CSV Auditor Pro exclusively supports standard .csv spreadsheet formats.');
+    // 1. Auth & Email Verification Check
+    const authCheck = checkUserUploadPermission(auth?.currentUser);
+    if (!authCheck.allowed) {
+      setErrorMsg(authCheck.message || 'Please verify your email before uploading files.');
       return;
     }
 
-    // Validate size (100MB limit for high-throughput stream optimization)
-    if (file.size > 100 * 1024 * 1024) {
-      setErrorMsg('File exceeds 100MB limits. Upgrade to Enterprise for multi-gigabyte server-side streams.');
+    // 2. Upload Rate Limit Check (5/min, 50/hour)
+    const userId = auth?.currentUser?.uid || 'anonymous';
+    const rateCheck = checkUploadRateLimit(userId);
+    if (!rateCheck.allowed) {
+      setErrorMsg(rateCheck.message || 'Upload limit reached. Please wait before uploading another file.');
+      return;
+    }
+
+    // 3. Pre-flight File Validation (Format, Extension, MIME, Size <= 25MB, Empty)
+    const preFlight = validateFilePreFlight(file);
+    if (!preFlight.valid) {
+      setErrorMsg(preFlight.errorMessage || 'The uploaded file exceeds the maximum allowed size of 25 MB.');
       return;
     }
 
     setFileDetails({ name: file.name, size: file.size });
+    const startTime = Date.now();
 
-    // Simulate progress upload
-    let progress = 0;
-    if (uploadIntervalRef.current) {
-      clearInterval(uploadIntervalRef.current);
-    }
-    uploadIntervalRef.current = setInterval(() => {
-      progress += 20;
-      setUploadProgress(progress);
-      if (progress >= 100) {
-        if (uploadIntervalRef.current) {
-          clearInterval(uploadIntervalRef.current);
-          uploadIntervalRef.current = null;
-        }
-        
-        // Parse actual CSV file client-side!
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          try {
-            const text = e.target?.result as string;
-            if (!text) throw new Error('Empty spreadsheet content');
-            
-            const isLargeFile = file.size > 5 * 1024 * 1024; // Treat files > 5MB as large
-            
-            // Count total lines/rows performantly without array allocations
-            let totalLinesCount = 0;
-            let pos = 0;
-            while ((pos = text.indexOf('\n', pos)) !== -1) {
-              totalLinesCount++;
-              pos++;
+    // Stage 1: Uploading...
+    setProcessingStageMessage('Uploading...');
+    setUploadProgress(15);
+
+    setTimeout(() => {
+      // Stage 2: Validating file...
+      setProcessingStageMessage('Validating file...');
+      setUploadProgress(35);
+
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const text = e.target?.result as string;
+          if (!text) throw new Error('Empty spreadsheet content');
+
+          // Stage 3: Scanning for threats...
+          setProcessingStageMessage('Scanning for threats...');
+          setUploadProgress(55);
+
+          const activeDelimiter = delimiterOverride || selectedDelimiter || ',';
+          
+          // Use safe RFC 4180 parser (handles quotes, line breaks, custom delimiters)
+          const { headers, rows } = parseCSVContentRFC4180(text, activeDelimiter);
+
+          if (headers.length === 0) {
+            throw new Error('Spreadsheet has no columns or header row');
+          }
+
+          // Run security & structural limit scan (formula injection, malicious scripts, limits)
+          const scanResult = runSecurityAndStructureScan(headers, rows);
+
+          if (!scanResult.isPassed) {
+            const durationMs = Date.now() - startTime;
+            logSecurityAuditTelemetry({
+              userId,
+              userEmail: auth?.currentUser?.email || undefined,
+              fileName: file.name,
+              fileSizeBytes: file.size,
+              processingDurationMs: durationMs,
+              totalRows: rows.length,
+              totalCols: headers.length,
+              validationPassed: false,
+              formulasSanitized: scanResult.formulasSanitizedCount,
+              maliciousThreatsDetected: scanResult.maliciousThreatsCount,
+              rejectionReason: scanResult.errorMessage
+            });
+
+            setErrorMsg(scanResult.errorMessage || 'File rejected due to security policy violations.');
+            setUploadProgress(null);
+            setProcessingStageMessage('');
+            return;
+          }
+
+          // Stage 4: Cleaning data...
+          setProcessingStageMessage('Cleaning data...');
+          setUploadProgress(75);
+
+          // Auto-detect format metadata
+          const detectedMetadata = detectCSVFormats(headers, scanResult.sanitizedRows);
+
+          // Generate quality issues
+          const dataQualityIssues = generateFileIssues(headers, scanResult.sanitizedRows, detectedMetadata, customRules);
+          
+          // Combine security issues and data quality issues
+          const allIssues = [...scanResult.issues, ...dataQualityIssues];
+          const score = calculateScore(allIssues.length, scanResult.sanitizedRows.length * headers.length);
+
+          // Stage 5: Preparing download...
+          setProcessingStageMessage('Preparing download...');
+          setUploadProgress(90);
+
+          // Record upload timestamp in rate limiter upon success
+          recordUploadTimestamp(userId);
+
+          const durationMs = Date.now() - startTime;
+          logSecurityAuditTelemetry({
+            userId,
+            userEmail: auth?.currentUser?.email || undefined,
+            fileName: file.name,
+            fileSizeBytes: file.size,
+            processingDurationMs: durationMs,
+            totalRows: scanResult.sanitizedRows.length,
+            totalCols: headers.length,
+            validationPassed: true,
+            formulasSanitized: scanResult.formulasSanitizedCount,
+            maliciousThreatsDetected: scanResult.maliciousThreatsCount
+          });
+
+          const isLargeFile = file.size > 5 * 1024 * 1024;
+
+          const parsedFile: CSVFile = {
+            id: `uploaded-file-${Date.now()}`,
+            name: file.name,
+            size: file.size,
+            uploadedAt: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            status: 'completed',
+            score: score,
+            headers: headers,
+            rows: scanResult.sanitizedRows,
+            issues: allIssues,
+            totalRowsCount: scanResult.sanitizedRows.length,
+            isLargeFile: isLargeFile,
+            detectedMetadata: detectedMetadata,
+            securityScanSummary: {
+              formulasSanitized: scanResult.formulasSanitizedCount,
+              maliciousThreatsDetected: scanResult.maliciousThreatsCount,
+              securityWarnings: scanResult.issues.length,
+              scanPassed: true,
+              sanitizedAt: new Date().toISOString()
             }
-            if (text.length > 0 && text[text.length - 1] !== '\n') {
-              totalLinesCount++;
-            }
+          };
 
-            // Extract a preview section of lines if it is a large file, otherwise parse all
-            const maxLinesToParse = isLargeFile ? 10000 : totalLinesCount;
-            let endPos = 0;
-            let linesCollected = 0;
-            while (linesCollected < maxLinesToParse && endPos !== -1) {
-              endPos = text.indexOf('\n', endPos);
-              if (endPos !== -1) {
-                endPos++;
-                linesCollected++;
-              }
-            }
-            const previewText = (isLargeFile && endPos !== -1) ? text.substring(0, endPos) : text;
-            
-            // Parse CSV lines
-            const lines = previewText.split(/\r?\n/).filter(line => line.trim() !== '');
-            if (lines.length === 0) throw new Error('Spreadsheet has no lines');
+          // Stage 6: Completed successfully.
+          setProcessingStageMessage('Completed successfully.');
+          setUploadProgress(100);
 
-            const activeDelimiter = delimiterOverride || selectedDelimiter || ',';
-            const headers = lines[0].split(activeDelimiter).map(h => h.replace(/^["']|["']$/g, '').trim());
-            const rows: Record<string, string>[] = [];
-
-            for (let i = 1; i < lines.length; i++) {
-              const columns = lines[i].split(activeDelimiter).map(c => c.replace(/^["']|["']$/g, '').trim());
-              const rowObj: Record<string, string> = {};
-              headers.forEach((h, index) => {
-                rowObj[h] = columns[index] || '';
-              });
-              rows.push(rowObj);
-            }
-
-            // Auto-detect formats during ingestion
-            const detectedMetadata = detectCSVFormats(headers, rows);
-
-            // Generate real dynamic issues for the active rows, including user-defined custom rules
-            const generatedIssues = generateFileIssues(headers, rows, detectedMetadata, customRules);
-            const score = calculateScore(generatedIssues.length, rows.length * headers.length);
-
-            const parsedFile: CSVFile = {
-              id: `uploaded-file-${Date.now()}`,
-              name: file.name,
-              size: file.size,
-              uploadedAt: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-              status: 'completed',
-              score: score,
-              headers: headers,
-              rows: rows,
-              issues: generatedIssues,
-              totalRowsCount: totalLinesCount - 1, // Subtract header line
-              isLargeFile: isLargeFile,
-              detectedMetadata: detectedMetadata
-            };
-
-            // Intercept file ingestion for AI canonical mapping step
+          setTimeout(() => {
             setPendingFiles([parsedFile]);
             setActivePendingIndex(0);
             setPendingFile(parsedFile);
             fetchHeaderAnalysis(parsedFile.headers, parsedFile.rows);
-          } catch (err) {
-            setErrorMsg('Parsing error: Make sure file has standard comma-separated syntax and valid columns.');
-          }
-        };
-        reader.readAsText(file);
-      }
-    }, 100);
+            setProcessingStageMessage('');
+          }, 300);
+
+        } catch (err: any) {
+          setErrorMsg(err.message || 'Parsing error: Make sure file has valid CSV syntax and column layout.');
+          setUploadProgress(null);
+          setProcessingStageMessage('');
+        }
+      };
+      reader.readAsText(file);
+    }, 200);
   };
 
   const processMultipleFiles = async (filesList: File[], delimiterOverride?: string) => {
     setErrorMsg('');
     setFileDetails(null);
     setUploadProgress(null);
+    setProcessingStageMessage('');
 
-    const validFiles = filesList.filter(file => {
-      if (!file.name.endsWith('.csv') && file.type !== 'text/csv') {
-        setErrorMsg(`Skipped some files: only standard .csv spreadsheet formats are supported.`);
-        return false;
+    // Check Auth
+    const authCheck = checkUserUploadPermission(auth?.currentUser);
+    if (!authCheck.allowed) {
+      setErrorMsg(authCheck.message || 'Please verify your email before uploading files.');
+      return;
+    }
+
+    // Check Rate Limit
+    const userId = auth?.currentUser?.uid || 'anonymous';
+    const rateCheck = checkUploadRateLimit(userId);
+    if (!rateCheck.allowed) {
+      setErrorMsg(rateCheck.message || 'Upload limit reached. Please wait before uploading another file.');
+      return;
+    }
+
+    // Pre-flight check on each file
+    const validFiles: File[] = [];
+    for (const file of filesList) {
+      const preFlight = validateFilePreFlight(file);
+      if (!preFlight.valid) {
+        setErrorMsg(`Skipped "${file.name}": ${preFlight.errorMessage}`);
+      } else {
+        validFiles.push(file);
       }
-      if (file.size > 100 * 1024 * 1024) {
-        setErrorMsg(`Skipped some files: "${file.name}" exceeds 100MB size limit.`);
-        return false;
-      }
-      return true;
-    });
+    }
 
     if (validFiles.length === 0) return;
 
@@ -1459,7 +1577,8 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     for (let idx = 0; idx < validFiles.length; idx++) {
       const file = validFiles[idx];
       setFileDetails({ name: file.name, size: file.size });
-      setUploadProgress(Math.round((idx / validFiles.length) * 100));
+      setUploadProgress(Math.round(((idx + 1) / validFiles.length) * 100));
+      setProcessingStageMessage(`Processing file ${idx + 1} of ${validFiles.length}: "${file.name}"`);
 
       try {
         const fileParsed: CSVFile = await new Promise((resolve, reject) => {
@@ -1468,81 +1587,63 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
             try {
               const text = e.target?.result as string;
               if (!text) throw new Error('Empty spreadsheet content');
-              
-              const isLargeFile = file.size > 5 * 1024 * 1024;
-              
-              let totalLinesCount = 0;
-              let pos = 0;
-              while ((pos = text.indexOf('\n', pos)) !== -1) {
-                totalLinesCount++;
-                pos++;
-              }
-              if (text.length > 0 && text[text.length - 1] !== '\n') {
-                totalLinesCount++;
-              }
-
-              const maxLinesToParse = isLargeFile ? 10000 : totalLinesCount;
-              let endPos = 0;
-              let linesCollected = 0;
-              while (linesCollected < maxLinesToParse && endPos !== -1) {
-                endPos = text.indexOf('\n', endPos);
-                if (endPos !== -1) {
-                  endPos++;
-                  linesCollected++;
-                }
-              }
-              const previewText = (isLargeFile && endPos !== -1) ? text.substring(0, endPos) : text;
-              
-              const lines = previewText.split(/\r?\n/).filter(line => line.trim() !== '');
-              if (lines.length === 0) throw new Error('Spreadsheet has no lines');
 
               const activeDelimiter = delimiterOverride || selectedDelimiter || ',';
-              const headers = lines[0].split(activeDelimiter).map(h => h.replace(/^["']|["']$/g, '').trim());
-              const rows: Record<string, string>[] = [];
+              const { headers, rows } = parseCSVContentRFC4180(text, activeDelimiter);
 
-              for (let i = 1; i < lines.length; i++) {
-                const columns = lines[i].split(activeDelimiter).map(c => c.replace(/^["']|["']$/g, '').trim());
-                const rowObj: Record<string, string> = {};
-                headers.forEach((h, index) => {
-                  rowObj[h] = columns[index] || '';
-                });
-                rows.push(rowObj);
+              if (headers.length === 0) throw new Error('No headers found');
+
+              const scanResult = runSecurityAndStructureScan(headers, rows);
+              if (!scanResult.isPassed) {
+                reject(new Error(scanResult.errorMessage || `Security scan failed for ${file.name}`));
+                return;
               }
 
-              const detectedMetadata = detectCSVFormats(headers, rows);
-              const generatedIssues = generateFileIssues(headers, rows, detectedMetadata, customRules);
-              const score = calculateScore(generatedIssues.length, rows.length * headers.length);
+              const detectedMetadata = detectCSVFormats(headers, scanResult.sanitizedRows);
+              const dataQualityIssues = generateFileIssues(headers, scanResult.sanitizedRows, detectedMetadata, customRules);
+              const allIssues = [...scanResult.issues, ...dataQualityIssues];
+              const score = calculateScore(allIssues.length, scanResult.sanitizedRows.length * headers.length);
+              const isLargeFile = file.size > 5 * 1024 * 1024;
 
               const parsedFile: CSVFile = {
                 id: `uploaded-file-${Date.now()}-${idx}-${Math.floor(Math.random() * 1000)}`,
                 name: file.name,
                 size: file.size,
-                uploadedAt: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                uploadedAt: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 status: 'completed',
                 score: score,
                 headers: headers,
-                rows: rows,
-                issues: generatedIssues,
-                totalRowsCount: totalLinesCount - 1,
+                rows: scanResult.sanitizedRows,
+                issues: allIssues,
+                totalRowsCount: scanResult.sanitizedRows.length,
                 isLargeFile: isLargeFile,
-                detectedMetadata: detectedMetadata
+                detectedMetadata: detectedMetadata,
+                securityScanSummary: {
+                  formulasSanitized: scanResult.formulasSanitizedCount,
+                  maliciousThreatsDetected: scanResult.maliciousThreatsCount,
+                  securityWarnings: scanResult.issues.length,
+                  scanPassed: true,
+                  sanitizedAt: new Date().toISOString()
+                }
               };
 
+              recordUploadTimestamp(userId);
               resolve(parsedFile);
-            } catch (err) {
-              reject(new Error(`Failed to parse ${file.name}`));
+            } catch (err: any) {
+              reject(err);
             }
           };
           reader.readAsText(file);
         });
 
         parsedFiles.push(fileParsed);
-      } catch (err) {
-        console.warn(err);
+      } catch (err: any) {
+        console.warn('Batch file processing issue:', err);
       }
     }
 
     setUploadProgress(100);
+    setProcessingStageMessage('Batch upload complete.');
     setIsAnalyzing(false);
 
     if (parsedFiles.length > 0) {
@@ -1550,6 +1651,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
       setActivePendingIndex(0);
       setPendingFile(parsedFiles[0]);
       fetchHeaderAnalysis(parsedFiles[0].headers, parsedFiles[0].rows);
+      setProcessingStageMessage('');
     }
   };
 
@@ -2403,7 +2505,7 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
               <div>
                 <h3 className="font-bold text-sm mb-1">Drag and drop your spreadsheet</h3>
                 <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                  Supports standard comma-delimited <span className="font-bold text-blue-500">.CSV</span> files up to 100MB.
+                  Supports standard comma-delimited <span className="font-bold text-blue-500">.CSV</span> files up to 25MB.
                 </p>
               </div>
 
@@ -2475,9 +2577,9 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
                     : `${(fileDetails.size / 1024).toFixed(1)} KB`}
                 </span>
                 {uploadProgress < 100 ? (
-                  <span className="flex items-center gap-1"><Clock className="w-3 h-3 animate-spin" /> Executing audit logic...</span>
+                  <span className="flex items-center gap-1 text-blue-400 font-semibold"><Clock className="w-3 h-3 animate-spin" /> {processingStageMessage || 'Executing audit logic...'}</span>
                 ) : (
-                  <span className="text-emerald-500 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Audit Compiled!</span>
+                  <span className="text-emerald-500 flex items-center gap-1 font-semibold"><CheckCircle2 className="w-3 h-3" /> {processingStageMessage || 'Audit Compiled!'}</span>
                 )}
               </div>
               

@@ -18,7 +18,66 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
+// Security Headers Middleware
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:; img-src 'self' https: data: blob:; frame-ancestors 'self' https:;"
+  );
+  next();
+});
+
 app.use(express.json({ limit: '50mb' }));
+
+// In-memory security audit logs
+const securityAuditLogs: any[] = [];
+
+// Security Telemetry Audit Logging Endpoint (Never logs CSV content, only metadata)
+app.post('/api/audit-logs/security', (req, res) => {
+  const {
+    userId,
+    userEmail,
+    fileName,
+    fileSizeBytes,
+    processingDurationMs,
+    totalRows,
+    totalCols,
+    validationPassed,
+    formulasSanitized,
+    maliciousThreatsDetected,
+    rejectionReason,
+    timestamp
+  } = req.body;
+
+  const logEntry = {
+    id: `sec-log-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    userId: userId || 'anonymous',
+    userEmail: userEmail || 'unverified',
+    fileName: fileName || 'unknown.csv',
+    fileSizeBytes: fileSizeBytes || 0,
+    processingDurationMs: processingDurationMs || 0,
+    totalRows: totalRows || 0,
+    totalCols: totalCols || 0,
+    validationPassed: Boolean(validationPassed),
+    formulasSanitized: formulasSanitized || 0,
+    maliciousThreatsDetected: maliciousThreatsDetected || 0,
+    rejectionReason: rejectionReason || null,
+    timestamp: timestamp || new Date().toISOString()
+  };
+
+  securityAuditLogs.push(logEntry);
+  if (securityAuditLogs.length > 500) {
+    securityAuditLogs.shift();
+  }
+
+  console.log(`[SECURITY AUDIT LOG] File: "${logEntry.fileName}" | User: ${logEntry.userId} | Size: ${logEntry.fileSizeBytes}B | Passed: ${logEntry.validationPassed} | Formulas Sanitized: ${logEntry.formulasSanitized} | Threat Detections: ${logEntry.maliciousThreatsDetected}`);
+
+  res.json({ success: true, logId: logEntry.id });
+});
 
 // Active local fallback data stores for database state when external Cloud SQL instance is in transition
 const localUsersStore = new Map<string, any>();
