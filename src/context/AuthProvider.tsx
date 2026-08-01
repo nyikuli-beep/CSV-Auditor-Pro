@@ -38,22 +38,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    let currentUid: string | null = null;
-
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      // Whenever switching accounts, mark loading as true
-      if (currentUser?.uid !== currentUid) {
-        setLoading(true);
-        currentUid = currentUser?.uid || null;
-      }
-
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
-        try {
-          await syncUserProfileToFirestore(currentUser);
-        } catch (e) {
-          console.warn("Could not sync user profile on auth change:", e);
-        }
+        setLoading(false);
+        // Non-blocking background sync
+        syncUserProfileToFirestore(currentUser).catch((e) => {
+          console.warn("Could not sync user profile in background on auth change:", e);
+        });
       } else {
         setUser(null);
         localStorage.removeItem('user_profile_uid');
@@ -61,8 +53,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         localStorage.removeItem('user_profile_name');
         sessionStorage.removeItem('auth_session_active');
         sessionStorage.removeItem('auth_last_verified');
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => unsubscribe();

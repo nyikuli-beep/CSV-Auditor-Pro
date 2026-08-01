@@ -461,10 +461,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   useEffect(() => {
     let isCancelled = false;
 
-    const unsubscribe = onAuthStateChanged(auth, async (fUser) => {
-      // 1. Immediately indicate loading and clear all previous state/cache on user switch/logout
-      setAuthLoading(true);
-
+    const unsubscribe = onAuthStateChanged(auth, (fUser) => {
       if (!fUser) {
         if (!isCancelled) {
           setFirebaseUser(null);
@@ -483,9 +480,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
         return;
       }
 
-      // Clear previous user state & cache immediately so old profile/dashboard never flashes
-      setUser(null);
-      setFirebaseUser(null);
+      // 1. Clear previous user state & cache immediately so old profile/dashboard never flashes
       setFiles([]);
       setActivities([]);
       setMembers([]);
@@ -494,162 +489,173 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       localStorage.removeItem('user_profile_avatar');
       localStorage.removeItem('user_profile_name');
 
-      // Refresh ID token if near expiry
-      try {
-        const tokenResult = await fUser.getIdTokenResult();
-        const expirationTime = new Date(tokenResult.expirationTime).getTime();
-        if (expirationTime <= Date.now() + 5 * 60 * 1000) {
-          await fUser.getIdToken(true);
-        }
-      } catch (tokenCheckErr) {
-        try {
-          await fUser.getIdToken(true);
-        } catch (e) {}
-      }
-
-      if (isCancelled) return;
-
       setActiveFileId('file-active-' + fUser.uid);
       
-      // Fetch or create newly authenticated user's Firestore profile doc using their UID
-      const userRef = doc(db, 'users', fUser.uid);
       const isOwnerEmail = ['nyikulibramwel@gmail.com'].some(
         p => p.toLowerCase() === (fUser.email || '').trim().toLowerCase()
       );
+      const initialRole = isOwnerEmail ? 'Owner' : 'Editor';
+      const initialName = fUser.displayName || fUser.email?.split('@')[0] || 'Authenticated User';
+      const initialAvatar = fUser.photoURL || '';
 
-      let userRole = isOwnerEmail ? 'Owner' : 'Editor';
-      let userName = fUser.displayName || fUser.email?.split('@')[0] || 'Authenticated User';
-      let userAvatar = fUser.photoURL || '';
+      // 2. Immediately render application shell with newly authenticated user (< 100ms response)
+      if (!isCancelled) {
+        setUser({ 
+          uid: fUser.uid,
+          email: fUser.email || `${fUser.uid}@demo.com`, 
+          role: initialRole,
+          name: initialName,
+          avatar: initialAvatar
+        });
+        setFirebaseUser(fUser);
+        setAuthLoading(false);
 
-      try {
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          const data = userSnap.data();
-          userRole = isOwnerEmail ? 'Owner' : (data.role || 'Editor');
-          if (fUser.photoURL) {
-            userAvatar = fUser.photoURL;
-          } else if (data.avatar && !data.avatar.includes('photo-1534528741775-53994a69daeb')) {
-            userAvatar = data.avatar;
-          }
-          if (data.name) {
-            userName = data.name;
-          }
-          if (data.settings && typeof data.settings === 'object') {
-            setSettings(prev => ({ ...prev, ...data.settings }));
-          }
-        } else {
-          const newProfile = {
-            id: fUser.uid,
-            uid: fUser.uid,
-            name: userName,
-            email: fUser.email || `${fUser.uid}@demo.com`,
-            role: userRole,
-            avatar: userAvatar,
-            createdAt: new Date().toISOString()
-          };
-          await setDoc(userRef, newProfile);
-        }
-      } catch (err) {
-        console.warn("Firestore profile sync fallback (using local session defaults):", err);
+        localStorage.setItem('user_profile_uid', fUser.uid);
+        localStorage.setItem('user_profile_avatar', initialAvatar);
+        localStorage.setItem('user_profile_name', initialName);
       }
 
-      if (isCancelled) return;
-
-      // Write to localStorage ONLY for current active user uid
-      localStorage.setItem('user_profile_uid', fUser.uid);
-      localStorage.setItem('user_profile_avatar', userAvatar);
-      localStorage.setItem('user_profile_name', userName);
-
-      // Also sync authenticated user into members collection so they occupy team workspace tenancy slot
-      try {
-        const emailLower = (fUser.email || `${fUser.uid}@demo.com`).toLowerCase().trim();
-        const primaryOwnerEmail = 'nyikulibramwel@gmail.com';
-
-        if (emailLower !== primaryOwnerEmail) {
-          const membersColl = collection(db, 'members');
-          const q = query(membersColl, where('email', '==', emailLower));
-          const querySnap = await getDocs(q);
-
-          if (!querySnap.empty) {
-            const isDenied = querySnap.docs.some(docSnap => {
-              const d = docSnap.data();
-              return d.status === 'denied' || d.accessDenied === true;
-            });
-
-            if (isDenied) {
-              setSecurityAlert({
-                title: 'Access Restricted: Login Denied',
-                message: `Security Protocol Active: Login access for '${emailLower}' has been revoked by workspace owner (${primaryOwnerEmail}). Access to the application is blocked.`
-              });
-              await logout();
-              setUser(null);
-              setFirebaseUser(null);
-              setAuthLoading(false);
-              return;
+      // 3. Perform background profile fetch and tenancy slot sync in parallel (non-blocking)
+      Promise.allSettled([
+        // A. Background ID Token refresh check
+        (async () => {
+          try {
+            const tokenResult = await fUser.getIdTokenResult();
+            const expirationTime = new Date(tokenResult.expirationTime).getTime();
+            if (expirationTime <= Date.now() + 5 * 60 * 1000) {
+              await fUser.getIdToken(true);
             }
+          } catch (e) {}
+        })(),
 
-            for (const docSnap of querySnap.docs) {
-              await setDoc(doc(db, 'members', docSnap.id), {
+        // B. Background Firestore Profile Fetch
+        (async () => {
+          try {
+            const userRef = doc(db, 'users', fUser.uid);
+            const userSnap = await getDoc(userRef);
+            if (userSnap.exists()) {
+              const data = userSnap.data();
+              const updatedRole = isOwnerEmail ? 'Owner' : (data.role || 'Editor');
+              let updatedAvatar = initialAvatar;
+              if (fUser.photoURL) {
+                updatedAvatar = fUser.photoURL;
+              } else if (data.avatar && !data.avatar.includes('photo-1534528741775-53994a69daeb')) {
+                updatedAvatar = data.avatar;
+              }
+              const updatedName = data.name || initialName;
+              if (data.settings && typeof data.settings === 'object') {
+                setSettings(prev => ({ ...prev, ...data.settings }));
+              }
+
+              if (!isCancelled) {
+                setUser(prev => prev && prev.uid === fUser.uid ? {
+                  ...prev,
+                  role: updatedRole,
+                  name: updatedName,
+                  avatar: updatedAvatar
+                } : prev);
+                localStorage.setItem('user_profile_avatar', updatedAvatar);
+                localStorage.setItem('user_profile_name', updatedName);
+              }
+            } else {
+              const newProfile = {
+                id: fUser.uid,
+                uid: fUser.uid,
+                name: initialName,
+                email: fUser.email || `${fUser.uid}@demo.com`,
+                role: initialRole,
+                avatar: initialAvatar,
+                createdAt: new Date().toISOString()
+              };
+              await setDoc(userRef, newProfile);
+            }
+          } catch (err) {
+            console.warn("Firestore background profile sync warning:", err);
+          }
+        })(),
+
+        // C. Background Tenancy Slot Sync
+        (async () => {
+          try {
+            const emailLower = (fUser.email || `${fUser.uid}@demo.com`).toLowerCase().trim();
+            const primaryOwnerEmail = 'nyikulibramwel@gmail.com';
+
+            if (emailLower !== primaryOwnerEmail) {
+              const membersColl = collection(db, 'members');
+              const q = query(membersColl, where('email', '==', emailLower));
+              const querySnap = await getDocs(q);
+
+              if (!querySnap.empty) {
+                const isDenied = querySnap.docs.some(docSnap => {
+                  const d = docSnap.data();
+                  return d.status === 'denied' || d.accessDenied === true;
+                });
+
+                if (isDenied && !isCancelled) {
+                  setSecurityAlert({
+                    title: 'Access Restricted: Login Denied',
+                    message: `Security Protocol Active: Login access for '${emailLower}' has been revoked by workspace owner (${primaryOwnerEmail}). Access to the application is blocked.`
+                  });
+                  await logout();
+                  setUser(null);
+                  setFirebaseUser(null);
+                  return;
+                }
+
+                for (const docSnap of querySnap.docs) {
+                  await setDoc(doc(db, 'members', docSnap.id), {
+                    status: 'active',
+                    name: initialName,
+                    ...(initialAvatar ? { avatar: initialAvatar } : {})
+                  }, { merge: true });
+                }
+              } else {
+                const memberRef = doc(db, 'members', fUser.uid);
+                const memberRecord: TeamMember = {
+                  id: fUser.uid,
+                  name: initialName,
+                  email: emailLower,
+                  role: (initialRole as any) || 'Editor',
+                  status: 'active',
+                  avatar: initialAvatar
+                };
+                await setDoc(memberRef, memberRecord);
+              }
+            } else {
+              const memberRef = doc(db, 'members', fUser.uid);
+              await setDoc(memberRef, {
                 status: 'active',
-                name: userName,
-                ...(userAvatar ? { avatar: userAvatar } : {})
+                name: initialName,
+                role: 'Owner',
+                ...(initialAvatar ? { avatar: initialAvatar } : {})
               }, { merge: true });
             }
-          } else {
-            const memberRef = doc(db, 'members', fUser.uid);
-            const memberRecord: TeamMember = {
-              id: fUser.uid,
-              name: userName,
-              email: emailLower,
-              role: (userRole as any) || 'Editor',
-              status: 'active',
-              avatar: userAvatar
-            };
-            await setDoc(memberRef, memberRecord);
+          } catch (memberSyncErr) {
+            console.warn("Firestore member sync fallback:", memberSyncErr);
           }
-        } else {
-          const memberRef = doc(db, 'members', fUser.uid);
-          await setDoc(memberRef, {
-            status: 'active',
-            name: userName,
-            role: 'Owner',
-            ...(userAvatar ? { avatar: userAvatar } : {})
-          }, { merge: true });
-        }
-      } catch (memberSyncErr) {
-        console.warn("Firestore member sync fallback:", memberSyncErr);
-      }
-      
-      // Sync user profile to Postgres
-      try {
-        const idToken = await fUser.getIdToken();
-        await fetch('/api/sql/sync-user', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${idToken}`
-          },
-          body: JSON.stringify({
-            name: userName,
-            email: fUser.email || `${fUser.uid}@demo.com`,
-            role: userRole
-          })
-        });
-      } catch (dbErr) {
-        console.warn("Error syncing user to Postgres on login:", dbErr);
-      }
+        })(),
 
-      if (isCancelled) return;
-
-      setUser({ 
-        uid: fUser.uid,
-        email: fUser.email || `${fUser.uid}@demo.com`, 
-        role: userRole,
-        name: userName,
-        avatar: userAvatar
-      });
-      setFirebaseUser(fUser);
-      setAuthLoading(false);
+        // D. Background Postgres User Record Sync
+        (async () => {
+          try {
+            const idToken = await fUser.getIdToken();
+            await fetch('/api/sql/sync-user', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${idToken}`
+              },
+              body: JSON.stringify({
+                name: initialName,
+                email: fUser.email || `${fUser.uid}@demo.com`,
+                role: initialRole
+              })
+            });
+          } catch (dbErr) {
+            console.warn("Postgres sync warning:", dbErr);
+          }
+        })()
+      ]);
     });
 
     return () => {
