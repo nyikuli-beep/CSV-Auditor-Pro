@@ -136,7 +136,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   }, [location.pathname]);
   
   // Session / Persona State
-  const [user, setUser] = useState<{ email: string; role: string; name?: string; avatar?: string } | null>(null);
+  const [user, setUser] = useState<{ uid: string; email: string; role: string; name?: string; avatar?: string } | null>(null);
   const [profileModalOpen, setProfileModalOpen] = useState<boolean>(false);
   const [shortcutsModalOpen, setShortcutsModalOpen] = useState<boolean>(false);
   const [tourModalOpen, setTourModalOpen] = useState<boolean>(() => {
@@ -457,185 +457,223 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       });
   }, []);
 
-  // Monitor auth state changes
+  // Monitor auth state changes & fetch Firestore profile
   useEffect(() => {
+    let isCancelled = false;
+
     const unsubscribe = onAuthStateChanged(auth, async (fUser) => {
+      // 1. Immediately indicate loading and clear all previous state/cache on user switch/logout
       setAuthLoading(true);
-      if (fUser) {
-        // Check if cached Firebase ID token is valid; if expired or near expiry, force a silent refresh using getIdToken(true)
-        try {
-          const tokenResult = await fUser.getIdTokenResult();
-          const expirationTime = new Date(tokenResult.expirationTime).getTime();
-          if (expirationTime <= Date.now() + 5 * 60 * 1000) {
-            await fUser.getIdToken(true);
-          }
-        } catch (tokenCheckErr) {
-          try {
-            await fUser.getIdToken(true);
-          } catch (e) {}
+
+      if (!fUser) {
+        if (!isCancelled) {
+          setFirebaseUser(null);
+          setUser(null);
+          setFiles([]);
+          setActivities([]);
+          setMembers([]);
+          setSlotRequests([]);
+          localStorage.removeItem('user_profile_uid');
+          localStorage.removeItem('user_profile_avatar');
+          localStorage.removeItem('user_profile_name');
+          sessionStorage.removeItem('auth_session_active');
+          sessionStorage.removeItem('auth_last_verified');
+          setAuthLoading(false);
         }
+        return;
+      }
 
-        setFirebaseUser(fUser);
-        setActiveFileId('file-active-' + fUser.uid);
-        
-        // Fetch or create user doc
-        const userRef = doc(db, 'users', fUser.uid);
-        const isOwnerEmail = ['nyikulibramwel@gmail.com'].some(
-          p => p.toLowerCase() === (fUser.email || '').trim().toLowerCase()
-        );
+      // Clear previous user state & cache immediately so old profile/dashboard never flashes
+      setUser(null);
+      setFirebaseUser(null);
+      setFiles([]);
+      setActivities([]);
+      setMembers([]);
+      setSlotRequests([]);
+      localStorage.removeItem('user_profile_uid');
+      localStorage.removeItem('user_profile_avatar');
+      localStorage.removeItem('user_profile_name');
 
-        let userRole = isOwnerEmail ? 'Owner' : 'Editor';
-        let userName = fUser.displayName || fUser.email?.split('@')[0] || 'Authenticated User';
-        let userAvatar = fUser.photoURL || '';
-
+      // Refresh ID token if near expiry
+      try {
+        const tokenResult = await fUser.getIdTokenResult();
+        const expirationTime = new Date(tokenResult.expirationTime).getTime();
+        if (expirationTime <= Date.now() + 5 * 60 * 1000) {
+          await fUser.getIdToken(true);
+        }
+      } catch (tokenCheckErr) {
         try {
-          const userSnap = await getDoc(userRef);
-          if (userSnap.exists()) {
-            const data = userSnap.data();
-            userRole = isOwnerEmail ? 'Owner' : (data.role || 'Editor');
-            if (fUser.photoURL) {
-              userAvatar = fUser.photoURL;
-            } else if (data.avatar && !data.avatar.includes('photo-1534528741775-53994a69daeb')) {
-              userAvatar = data.avatar;
+          await fUser.getIdToken(true);
+        } catch (e) {}
+      }
+
+      if (isCancelled) return;
+
+      setActiveFileId('file-active-' + fUser.uid);
+      
+      // Fetch or create newly authenticated user's Firestore profile doc using their UID
+      const userRef = doc(db, 'users', fUser.uid);
+      const isOwnerEmail = ['nyikulibramwel@gmail.com'].some(
+        p => p.toLowerCase() === (fUser.email || '').trim().toLowerCase()
+      );
+
+      let userRole = isOwnerEmail ? 'Owner' : 'Editor';
+      let userName = fUser.displayName || fUser.email?.split('@')[0] || 'Authenticated User';
+      let userAvatar = fUser.photoURL || '';
+
+      try {
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          const data = userSnap.data();
+          userRole = isOwnerEmail ? 'Owner' : (data.role || 'Editor');
+          if (fUser.photoURL) {
+            userAvatar = fUser.photoURL;
+          } else if (data.avatar && !data.avatar.includes('photo-1534528741775-53994a69daeb')) {
+            userAvatar = data.avatar;
+          }
+          if (data.name) {
+            userName = data.name;
+          }
+          if (data.settings && typeof data.settings === 'object') {
+            setSettings(prev => ({ ...prev, ...data.settings }));
+          }
+        } else {
+          const newProfile = {
+            id: fUser.uid,
+            uid: fUser.uid,
+            name: userName,
+            email: fUser.email || `${fUser.uid}@demo.com`,
+            role: userRole,
+            avatar: userAvatar,
+            createdAt: new Date().toISOString()
+          };
+          await setDoc(userRef, newProfile);
+        }
+      } catch (err) {
+        console.warn("Firestore profile sync fallback (using local session defaults):", err);
+      }
+
+      if (isCancelled) return;
+
+      // Write to localStorage ONLY for current active user uid
+      localStorage.setItem('user_profile_uid', fUser.uid);
+      localStorage.setItem('user_profile_avatar', userAvatar);
+      localStorage.setItem('user_profile_name', userName);
+
+      // Also sync authenticated user into members collection so they occupy team workspace tenancy slot
+      try {
+        const emailLower = (fUser.email || `${fUser.uid}@demo.com`).toLowerCase().trim();
+        const primaryOwnerEmail = 'nyikulibramwel@gmail.com';
+
+        if (emailLower !== primaryOwnerEmail) {
+          const membersColl = collection(db, 'members');
+          const q = query(membersColl, where('email', '==', emailLower));
+          const querySnap = await getDocs(q);
+
+          if (!querySnap.empty) {
+            const isDenied = querySnap.docs.some(docSnap => {
+              const d = docSnap.data();
+              return d.status === 'denied' || d.accessDenied === true;
+            });
+
+            if (isDenied) {
+              setSecurityAlert({
+                title: 'Access Restricted: Login Denied',
+                message: `Security Protocol Active: Login access for '${emailLower}' has been revoked by workspace owner (${primaryOwnerEmail}). Access to the application is blocked.`
+              });
+              await logout();
+              setUser(null);
+              setFirebaseUser(null);
+              setAuthLoading(false);
+              return;
             }
-            if (data.name) {
-              userName = data.name;
-            }
-            if (data.settings && typeof data.settings === 'object') {
-              setSettings(prev => ({ ...prev, ...data.settings }));
+
+            for (const docSnap of querySnap.docs) {
+              await setDoc(doc(db, 'members', docSnap.id), {
+                status: 'active',
+                name: userName,
+                ...(userAvatar ? { avatar: userAvatar } : {})
+              }, { merge: true });
             }
           } else {
-            const newProfile = {
+            const memberRef = doc(db, 'members', fUser.uid);
+            const memberRecord: TeamMember = {
               id: fUser.uid,
               name: userName,
-              email: fUser.email || `${fUser.uid}@demo.com`,
-              role: userRole,
-              avatar: userAvatar,
-              createdAt: new Date().toISOString()
-            };
-            await setDoc(userRef, newProfile);
-          }
-        } catch (err) {
-          console.warn("Firestore profile sync fallback (using local session defaults):", err);
-        }
-
-        // Write to localStorage ONLY for current active user uid
-        localStorage.setItem('user_profile_uid', fUser.uid);
-        localStorage.setItem('user_profile_avatar', userAvatar);
-        localStorage.setItem('user_profile_name', userName);
-        
-        setUser({ 
-          email: fUser.email || `${fUser.uid}@demo.com`, 
-          role: userRole,
-          name: userName,
-          avatar: userAvatar
-        });
-
-        // Also sync authenticated user into members collection so they occupy team workspace tenancy slot
-        try {
-          const emailLower = (fUser.email || `${fUser.uid}@demo.com`).toLowerCase().trim();
-          const primaryOwnerEmail = 'nyikulibramwel@gmail.com';
-
-          if (emailLower !== primaryOwnerEmail) {
-            const membersColl = collection(db, 'members');
-            const q = query(membersColl, where('email', '==', emailLower));
-            const querySnap = await getDocs(q);
-
-            if (!querySnap.empty) {
-              const isDenied = querySnap.docs.some(docSnap => {
-                const d = docSnap.data();
-                return d.status === 'denied' || d.accessDenied === true;
-              });
-
-              if (isDenied) {
-                setSecurityAlert({
-                  title: 'Access Restricted: Login Denied',
-                  message: `Security Protocol Active: Login access for '${emailLower}' has been revoked by workspace owner (${primaryOwnerEmail}). Access to the application is blocked.`
-                });
-                await logout();
-                setUser(null);
-                setFirebaseUser(null);
-                setAuthLoading(false);
-                return;
-              }
-
-              // Update existing active member document(s) for this email
-              for (const docSnap of querySnap.docs) {
-                await setDoc(doc(db, 'members', docSnap.id), {
-                  status: 'active',
-                  name: userName,
-                  ...(userAvatar ? { avatar: userAvatar } : {})
-                }, { merge: true });
-              }
-            } else {
-              // New or returning non-owner member logging in -> Create their member document in Firestore
-              const memberRef = doc(db, 'members', fUser.uid);
-              const memberRecord: TeamMember = {
-                id: fUser.uid,
-                name: userName,
-                email: emailLower,
-                role: (userRole as any) || 'Editor',
-                status: 'active',
-                avatar: userAvatar
-              };
-              await setDoc(memberRef, memberRecord);
-            }
-          } else {
-            // Owner
-            const memberRef = doc(db, 'members', fUser.uid);
-            await setDoc(memberRef, {
+              email: emailLower,
+              role: (userRole as any) || 'Editor',
               status: 'active',
-              name: userName,
-              role: 'Owner',
-              ...(userAvatar ? { avatar: userAvatar } : {})
-            }, { merge: true });
+              avatar: userAvatar
+            };
+            await setDoc(memberRef, memberRecord);
           }
-        } catch (memberSyncErr) {
-          console.warn("Firestore member sync fallback:", memberSyncErr);
+        } else {
+          const memberRef = doc(db, 'members', fUser.uid);
+          await setDoc(memberRef, {
+            status: 'active',
+            name: userName,
+            role: 'Owner',
+            ...(userAvatar ? { avatar: userAvatar } : {})
+          }, { merge: true });
         }
-        
-        // Sync user profile to Postgres
-        try {
-          const idToken = await fUser.getIdToken();
-          await fetch('/api/sql/sync-user', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${idToken}`
-            },
-            body: JSON.stringify({
-              name: userName,
-              email: fUser.email || `${fUser.uid}@demo.com`,
-              role: userRole
-            })
-          });
-        } catch (dbErr) {
-          console.warn("Error syncing user to Postgres on login (safe fallback to local state active):", dbErr);
-        }
-
-        // On auth state change, user state synced
-      } else {
-        setFirebaseUser(null);
-        setUser(null);
-        setFiles([]);
-        setActivities([]);
-        setMembers([]);
-        localStorage.removeItem('user_profile_uid');
-        localStorage.removeItem('user_profile_avatar');
-        localStorage.removeItem('user_profile_name');
+      } catch (memberSyncErr) {
+        console.warn("Firestore member sync fallback:", memberSyncErr);
       }
+      
+      // Sync user profile to Postgres
+      try {
+        const idToken = await fUser.getIdToken();
+        await fetch('/api/sql/sync-user', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`
+          },
+          body: JSON.stringify({
+            name: userName,
+            email: fUser.email || `${fUser.uid}@demo.com`,
+            role: userRole
+          })
+        });
+      } catch (dbErr) {
+        console.warn("Error syncing user to Postgres on login:", dbErr);
+      }
+
+      if (isCancelled) return;
+
+      setUser({ 
+        uid: fUser.uid,
+        email: fUser.email || `${fUser.uid}@demo.com`, 
+        role: userRole,
+        name: userName,
+        avatar: userAvatar
+      });
+      setFirebaseUser(fUser);
       setAuthLoading(false);
     });
-    return () => unsubscribe();
+
+    return () => {
+      isCancelled = true;
+      unsubscribe();
+    };
   }, []);
 
-  // Sync collections in real-time
+  // Sync collections in real-time with proper unsubscribes on user switch
   useEffect(() => {
-    if (!firebaseUser) return;
+    if (authLoading || !firebaseUser || !user || firebaseUser.uid !== user.uid) {
+      setFiles([]);
+      setMembers([]);
+      setActivities([]);
+      setSlotRequests([]);
+      return;
+    }
+
+    let isMounted = true;
 
     // 1. Files snapshot
     const filesQuery = query(collection(db, 'files'), where('ownerId', '==', firebaseUser.uid));
     const unsubscribeFiles = onSnapshot(filesQuery, async (snapshot) => {
+      if (!isMounted) return;
       const filesList: CSVFile[] = [];
       snapshot.forEach((docSnap) => {
         filesList.push(docSnap.data() as CSVFile);
@@ -644,7 +682,6 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       if (filesList.length === 0) {
         setFiles([]);
       } else {
-        // Keep any unsynced local files that haven't registered in the Firestore snapshot yet
         setFiles(prev => {
           const unsynced = prev.filter(p => !filesList.some(f => f.id === p.id) && !p.id.startsWith('file-active'));
           const combined = [...unsynced, ...filesList];
@@ -661,17 +698,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
               const parsed = Date.parse(b.uploadedAt);
               if (!isNaN(parsed)) timeB = parsed;
             }
-            
-            if (timeA === timeB) {
-              const matchA = a.id.match(/\d+/g);
-              const matchB = b.id.match(/\d+/g);
-              const numA = matchA ? parseInt(matchA.join(''), 10) : 0;
-              const numB = matchB ? parseInt(matchB.join(''), 10) : 0;
-              timeA = numA;
-              timeB = numB;
-            }
-            
-            return timeB - timeA; // Newest first
+            return timeB - timeA;
           });
           return combined;
         });
@@ -683,6 +710,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     // 2. Team snapshot
     const membersQuery = collection(db, 'members');
     const unsubscribeMembers = onSnapshot(membersQuery, async (snapshot) => {
+      if (!isMounted) return;
       const membersList: TeamMember[] = [];
       snapshot.forEach((docSnap) => {
         const data = docSnap.data() as TeamMember;
@@ -692,10 +720,8 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       const userEmailLower = (firebaseUser.email || '').toLowerCase().trim();
       const primaryOwnerEmail = 'nyikulibramwel@gmail.com';
 
-      // Use Map to deduplicate members by lowercase email
       const memberMap = new Map<string, TeamMember>();
 
-      // 1. Ensure primary owner (nyikulibramwel@gmail.com) is present at slot #1
       const primaryOwnerMember: TeamMember = {
         id: userEmailLower === primaryOwnerEmail ? firebaseUser.uid : 'usr-primary-owner',
         name: userEmailLower === primaryOwnerEmail ? (user?.name || firebaseUser.displayName || 'Nyikuli Bramwel') : 'Nyikuli Bramwel',
@@ -706,7 +732,6 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       };
       memberMap.set(primaryOwnerEmail, primaryOwnerMember);
 
-      // 2. Process all members from Firestore snapshot
       membersList.forEach(m => {
         const emailKey = (m.email || '').toLowerCase().trim();
         if (!emailKey || emailKey === primaryOwnerEmail) return;
@@ -720,7 +745,6 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
         });
       });
 
-      // 3. REAL-TIME SECURITY ENFORCEMENT for active non-owner session
       if (userEmailLower && userEmailLower !== primaryOwnerEmail) {
         const activeUserRecord = memberMap.get(userEmailLower);
 
@@ -733,13 +757,11 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
           return;
         }
 
-        // Track active workspace presence and enforce real-time security
         const existsInFirestore = membersList.some(m => (m.email || '').toLowerCase().trim() === userEmailLower);
 
         if (existsInFirestore) {
           knownActiveMemberEmailsRef.current.add(userEmailLower);
         } else if (knownActiveMemberEmailsRef.current.has(userEmailLower)) {
-          // User WAS present in members collection during this active session, but was deleted by the owner!
           setSecurityAlert({
             title: 'Account Deleted in Real Time',
             message: `Your workspace account (${userEmailLower}) was removed from team tenancy slots by owner ${primaryOwnerEmail}. You have been signed out.`
@@ -758,6 +780,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     // 3. Activities snapshot
     const activitiesQuery = query(collection(db, 'activities'), limit(25));
     const unsubscribeActivities = onSnapshot(activitiesQuery, async (snapshot) => {
+      if (!isMounted) return;
       const activitiesList: AuditActivity[] = [];
       snapshot.forEach((docSnap) => {
         activitiesList.push(docSnap.data() as AuditActivity);
@@ -775,6 +798,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     // 4. Slot requests snapshot
     const slotReqQuery = query(collection(db, 'slot_requests'), limit(50));
     const unsubscribeSlotReq = onSnapshot(slotReqQuery, (snapshot) => {
+      if (!isMounted) return;
       const reqList: SlotRequest[] = [];
       snapshot.forEach((docSnap) => {
         reqList.push({ id: docSnap.id, ...docSnap.data() } as SlotRequest);
@@ -785,12 +809,13 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     });
 
     return () => {
+      isMounted = false;
       unsubscribeFiles();
       unsubscribeMembers();
       unsubscribeActivities();
       unsubscribeSlotReq();
     };
-  }, [firebaseUser]);
+  }, [firebaseUser?.uid, user?.uid, authLoading]);
 
   const handleApproveSlotRequest = async (req: SlotRequest) => {
     try {
@@ -905,7 +930,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       }
     }
     localStorage.setItem('user_profile_name', userInfo.name);
-    setUser({ email: userInfo.email, role: userInfo.role, name: userInfo.name, avatar: savedAvatar });
+    setUser({ uid: activeUser?.uid || '', email: userInfo.email, role: userInfo.role, name: userInfo.name, avatar: savedAvatar });
     navigate('/dashboard');
     setActiveTab('dashboard');
 
@@ -927,19 +952,24 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
 
   // Log Out Sequence
   const handleLogout = async () => {
+    setAuthLoading(true);
+    setUser(null);
+    setFirebaseUser(null);
+    setFiles([]);
+    setActivities([]);
+    setMembers([]);
+    setSlotRequests([]);
+    localStorage.removeItem('user_profile_uid');
+    localStorage.removeItem('user_profile_avatar');
+    localStorage.removeItem('user_profile_name');
+    sessionStorage.removeItem('auth_session_active');
+    sessionStorage.removeItem('auth_last_verified');
     try {
       await logout();
     } catch (err) {
       console.error("Error signing out:", err);
     } finally {
-      setUser(null);
-      setFirebaseUser(null);
-      setFiles([]);
-      setActivities([]);
-      setMembers([]);
-      localStorage.removeItem('user_profile_uid');
-      localStorage.removeItem('user_profile_avatar');
-      localStorage.removeItem('user_profile_name');
+      setAuthLoading(false);
       navigate('/login', { replace: true });
     }
   };
@@ -1610,6 +1640,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     }
 
     setUser({
+      uid: member.id || firebaseUser?.uid || '',
       email: member.email,
       role: member.role,
       name: member.name,
@@ -1838,6 +1869,28 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       setActiveFileId(file.id);
     }
   };
+
+  // Full-screen loading protection during initial auth initialization or account switching profile fetch
+  if (authLoading || !user || !firebaseUser || user.uid !== firebaseUser.uid) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-slate-100 p-6 select-none">
+        <div className="relative flex items-center justify-center mb-6">
+          <div className="w-16 h-16 rounded-full border-4 border-blue-500/20 border-t-blue-500 animate-spin" />
+          <div className="absolute w-8 h-8 rounded-full bg-blue-600/30 animate-ping" />
+        </div>
+        <div className="flex items-center gap-2 mb-2">
+          <FileSpreadsheet className="w-5 h-5 text-blue-500" />
+          <span className="text-sm font-bold text-slate-300 tracking-wide uppercase">CSV Auditor Pro</span>
+        </div>
+        <h3 className="text-lg font-semibold tracking-tight text-slate-100 text-center">
+          Loading Account Profile & Workspace Session
+        </h3>
+        <p className="text-xs text-slate-400 mt-1 text-center max-w-sm">
+          Securing tenant isolation and validating profile credentials...
+        </p>
+      </div>
+    );
+  }
 
   return (
     <motion.div 

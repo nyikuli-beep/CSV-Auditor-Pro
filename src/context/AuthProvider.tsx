@@ -38,15 +38,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
+    let currentUid: string | null = null;
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
+      // Whenever switching accounts, mark loading as true
+      if (currentUser?.uid !== currentUid) {
+        setLoading(true);
+        currentUid = currentUser?.uid || null;
+      }
+
       if (currentUser) {
-        // Sync profile state safely
-        syncUserProfileToFirestore(currentUser).catch(() => {});
+        setUser(currentUser);
+        try {
+          await syncUserProfileToFirestore(currentUser);
+        } catch (e) {
+          console.warn("Could not sync user profile on auth change:", e);
+        }
       } else {
+        setUser(null);
         localStorage.removeItem('user_profile_uid');
         localStorage.removeItem('user_profile_avatar');
         localStorage.removeItem('user_profile_name');
+        sessionStorage.removeItem('auth_session_active');
+        sessionStorage.removeItem('auth_last_verified');
       }
       setLoading(false);
     });
@@ -59,29 +73,53 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   );
 
   const login = async (email: string, password: string): Promise<User> => {
-    const loggedInUser = await loginWithEmailPassword(email, password);
-    setUser(loggedInUser);
-    return loggedInUser;
+    setLoading(true);
+    try {
+      const loggedInUser = await loginWithEmailPassword(email, password);
+      setUser(loggedInUser);
+      return loggedInUser;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const register = async (email: string, password: string, fullName: string): Promise<User> => {
-    const newUser = await registerWithEmailPassword(email, password, fullName);
-    setUser(newUser);
-    return newUser;
+    setLoading(true);
+    try {
+      const newUser = await registerWithEmailPassword(email, password, fullName);
+      setUser(newUser);
+      return newUser;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const loginWithGoogle = async (): Promise<User> => {
-    const gUser = await signInWithGoogle();
-    setUser(gUser);
-    return gUser;
+    setLoading(true);
+    try {
+      const gUser = await signInWithGoogle();
+      setUser(gUser);
+      return gUser;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const logout = async (): Promise<void> => {
-    await logoutUser();
+    setLoading(true);
     setUser(null);
     localStorage.removeItem('user_profile_uid');
     localStorage.removeItem('user_profile_avatar');
     localStorage.removeItem('user_profile_name');
+    sessionStorage.removeItem('auth_session_active');
+    sessionStorage.removeItem('auth_last_verified');
+    try {
+      await logoutUser();
+    } catch (e) {
+      console.error('Error during logout:', e);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const forgotPassword = async (email: string): Promise<void> => {
