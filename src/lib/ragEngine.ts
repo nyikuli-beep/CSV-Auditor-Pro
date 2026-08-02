@@ -145,7 +145,7 @@ export function formatStructuredResponseMarkdown(res: StructuredAIResponse): str
     text += `\n\n**Key Takeaways:**\n` + res.keyTakeaways.map(k => `• ${k}`).join('\n');
   }
   if (res.recommendedAction && res.recommendedAction.trim() && !text.includes('Recommended Action')) {
-    text += `\n\n💡 **Recommended Action:** ${res.recommendedAction}`;
+    text += `\n\n**Recommended Action:** ${res.recommendedAction}`;
   }
   return text;
 }
@@ -193,12 +193,20 @@ export const KNOWLEDGE_BASE_CHUNKS: KnowledgeChunk[] = [
     keywords: ['about', 'what is', 'csv auditor pro', 'overview', 'mission', 'app', 'product', 'platform', 'spreadsheet']
   },
   {
+    id: 'how-app-operates',
+    sourceFile: 'about.md',
+    title: 'How the Application Operates (System Operation & Workflow)',
+    category: 'Product Knowledge',
+    content: 'CSV Auditor Pro operates through an automated 5-step data quality pipeline: 1. Ingestion & Local Browser Parsing: Upload CSV, TSV, or XLSX files up to 50MB. File data is parsed in browser memory so private data stays secure. 2. Automated Audit Engine: The engine checks 15+ data health rules (duplicate rows, missing/blank values, invalid ISO dates, text casing errors, and numerical outliers >3 SDs) and calculates a 0-100 Quality Score. 3. Interactive Cleaning Center: Clean dataset issues with 1-click routines (deduplication, mean/median/mode value imputation, trim/casing, date normalization). 4. Schema Validation & Drift Detection: Verify dataset headers against team schemas and generate PostgreSQL DDLs. 5. AI Assistant & Compliance Reporting: Ask questions to the Gemini-powered AI Auditor Assistant, annotate spreadsheet cells, and export cleaned files or PDF compliance reports via Gmail.',
+    keywords: ['operate', 'operates', 'operation', 'how the application operates', 'how it operates', 'how the app operates', 'how does it work', 'workflow', 'architecture', 'pipeline']
+  },
+  {
     id: 'about-architecture',
     sourceFile: 'about.md',
     title: 'Architecture & Privacy',
     category: 'Product Knowledge',
-    content: 'Client-side processing keeps spreadsheet data in browser memory. AI reasoning uses Google Gemini (gemini-3.6-flash and gemini-3.1-pro-preview) via secure backend API routes. Persistence uses Firebase Firestore and Cloud SQL / Drizzle ORM.',
-    keywords: ['architecture', 'privacy', 'security', 'client-side', 'gemini', 'firestore', 'backend', 'how it works']
+    content: 'Client-side processing keeps spreadsheet data in browser memory. AI reasoning uses Google Gemini (gemini-2.5-flash and gemini-2.5-pro) via secure backend API routes. Persistence uses Firebase Firestore and Cloud SQL / Drizzle ORM.',
+    keywords: ['architecture', 'privacy', 'security', 'client-side', 'gemini', 'firestore', 'backend', 'how it works', 'operates']
   },
 
   // features.md
@@ -367,11 +375,11 @@ export function detectUserIntent(prompt: string): { intent: string; plainLanguag
     p.includes('simple terms') ||
     p.includes('in simple words');
 
-  if (p.includes('what is this app') || p.includes('what is csv auditor') || p.includes('tell me about this app') || p.includes('what does this app do')) {
+  if (p.includes('what is this app') || p.includes('what is csv auditor') || p.includes('tell me about this app') || p.includes('what does this app do') || p.includes('overview')) {
     return { intent: 'product_explanation', plainLanguageMode: isPlainLanguage };
   }
 
-  if (p.includes('how does this work') || p.includes('how to use') || p.includes('workflow') || p.includes('what happens after i upload')) {
+  if (p.includes('how does this work') || p.includes('how to use') || p.includes('workflow') || p.includes('what happens after i upload') || p.includes('operates') || p.includes('how the application operates') || p.includes('how the app operates') || p.includes('how it operates') || p.includes('operation') || p.includes('how does the app work') || p.includes('how does the application work')) {
     return { intent: 'workflow_explanation', plainLanguageMode: isPlainLanguage };
   }
 
@@ -452,7 +460,7 @@ export function buildDynamicRAGPrompt(
   const { intent, plainLanguageMode } = detectUserIntent(prompt);
 
   const citations: Array<{ type: 'doc' | 'dataset' | 'memory' | 'product'; label: string }> = [
-    { type: 'product', label: '⚙️ Product Knowledge' }
+    { type: 'product', label: 'Product Knowledge' }
   ];
 
   // Base System Prompt as specified in guidelines
@@ -477,13 +485,13 @@ export function buildDynamicRAGPrompt(
   let docsSection = '### KNOWLEDGE BASE DOCUMENTATION:\n';
   relevantDocs.forEach(doc => {
     docsSection += `- **[${doc.sourceFile} - ${doc.title}]**: ${doc.content}\n`;
-    citations.push({ type: 'doc', label: `📄 Doc: ${doc.sourceFile}` });
+    citations.push({ type: 'doc', label: `Doc: ${doc.sourceFile}` });
   });
 
   // Construct Dataset Context
   let datasetSection = '### CURRENT ACTIVE DATASET SESSION:\n';
   if (datasetContext && datasetContext.fileName) {
-    citations.push({ type: 'dataset', label: `📊 Dataset: ${datasetContext.fileName}` });
+    citations.push({ type: 'dataset', label: `Dataset: ${datasetContext.fileName}` });
     datasetSection += `
 - File Name: ${datasetContext.fileName}
 - Row Count: ${datasetContext.rowCount} rows
@@ -518,7 +526,7 @@ export function buildDynamicRAGPrompt(
   // Construct Conversation Memory
   let historySection = '';
   if (history && history.length > 0) {
-    citations.push({ type: 'memory', label: '💬 Conversation Memory' });
+    citations.push({ type: 'memory', label: 'Conversation Memory' });
     historySection = '### PREVIOUS CONVERSATION HISTORY:\n';
     history.slice(-6).forEach(msg => {
       historySection += `${msg.role.toUpperCase()}: ${msg.content}\n`;

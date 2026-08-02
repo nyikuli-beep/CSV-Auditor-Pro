@@ -1807,8 +1807,8 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       content: 'Searching documentation & analyzing dataset...',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       citations: [
-        { type: 'product', label: '⚙️ Product Knowledge' },
-        { type: 'doc', label: '📄 Searching Docs...' }
+        { type: 'product', label: 'Product Knowledge' },
+        { type: 'doc', label: 'Searching Docs...' }
       ]
     };
 
@@ -1932,8 +1932,8 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                 ...m, 
                 content: `CSV Auditor Pro Knowledge Base Response:\n\nRegarding "${msgContent}": CSV Auditor Pro provides automated dataset auditing, deduplication, missing value imputation, ISO date formatting, and schema validation. You can run automated cleaning routines directly in the Cleaning Center tab or generate a PDF report!`, 
                 citations: [
-                  { type: 'product', label: '⚙️ Product Knowledge' },
-                  { type: 'doc', label: '📄 Grounded Docs' }
+                  { type: 'product', label: 'Product Knowledge' },
+                  { type: 'doc', label: 'Grounded Docs' }
                 ],
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
               }

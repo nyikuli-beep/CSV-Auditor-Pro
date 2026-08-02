@@ -654,19 +654,26 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
                     {msg.role === 'assistant' && msg.citations && msg.citations.length > 0 && (
                       <div className="mt-3 pt-2.5 border-t border-slate-800/40 flex flex-wrap gap-1.5 items-center">
                         <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mr-1">Sources:</span>
-                        {msg.citations.map((c, idx) => (
-                          <span 
-                            key={idx} 
-                            className={`px-2 py-0.5 rounded-md text-[9px] font-mono border ${
-                              c.type === 'doc' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                              c.type === 'dataset' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                              c.type === 'memory' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
-                              'bg-purple-500/10 text-purple-400 border-purple-500/20'
-                            }`}
-                          >
-                            {c.label}
-                          </span>
-                        ))}
+                        {msg.citations.map((c, idx) => {
+                          const cleanLabel = c.label.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
+                          return (
+                            <span 
+                              key={idx} 
+                              className={`px-2 py-0.5 rounded-md text-[9px] font-mono border flex items-center gap-1 ${
+                                c.type === 'doc' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                                c.type === 'dataset' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                                c.type === 'memory' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                                'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                              }`}
+                            >
+                              {c.type === 'doc' && <FileSpreadsheet className="w-2.5 h-2.5 text-blue-400 shrink-0" />}
+                              {c.type === 'dataset' && <Database className="w-2.5 h-2.5 text-emerald-400 shrink-0" />}
+                              {c.type === 'memory' && <MessageSquare className="w-2.5 h-2.5 text-amber-400 shrink-0" />}
+                              {c.type === 'product' && <Zap className="w-2.5 h-2.5 text-purple-400 shrink-0" />}
+                              <span>{cleanLabel}</span>
+                            </span>
+                          );
+                        })}
                       </div>
                     )}
 
