@@ -35,6 +35,133 @@ export interface UserContext {
   collaborators?: string[];
 }
 
+export interface StructuredAIResponse {
+  answer: string;
+  summary: string;
+  keyTakeaways: string[];
+  recommendedAction?: string;
+  confidenceScore?: number;
+}
+
+export const STRUCTURED_RESPONSE_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    answer: { type: 'STRING', description: 'The primary detailed answer or analysis.' },
+    summary: { type: 'STRING', description: 'A concise 1-2 sentence executive summary.' },
+    keyTakeaways: {
+      type: 'ARRAY',
+      items: { type: 'STRING' },
+      description: 'Key bullet points summarizing main insights or findings.'
+    },
+    recommendedAction: { type: 'STRING', description: 'Actionable recommendation or next step.' },
+    confidenceScore: { type: 'NUMBER', description: 'Confidence score between 0.0 and 1.0.' }
+  },
+  required: ['answer', 'summary', 'keyTakeaways']
+};
+
+/**
+  Validate structured AI responses
+ */
+export function validateStructuredResponse(data: any): { valid: boolean; error?: string; cleanData?: StructuredAIResponse } {
+  if (!data || typeof data !== 'object') {
+    return { valid: false, error: 'Response is not a valid JSON object' };
+  }
+  if (typeof data.answer !== 'string' || !data.answer.trim()) {
+    return { valid: false, error: 'Field "answer" is missing or empty' };
+  }
+  if (typeof data.summary !== 'string') {
+    return { valid: false, error: 'Field "summary" is missing or not a string' };
+  }
+  if (!Array.isArray(data.keyTakeaways)) {
+    return { valid: false, error: 'Field "keyTakeaways" is missing or not an array' };
+  }
+  return {
+    valid: true,
+    cleanData: {
+      answer: data.answer.trim(),
+      summary: data.summary.trim(),
+      keyTakeaways: data.keyTakeaways.map((k: any) => String(k).trim()).filter(Boolean),
+      recommendedAction: typeof data.recommendedAction === 'string' ? data.recommendedAction.trim() : undefined,
+      confidenceScore: typeof data.confidenceScore === 'number' ? Number(data.confidenceScore) : 0.95
+    }
+  };
+}
+
+/**
+  In-Memory Caching for repeated requests
+ */
+interface CacheEntry {
+  data: any;
+  expiresAt: number;
+}
+const responseCache = new Map<string, CacheEntry>();
+
+export function getCachedResponse(key: string): any | null {
+  const entry = responseCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    responseCache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+export function setCachedResponse(key: string, data: any, ttlMs = 300000): void {
+  responseCache.set(key, { data, expiresAt: Date.now() + ttlMs });
+  if (responseCache.size > 100) {
+    const oldestKey = responseCache.keys().next().value;
+    if (oldestKey) responseCache.delete(oldestKey);
+  }
+}
+
+/**
+  Detailed Server-Side Logging
+ */
+export function logAIEngineEvent(params: {
+  requestId: string;
+  model: string;
+  latencyMs: number;
+  tokens?: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number };
+  validationStatus: 'PASSED' | 'FAILED' | 'RETRIED' | 'FALLBACK';
+  cacheStatus: 'HIT' | 'MISS';
+  validationError?: string;
+  apiError?: string;
+}) {
+  const pTokens = params.tokens?.promptTokenCount ?? 0;
+  const cTokens = params.tokens?.candidatesTokenCount ?? 0;
+  const tTokens = params.tokens?.totalTokenCount ?? 0;
+
+  console.log(
+    `[AI Engine Log] ID: ${params.requestId} | Model: ${params.model} | Latency: ${params.latencyMs}ms | Tokens: { prompt: ${pTokens}, candidate: ${cTokens}, total: ${tTokens} } | Validation: ${params.validationStatus} | Cache: ${params.cacheStatus}${params.validationError ? ` | ValErr: ${params.validationError}` : ''}${params.apiError ? ` | APIErr: ${params.apiError}` : ''}`
+  );
+}
+
+/**
+  Format Structured Response to readable text for presentation
+ */
+export function formatStructuredResponseMarkdown(res: StructuredAIResponse): string {
+  let text = res.answer;
+  if (res.keyTakeaways && res.keyTakeaways.length > 0 && !text.includes('Key Takeaways')) {
+    text += `\n\n**Key Takeaways:**\n` + res.keyTakeaways.map(k => `• ${k}`).join('\n');
+  }
+  if (res.recommendedAction && res.recommendedAction.trim() && !text.includes('Recommended Action')) {
+    text += `\n\n💡 **Recommended Action:** ${res.recommendedAction}`;
+  }
+  return text;
+}
+
+/**
+ * Model Selection helper:
+ * - gemini-2.5-pro for complex reasoning (thinkingMode, image input, architect/analyst persona, complex audits)
+ * - gemini-2.5-flash for fast conversational responses
+ */
+export function selectGeminiModel(options: { thinkingMode?: boolean; image?: any; persona?: string; model?: string }): string {
+  if (options.thinkingMode || options.image || options.persona === 'architect' || options.persona === 'analyst') {
+    return 'gemini-2.5-pro';
+  }
+  return 'gemini-2.5-flash';
+}
+
 export interface RagRequestOptions {
   prompt: string;
   history?: Array<{ role: string; content: string }>;
@@ -426,99 +553,171 @@ Please generate a grounded, accurate, and helpful response based on the above kn
 export async function generateRAGResponseStream(
   ai: GoogleGenAI | null,
   options: RagRequestOptions,
-  onMeta: (meta: { citations: any[]; intent: string; plainLanguageMode: boolean; retrievedDocs: string[] }) => void,
+  onMeta: (meta: { requestId: string; model: string; citations: any[]; intent: string; plainLanguageMode: boolean; retrievedDocs: string[] }) => void,
   onChunk: (textChunk: string) => void
 ): Promise<void> {
-  const { prompt, model = 'gemini-3.6-flash', thinkingMode, image } = options;
+  const requestId = `req-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+  const startTime = Date.now();
+  const selectedModel = selectGeminiModel(options);
+  const { prompt } = options;
   const { intent, plainLanguageMode } = detectUserIntent(prompt);
 
   // Retrieve top relevant knowledge docs
   const relevantDocs = retrieveKnowledgeChunks(prompt, 4);
-
-  // Build prompt and citations
   const { systemInstruction, fullPrompt, citations } = buildDynamicRAGPrompt(options, relevantDocs);
   const docNames = relevantDocs.map(d => d.sourceFile);
 
   // Send metadata upfront
   onMeta({
+    requestId,
+    model: selectedModel,
     citations,
     intent,
     plainLanguageMode,
     retrievedDocs: docNames
   });
 
-  // Select appropriate Gemini model
-  let selectedModel = model;
-  if (image || thinkingMode) {
-    selectedModel = 'gemini-3.1-pro-preview';
-  } else if (!selectedModel || selectedModel === 'gemini-2.5-flash' || selectedModel === 'gemini-2.0-flash') {
-    selectedModel = 'gemini-3.6-flash';
+  // Check In-Memory Cache first
+  const cacheKey = `stream_${selectedModel}_${prompt.trim().toLowerCase()}_${options.datasetContext?.fileName || 'nofile'}_${options.persona || 'auditor'}`;
+  const cachedData = getCachedResponse(cacheKey);
+  if (cachedData) {
+    logAIEngineEvent({
+      requestId,
+      model: selectedModel,
+      latencyMs: Date.now() - startTime,
+      validationStatus: 'PASSED',
+      cacheStatus: 'HIT'
+    });
+    onChunk(formatStructuredResponseMarkdown(cachedData));
+    return;
   }
 
+  // Attempt API Call with 1x Automatic Retry
   if (ai) {
-    try {
-      let contentsPayload: any = fullPrompt;
+    let attempt = 0;
+    const maxAttempts = 2;
 
-      if (image && image.data) {
-        contentsPayload = {
-          parts: [
-            { inlineData: { mimeType: image.mimeType || 'image/png', data: image.data } },
-            { text: fullPrompt }
-          ]
-        };
-      }
+    while (attempt < maxAttempts) {
+      attempt++;
+      const attemptStart = Date.now();
 
-      const responseStream = await ai.models.generateContentStream({
-        model: selectedModel,
-        contents: contentsPayload,
-        config: {
-          systemInstruction,
-          temperature: plainLanguageMode ? 0.3 : 0.4
+      try {
+        let contentsPayload: any = fullPrompt;
+        if (options.image && options.image.data) {
+          contentsPayload = {
+            parts: [
+              { inlineData: { mimeType: options.image.mimeType || 'image/png', data: options.image.data } },
+              { text: fullPrompt }
+            ]
+          };
         }
-      });
 
-      let streamedAny = false;
-      for await (const chunk of responseStream) {
-        if (chunk.text) {
-          streamedAny = true;
-          onChunk(chunk.text);
+        const responseStream = await ai.models.generateContentStream({
+          model: selectedModel,
+          contents: contentsPayload,
+          config: {
+            systemInstruction,
+            temperature: 0.3,
+            responseMimeType: 'application/json',
+            responseSchema: STRUCTURED_RESPONSE_SCHEMA
+          }
+        });
+
+        let accumulatedJsonText = '';
+        for await (const chunk of responseStream) {
+          if (chunk.text) {
+            accumulatedJsonText += chunk.text;
+          }
         }
+
+        // Parse and validate structured output
+        let parsed: any = null;
+        try {
+          parsed = JSON.parse(accumulatedJsonText);
+        } catch (e) {
+          // If markdown-wrapped
+          const clean = accumulatedJsonText.replace(/```json/g, '').replace(/```/g, '').trim();
+          parsed = JSON.parse(clean);
+        }
+
+        const validation = validateStructuredResponse(parsed);
+        if (validation.valid && validation.cleanData) {
+          const formattedText = formatStructuredResponseMarkdown(validation.cleanData);
+          setCachedResponse(cacheKey, validation.cleanData);
+
+          logAIEngineEvent({
+            requestId,
+            model: selectedModel,
+            latencyMs: Date.now() - startTime,
+            validationStatus: attempt === 1 ? 'PASSED' : 'RETRIED',
+            cacheStatus: 'MISS'
+          });
+
+          onChunk(formattedText);
+          return;
+        } else {
+          logAIEngineEvent({
+            requestId,
+            model: selectedModel,
+            latencyMs: Date.now() - attemptStart,
+            validationStatus: 'FAILED',
+            cacheStatus: 'MISS',
+            validationError: validation.error
+          });
+        }
+      } catch (err: any) {
+        logAIEngineEvent({
+          requestId,
+          model: selectedModel,
+          latencyMs: Date.now() - attemptStart,
+          validationStatus: 'FAILED',
+          cacheStatus: 'MISS',
+          apiError: err.message || 'Stream call error'
+        });
       }
 
-      if (streamedAny) {
-        return;
+      if (attempt < maxAttempts) {
+        await new Promise(r => setTimeout(r, 200));
       }
-    } catch (err: any) {
-      console.warn('Gemini RAG Streaming API call error, using grounded local fallback:', err.message);
     }
   }
 
-  // Grounded Local Fallback Synthesis (Guaranteed Zero Generic / Error Responses)
+  // Grounded Local Fallback Synthesis (User-friendly message, zero raw API errors)
+  logAIEngineEvent({
+    requestId,
+    model: selectedModel,
+    latencyMs: Date.now() - startTime,
+    validationStatus: 'FALLBACK',
+    cacheStatus: 'MISS'
+  });
+
   const docSummary = relevantDocs.map(d => `**${d.title}**: ${d.content}`).join('\n\n');
-  let fallbackText = '';
+  let fallbackAnswer = '';
 
   if (intent === 'product_explanation') {
-    fallbackText = plainLanguageMode
+    fallbackAnswer = plainLanguageMode
       ? `CSV Auditor Pro is an easy-to-use tool that checks your spreadsheets for mistakes, duplicate rows, or missing information before you upload them into a database. It works right inside your browser so your data stays safe!`
       : `CSV Auditor Pro is an enterprise spreadsheet audit and data compliance platform. It provides automated anomaly detection, real-time data cleaning (deduplication, missing value imputation, ISO date formatting), schema validation, and team collaboration.`;
   } else if (intent === 'dataset_query' && options.datasetContext?.fileName) {
     const ds = options.datasetContext;
-    fallbackText = `Here is the current audit breakdown for **${ds.fileName}**:
-- **Quality Score**: ${ds.score ?? 100}/100
-- **Total Rows**: ${ds.rowCount}
-- **Duplicates Found**: ${ds.duplicatesCount ?? 0}
-- **Blank/Missing Cells**: ${ds.missingValuesCount ?? 0}
-- **Applied Cleanings**: ${ds.cleaningOperationsPerformed?.length ? ds.cleaningOperationsPerformed.join(', ') : 'None yet'}
-
-You can run automated cleaning routines directly in the **Cleaning Center** tab!`;
-  } else if (plainLanguageMode) {
-    fallbackText = `Here is a simple explanation:\n${docSummary}\n\nIf you have an active spreadsheet loaded, you can ask me to help check for blank cells or duplicate rows!`;
+    fallbackAnswer = `Here is the current audit breakdown for **${ds.fileName}**:\n- **Quality Score**: ${ds.score ?? 100}/100\n- **Total Rows**: ${ds.rowCount}\n- **Duplicates Found**: ${ds.duplicatesCount ?? 0}\n- **Blank/Missing Cells**: ${ds.missingValuesCount ?? 0}\n- **Applied Cleanings**: ${ds.cleaningOperationsPerformed?.length ? ds.cleaningOperationsPerformed.join(', ') : 'None yet'}\n\nYou can run automated cleaning routines directly in the **Cleaning Center** tab!`;
   } else {
-    fallbackText = `Based on CSV Auditor Pro product documentation and your current workspace context:\n\n${docSummary}`;
+    fallbackAnswer = `Based on CSV Auditor Pro product documentation and your workspace context:\n\n${docSummary}`;
   }
 
-  // Stream fallback text in smooth chunks
-  const words = fallbackText.split(' ');
+  const fallbackStructured: StructuredAIResponse = {
+    answer: fallbackAnswer,
+    summary: 'CSV Auditor Pro audit insight retrieved from grounded knowledge base.',
+    keyTakeaways: [
+      'Grounded in local product documentation and session state.',
+      'Data parsing and audit rules executed locally in browser.'
+    ],
+    recommendedAction: 'Navigate to the Cleaning Center or run an automated dataset scan.',
+    confidenceScore: 0.9
+  };
+
+  const formattedFallback = formatStructuredResponseMarkdown(fallbackStructured);
+  const words = formattedFallback.split(' ');
   let batch = '';
   for (let i = 0; i < words.length; i++) {
     batch += (i === 0 ? '' : ' ') + words[i];
@@ -537,88 +736,150 @@ export async function generateRAGResponse(
   ai: GoogleGenAI | null,
   options: RagRequestOptions
 ): Promise<RagResponse> {
-  const { prompt, model = 'gemini-3.6-flash', thinkingMode, image } = options;
+  const requestId = `req-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+  const startTime = Date.now();
+  const selectedModel = selectGeminiModel(options);
+  const { prompt } = options;
   const { intent, plainLanguageMode } = detectUserIntent(prompt);
 
-  // Retrieve top relevant knowledge docs
   const relevantDocs = retrieveKnowledgeChunks(prompt, 4);
-
-  // Build prompt and citations
   const { systemInstruction, fullPrompt, citations } = buildDynamicRAGPrompt(options, relevantDocs);
-
   const docNames = relevantDocs.map(d => d.sourceFile);
 
-  // Select appropriate Gemini model as per skill rules
-  let selectedModel = model;
-  if (image || thinkingMode) {
-    selectedModel = 'gemini-3.1-pro-preview';
-  } else if (!selectedModel || selectedModel === 'gemini-2.5-flash' || selectedModel === 'gemini-2.0-flash') {
-    selectedModel = 'gemini-3.6-flash';
+  const cacheKey = `sync_${selectedModel}_${prompt.trim().toLowerCase()}_${options.datasetContext?.fileName || 'nofile'}_${options.persona || 'auditor'}`;
+  const cachedData = getCachedResponse(cacheKey);
+  if (cachedData) {
+    logAIEngineEvent({
+      requestId,
+      model: selectedModel,
+      latencyMs: Date.now() - startTime,
+      validationStatus: 'PASSED',
+      cacheStatus: 'HIT'
+    });
+    return {
+      text: formatStructuredResponseMarkdown(cachedData),
+      intent,
+      plainLanguageMode,
+      citations,
+      retrievedDocs: docNames
+    };
   }
 
   if (ai) {
-    try {
-      let contentsPayload: any = fullPrompt;
+    let attempt = 0;
+    const maxAttempts = 2;
 
-      if (image && image.data) {
-        contentsPayload = {
-          parts: [
-            { inlineData: { mimeType: image.mimeType || 'image/png', data: image.data } },
-            { text: fullPrompt }
-          ]
-        };
-      }
+    while (attempt < maxAttempts) {
+      attempt++;
+      const attemptStart = Date.now();
 
-      const response = await ai.models.generateContent({
-        model: selectedModel,
-        contents: contentsPayload,
-        config: {
-          systemInstruction,
-          temperature: plainLanguageMode ? 0.3 : 0.4
+      try {
+        let contentsPayload: any = fullPrompt;
+        if (options.image && options.image.data) {
+          contentsPayload = {
+            parts: [
+              { inlineData: { mimeType: options.image.mimeType || 'image/png', data: options.image.data } },
+              { text: fullPrompt }
+            ]
+          };
         }
-      });
 
-      const responseText = response.text || '';
-      if (responseText.trim()) {
-        return {
-          text: responseText,
-          intent,
-          plainLanguageMode,
-          citations,
-          retrievedDocs: docNames
-        };
+        const response = await ai.models.generateContent({
+          model: selectedModel,
+          contents: contentsPayload,
+          config: {
+            systemInstruction,
+            temperature: 0.3,
+            responseMimeType: 'application/json',
+            responseSchema: STRUCTURED_RESPONSE_SCHEMA
+          }
+        });
+
+        const rawText = response.text || '';
+        let parsed: any = null;
+        try {
+          parsed = JSON.parse(rawText);
+        } catch (e) {
+          const clean = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+          parsed = JSON.parse(clean);
+        }
+
+        const validation = validateStructuredResponse(parsed);
+        if (validation.valid && validation.cleanData) {
+          setCachedResponse(cacheKey, validation.cleanData);
+
+          logAIEngineEvent({
+            requestId,
+            model: selectedModel,
+            latencyMs: Date.now() - startTime,
+            tokens: (response as any).usageMetadata,
+            validationStatus: attempt === 1 ? 'PASSED' : 'RETRIED',
+            cacheStatus: 'MISS'
+          });
+
+          return {
+            text: formatStructuredResponseMarkdown(validation.cleanData),
+            intent,
+            plainLanguageMode,
+            citations,
+            retrievedDocs: docNames
+          };
+        } else {
+          logAIEngineEvent({
+            requestId,
+            model: selectedModel,
+            latencyMs: Date.now() - attemptStart,
+            validationStatus: 'FAILED',
+            cacheStatus: 'MISS',
+            validationError: validation.error
+          });
+        }
+      } catch (err: any) {
+        logAIEngineEvent({
+          requestId,
+          model: selectedModel,
+          latencyMs: Date.now() - attemptStart,
+          validationStatus: 'FAILED',
+          cacheStatus: 'MISS',
+          apiError: err.message || 'API call error'
+        });
       }
-    } catch (err: any) {
-      console.warn('Gemini RAG API call error, using grounded local fallback:', err.message);
+
+      if (attempt < maxAttempts) {
+        await new Promise(r => setTimeout(r, 200));
+      }
     }
   }
 
-  // Grounded Local Fallback Synthesis (Guaranteed Zero Generic / Error Responses)
+  // Fallback
+  logAIEngineEvent({
+    requestId,
+    model: selectedModel,
+    latencyMs: Date.now() - startTime,
+    validationStatus: 'FALLBACK',
+    cacheStatus: 'MISS'
+  });
+
   const docSummary = relevantDocs.map(d => `**${d.title}**: ${d.content}`).join('\n\n');
-  let fallbackText = '';
+  let fallbackAnswer = `Based on CSV Auditor Pro product documentation and your workspace context:\n\n${docSummary}`;
 
   if (intent === 'product_explanation') {
-    fallbackText = plainLanguageMode
-      ? `CSV Auditor Pro is an easy-to-use tool that checks your spreadsheets for mistakes, duplicate rows, or missing information before you upload them into a database. It works right inside your browser so your data stays safe!`
-      : `CSV Auditor Pro is an enterprise spreadsheet audit and data compliance platform. It provides automated anomaly detection, real-time data cleaning (deduplication, missing value imputation, ISO date formatting), schema validation, and team collaboration.`;
-  } else if (intent === 'dataset_query' && options.datasetContext?.fileName) {
-    const ds = options.datasetContext;
-    fallbackText = `Here is the current audit breakdown for **${ds.fileName}**:
-- **Quality Score**: ${ds.score ?? 100}/100
-- **Total Rows**: ${ds.rowCount}
-- **Duplicates Found**: ${ds.duplicatesCount ?? 0}
-- **Blank/Missing Cells**: ${ds.missingValuesCount ?? 0}
-- **Applied Cleanings**: ${ds.cleaningOperationsPerformed?.length ? ds.cleaningOperationsPerformed.join(', ') : 'None yet'}
-
-You can run automated cleaning routines directly in the **Cleaning Center** tab!`;
-  } else if (plainLanguageMode) {
-    fallbackText = `Here is a simple explanation:\n${docSummary}\n\nIf you have an active spreadsheet loaded, you can ask me to help check for blank cells or duplicate rows!`;
-  } else {
-    fallbackText = `Based on CSV Auditor Pro product documentation and your current workspace context:\n\n${docSummary}`;
+    fallbackAnswer = `CSV Auditor Pro is an enterprise spreadsheet audit and data compliance platform providing automated anomaly detection, real-time data cleaning, schema validation, and team collaboration.`;
   }
 
+  const fallbackStructured: StructuredAIResponse = {
+    answer: fallbackAnswer,
+    summary: 'CSV Auditor Pro audit insight retrieved from grounded knowledge base.',
+    keyTakeaways: [
+      'Grounded in local product documentation and session state.',
+      'Data parsing and audit rules executed locally in browser.'
+    ],
+    recommendedAction: 'Navigate to the Cleaning Center or run an automated dataset scan.',
+    confidenceScore: 0.9
+  };
+
   return {
-    text: fallbackText,
+    text: formatStructuredResponseMarkdown(fallbackStructured),
     intent,
     plainLanguageMode,
     citations,

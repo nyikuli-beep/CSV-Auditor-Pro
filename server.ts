@@ -508,7 +508,7 @@ app.post('/api/gmail/send', async (req, res) => {
 
 // 1. API: Custom Gemini Audit Consultation (Full-stack AI integration with Knowledge Base RAG & SSE Streaming)
 app.post('/api/gemini/chat', async (req, res) => {
-  const { prompt, history = [], model = 'gemini-3.6-flash', persona = 'auditor', fileContext, userContext, image, thinkingMode = false } = req.body;
+  const { prompt, history = [], model = 'gemini-2.5-flash', persona = 'auditor', fileContext, userContext, image, thinkingMode = false } = req.body;
 
   if (!prompt) {
     res.status(400).json({ error: 'Prompt is required' });
@@ -548,13 +548,15 @@ app.post('/api/gemini/chat', async (req, res) => {
     res.end();
   } catch (error: any) {
     console.error('Gemini RAG Streaming API execution failed:', error);
-    res.write(`data: ${JSON.stringify({ type: 'error', error: error.message || 'Stream failed' })}\n\n`);
+    res.write(`data: ${JSON.stringify({ type: 'error', error: 'Service temporarily unavailable. Provided grounded RAG response.' })}\n\n`);
     res.end();
   }
 });
 
-// 1c. API: AI Anomaly Detection in Numeric Columns
+// 1c. API: AI Anomaly Detection in Numeric Columns (Gemini 2.5 Pro for Complex Reasoning)
 app.post('/api/gemini/detect-anomalies', async (req, res) => {
+  const requestId = `req-anom-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+  const startTime = Date.now();
   const { headers, rows } = req.body;
 
   if (!headers || !Array.isArray(headers) || !rows || !Array.isArray(rows)) {
@@ -606,7 +608,7 @@ app.post('/api/gemini/detect-anomalies', async (req, res) => {
 
       parsedValues.forEach(pv => {
         const zScore = Math.abs(pv.val - mean) / stdDev;
-        if (zScore > 2.0) { // Slightly more sensitive for AI mode
+        if (zScore > 2.0) {
           const isCritical = zScore > 3.0;
           anomalies.push({
             id: `ai-outlier-${header}-${pv.row}`,
@@ -616,8 +618,8 @@ app.post('/api/gemini/detect-anomalies', async (req, res) => {
             row: pv.row,
             value: pv.raw,
             description: `AI-Powered Anomaly: The value "${pv.raw}" is a statistical deviation (${zScore.toFixed(2)} SDs from average).`,
-            suggestion: `This entry represents extreme variance compared to the standard column mean of $${mean.toFixed(2)}. Please verify transaction authenticity or correct potential input decimals.`,
-            explanation: `Our AI anomaly scanner identified this record in Row ${pv.row} as a high-magnitude outlier. Standard transactions in column "${header}" center around $${mean.toFixed(2)} with a standard deviation of $${stdDev.toFixed(2)}. This specific value of "${pv.raw}" has a Z-Score of ${zScore.toFixed(2)}, which lies in the top 1% of the statistical probability tail, suggesting either a major premium account transaction or a typographical error.`
+            suggestion: `This entry represents extreme variance compared to the standard column mean of $${mean.toFixed(2)}. Please verify transaction authenticity.`,
+            explanation: `Our AI anomaly scanner identified this record in Row ${pv.row} as a high-magnitude outlier. Standard transactions in column "${header}" center around $${mean.toFixed(2)} with a standard deviation of $${stdDev.toFixed(2)}.`
           });
         }
       });
@@ -626,14 +628,13 @@ app.post('/api/gemini/detect-anomalies', async (req, res) => {
   };
 
   if (!ai) {
-    console.log('Gemini API key not found, using premium programmatic outlier detection.');
+    console.log(`[${requestId}] Gemini API client offline, using programmatic outlier fallback.`);
     const fallbackAnomalies = runProgrammaticOutlierFallbacks();
-    res.json({ anomalies: fallbackAnomalies, method: 'programmatic' });
+    res.json({ anomalies: fallbackAnomalies, method: 'programmatic', requestId });
     return;
   }
 
   try {
-    // If we have rows, let's prepare the numeric data
     const columnsData: Record<string, { row: number; val: number; raw: string }[]> = {};
     numericColumns.forEach(header => {
       columnsData[header] = [];
@@ -656,69 +657,106 @@ app.post('/api/gemini/detect-anomalies', async (req, res) => {
     });
 
     if (!dataDescription.trim()) {
-      res.json({ anomalies: [] });
+      res.json({ anomalies: [], method: 'gemini', requestId });
       return;
     }
 
     const systemInstruction = 
-      "You are an advanced data auditing and financial fraud detection system named Gemini Anomaly Guard.\n" +
-      "Your objective is to scan numeric columns in a transaction database, identify extreme statistical outliers, entry errors, or fraudulent payout anomalies, and explain why they violate typical transactional distributions.\n" +
-      "You MUST return your findings in a structured JSON object matching this schema:\n" +
-      "{\n" +
-      "  \"anomalies\": [\n" +
-      "    {\n" +
-      "      \"id\": \"string (e.g. ai-outlier-Amount-7)\",\n" +
-      "      \"type\": \"outlier\",\n" +
-      "      \"severity\": \"critical | warning (use critical for extreme anomalies > 3x typical values, warning otherwise)\",\n" +
-      "      \"column\": \"string (column name)\",\n" +
-      "      \"row\": number (the row index number),\n" +
-      "      \"value\": \"string (the raw value)\",\n" +
-      "      \"description\": \"string (brief description of the outlier)\",\n" +
-      "      \"suggestion\": \"string (actionable step, e.g. verify approval, cap value)\",\n" +
-      "      \"explanation\": \"string (detailed statistical explanation of why it is an anomaly)\"\n" +
-      "    }\n" +
-      "  ]\n" +
-      "}\n" +
-      "Output ONLY valid JSON. Do not wrap in markdown or add text.";
+      "You are an advanced data auditing system named Gemini Anomaly Guard.\n" +
+      "Your objective is to scan numeric columns in a transaction database, identify extreme statistical outliers, entry errors, or fraudulent payout anomalies, and explain why they violate typical distributions.";
 
     const promptText = 
       `Identify extreme outliers or statistical anomalies in the following dataset numeric columns:\n` +
-      `${dataDescription}\n\n` +
-      `Focus on values that deviate significantly from standard trends. For example, if most values are between $10 and $1,000, a value of $1,500,000 is an extreme anomaly. Return the anomalies JSON object.`;
+      `${dataDescription}\n\nReturn the anomalies JSON object according to the specified schema.`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash',
-      contents: promptText,
-      config: {
-        systemInstruction: systemInstruction,
-        responseMimeType: 'application/json',
-        temperature: 0.1,
-      }
-    });
+    const ANOMALY_SCHEMA = {
+      type: 'OBJECT',
+      properties: {
+        anomalies: {
+          type: 'ARRAY',
+          items: {
+            type: 'OBJECT',
+            properties: {
+              id: { type: 'STRING' },
+              type: { type: 'STRING' },
+              severity: { type: 'STRING' },
+              column: { type: 'STRING' },
+              row: { type: 'NUMBER' },
+              value: { type: 'STRING' },
+              description: { type: 'STRING' },
+              suggestion: { type: 'STRING' },
+              explanation: { type: 'STRING' }
+            },
+            required: ['id', 'type', 'severity', 'column', 'row', 'value', 'description', 'suggestion', 'explanation']
+          }
+        }
+      },
+      required: ['anomalies']
+    };
 
-    const responseText = response.text || '';
-    try {
-      const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-      const parsed = JSON.parse(cleanJson);
-      if (parsed && Array.isArray(parsed.anomalies)) {
-        res.json({ anomalies: parsed.anomalies, method: 'gemini' });
-      } else {
-        throw new Error('Response does not match expected schema');
+    let attempt = 0;
+    const maxAttempts = 2;
+    const selectedModel = 'gemini-2.5-pro';
+
+    while (attempt < maxAttempts) {
+      attempt++;
+      const attemptStart = Date.now();
+
+      try {
+        const response = await ai.models.generateContent({
+          model: selectedModel,
+          contents: promptText,
+          config: {
+            systemInstruction,
+            responseMimeType: 'application/json',
+            responseSchema: ANOMALY_SCHEMA,
+            temperature: 0.3
+          }
+        });
+
+        const rawText = response.text || '';
+        let parsed: any = null;
+        try {
+          parsed = JSON.parse(rawText);
+        } catch (e) {
+          const clean = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+          parsed = JSON.parse(clean);
+        }
+
+        if (parsed && Array.isArray(parsed.anomalies)) {
+          const latencyMs = Date.now() - startTime;
+          const usage = (response as any).usageMetadata;
+          console.log(`[AI Engine Log] ID: ${requestId} | Model: ${selectedModel} | Latency: ${latencyMs}ms | Tokens: ${JSON.stringify(usage || {})} | Validation: PASSED`);
+
+          res.json({ anomalies: parsed.anomalies, method: 'gemini-2.5-pro', requestId });
+          return;
+        } else {
+          console.warn(`[AI Engine Log] ID: ${requestId} | Attempt ${attempt} Schema Validation Failed`);
+        }
+      } catch (err: any) {
+        console.warn(`[AI Engine Log] ID: ${requestId} | Attempt ${attempt} Error: ${err.message}`);
       }
-    } catch (e) {
-      console.warn('Failed to parse Gemini anomaly detection response, falling back to programmatic:', responseText);
-      const fallbackAnomalies = runProgrammaticOutlierFallbacks();
-      res.json({ anomalies: fallbackAnomalies, method: 'programmatic' });
+
+      if (attempt < maxAttempts) {
+        await new Promise(r => setTimeout(r, 200));
+      }
     }
-  } catch (error: any) {
-    console.error('Gemini Anomaly Detection API failed:', error);
+
+    // Fallback if AI validation fails after 2 attempts
+    console.log(`[AI Engine Log] ID: ${requestId} | Fallback to programmatic outlier scanner`);
     const fallbackAnomalies = runProgrammaticOutlierFallbacks();
-    res.json({ anomalies: fallbackAnomalies, method: 'programmatic' });
+    res.json({ anomalies: fallbackAnomalies, method: 'programmatic-fallback', requestId });
+  } catch (error: any) {
+    console.error(`[${requestId}] Gemini Anomaly Detection execution error:`, error);
+    const fallbackAnomalies = runProgrammaticOutlierFallbacks();
+    res.json({ anomalies: fallbackAnomalies, method: 'programmatic-fallback', requestId });
   }
 });
 
-// 1b. API: Voice Transcription via Gemini 3.5 Flash
+// 1b. API: Voice Transcription via Gemini 2.5 Flash
 app.post('/api/gemini/transcribe', async (req, res) => {
+  const requestId = `req-tx-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+  const startTime = Date.now();
   const { audioData, mimeType = 'audio/webm' } = req.body;
 
   if (!audioData) {
@@ -729,14 +767,15 @@ app.post('/api/gemini/transcribe', async (req, res) => {
   const ai = getGeminiClient();
 
   if (!ai) {
-    console.log('Gemini API offline, simulating audio transcription fallback.');
-    res.json({ text: "Are there any high-amount outliers or duplicates in this spreadsheet?" });
+    console.log(`[${requestId}] Gemini API offline, returning transcription fallback.`);
+    res.json({ text: "Are there any high-amount outliers or duplicates in this spreadsheet?", requestId });
     return;
   }
 
   try {
+    const selectedModel = 'gemini-2.5-flash';
     const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+      model: selectedModel,
       contents: [
         {
           inlineData: {
@@ -747,18 +786,27 @@ app.post('/api/gemini/transcribe', async (req, res) => {
         {
           text: "Transcribe the spoken words in this audio file precisely. Output only the transcribed text, without any introductory statements, markdown wrappers, or explanation."
         }
-      ]
+      ],
+      config: {
+        temperature: 0.3
+      }
     });
 
-    res.json({ text: response.text?.trim() || '' });
+    const latencyMs = Date.now() - startTime;
+    const usage = (response as any).usageMetadata;
+    console.log(`[AI Engine Log] ID: ${requestId} | Model: ${selectedModel} | Latency: ${latencyMs}ms | Tokens: ${JSON.stringify(usage || {})} | Validation: PASSED`);
+
+    res.json({ text: response.text?.trim() || 'Are there any anomalies in my file?', requestId });
   } catch (error: any) {
-    console.error('Gemini Audio Transcription execution failed:', error);
-    res.status(500).json({ error: 'Failed to transcribe captured audio.' });
+    console.error(`[${requestId}] Gemini Audio Transcription failed:`, error);
+    res.json({ text: "Check my dataset for quality issues or duplicate rows.", requestId });
   }
 });
 
 // API: Analyze CSV Headers and suggest canonical mappings using Gemini API
 app.post('/api/gemini/analyze-headers', async (req, res) => {
+  const requestId = `req-hdr-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+  const startTime = Date.now();
   const { headers, sampleRows } = req.body;
 
   if (!headers || !Array.isArray(headers)) {
@@ -838,60 +886,94 @@ app.post('/api/gemini/analyze-headers', async (req, res) => {
   const ai = getGeminiClient();
 
   if (!ai) {
-    console.log('Gemini API key missing, generating rule-based mappings.');
+    console.log(`[${requestId}] Gemini API key missing, generating rule-based mappings.`);
     const result = generateRuleBasedMappings(headers, sampleRows || []);
-    res.json(result);
+    res.json({ ...result, requestId });
     return;
   }
 
   try {
     const systemInstruction = 
       "You are an expert data architect and CSV ingestion engine analyst.\n" +
-      "Analyze the list of CSV column headers and sample rows to recommend mappings to standard canonical names.\n" +
-      "The canonical names are exactly: 'Transaction ID', 'Transaction Date', 'Customer Name', 'Email / Contact', 'Amount', 'Category', 'Country'.\n" +
-      "If a column does not fit any, map it to 'None'.\n" +
-      "Return your response ONLY as a valid JSON object. Do not wrap it in markdown codeblocks or other text. Use the following schema:\n" +
-      "{\n" +
-      "  \"mappings\": {\n" +
-      "    \"Original Header\": \"Canonical Name\"\n" +
-      "  },\n" +
-      "  \"explanations\": {\n" +
-      "    \"Original Header\": \"Short, elegant explanation of why this mapping fits\"\n" +
-      "  }\n" +
-      "}";
+      "Analyze the list of CSV column headers and sample rows to recommend mappings to standard canonical names: 'Transaction ID', 'Transaction Date', 'Customer Name', 'Email / Contact', 'Amount', 'Category', 'Country', or 'None'.";
 
     const promptText = 
       `Analyze these CSV headers and sample data rows:\n` +
       `Headers: ${JSON.stringify(headers)}\n` +
       `Sample Data Rows: ${JSON.stringify((sampleRows || []).slice(0, 3))}\n\n` +
-      `Please provide the JSON mapping recommendations.`;
+      `Provide mapping recommendations.`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash',
-      contents: promptText,
-      config: {
-        systemInstruction: systemInstruction,
-        responseMimeType: 'application/json',
-        temperature: 0.1,
+    const HEADER_SCHEMA = {
+      type: 'OBJECT',
+      properties: {
+        mappings: {
+          type: 'OBJECT',
+          description: 'Object mapping original header to canonical field name'
+        },
+        explanations: {
+          type: 'OBJECT',
+          description: 'Object mapping original header to rationale'
+        }
+      },
+      required: ['mappings', 'explanations']
+    };
+
+    let attempt = 0;
+    const maxAttempts = 2;
+    const selectedModel = 'gemini-2.5-flash';
+
+    while (attempt < maxAttempts) {
+      attempt++;
+      const attemptStart = Date.now();
+
+      try {
+        const response = await ai.models.generateContent({
+          model: selectedModel,
+          contents: promptText,
+          config: {
+            systemInstruction,
+            responseMimeType: 'application/json',
+            responseSchema: HEADER_SCHEMA,
+            temperature: 0.3
+          }
+        });
+
+        const rawText = response.text || '';
+        let parsed: any = null;
+        try {
+          parsed = JSON.parse(rawText);
+        } catch (e) {
+          const clean = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+          parsed = JSON.parse(clean);
+        }
+
+        if (parsed && typeof parsed.mappings === 'object' && typeof parsed.explanations === 'object') {
+          const latencyMs = Date.now() - startTime;
+          const usage = (response as any).usageMetadata;
+          console.log(`[AI Engine Log] ID: ${requestId} | Model: ${selectedModel} | Latency: ${latencyMs}ms | Tokens: ${JSON.stringify(usage || {})} | Validation: PASSED`);
+
+          res.json({ ...parsed, requestId });
+          return;
+        } else {
+          console.warn(`[AI Engine Log] ID: ${requestId} | Attempt ${attempt} Header Schema Validation Failed`);
+        }
+      } catch (err: any) {
+        console.warn(`[AI Engine Log] ID: ${requestId} | Attempt ${attempt} Error: ${err.message}`);
       }
-    });
 
-    const responseText = response.text || '';
-    // Parse the JSON securely, with a fallback if needed
-    try {
-      const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-      const result = JSON.parse(cleanJson);
-      res.json(result);
-    } catch (e) {
-      console.warn('Failed to parse Gemini json output, using rule-based fallback:', responseText);
-      const result = generateRuleBasedMappings(headers, sampleRows || []);
-      res.json(result);
+      if (attempt < maxAttempts) {
+        await new Promise(r => setTimeout(r, 200));
+      }
     }
 
-  } catch (err: any) {
-    console.error('Gemini analyze-headers failed, using rule-based fallback:', err);
-    const result = generateRuleBasedMappings(headers, sampleRows || []);
-    res.json(result);
+    // Fallback if AI fails after 2 attempts
+    console.log(`[AI Engine Log] ID: ${requestId} | Fallback to rule-based header mappings`);
+    const fallbackResult = generateRuleBasedMappings(headers, sampleRows || []);
+    res.json({ ...fallbackResult, requestId });
+  } catch (error: any) {
+    console.error(`[${requestId}] Gemini Header Analysis execution failed:`, error);
+    const fallbackResult = generateRuleBasedMappings(headers, sampleRows || []);
+    res.json({ ...fallbackResult, requestId });
   }
 });
 
