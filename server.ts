@@ -11,6 +11,7 @@ import { users, files, activities, members } from './src/db/schema.ts';
 import { getOrCreateUser } from './src/db/users.ts';
 import { requireAuth, AuthRequest } from './src/middleware/auth.ts';
 import { eq, desc } from 'drizzle-orm';
+import { dispatchGmailEmail, checkProductionEnvironmentVars } from './src/lib/gmailService.ts';
 
 // Load environmental keys
 dotenv.config();
@@ -455,77 +456,52 @@ function getGeminiClient(): GoogleGenAI | null {
   return aiClient;
 }
 
-// API: Send Gmail / Compliance Email Proxy with resilient fallback
+// API: Diagnostic / Environment Verification for Gmail Integration
+app.get('/api/gmail/status', (req, res) => {
+  const envChecks = checkProductionEnvironmentVars();
+  return res.json({
+    status: 'ok',
+    environment: process.env.VERCEL_ENV || process.env.NODE_ENV || 'development',
+    isVercel: Boolean(process.env.VERCEL),
+    envChecks,
+    requiredScopes: [
+      'https://www.googleapis.com/auth/gmail.readonly',
+      'https://www.googleapis.com/auth/gmail.send',
+      'https://www.googleapis.com/auth/gmail.modify',
+      'https://www.googleapis.com/auth/gmail.compose'
+    ]
+  });
+});
+
+// API: Send Gmail / Compliance Email Proxy with Hardened Error Handling & Exponential Retry
 app.post('/api/gmail/send', async (req, res) => {
   try {
-    const { to, subject, body, token } = req.body;
-    if (!to || !to.includes('@')) {
-      return res.status(400).json({ error: 'Please enter a valid recipient email address.' });
-    }
-    if (!subject) {
-      return res.status(400).json({ error: 'Please enter a subject line for the email.' });
-    }
-    if (!body) {
-      return res.status(400).json({ error: 'Email content body cannot be empty.' });
-    }
+    const { to, subject, body, token, userEmail, tokenIssuedAt } = req.body;
 
-    const isRealToken = token && token !== 'persisted_gmail_session_token' && token.length > 20;
-
-    if (isRealToken) {
-      try {
-        const rfcMessage = [
-          `To: ${to}`,
-          `Subject: ${subject}`,
-          'MIME-Version: 1.0',
-          'Content-Type: text/html; charset=utf-8',
-          '',
-          body
-        ].join('\r\n');
-
-        const bytes = Buffer.from(rfcMessage, 'utf-8');
-        const raw = bytes.toString('base64')
-          .replace(/\+/g, '-')
-          .replace(/\//g, '_')
-          .replace(/=+$/, '');
-
-        const gmailResponse = await fetch('https://www.googleapis.com/gmail/v1/users/me/messages/send', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ raw })
-        });
-
-        if (gmailResponse.ok) {
-          const gmailData = await gmailResponse.json().catch(() => ({}));
-          return res.json({
-            success: true,
-            method: 'gmail_api',
-            id: gmailData.id || `msg-${Date.now()}`,
-            message: `Compliance report successfully sent directly via Gmail API to ${to}!`
-          });
-        } else {
-          const errData: any = await gmailResponse.json().catch(() => ({}));
-          console.warn('Gmail API response error:', gmailResponse.status, errData);
-          // Fallback gracefully to platform compliance gateway if token is expired or unauthorized
-        }
-      } catch (gmailErr) {
-        console.warn('Gmail API fetch exception:', gmailErr);
-      }
-    }
-
-    // Fallback: Dispatch via CSV Auditor Pro Compliance Gateway
-    return res.json({
-      success: true,
-      method: 'compliance_gateway',
-      id: `gateway-${Date.now()}`,
-      message: `Compliance report successfully dispatched to ${to} via CSV Auditor Email Gateway!`
+    const result = await dispatchGmailEmail({
+      to,
+      subject,
+      body,
+      token,
+      userEmail,
+      tokenIssuedAt: tokenIssuedAt ? Number(tokenIssuedAt) : undefined
     });
 
+    if (result.success) {
+      return res.status(200).json(result);
+    } else {
+      return res.status(result.httpStatus || 500).json(result);
+    }
   } catch (err: any) {
-    console.error('Error dispatching compliance email:', err);
-    return res.status(500).json({ error: err.message || 'Failed to dispatch compliance email' });
+    console.error('Unhandled server exception in /api/gmail/send:', err);
+    return res.status(500).json({
+      success: false,
+      method: 'gmail_api',
+      message: err.message || 'An unhandled server error occurred while dispatching the email.',
+      httpStatus: 500,
+      errorCode: 'INTERNAL_SERVER_ERROR',
+      requestId: `req-err-${Date.now()}`
+    });
   }
 });
 

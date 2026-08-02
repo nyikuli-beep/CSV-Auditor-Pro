@@ -445,7 +445,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
         if (result) {
           const credential = GoogleAuthProvider.credentialFromResult(result);
           if (credential?.accessToken) {
-            setGmailAccessToken(credential.accessToken);
+            setGmailAccessToken(credential.accessToken, Date.now());
           }
           if (result.user) {
             setFirebaseUser(result.user);

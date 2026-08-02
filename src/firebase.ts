@@ -33,20 +33,27 @@ console.error = function (...args: any[]) {
   originalConsoleError.apply(console, args);
 };
 
-// Persistent cache for Google Access Token
+// Persistent cache for Google Access Token and Metadata
 let cachedAccessToken: string | null = null;
+let cachedTokenIssuedAt: number | null = null;
 
-export const setGmailAccessToken = (token: string | null) => {
+export const setGmailAccessToken = (token: string | null, issuedAt?: number) => {
   cachedAccessToken = token;
+  cachedTokenIssuedAt = issuedAt || (token ? Date.now() : null);
+
   if (token) {
     try {
       localStorage.setItem('gmail_access_token', token);
       localStorage.setItem('gmail_connected', 'true');
+      if (cachedTokenIssuedAt) {
+        localStorage.setItem('gmail_token_issued_at', String(cachedTokenIssuedAt));
+      }
     } catch (e) {}
   } else {
     try {
       localStorage.removeItem('gmail_access_token');
       localStorage.removeItem('gmail_connected');
+      localStorage.removeItem('gmail_token_issued_at');
     } catch (e) {}
   }
 };
@@ -63,6 +70,27 @@ export const getGmailAccessToken = () => {
   return cachedAccessToken;
 };
 
+export const getGmailTokenMetadata = () => {
+  const token = getGmailAccessToken();
+  let issuedAt = cachedTokenIssuedAt;
+  if (!issuedAt) {
+    try {
+      const stored = localStorage.getItem('gmail_token_issued_at');
+      if (stored) issuedAt = parseInt(stored, 10);
+    } catch (e) {}
+  }
+
+  const ageSeconds = issuedAt ? Math.floor((Date.now() - issuedAt) / 1000) : null;
+  const isExpired = ageSeconds !== null && ageSeconds > 3500;
+
+  return {
+    token,
+    issuedAt,
+    ageSeconds,
+    isExpired
+  };
+};
+
 export async function signInWithGoogleForGmail() {
   const provider = new GoogleAuthProvider();
   provider.addScope('https://www.googleapis.com/auth/gmail.readonly');
@@ -74,16 +102,18 @@ export async function signInWithGoogleForGmail() {
     const result = await signInWithPopup(auth, provider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
     if (credential?.accessToken) {
-      setGmailAccessToken(credential.accessToken);
+      const issuedAt = Date.now();
+      setGmailAccessToken(credential.accessToken, issuedAt);
       return {
         user: result.user,
-        accessToken: credential.accessToken
+        accessToken: credential.accessToken,
+        issuedAt
       };
     }
   } catch (err: any) {
     if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user') {
       await signInWithRedirect(auth, provider);
-      return { user: null, accessToken: null };
+      return { user: null, accessToken: null, issuedAt: null };
     }
     throw err;
   }

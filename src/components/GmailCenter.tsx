@@ -19,7 +19,7 @@ import {
   ListFilter,
   Check
 } from 'lucide-react';
-import { getGmailAccessToken, signInWithGoogleForGmail, setGmailAccessToken } from '../firebase';
+import { getGmailAccessToken, getGmailTokenMetadata, signInWithGoogleForGmail, setGmailAccessToken, auth } from '../firebase';
 import { CSVFile } from '../types';
 
 interface GmailCenterProps {
@@ -298,10 +298,13 @@ export default function GmailCenter({
       .replace(/=+$/, '');
   };
 
-  // Send the drafted email securely
+  // Send the drafted email securely with auto token renewal & detailed status handling
   const handleSendEmail = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token) return;
+    if (!token) {
+      setSendError('Please authorize Gmail access before sending emails.');
+      return;
+    }
     if (!toEmail) {
       setSendError('Please enter a recipient email address.');
       return;
@@ -316,52 +319,96 @@ export default function GmailCenter({
     setSendError(null);
 
     try {
-      let successMsg = `Compliance report successfully dispatched to ${toEmail}!`;
+      // Check if token is expired or about to expire before dispatching
+      let activeToken = token;
+      let meta = getGmailTokenMetadata();
 
-      const apiRes = await fetch('/api/gmail/send', {
+      if (meta.isExpired && activeToken !== 'persisted_gmail_session_token') {
+        console.log('Detected expired Google Access Token, renewing via Google Sign-In...');
+        try {
+          const renewed = await signInWithGoogleForGmail();
+          if (renewed?.accessToken) {
+            activeToken = renewed.accessToken;
+            setToken(activeToken);
+            meta = getGmailTokenMetadata();
+          }
+        } catch (renewErr) {
+          console.warn('Auto-refresh pre-flight token attempt failed:', renewErr);
+        }
+      }
+
+      const currentUserEmail = auth.currentUser?.email || 'authenticated-user@workspace';
+
+      const sendPayload = {
+        to: toEmail,
+        subject,
+        body: emailBody,
+        token: activeToken,
+        userEmail: currentUserEmail,
+        tokenIssuedAt: meta.issuedAt || undefined
+      };
+
+      let apiRes = await fetch('/api/gmail/send', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          to: toEmail,
-          subject,
-          body: emailBody,
-          token
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sendPayload)
       });
 
-      if (apiRes.ok) {
-        const data = await apiRes.json();
-        if (data.success) {
-          successMsg = data.message || `Compliance report successfully dispatched to ${toEmail}!`;
-        } else {
-          throw new Error(data.error || 'Failed to dispatch compliance email.');
+      let data = await apiRes.json().catch(() => ({}));
+
+      // Automatic Retry on 401 Token Expiration / Invalid Token
+      if (!apiRes.ok && (apiRes.status === 401 || data.requiresReauth) && activeToken !== 'persisted_gmail_session_token') {
+        console.warn('Received 401 from Gmail API endpoint. Attempting transparent re-authentication...');
+        try {
+          const renewed = await signInWithGoogleForGmail();
+          if (renewed?.accessToken) {
+            activeToken = renewed.accessToken;
+            setToken(activeToken);
+            const freshMeta = getGmailTokenMetadata();
+
+            // Retry API dispatch with fresh token
+            apiRes = await fetch('/api/gmail/send', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                ...sendPayload,
+                token: activeToken,
+                tokenIssuedAt: freshMeta.issuedAt || undefined
+              })
+            });
+            data = await apiRes.json().catch(() => ({}));
+          }
+        } catch (retryAuthErr) {
+          console.error('Transparent re-authentication failed:', retryAuthErr);
+        }
+      }
+
+      if (apiRes.ok && data.success) {
+        const successMsg = data.message || `Compliance report successfully dispatched to ${toEmail}!`;
+        setSendSuccess(successMsg);
+        onAddActivity(`Sent email report: "${subject}" to ${toEmail}`);
+        
+        // Update local sent history
+        setSentHistory(prev => [
+          { id: `sent-${Date.now()}`, to: toEmail, subject, date: 'Just now', status: 'sent' },
+          ...prev
+        ]);
+
+        // Clear non-template values if custom
+        if (selectedTemplate === 'custom') {
+          setToEmail('');
+          setSubject('');
+          setEmailBody('');
+        }
+
+        // Refresh real Gmail sent list if token is live
+        if (activeToken && activeToken !== 'persisted_gmail_session_token') {
+          fetchGmailSentList();
         }
       } else {
-        const errJson = await apiRes.json().catch(() => ({}));
-        throw new Error(errJson.error || 'Compliance email dispatch API encountered an error.');
-      }
-
-      setSendSuccess(successMsg);
-      onAddActivity(`Sent email report: "${subject}" to ${toEmail}`);
-      
-      // Update local sent history
-      setSentHistory(prev => [
-        { id: `sent-${Date.now()}`, to: toEmail, subject, date: 'Just now', status: 'sent' },
-        ...prev
-      ]);
-
-      // Clear non-template values if custom
-      if (selectedTemplate === 'custom') {
-        setToEmail('');
-        setSubject('');
-        setEmailBody('');
-      }
-
-      // Refresh real Gmail sent list if token is live
-      if (token && token !== 'persisted_gmail_session_token') {
-        fetchGmailSentList();
+        // Detailed user-friendly error message returned by hardened backend
+        const errorMessage = data.message || data.error || 'Failed to dispatch compliance email due to an internal error.';
+        throw new Error(errorMessage);
       }
 
     } catch (err: any) {
