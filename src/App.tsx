@@ -1786,10 +1786,10 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   };
 
 
-  // Dispatch prompt context to full-stack backend with multi-turn and custom model/persona support
+  // Dispatch prompt context to full-stack backend with RAG Knowledge Base and rich dataset context
   const handleSendChatMessage = async (
     msgContent: string, 
-    model: string = 'gemini-3.5-flash', 
+    model: string = 'gemini-3.6-flash', 
     persona: string = 'auditor',
     image: { data: string; mimeType: string } | null = null,
     thinkingMode: boolean = false
@@ -1804,8 +1804,12 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     const aiThinkingMsg: ChatMessage = {
       id: `msg-ai-think-${Date.now()}`,
       role: 'assistant',
-      content: 'Consulting Gemini API for compliance insights...',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      content: 'Searching documentation & analyzing dataset...',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      citations: [
+        { type: 'product', label: '⚙️ Product Knowledge' },
+        { type: 'doc', label: '📄 Searching Docs...' }
+      ]
     };
 
     // Capture current message history before state updates
@@ -1828,36 +1832,114 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
           persona: persona,
           image: image,
           thinkingMode: thinkingMode,
+          userContext: {
+            uid: user?.uid,
+            email: user?.email,
+            name: user?.name || user?.email?.split('@')[0] || 'User',
+            role: 'Admin',
+            workspaceName: 'CSV Auditor Pro Workspace',
+            teamMembersCount: members?.length || 1
+          },
           fileContext: activeFile ? {
             fileName: activeFile.name,
             headers: activeFile.headers,
             rowCount: activeFile.rows.length,
-            issuesCount: activeFile.issues.length
+            issuesCount: activeFile.issues.length,
+            score: activeFile.score,
+            duplicatesCount: activeFile.issues.filter(i => i.type === 'duplicate').length,
+            missingValuesCount: activeFile.issues.filter(i => i.type === 'missing_value').length,
+            formatErrorsCount: activeFile.issues.filter(i => i.type === 'invalid_format').length,
+            outliersCount: activeFile.issues.filter(i => i.type === 'outlier').length
           } : null
         })
       });
 
-      if (!response.ok) throw new Error('API server unavailable');
-      const data = await response.json();
+      if (!response.ok || !response.body) throw new Error('API server unavailable or stream error');
 
-      setChatMessages(prev => prev.map(m => 
-        m.id === aiThinkingMsg.id 
-          ? { ...m, content: data.text, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
-          : m
-      ));
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let accumulatedText = '';
+      let currentCitations: any[] = aiThinkingMsg.citations || [];
+      let retrievedDocs: string[] = [];
+      let intent = '';
+      let sseBuffer = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        sseBuffer += decoder.decode(value, { stream: true });
+        const lines = sseBuffer.split('\n');
+        sseBuffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data:')) continue;
+          const jsonStr = trimmed.slice(5).trim();
+          if (!jsonStr) continue;
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            if (parsed.type === 'meta') {
+              if (parsed.citations) currentCitations = parsed.citations;
+              if (parsed.retrievedDocs) retrievedDocs = parsed.retrievedDocs;
+              if (parsed.intent) intent = parsed.intent;
+            } else if (parsed.type === 'chunk' && parsed.text) {
+              accumulatedText += parsed.text;
+            } else if (parsed.type === 'error') {
+              throw new Error(parsed.error || 'Stream error');
+            }
+
+            setChatMessages(prev => prev.map(m => 
+              m.id === aiThinkingMsg.id 
+                ? { 
+                    ...m, 
+                    content: accumulatedText || m.content, 
+                    citations: currentCitations,
+                    retrievedDocs: retrievedDocs,
+                    intent: intent,
+                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+                  }
+                : m
+            ));
+          } catch (e) {
+            console.warn('Error parsing stream event:', e);
+          }
+        }
+      }
+
+      // Handle any leftover trailing data in buffer
+      if (sseBuffer.trim().startsWith('data:')) {
+        const jsonStr = sseBuffer.trim().slice(5).trim();
+        if (jsonStr) {
+          try {
+            const parsed = JSON.parse(jsonStr);
+            if (parsed.type === 'chunk' && parsed.text) {
+              accumulatedText += parsed.text;
+              setChatMessages(prev => prev.map(m => 
+                m.id === aiThinkingMsg.id ? { ...m, content: accumulatedText } : m
+              ));
+            }
+          } catch (e) {}
+        }
+      }
     } catch (err) {
-      // Graceful offline fallback
+      // Product-grounded offline fallback
       setTimeout(() => {
         setChatMessages(prev => prev.map(m => 
           m.id === aiThinkingMsg.id 
             ? { 
                 ...m, 
-                content: `[Expert Fallback] I received: "${msgContent}". Active dataset metrics suggest running standard cleaning routines. If you need standard PostgreSQL migration DDLs, let me know!`, 
+                content: `CSV Auditor Pro Knowledge Base Response:\n\nRegarding "${msgContent}": CSV Auditor Pro provides automated dataset auditing, deduplication, missing value imputation, ISO date formatting, and schema validation. You can run automated cleaning routines directly in the Cleaning Center tab or generate a PDF report!`, 
+                citations: [
+                  { type: 'product', label: '⚙️ Product Knowledge' },
+                  { type: 'doc', label: '📄 Grounded Docs' }
+                ],
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
               }
             : m
         ));
-      }, 1000);
+      }, 800);
     }
   };
 

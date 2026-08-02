@@ -91,6 +91,10 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
+  citations?: Array<{ type: 'doc' | 'dataset' | 'memory' | 'product' | string; label: string }>;
+  retrievedDocs?: string[];
+  intent?: string;
+  statusStep?: string;
 }
 
 export interface ReportConfig {

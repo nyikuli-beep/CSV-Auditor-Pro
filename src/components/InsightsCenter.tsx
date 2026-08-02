@@ -58,10 +58,11 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Audio Recording State
+  // Audio Recording State & Speech Recognition
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const speechRecognitionRef = useRef<any>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -163,9 +164,52 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
     }
   };
 
-  // Audio Recording (Microphone Input) Logic
+  // Audio Recording (Microphone Input & Speech Dictation) Logic
   const startRecording = async () => {
     try {
+      // 1. Initialize Browser SpeechRecognition if supported
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      let recognitionInstance: any = null;
+      let speechTranscribed = false;
+
+      if (SpeechRecognition) {
+        try {
+          recognitionInstance = new SpeechRecognition();
+          recognitionInstance.continuous = true;
+          recognitionInstance.interimResults = true;
+          recognitionInstance.lang = 'en-US';
+
+          let baseInput = userInput;
+          recognitionInstance.onresult = (event: any) => {
+            speechTranscribed = true;
+            let currentInterim = '';
+            let newFinal = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+              if (event.results[i].isFinal) {
+                newFinal += event.results[i][0].transcript;
+              } else {
+                currentInterim += event.results[i][0].transcript;
+              }
+            }
+            if (newFinal) {
+              baseInput = (baseInput ? baseInput.trim() + ' ' : '') + newFinal.trim();
+            }
+            const combined = (baseInput ? baseInput.trim() + ' ' : '') + currentInterim.trim();
+            setUserInput(combined);
+          };
+
+          recognitionInstance.onerror = (event: any) => {
+            console.warn("Speech Recognition notice:", event.error);
+          };
+
+          recognitionInstance.start();
+          speechRecognitionRef.current = recognitionInstance;
+        } catch (srErr) {
+          console.warn("SpeechRecognition initialization failed, relying on audio stream recorder:", srErr);
+        }
+      }
+
+      // 2. Request microphone stream for MediaRecorder audio capture
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
@@ -178,49 +222,57 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
       };
 
       mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        
-        // Convert audio Blob to Base64
-        const reader = new FileReader();
-        reader.readAsDataURL(audioBlob);
-        reader.onloadend = async () => {
-          const base64String = reader.result as string;
-          const base64Data = base64String.split(',')[1];
+        // If live SpeechRecognition didn't produce text, use backend Gemini transcription
+        if (!speechTranscribed && audioChunksRef.current.length > 0) {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
           
-          setLoading(true);
-          try {
-            const res = await fetch('/api/gemini/transcribe', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                audioData: base64Data,
-                mimeType: 'audio/webm'
-              })
-            });
-            const data = await res.json();
-            if (data.text) {
-              setUserInput(prev => prev ? `${prev} ${data.text}` : data.text);
+          const reader = new FileReader();
+          reader.readAsDataURL(audioBlob);
+          reader.onloadend = async () => {
+            const base64String = reader.result as string;
+            const base64Data = base64String.split(',')[1];
+            
+            setLoading(true);
+            try {
+              const res = await fetch('/api/gemini/transcribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  audioData: base64Data,
+                  mimeType: 'audio/webm'
+                })
+              });
+              const data = await res.json();
+              if (data.text) {
+                setUserInput(prev => prev ? `${prev.trim()} ${data.text.trim()}` : data.text.trim());
+              }
+            } catch (e) {
+              console.error("Transcription pipeline execution failed:", e);
+            } finally {
+              setLoading(false);
             }
-          } catch (e) {
-            console.error("Transcription pipeline execution failed:", e);
-          } finally {
-            setLoading(false);
-          }
-        };
+          };
+        }
 
-        // Turn off mic light by stopping all tracks
+        // Stop all audio tracks
         stream.getTracks().forEach(track => track.stop());
       };
 
       mediaRecorder.start();
       setIsRecording(true);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Microphone access failed:", err);
-      alert("Microphone access denied or unavailable in this secure context. Check iframe permissions.");
+      alert("Microphone access denied or unavailable. Please ensure microphone permissions are allowed in your browser settings.");
     }
   };
 
   const stopRecording = () => {
+    if (speechRecognitionRef.current) {
+      try {
+        speechRecognitionRef.current.stop();
+      } catch (e) {}
+      speechRecognitionRef.current = null;
+    }
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
@@ -244,9 +296,10 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
         ];
       default: // auditor
         return [
-          { label: 'Identify Violations', text: 'Perform a detailed compliance audit. Which dates, emails, and transaction keys are invalid or duplicate?' },
-          { label: 'Audit Checklist', text: 'Generate a step-by-step cleaning audit checklist for compliance before we submit this to regulators.' },
-          { label: 'Spot Data Outliers', text: 'Find transaction outliers with amounts exceeding standard limits, and explain why they pose compliance risks.' }
+          { label: 'Product & Features', text: 'Explain how CSV Auditor Pro works and list all key cleaning and security features.' },
+          { label: 'Dataset Health (Layman)', text: 'Explain my active dataset health score and detected anomalies in simple layman terms.' },
+          { label: 'Data Cleaning & Dedupe', text: 'How do duplicate row detection and missing value imputation routines work?' },
+          { label: 'Security & Privacy', text: 'How does CSV Auditor Pro protect my data privacy and prevent third-party AI training?' }
         ];
     }
   };
@@ -596,6 +649,27 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
                   </div>
                   <div className={`p-3.5 rounded-2xl relative ${msg.role === 'user' ? 'bg-blue-600/15 border border-blue-500/20 text-blue-200 rounded-tr-none' : isDarkMode ? 'bg-slate-950/60 border border-slate-800 rounded-tl-none' : 'bg-slate-100 rounded-tl-none text-slate-800'}`}>
                     <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                    
+                    {/* RAG Grounded Sources & Citations */}
+                    {msg.role === 'assistant' && msg.citations && msg.citations.length > 0 && (
+                      <div className="mt-3 pt-2.5 border-t border-slate-800/40 flex flex-wrap gap-1.5 items-center">
+                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mr-1">Sources:</span>
+                        {msg.citations.map((c, idx) => (
+                          <span 
+                            key={idx} 
+                            className={`px-2 py-0.5 rounded-md text-[9px] font-mono border ${
+                              c.type === 'doc' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                              c.type === 'dataset' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                              c.type === 'memory' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                              'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                            }`}
+                          >
+                            {c.label}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
                     <span className="text-[8px] text-slate-500 font-mono block mt-2 text-right">{msg.timestamp}</span>
                   </div>
                 </div>
