@@ -30,7 +30,14 @@ import {
   CornerDownRight, 
   Sparkles,
   Download,
-  Eye
+  Eye,
+  ThumbsUp,
+  Heart,
+  Flame,
+  Rocket,
+  Lightbulb,
+  Target,
+  Globe
 } from 'lucide-react';
 import { TeamMember } from '../types';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
@@ -120,7 +127,32 @@ interface CellAnnotationBoardProps {
   activeFileName?: string;
 }
 
-const EMOJI_OPTIONS = ['👍', '❤️', '🔥', '🚀', '💡', '👏', '🎯'];
+const REACTION_CONFIG: Record<string, { label: string; icon: React.FC<{ className?: string }>; colorClass: string }> = {
+  'thumbsup': { label: 'Like', icon: ThumbsUp, colorClass: 'text-blue-400' },
+  '👍': { label: 'Like', icon: ThumbsUp, colorClass: 'text-blue-400' },
+  'heart': { label: 'Love', icon: Heart, colorClass: 'text-rose-400' },
+  '❤️': { label: 'Love', icon: Heart, colorClass: 'text-rose-400' },
+  'fire': { label: 'Flame', icon: Flame, colorClass: 'text-amber-400' },
+  '🔥': { label: 'Flame', icon: Flame, colorClass: 'text-amber-400' },
+  'rocket': { label: 'Rocket', icon: Rocket, colorClass: 'text-purple-400' },
+  '🚀': { label: 'Rocket', icon: Rocket, colorClass: 'text-purple-400' },
+  'idea': { label: 'Insight', icon: Lightbulb, colorClass: 'text-yellow-400' },
+  '💡': { label: 'Insight', icon: Lightbulb, colorClass: 'text-yellow-400' },
+  'sparkles': { label: 'Clap', icon: Sparkles, colorClass: 'text-emerald-400' },
+  '👏': { label: 'Clap', icon: Sparkles, colorClass: 'text-emerald-400' },
+  'target': { label: 'Target', icon: Target, colorClass: 'text-cyan-400' },
+  '🎯': { label: 'Target', icon: Target, colorClass: 'text-cyan-400' },
+};
+
+const REACTION_OPTIONS = [
+  { key: 'thumbsup', label: 'Like', icon: ThumbsUp, colorClass: 'text-blue-400 hover:bg-blue-500/20' },
+  { key: 'heart', label: 'Love', icon: Heart, colorClass: 'text-rose-400 hover:bg-rose-500/20' },
+  { key: 'fire', label: 'Flame', icon: Flame, colorClass: 'text-amber-400 hover:bg-amber-500/20' },
+  { key: 'rocket', label: 'Rocket', icon: Rocket, colorClass: 'text-purple-400 hover:bg-purple-500/20' },
+  { key: 'idea', label: 'Insight', icon: Lightbulb, colorClass: 'text-yellow-400 hover:bg-yellow-500/20' },
+  { key: 'sparkles', label: 'Clap', icon: Sparkles, colorClass: 'text-emerald-400 hover:bg-emerald-500/20' },
+  { key: 'target', label: 'Target', icon: Target, colorClass: 'text-cyan-400 hover:bg-cyan-500/20' },
+];
 
 export default function CellAnnotationBoard({
   currentUserEmail,
@@ -139,27 +171,24 @@ export default function CellAnnotationBoard({
   const annotationId = 'cell-annotation-board';
   const fileId = activeFileId || 'active-file';
 
-  // Dynamic Auth State
-  const [userAuth, setUserAuth] = useState<{ uid: string; email: string; name: string; photo: string }>({
-    uid: auth.currentUser?.uid || `usr-${currentUserEmail.split('@')[0] || 'active'}`,
-    email: auth.currentUser?.email || currentUserEmail,
-    name: auth.currentUser?.displayName || currentUserEmail.split('@')[0] || 'Collaborator',
-    photo: auth.currentUser?.photoURL || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(currentUserEmail)}&backgroundColor=3b82f6`
+  // Dynamic Auth State - Respects active user profile switches and Firebase Auth
+  const [userAuth, setUserAuth] = useState<{ uid: string; email: string; name: string; photo: string }>(() => {
+    const email = currentUserEmail || auth.currentUser?.email || 'collaborator@workspace.com';
+    const name = email.split('@')[0] || 'Collaborator';
+    const uid = auth.currentUser?.uid || `usr-${email.split('@')[0] || 'active'}`;
+    const photo = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(email)}&backgroundColor=3b82f6`;
+    return { uid, email, name, photo };
   });
 
   useEffect(() => {
-    const unsub = auth.onAuthStateChanged((u) => {
-      if (u) {
-        setUserAuth({
-          uid: u.uid,
-          email: u.email || currentUserEmail,
-          name: u.displayName || u.email?.split('@')[0] || 'Collaborator',
-          photo: u.photoURL || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(u.displayName || u.email || 'user')}&backgroundColor=3b82f6`
-        });
-      }
-    });
-    return () => unsub();
-  }, [currentUserEmail]);
+    const email = currentUserEmail || auth.currentUser?.email || 'collaborator@workspace.com';
+    const memberMatch = members.find(m => m.email.toLowerCase() === email.toLowerCase());
+    const name = memberMatch?.name || (auth.currentUser?.email?.toLowerCase() === email.toLowerCase() ? auth.currentUser?.displayName : null) || email.split('@')[0] || 'Collaborator';
+    const photo = memberMatch?.avatar || (auth.currentUser?.email?.toLowerCase() === email.toLowerCase() ? auth.currentUser?.photoURL : null) || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}&backgroundColor=3b82f6`;
+    const uid = (auth.currentUser?.email?.toLowerCase() === email.toLowerCase() && auth.currentUser?.uid) ? auth.currentUser.uid : `usr-${email.split('@')[0] || 'active'}`;
+
+    setUserAuth({ uid, email, name, photo });
+  }, [currentUserEmail, members]);
 
   // Current User Identification
   const activeMember = useMemo(() => {
@@ -258,173 +287,235 @@ export default function CellAnnotationBoard({
     };
   }, [addLog]);
 
-  // --- 5. FIRESTORE REAL-TIME MESSAGE LISTENER (onSnapshot) ---
+  // --- 5. FIRESTORE REAL-TIME MULTI-CHANNEL MESSAGE LISTENER (onSnapshot) ---
   useEffect(() => {
     if (!tenancyValid) return;
 
-    addLog('info', `Attaching real-time snapshot listener to path: ${multiTenantPath}`);
+    addLog('info', `Attaching real-time multi-channel listeners for active workspace [${workspaceId}] and global channels...`);
 
-    try {
-      const q = query(
-        collection(db, 'tenants', tenantId, 'workspaces', workspaceId, 'annotations', annotationId, 'messages'),
-        orderBy('createdAt', 'asc'),
-        limit(100)
-      );
+    // Helper to merge remote docs from snapshot into state
+    const processSnapshotDocs = (docs: any[]) => {
+      setSnapshotCount(c => c + 1);
+      const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      setLastSnapshotTime(timeNow);
 
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        setSnapshotCount(c => c + 1);
-        const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        setLastSnapshotTime(timeNow);
+      const incomingMsgs: ChatMessage[] = [];
+      const userEmail = userAuth.email || currentUserEmail;
 
-        const remoteMsgs: ChatMessage[] = [];
+      docs.forEach((docSnap) => {
+        const raw = docSnap.data();
+        if (!raw || !raw.id) return;
 
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data() as ChatMessage;
-          if (data && data.id) {
-            remoteMsgs.push(data);
+        // Convert or normalize document
+        const msg: ChatMessage = {
+          id: raw.id,
+          messageId: raw.id,
+          tenantId: raw.tenantId || tenantId,
+          workspaceId: raw.workspaceId || workspaceId,
+          annotationId: raw.annotationId || annotationId,
+          fileId: raw.fileId || fileId,
+          senderId: raw.senderId || raw.userEmail || 'usr-anon',
+          senderEmail: raw.senderEmail || raw.userEmail || 'collaborator@workspace.com',
+          senderName: raw.senderName || raw.author || 'Team Member',
+          senderPhoto: raw.senderPhoto || raw.avatar,
+          senderRole: raw.senderRole || raw.role || 'Member',
+          text: raw.text || '',
+          cellRef: raw.cellRef || 'Row 14',
+          mentions: raw.mentions || [],
+          attachments: raw.attachments || [],
+          createdAt: raw.createdAt || raw.timestamp || Date.now(),
+          updatedAt: raw.updatedAt || Date.now(),
+          edited: Boolean(raw.edited),
+          deleted: Boolean(raw.deleted),
+          replyTo: raw.replyTo || null,
+          status: raw.status || 'delivered',
+          reactions: raw.reactions || {},
+          readBy: raw.readBy || {}
+        };
 
-            // Live Read Receipts: Mark unread incoming messages as read
-            const userEmail = userAuth.email || currentUserEmail;
-            if (userEmail && data.senderEmail.toLowerCase() !== userEmail.toLowerCase() && !data.readBy?.[userEmail]) {
-              const msgDocRef = doc(db, 'tenants', tenantId, 'workspaces', workspaceId, 'annotations', annotationId, 'messages', data.id);
-              const newReadBy = { ...(data.readBy || {}), [userEmail]: Date.now() };
-              setDoc(msgDocRef, { readBy: newReadBy, status: 'read' }, { merge: true }).catch(() => {});
-            }
-          }
-        });
+        incomingMsgs.push(msg);
 
-        // Single Source of Truth Reconciliation
-        setMessages(prev => {
-          const map = new Map<string, ChatMessage>();
-          // Preserve local sending/failed messages
-          prev.filter(m => m.status === 'sending' || m.status === 'failed').forEach(m => map.set(m.id, m));
-          // Overlay remote confirmed messages
-          remoteMsgs.forEach(m => map.set(m.id, m));
-
-          const sorted = Array.from(map.values()).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-
-          try {
-            localStorage.setItem(`cell_annotations_${workspaceId}`, JSON.stringify(sorted));
-          } catch (e) {}
-
-          return sorted;
-        });
-
-        setLivePulse(true);
-        setTimeout(() => setLivePulse(false), 2000);
-        addLog('snapshot', `Snapshot received: ${snapshot.docs.length} messages in workspace [${workspaceId}].`);
-      }, (err) => {
-        addLog('error', `Firestore onSnapshot listener error: ${err.message}`);
+        // Mark unread incoming messages as read
+        if (userEmail && msg.senderEmail.toLowerCase() !== userEmail.toLowerCase() && !msg.readBy?.[userEmail]) {
+          const targetWs = raw.workspaceId || workspaceId;
+          const msgDocRef = doc(db, 'tenants', tenantId, 'workspaces', targetWs, 'annotations', annotationId, 'messages', msg.id);
+          const newReadBy = { ...(msg.readBy || {}), [userEmail]: Date.now() };
+          setDoc(msgDocRef, { readBy: newReadBy, status: 'read' }, { merge: true }).catch(() => {});
+        }
       });
 
-      return () => unsubscribe();
-    } catch (err: any) {
-      addLog('error', `Snapshot initialization exception: ${err?.message || err}`);
-    }
-  }, [tenantId, workspaceId, annotationId, multiTenantPath, tenancyValid, userAuth.email, currentUserEmail, addLog]);
+      // Single Source of Truth Reconciliation across all channels
+      setMessages(prev => {
+        const map = new Map<string, ChatMessage>();
+        // Preserve local sending or failed messages
+        prev.filter(m => m.status === 'sending' || m.status === 'failed').forEach(m => map.set(m.id, m));
+        // Preserve previous confirmed messages
+        prev.filter(m => m.status !== 'sending' && m.status !== 'failed').forEach(m => map.set(m.id, m));
+        // Overlay new incoming messages
+        incomingMsgs.forEach(m => map.set(m.id, m));
 
-  // Fallback sync for legacy top-level annotations compatibility
-  useEffect(() => {
-    try {
-      const topQ = query(collection(db, 'annotations'), limit(100));
-      const unsubscribeTop = onSnapshot(topQ, (snapshot) => {
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data() as any;
-          if (data && data.id && data.text && (data.workspaceId === workspaceId || channelMode === 'global')) {
-            setMessages(prev => {
-              if (prev.some(m => m.id === data.id)) return prev;
-              const converted: ChatMessage = {
-                id: data.id,
-                messageId: data.id,
-                tenantId: data.tenantId || tenantId,
-                workspaceId: data.workspaceId || workspaceId,
-                annotationId: data.annotationId || annotationId,
-                fileId: data.fileId || fileId,
-                senderId: data.senderId || data.userEmail || 'usr-legacy',
-                senderEmail: data.senderEmail || data.userEmail || 'collaborator@workspace.com',
-                senderName: data.senderName || data.author || 'Team Member',
-                senderPhoto: data.senderPhoto || data.avatar,
-                senderRole: data.senderRole || data.role || 'Editor',
-                text: data.text,
-                cellRef: data.cellRef || 'Row 14',
-                createdAt: data.createdAt || data.timestamp || Date.now(),
-                status: 'delivered',
-                edited: false,
-                deleted: false
-              };
-              const updated = [...prev, converted].sort((a, b) => a.createdAt - b.createdAt);
-              return updated;
-            });
+        const sorted = Array.from(map.values()).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+
+        try {
+          localStorage.setItem(`cell_annotations_${tenantId}`, JSON.stringify(sorted));
+        } catch (e) {}
+
+        return sorted;
+      });
+
+      setLivePulse(true);
+      setTimeout(() => setLivePulse(false), 2000);
+    };
+
+    // Listener 1: Active Workspace Messages
+    const activeQ = query(
+      collection(db, 'tenants', tenantId, 'workspaces', workspaceId, 'annotations', annotationId, 'messages'),
+      orderBy('createdAt', 'asc'),
+      limit(100)
+    );
+    const unsubActive = onSnapshot(activeQ, (snap) => {
+      addLog('snapshot', `Active workspace [${workspaceId}] snapshot: ${snap.docs.length} messages.`);
+      processSnapshotDocs(snap.docs);
+    }, (err) => {
+      addLog('error', `Active workspace listener error: ${err.message}`);
+    });
+
+    // Listener 2: Workspace Global Messages (Cross-channel broadcast)
+    const unsubGlobal = workspaceId !== 'workspace-global'
+      ? onSnapshot(
+          query(
+            collection(db, 'tenants', tenantId, 'workspaces', 'workspace-global', 'annotations', annotationId, 'messages'),
+            orderBy('createdAt', 'asc'),
+            limit(100)
+          ),
+          (snap) => {
+            addLog('snapshot', `Global workspace snapshot: ${snap.docs.length} messages.`);
+            processSnapshotDocs(snap.docs);
+          },
+          (err) => {
+            addLog('error', `Global workspace listener error: ${err.message}`);
           }
-        });
-      }, () => {});
-      return () => unsubscribeTop();
-    } catch (e) {}
-  }, [tenantId, workspaceId, annotationId, fileId, channelMode]);
+        )
+      : () => {};
+
+    // Listener 3: Top-level Fallback Annotations Collection
+    const unsubTop = onSnapshot(
+      query(collection(db, 'annotations'), limit(100)),
+      (snap) => {
+        processSnapshotDocs(snap.docs);
+      },
+      () => {}
+    );
+
+    return () => {
+      unsubActive();
+      unsubGlobal();
+      unsubTop();
+    };
+  }, [tenantId, workspaceId, annotationId, fileId, tenancyValid, userAuth.email, currentUserEmail, addLog]);
 
   // --- 6. PRESENCE HEARTBEAT & REAL-TIME PRESENCE LISTENER ---
   useEffect(() => {
     if (!tenancyValid || !userAuth.email) return;
 
-    const presenceDocRef = doc(db, 'tenants', tenantId, 'workspaces', workspaceId, 'presence', currentUserId);
+    const userEmail = userAuth.email || currentUserEmail;
+    const activeDocRef = doc(db, 'tenants', tenantId, 'workspaces', workspaceId, 'presence', currentUserId);
+    const globalDocRef = doc(db, 'tenants', tenantId, 'workspaces', 'workspace-global', 'presence', currentUserId);
 
     const updatePresence = async () => {
       try {
         const payload: UserPresenceState = {
           userId: currentUserId,
           userName: currentUserName,
-          userEmail: userAuth.email || currentUserEmail,
+          userEmail: userEmail,
           status: 'online',
           lastActive: Date.now()
         };
-        await setDoc(presenceDocRef, payload);
+        const writes = [setDoc(activeDocRef, payload)];
+        if (workspaceId !== 'workspace-global') {
+          writes.push(setDoc(globalDocRef, payload));
+        }
+        await Promise.all(writes);
       } catch (e) {}
     };
 
     updatePresence();
     const interval = setInterval(updatePresence, 12000);
 
-    // Presence listener
-    const presenceCol = collection(db, 'tenants', tenantId, 'workspaces', workspaceId, 'presence');
-    const unsubPresence = onSnapshot(presenceCol, (snap) => {
-      const active: UserPresenceState[] = [];
+    // Presence listeners across active & global workspace
+    const mergePresence = (snaps: any[]) => {
+      const map = new Map<string, UserPresenceState>();
       const now = Date.now();
-      snap.forEach(d => {
-        const val = d.data() as UserPresenceState;
-        if (val && val.userId) {
-          const isStale = (now - val.lastActive) > 30000;
-          active.push({
-            ...val,
-            status: isStale ? 'offline' : (now - val.lastActive > 15000 ? 'idle' : 'online')
-          });
-        }
+
+      snaps.forEach(snap => {
+        snap.forEach((d: any) => {
+          const val = d.data() as UserPresenceState;
+          if (val && (val.userId || val.userEmail)) {
+            const key = val.userEmail ? val.userEmail.toLowerCase() : val.userId;
+            const isStale = (now - val.lastActive) > 30000;
+            const state: UserPresenceState = {
+              ...val,
+              status: isStale ? 'offline' : (now - val.lastActive > 15000 ? 'idle' : 'online')
+            };
+            map.set(key, state);
+          }
+        });
       });
-      setPresenceList(active);
+
+      setPresenceList(Array.from(map.values()));
+    };
+
+    const unsubActivePresence = onSnapshot(collection(db, 'tenants', tenantId, 'workspaces', workspaceId, 'presence'), (snap) => {
+      mergePresence([snap]);
     }, () => {});
+
+    const unsubGlobalPresence = workspaceId !== 'workspace-global'
+      ? onSnapshot(collection(db, 'tenants', tenantId, 'workspaces', 'workspace-global', 'presence'), (snap) => {
+          mergePresence([snap]);
+        }, () => {})
+      : () => {};
 
     return () => {
       clearInterval(interval);
-      unsubPresence();
+      unsubActivePresence();
+      unsubGlobalPresence();
     };
   }, [tenantId, workspaceId, currentUserId, currentUserName, userAuth.email, currentUserEmail, tenancyValid]);
 
   // --- 7. TYPING INDICATOR LISTENER ---
   useEffect(() => {
     if (!tenancyValid) return;
-    const typingCol = collection(db, 'tenants', tenantId, 'workspaces', workspaceId, 'typing');
-    const unsubTyping = onSnapshot(typingCol, (snap) => {
+
+    const processTyping = (snaps: any[]) => {
       const now = Date.now();
-      const activeTyping: TypingIndicatorState[] = [];
-      snap.forEach(d => {
-        const t = d.data() as TypingIndicatorState;
-        if (t && t.userId && t.userId !== currentUserId && (now - t.timestamp) < 4000) {
-          activeTyping.push(t);
-        }
+      const map = new Map<string, TypingIndicatorState>();
+
+      snaps.forEach(snap => {
+        snap.forEach((d: any) => {
+          const val = d.data() as TypingIndicatorState;
+          if (val && val.userId && val.userId !== currentUserId && (now - val.timestamp) < 4000) {
+            map.set(val.userId, val);
+          }
+        });
       });
-      setTypingUsers(activeTyping);
+
+      setTypingUsers(Array.from(map.values()));
+    };
+
+    const unsubActiveTyping = onSnapshot(collection(db, 'tenants', tenantId, 'workspaces', workspaceId, 'typing'), (snap) => {
+      processTyping([snap]);
     }, () => {});
 
-    return () => unsubTyping();
+    const unsubGlobalTyping = workspaceId !== 'workspace-global'
+      ? onSnapshot(collection(db, 'tenants', tenantId, 'workspaces', 'workspace-global', 'typing'), (snap) => {
+          processTyping([snap]);
+        }, () => {})
+      : () => {};
+
+    return () => {
+      unsubActiveTyping();
+      unsubGlobalTyping();
+    };
   }, [tenantId, workspaceId, currentUserId, tenancyValid]);
 
   // Trigger typing event when user types
@@ -442,35 +533,51 @@ export default function CellAnnotationBoard({
       setMentionQuery(null);
     }
 
-    // Broadcast typing heartbeat
+    // Broadcast typing heartbeat across workspace channels
     if (tenancyValid && val.trim().length > 0) {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-      const typingDocRef = doc(db, 'tenants', tenantId, 'workspaces', workspaceId, 'typing', currentUserId);
-      setDoc(typingDocRef, {
+      const activeTypingRef = doc(db, 'tenants', tenantId, 'workspaces', workspaceId, 'typing', currentUserId);
+      const globalTypingRef = doc(db, 'tenants', tenantId, 'workspaces', 'workspace-global', 'typing', currentUserId);
+      const typingPayload = {
         userId: currentUserId,
         userName: currentUserName,
         timestamp: Date.now()
-      }).catch(() => {});
+      };
+      setDoc(activeTypingRef, typingPayload).catch(() => {});
+      if (workspaceId !== 'workspace-global') {
+        setDoc(globalTypingRef, typingPayload).catch(() => {});
+      }
 
       typingTimeoutRef.current = setTimeout(() => {
-        deleteDoc(typingDocRef).catch(() => {});
+        deleteDoc(activeTypingRef).catch(() => {});
+        if (workspaceId !== 'workspace-global') {
+          deleteDoc(globalTypingRef).catch(() => {});
+        }
       }, 3000);
     } else if (tenancyValid && val.trim().length === 0) {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-      const typingDocRef = doc(db, 'tenants', tenantId, 'workspaces', workspaceId, 'typing', currentUserId);
-      deleteDoc(typingDocRef).catch(() => {});
+      const activeTypingRef = doc(db, 'tenants', tenantId, 'workspaces', workspaceId, 'typing', currentUserId);
+      const globalTypingRef = doc(db, 'tenants', tenantId, 'workspaces', 'workspace-global', 'typing', currentUserId);
+      deleteDoc(activeTypingRef).catch(() => {});
+      if (workspaceId !== 'workspace-global') {
+        deleteDoc(globalTypingRef).catch(() => {});
+      }
     }
   };
 
   const handleInputBlur = () => {
     if (tenancyValid) {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-      const typingDocRef = doc(db, 'tenants', tenantId, 'workspaces', workspaceId, 'typing', currentUserId);
-      deleteDoc(typingDocRef).catch(() => {});
+      const activeTypingRef = doc(db, 'tenants', tenantId, 'workspaces', workspaceId, 'typing', currentUserId);
+      const globalTypingRef = doc(db, 'tenants', tenantId, 'workspaces', 'workspace-global', 'typing', currentUserId);
+      deleteDoc(activeTypingRef).catch(() => {});
+      if (workspaceId !== 'workspace-global') {
+        deleteDoc(globalTypingRef).catch(() => {});
+      }
     }
   };
 
-  // --- 8. SEND MESSAGE WITH TRANSACTION / RETRY ---
+  // --- 8. SEND MESSAGE WITH MULTI-PATH BROADCAST ---
   const sendMessage = async (rawText: string, customTag?: string) => {
     if (!rawText.trim() && selectedAttachments.length === 0) return;
 
@@ -520,14 +627,19 @@ export default function CellAnnotationBoard({
     setShowMentionDropdown(false);
 
     // Clear typing state
-    const typingDocRef = doc(db, 'tenants', tenantId, 'workspaces', workspaceId, 'typing', currentUserId);
-    deleteDoc(typingDocRef).catch(() => {});
+    const activeTypingRef = doc(db, 'tenants', tenantId, 'workspaces', workspaceId, 'typing', currentUserId);
+    const globalTypingRef = doc(db, 'tenants', tenantId, 'workspaces', 'workspace-global', 'typing', currentUserId);
+    deleteDoc(activeTypingRef).catch(() => {});
+    if (workspaceId !== 'workspace-global') {
+      deleteDoc(globalTypingRef).catch(() => {});
+    }
 
-    addLog('info', `Sending message [${msgId}] to channel [${workspaceId}]...`);
+    addLog('info', `Sending message [${msgId}] to workspace [${workspaceId}] & global channel...`);
 
-    // 2. Persist to Firestore Multi-Tenant path & top-level annotations path
+    // 2. Persist to Firestore Multi-Tenant path, Global path, and top-level annotations path
     try {
-      const multiTenantDocRef = doc(db, 'tenants', tenantId, 'workspaces', workspaceId, 'annotations', annotationId, 'messages', msgId);
+      const activeDocRef = doc(db, 'tenants', tenantId, 'workspaces', workspaceId, 'annotations', annotationId, 'messages', msgId);
+      const globalDocRef = doc(db, 'tenants', tenantId, 'workspaces', 'workspace-global', 'annotations', annotationId, 'messages', msgId);
       const topLevelDocRef = doc(db, 'annotations', msgId);
 
       const payload = {
@@ -535,9 +647,7 @@ export default function CellAnnotationBoard({
         status: 'delivered'
       };
 
-      await setDoc(multiTenantDocRef, payload);
-      // Dual-write top-level annotations for cross-component compatibility
-      await setDoc(topLevelDocRef, {
+      const topLevelPayload = {
         id: msgId,
         author: currentUserName,
         role: currentUserRole,
@@ -551,11 +661,22 @@ export default function CellAnnotationBoard({
         workspaceId,
         annotationId,
         fileId
-      });
+      };
+
+      const writes = [
+        setDoc(activeDocRef, payload),
+        setDoc(topLevelDocRef, topLevelPayload)
+      ];
+
+      if (workspaceId !== 'workspace-global') {
+        writes.push(setDoc(globalDocRef, payload));
+      }
+
+      await Promise.all(writes);
 
       // Update local message status to delivered
       setMessages(prev => prev.map(m => m.id === msgId ? { ...m, status: 'delivered' } : m));
-      addLog('success', `Message [${msgId}] delivered to workspace [${workspaceId}].`);
+      addLog('success', `Message [${msgId}] delivered to active workspace [${workspaceId}] and global channel.`);
     } catch (err: any) {
       addLog('error', `Message dispatch failed for [${msgId}]: ${err?.message || err}`);
       setMessages(prev => prev.map(m => m.id === msgId ? { ...m, status: 'failed', errorMessage: err?.message || 'Network write failed' } : m));
@@ -663,22 +784,31 @@ export default function CellAnnotationBoard({
     addLog('info', `Retrying failed message [${msg.id}]...`);
 
     try {
-      const multiTenantDocRef = doc(db, 'tenants', tenantId, 'workspaces', workspaceId, 'annotations', annotationId, 'messages', msg.id);
+      const activeDocRef = doc(db, 'tenants', tenantId, 'workspaces', workspaceId, 'annotations', annotationId, 'messages', msg.id);
+      const globalDocRef = doc(db, 'tenants', tenantId, 'workspaces', 'workspace-global', 'annotations', annotationId, 'messages', msg.id);
       const topLevelDocRef = doc(db, 'annotations', msg.id);
 
       const payload = { ...msg, status: 'delivered', updatedAt: Date.now() };
-      await setDoc(multiTenantDocRef, payload);
-      await setDoc(topLevelDocRef, {
-        id: msg.id,
-        author: msg.senderName,
-        role: msg.senderRole,
-        text: msg.text,
-        time: new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        timestamp: msg.createdAt,
-        userEmail: msg.senderEmail,
-        avatar: msg.senderPhoto,
-        cellRef: msg.cellRef
-      });
+      const writes = [
+        setDoc(activeDocRef, payload),
+        setDoc(topLevelDocRef, {
+          id: msg.id,
+          author: msg.senderName,
+          role: msg.senderRole,
+          text: msg.text,
+          time: new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          timestamp: msg.createdAt,
+          userEmail: msg.senderEmail,
+          avatar: msg.senderPhoto,
+          cellRef: msg.cellRef
+        })
+      ];
+
+      if (workspaceId !== 'workspace-global') {
+        writes.push(setDoc(globalDocRef, payload));
+      }
+
+      await Promise.all(writes);
 
       setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, status: 'delivered' } : m));
       addLog('success', `Retry successful for message [${msg.id}].`);
@@ -697,15 +827,20 @@ export default function CellAnnotationBoard({
     setEditingMessageId(null);
 
     try {
-      const multiTenantDocRef = doc(db, 'tenants', tenantId, 'workspaces', workspaceId, 'annotations', annotationId, 'messages', msgId);
+      const activeDocRef = doc(db, 'tenants', tenantId, 'workspaces', workspaceId, 'annotations', annotationId, 'messages', msgId);
+      const globalDocRef = doc(db, 'tenants', tenantId, 'workspaces', 'workspace-global', 'annotations', annotationId, 'messages', msgId);
       const existingMsg = messages.find(m => m.id === msgId);
       if (existingMsg) {
-        await setDoc(multiTenantDocRef, {
-          ...existingMsg,
+        const updateData = {
           text: editText.trim(),
           edited: true,
           updatedAt: Date.now()
-        }, { merge: true });
+        };
+        const writes = [setDoc(activeDocRef, updateData, { merge: true })];
+        if (workspaceId !== 'workspace-global') {
+          writes.push(setDoc(globalDocRef, updateData, { merge: true }));
+        }
+        await Promise.all(writes);
         addLog('success', `Edit committed for message [${msgId}].`);
       }
     } catch (err: any) {
@@ -719,15 +854,24 @@ export default function CellAnnotationBoard({
     setMessages(prev => prev.map(m => m.id === msgId ? { ...m, deleted: true, text: 'This annotation message was deleted by author.', updatedAt: Date.now() } : m));
 
     try {
-      const multiTenantDocRef = doc(db, 'tenants', tenantId, 'workspaces', workspaceId, 'annotations', annotationId, 'messages', msgId);
-      await setDoc(multiTenantDocRef, {
+      const activeDocRef = doc(db, 'tenants', tenantId, 'workspaces', workspaceId, 'annotations', annotationId, 'messages', msgId);
+      const globalDocRef = doc(db, 'tenants', tenantId, 'workspaces', 'workspace-global', 'annotations', annotationId, 'messages', msgId);
+      const topLevelDocRef = doc(db, 'annotations', msgId);
+
+      const deletePayload = {
         deleted: true,
         text: 'This annotation message was deleted by author.',
         updatedAt: Date.now()
-      }, { merge: true });
+      };
 
-      const topLevelDocRef = doc(db, 'annotations', msgId);
-      await deleteDoc(topLevelDocRef).catch(() => {});
+      const writes = [
+        setDoc(activeDocRef, deletePayload, { merge: true }),
+        deleteDoc(topLevelDocRef).catch(() => {})
+      ];
+      if (workspaceId !== 'workspace-global') {
+        writes.push(setDoc(globalDocRef, deletePayload, { merge: true }));
+      }
+      await Promise.all(writes);
       addLog('success', `Message [${msgId}] deleted.`);
     } catch (err: any) {
       addLog('error', `Delete failed for [${msgId}]: ${err?.message || err}`);
@@ -739,14 +883,15 @@ export default function CellAnnotationBoard({
     const targetMsg = messages.find(m => m.id === msgId);
     if (!targetMsg) return;
 
+    const userEmail = userAuth.email || currentUserEmail;
     const currentReactions = { ...(targetMsg.reactions || {}) };
     const emojiUsers = [...(currentReactions[emoji] || [])];
 
-    const existingIndex = emojiUsers.indexOf(currentUserEmail);
+    const existingIndex = emojiUsers.findIndex(e => e.toLowerCase() === userEmail.toLowerCase());
     if (existingIndex >= 0) {
       emojiUsers.splice(existingIndex, 1);
     } else {
-      emojiUsers.push(currentUserEmail);
+      emojiUsers.push(userEmail);
     }
 
     if (emojiUsers.length === 0) {
@@ -759,8 +904,14 @@ export default function CellAnnotationBoard({
     setActiveReactionPickerMsgId(null);
 
     try {
-      const multiTenantDocRef = doc(db, 'tenants', tenantId, 'workspaces', workspaceId, 'annotations', annotationId, 'messages', msgId);
-      await setDoc(multiTenantDocRef, { reactions: currentReactions }, { merge: true });
+      const activeDocRef = doc(db, 'tenants', tenantId, 'workspaces', workspaceId, 'annotations', annotationId, 'messages', msgId);
+      const globalDocRef = doc(db, 'tenants', tenantId, 'workspaces', 'workspace-global', 'annotations', annotationId, 'messages', msgId);
+
+      const writes = [setDoc(activeDocRef, { reactions: currentReactions }, { merge: true })];
+      if (workspaceId !== 'workspace-global') {
+        writes.push(setDoc(globalDocRef, { reactions: currentReactions }, { merge: true }));
+      }
+      await Promise.all(writes);
     } catch (e) {}
   };
 
@@ -879,26 +1030,28 @@ export default function CellAnnotationBoard({
               <button
                 type="button"
                 onClick={() => setChannelMode('global')}
-                className={`px-2 py-0.5 rounded-md text-[9px] font-mono font-bold transition-all cursor-pointer border ${
+                className={`px-2.5 py-1 rounded-md text-[9px] font-mono font-bold transition-all cursor-pointer border flex items-center gap-1.5 ${
                   channelMode === 'global'
                     ? 'bg-blue-600 text-white border-blue-500 shadow-xs'
                     : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-slate-200'
                 }`}
                 title="Broadcast to all workspace collaborators in General Team Chat"
               >
-                🌐 Global Workspace Chat
+                <Globe className="w-3 h-3 text-cyan-300 shrink-0" />
+                <span>Global Workspace Chat</span>
               </button>
               <button
                 type="button"
                 onClick={() => setChannelMode('file')}
-                className={`px-2 py-0.5 rounded-md text-[9px] font-mono font-bold transition-all cursor-pointer border ${
+                className={`px-2.5 py-1 rounded-md text-[9px] font-mono font-bold transition-all cursor-pointer border flex items-center gap-1.5 ${
                   channelMode === 'file'
                     ? 'bg-purple-600 text-white border-purple-500 shadow-xs'
                     : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-slate-200'
                 }`}
                 title="Target annotations specifically to the active sheet"
               >
-                📄 {activeFileName}
+                <FileSpreadsheet className="w-3 h-3 text-purple-300 shrink-0" />
+                <span>{activeFileName}</span>
               </button>
             </div>
           </div>
@@ -1334,23 +1487,28 @@ export default function CellAnnotationBoard({
                     </div>
                   )}
 
-                  {/* EMOJI REACTIONS BADGES */}
+                  {/* SVG REACTION BADGES */}
                   {msg.reactions && Object.keys(msg.reactions).length > 0 && (
                     <div className="mt-2 flex flex-wrap items-center gap-1 pt-1">
-                      {Object.entries(msg.reactions).map(([emoji, users]) => {
-                        const hasReacted = users.includes(currentUserEmail);
+                      {Object.entries(msg.reactions).map(([reactionKey, users]) => {
+                        if (!users || users.length === 0) return null;
+                        const hasReacted = users.includes(userAuth.email || currentUserEmail);
+                        const config = REACTION_CONFIG[reactionKey] || { label: reactionKey, icon: Sparkles, colorClass: 'text-blue-400' };
+                        const IconComponent = config.icon;
+
                         return (
                           <button
-                            key={emoji}
+                            key={reactionKey}
                             type="button"
-                            onClick={() => handleToggleReaction(msg.id, emoji)}
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-mono border flex items-center gap-1 transition-all cursor-pointer ${
+                            onClick={() => handleToggleReaction(msg.id, reactionKey)}
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-mono border flex items-center gap-1.5 transition-all cursor-pointer ${
                               hasReacted 
                                 ? 'bg-blue-500/20 text-blue-300 border-blue-500/50 font-bold' 
                                 : 'bg-slate-950/50 text-slate-400 border-slate-800 hover:text-slate-200'
                             }`}
+                            title={`${config.label} (${users.length})`}
                           >
-                            <span>{emoji}</span>
+                            <IconComponent className={`w-3 h-3 ${config.colorClass}`} />
                             <span>{users.length}</span>
                           </button>
                         );
@@ -1375,7 +1533,7 @@ export default function CellAnnotationBoard({
                   {/* HOVER QUICK ACTION BAR */}
                   {!msg.deleted && (
                     <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-950/90 border border-slate-800 rounded-xl p-1 flex items-center gap-1 shadow-lg z-10">
-                      {/* Emoji reaction button */}
+                      {/* SVG Reaction button */}
                       <button 
                         type="button" 
                         onClick={() => setActiveReactionPickerMsgId(activeReactionPickerMsgId === msg.id ? null : msg.id)}
@@ -1429,19 +1587,23 @@ export default function CellAnnotationBoard({
                     </div>
                   )}
 
-                  {/* EMOJI PICKER POPUP */}
+                  {/* SVG REACTION PICKER POPUP */}
                   {activeReactionPickerMsgId === msg.id && (
                     <div className="absolute top-8 right-2 bg-slate-950 border border-slate-800 rounded-2xl p-1.5 flex items-center gap-1 shadow-2xl z-20">
-                      {EMOJI_OPTIONS.map(emoji => (
-                        <button
-                          key={emoji}
-                          type="button"
-                          onClick={() => handleToggleReaction(msg.id, emoji)}
-                          className="p-1 hover:bg-slate-800 rounded text-base cursor-pointer transition-transform hover:scale-125"
-                        >
-                          {emoji}
-                        </button>
-                      ))}
+                      {REACTION_OPTIONS.map(opt => {
+                        const IconComp = opt.icon;
+                        return (
+                          <button
+                            key={opt.key}
+                            type="button"
+                            onClick={() => handleToggleReaction(msg.id, opt.key)}
+                            className={`p-1.5 rounded-xl transition-all cursor-pointer hover:scale-110 ${opt.colorClass}`}
+                            title={opt.label}
+                          >
+                            <IconComp className="w-4 h-4" />
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </motion.div>
