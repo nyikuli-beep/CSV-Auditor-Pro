@@ -144,6 +144,58 @@
         }
       },
       "required": ["userId", "mappings", "explanations", "updatedAt"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Real-time Cell Annotation Board multi-tenant chat message.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "messageId": { "type": "string" },
+        "tenantId": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "annotationId": { "type": "string" },
+        "fileId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderEmail": { "type": "string" },
+        "senderName": { "type": "string" },
+        "senderPhoto": { "type": "string" },
+        "senderRole": { "type": "string" },
+        "text": { "type": "string" },
+        "cellRef": { "type": "string" },
+        "mentions": { "type": "array" },
+        "attachments": { "type": "array" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" },
+        "edited": { "type": "boolean" },
+        "deleted": { "type": "boolean" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "tenantId", "workspaceId", "annotationId", "senderEmail", "text", "createdAt"]
+    },
+    "UserPresence": {
+      "title": "UserPresence",
+      "description": "Real-time user online presence heartbeat.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "status": { "type": "string" },
+        "lastActive": { "type": "number" }
+      },
+      "required": ["userId", "userEmail", "status", "lastActive"]
+    },
+    "TypingIndicator": {
+      "title": "TypingIndicator",
+      "description": "Real-time chat typing indicator state.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["userId", "userName", "timestamp"]
     }
   },
   "firestore": {
@@ -166,6 +218,22 @@
     "/drafts/{userId}": {
       "schema": "DraftUploadState",
       "description": "Auto-saved in-progress upload state and mappings."
+    },
+    "/tenants/{tenantId}/workspaces/{workspaceId}/annotations/{annotationId}/messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Multi-tenant team chat messages for cell annotations."
+    },
+    "/tenants/{tenantId}/workspaces/{workspaceId}/presence/{userId}": {
+      "schema": "UserPresence",
+      "description": "Team workspace member live presence status."
+    },
+    "/tenants/{tenantId}/workspaces/{workspaceId}/typing/{userId}": {
+      "schema": "TypingIndicator",
+      "description": "Real-time user typing indicators."
+    },
+    "/annotations/{annotationId}": {
+      "schema": "ChatMessage",
+      "description": "Root annotations path for legacy and top-level sync."
     }
   }
 }

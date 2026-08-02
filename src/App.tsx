@@ -2440,6 +2440,8 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                         slotRequests={slotRequests}
                         onApproveSlotRequest={handleApproveSlotRequest}
                         onDeclineSlotRequest={handleDeclineSlotRequest}
+                        activeFileId={activeFileId}
+                        activeFileName={activeFile?.name}
                       />
                     )}
 

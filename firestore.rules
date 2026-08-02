@@ -117,8 +117,28 @@ service cloud.firestore {
       allow get, list, create, update, delete: if isSignedIn() && request.auth.uid == userId;
     }
 
-    // ANNOTATIONS COLLECTION
+    // SLOT REQUESTS COLLECTION
+    match /slot_requests/{reqId} {
+      allow read, create, update, delete: if isSignedIn();
+    }
+
+    // ANNOTATIONS COLLECTION (Top-level)
     match /annotations/{annotationId} {
+      allow read, create, update, delete: if true;
+    }
+
+    // MULTI-TENANT WORKSPACE ANNOTATIONS & CHAT
+    match /tenants/{tenantId}/workspaces/{workspaceId}/annotations/{annotationId}/messages/{messageId} {
+      allow read, create, update, delete: if true;
+    }
+
+    // MULTI-TENANT WORKSPACE PRESENCE
+    match /tenants/{tenantId}/workspaces/{workspaceId}/presence/{userId} {
+      allow read, create, update, delete: if true;
+    }
+
+    // MULTI-TENANT WORKSPACE TYPING INDICATORS
+    match /tenants/{tenantId}/workspaces/{workspaceId}/typing/{userId} {
       allow read, create, update, delete: if true;
     }
   }
