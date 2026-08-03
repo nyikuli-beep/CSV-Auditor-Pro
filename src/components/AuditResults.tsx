@@ -26,9 +26,11 @@ import {
 } from 'lucide-react';
 import { CSVFile, AuditIssue, Severity, IssueType } from '../types';
 import { exportCleanedAuditToExcel } from '../lib/excelExporter';
+import QualityTrendChart from './QualityTrendChart';
 
 interface AuditResultsProps {
   activeFile: CSVFile | null;
+  allFiles?: CSVFile[];
   onNavigate: (tab: string) => void;
   isDarkMode: boolean;
   accentClass: string;
@@ -37,7 +39,7 @@ interface AuditResultsProps {
 
 export type SortField = 'type' | 'row' | 'column' | 'severity' | 'status' | 'value' | 'description';
 
-export default function AuditResults({ activeFile, onNavigate, isDarkMode, accentClass, onUpdateFile }: AuditResultsProps) {
+export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkMode, accentClass, onUpdateFile }: AuditResultsProps) {
   const [severityFilter, setSeverityFilter] = useState<'all' | Severity>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | IssueType>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -828,6 +830,13 @@ export default function AuditResults({ activeFile, onNavigate, isDarkMode, accen
           )}
         </div>
       </div>
+
+      {/* Recharts Data Quality Score Trend Visualization */}
+      <QualityTrendChart 
+        activeFile={activeFile} 
+        allFiles={allFiles} 
+        isDarkMode={isDarkMode} 
+      />
 
       {/* Filter and Issues Feed */}
       <div className={`p-6 rounded-3xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>

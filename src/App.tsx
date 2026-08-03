@@ -2446,6 +2446,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                     {activeTab === 'results' && (
                       <AuditResults 
                         activeFile={activeFile}
+                        allFiles={files}
                         onNavigate={handleNavigateTab}
                         isDarkMode={isDarkMode}
                         accentClass={accentClass}
