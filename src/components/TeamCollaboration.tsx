@@ -32,6 +32,7 @@ import { TeamMember, AuditActivity, SlotRequest } from '../types';
 import { db, auth } from '../firebase';
 import { collection, doc, setDoc, onSnapshot, query, limit } from 'firebase/firestore';
 import CellAnnotationBoard from './CellAnnotationBoard';
+import CollaborationChat from './CollaborationChat';
 
 interface TeamCollaborationProps {
   members: TeamMember[];
@@ -1197,8 +1198,19 @@ export default function TeamCollaboration({
           </div>
         </div>
 
-        {/* Right column: discussion threads & cell annotation board */}
+        {/* Right column: discussion threads, real-time collaboration chat & cell annotation board */}
         <div className="lg:col-span-5 space-y-6">
+          <CollaborationChat
+            tenantId="default-tenant-01"
+            activeFileId={activeFileId}
+            activeFileName={activeFileName}
+            currentUserEmail={currentUserEmail}
+            currentUserRole={currentUserRole}
+            members={members}
+            isDarkMode={isDarkMode}
+            accentClass={accentClass}
+          />
+
           <CellAnnotationBoard 
             currentUserEmail={currentUserEmail}
             currentUserRole={currentUserRole}
