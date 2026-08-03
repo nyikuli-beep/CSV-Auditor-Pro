@@ -171,7 +171,57 @@ export default function CollaborationChat({
     }
   }, [roomId, seedMessages]);
 
-  // 3. Multi-Tab BroadcastChannel listener for local cross-tab real-time sync
+  // 3. Real-Time Firestore onSnapshot message subscription (Syncs across all authenticated users and non-owners)
+  useEffect(() => {
+    const chatColl = collection(db, 'chat_messages');
+    const unsubscribe = onSnapshot(chatColl, (snapshot) => {
+      const remoteMessages: ChatMessage[] = [];
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        if (data && data.text) {
+          remoteMessages.push({
+            id: docSnap.id || data.id,
+            tenantId: data.tenantId || tenantId,
+            fileId: data.fileId || activeFileId,
+            userId: data.userId || 'usr-anon',
+            userName: data.userName || 'Auditor User',
+            userEmail: data.userEmail || '',
+            userRole: data.userRole || 'Editor',
+            userAvatar: data.userAvatar || '',
+            text: data.text,
+            cellRef: data.cellRef || undefined,
+            timestamp: typeof data.timestamp === 'number' ? data.timestamp : Date.now(),
+            timeFormatted: data.timeFormatted || new Date(data.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          });
+        }
+      });
+
+      if (remoteMessages.length > 0) {
+        setMessages(prev => {
+          const map = new Map<string, ChatMessage>();
+          seedMessages.forEach(m => map.set(m.id, m));
+          prev.forEach(m => map.set(m.id, m));
+          remoteMessages.forEach(m => map.set(m.id, m));
+
+          const merged = Array.from(map.values()).sort((a, b) => a.timestamp - b.timestamp);
+          try {
+            localStorage.setItem(`chat_store_${roomId}`, JSON.stringify(merged.slice(-100)));
+          } catch (e) {}
+          return merged;
+        });
+        setPulse(true);
+        setTimeout(() => setPulse(false), 2000);
+      }
+    }, (err) => {
+      console.warn("Firestore chat_messages onSnapshot error:", err);
+    });
+
+    setConnectionStatus('connected');
+
+    return () => unsubscribe();
+  }, [tenantId, activeFileId, roomId, seedMessages]);
+
+  // 4. Multi-Tab BroadcastChannel listener for local cross-tab real-time sync
   useEffect(() => {
     let bc: BroadcastChannel | null = null;
     try {
@@ -208,13 +258,31 @@ export default function CollaborationChat({
   }, [messages, typingUsers]);
 
   // Handle send message
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim()) return;
 
     if (chatClientRef.current) {
       try {
         const newMsg = chatClientRef.current.sendMessage(inputText, cellRef || undefined);
+
+        // Sanitize payload for Firestore (strictly omit undefined fields!)
+        const docPayload: Record<string, any> = {
+          id: newMsg.id,
+          tenantId: newMsg.tenantId || tenantId,
+          fileId: newMsg.fileId || activeFileId,
+          userId: newMsg.userId,
+          userName: newMsg.userName,
+          userEmail: newMsg.userEmail,
+          userRole: newMsg.userRole || 'Editor',
+          userAvatar: newMsg.userAvatar || '',
+          text: newMsg.text,
+          timestamp: newMsg.timestamp,
+          timeFormatted: newMsg.timeFormatted
+        };
+        if (newMsg.cellRef) {
+          docPayload.cellRef = newMsg.cellRef;
+        }
 
         // Update local state immediately for instant feedback
         setMessages(prev => {
@@ -226,10 +294,12 @@ export default function CollaborationChat({
           return updated;
         });
 
-        // Sync message to Firestore as persistent chat log
+        // Sync message to Firestore as persistent chat log for multi-user broadcast
         try {
-          setDoc(doc(db, 'chat_messages', newMsg.id), newMsg).catch(() => {});
-        } catch (e) {}
+          await setDoc(doc(db, 'chat_messages', newMsg.id), docPayload);
+        } catch (fErr) {
+          console.warn("Firestore setDoc chat_message sync error:", fErr);
+        }
 
         setInputText('');
         setCellRef('');
@@ -281,7 +351,7 @@ export default function CollaborationChat({
             <div className="flex items-center gap-2">
               <h3 className="font-extrabold text-sm tracking-tight">Team Collaboration Chat</h3>
               <span className="text-[10px] bg-blue-500/10 text-blue-400 font-mono font-bold px-2 py-0.5 rounded border border-blue-500/20 flex items-center gap-1">
-                <Hash className="w-3 h-3" /> Socket.io Real-Time
+                <Hash className="w-3 h-3" /> Live Firestore Sync
               </span>
             </div>
             <div className="flex items-center gap-2 text-[10px] font-mono text-slate-400 mt-0.5">
@@ -326,7 +396,7 @@ export default function CollaborationChat({
             {connectionStatus === 'connected' ? (
               <>
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>Socket Connected</span>
+                <span>Live Sync Connected</span>
               </>
             ) : connectionStatus === 'connecting' ? (
               <>
