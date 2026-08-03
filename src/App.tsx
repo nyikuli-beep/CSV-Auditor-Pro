@@ -190,8 +190,21 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   const [isFixingActiveFile, setIsFixingActiveFile] = useState<boolean>(false);
   const [fixAllSuccessMsg, setFixAllSuccessMsg] = useState<string>('');
 
-  // Collaboration registry
-  const [members, setMembers] = useState<TeamMember[]>([]);
+  // Collaboration registry (with persistence from localStorage)
+  const [members, setMembers] = useState<TeamMember[]>(() => {
+    try {
+      const saved = localStorage.getItem('app_team_members');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to parse cached app_team_members:", e);
+    }
+    return [];
+  });
   const [activities, setActivities] = useState<AuditActivity[]>([]);
   const knownActiveMemberEmailsRef = useRef<Set<string>>(new Set());
 
@@ -603,32 +616,40 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                 }
 
                 for (const docSnap of querySnap.docs) {
-                  await setDoc(doc(db, 'members', docSnap.id), {
+                  const existingData = docSnap.data();
+                  const updatedMember: TeamMember = {
+                    id: docSnap.id,
+                    name: initialName || existingData.name || emailLower.split('@')[0],
+                    email: emailLower,
+                    role: (existingData.role as any) || 'Editor',
                     status: 'active',
-                    name: initialName,
-                    ...(initialAvatar ? { avatar: initialAvatar } : {})
-                  }, { merge: true });
+                    avatar: initialAvatar || existingData.avatar || ''
+                  };
+                  await setDoc(doc(db, 'members', docSnap.id), updatedMember);
                 }
               } else {
                 const memberRef = doc(db, 'members', fUser.uid);
                 const memberRecord: TeamMember = {
                   id: fUser.uid,
-                  name: initialName,
+                  name: initialName || emailLower.split('@')[0],
                   email: emailLower,
                   role: (initialRole as any) || 'Editor',
                   status: 'active',
-                  avatar: initialAvatar
+                  avatar: initialAvatar || ''
                 };
                 await setDoc(memberRef, memberRecord);
               }
             } else {
               const memberRef = doc(db, 'members', fUser.uid);
-              await setDoc(memberRef, {
-                status: 'active',
-                name: initialName,
+              const ownerRecord: TeamMember = {
+                id: fUser.uid,
+                name: initialName || 'Nyikuli Bramwel',
+                email: primaryOwnerEmail,
                 role: 'Owner',
-                ...(initialAvatar ? { avatar: initialAvatar } : {})
-              }, { merge: true });
+                status: 'active',
+                avatar: initialAvatar || ''
+              };
+              await setDoc(memberRef, ownerRecord);
             }
           } catch (memberSyncErr) {
             console.warn("Firestore member sync fallback:", memberSyncErr);
@@ -728,6 +749,20 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
 
       const memberMap = new Map<string, TeamMember>();
 
+      // Load cached members from localStorage first so offline or pending invitations persist across reloads
+      try {
+        const cached = localStorage.getItem('app_team_members');
+        if (cached) {
+          const parsedArr: TeamMember[] = JSON.parse(cached);
+          if (Array.isArray(parsedArr)) {
+            parsedArr.forEach(m => {
+              const emailKey = (m.email || '').toLowerCase().trim();
+              if (emailKey) memberMap.set(emailKey, m);
+            });
+          }
+        }
+      } catch (e) {}
+
       const primaryOwnerMember: TeamMember = {
         id: userEmailLower === primaryOwnerEmail ? firebaseUser.uid : 'usr-primary-owner',
         name: userEmailLower === primaryOwnerEmail ? (user?.name || firebaseUser.displayName || 'Nyikuli Bramwel') : 'Nyikuli Bramwel',
@@ -743,10 +778,12 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
         if (!emailKey || emailKey === primaryOwnerEmail) return;
 
         const isDenied = m.status === 'denied' || m.accessDenied === true;
+        const existing = memberMap.get(emailKey);
         memberMap.set(emailKey, {
+          ...existing,
           ...m,
-          role: m.role || 'Editor',
-          status: isDenied ? 'denied' : (m.status || 'active'),
+          role: m.role || existing?.role || 'Editor',
+          status: isDenied ? 'denied' : (m.status || existing?.status || 'active'),
           accessDenied: isDenied
         });
       });
@@ -778,7 +815,11 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
         }
       }
 
-      setMembers(Array.from(memberMap.values()));
+      const mergedList = Array.from(memberMap.values());
+      setMembers(mergedList);
+      try {
+        localStorage.setItem('app_team_members', JSON.stringify(mergedList));
+      } catch (e) {}
     }, (err) => {
       handleFirestoreError(err, OperationType.LIST, 'members');
     });
@@ -1451,10 +1492,23 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     const emailLower = (newMember.email || '').toLowerCase().trim();
     if (!emailLower) return;
 
-    // Optimistically update local members state
+    const sanitizedMember: TeamMember = {
+      id: newMember.id || `usr-${Date.now()}`,
+      name: newMember.name || emailLower.split('@')[0],
+      email: emailLower,
+      role: newMember.role || 'Editor',
+      status: newMember.status || 'invited',
+      avatar: newMember.avatar || ''
+    };
+
+    // Optimistically update local members state & localStorage
     setMembers(prev => {
       const filtered = prev.filter(m => m.email.toLowerCase().trim() !== emailLower);
-      return [...filtered, newMember];
+      const updated = [...filtered, sanitizedMember];
+      try {
+        localStorage.setItem('app_team_members', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
     });
 
     try {
@@ -1466,33 +1520,36 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
         let isFirst = true;
         for (const docSnap of querySnap.docs) {
           if (isFirst) {
-            await setDoc(doc(db, 'members', docSnap.id), {
-              ...newMember,
-              id: docSnap.id
-            }, { merge: true });
+            const existing = docSnap.data();
+            const recordToSave: TeamMember = {
+              id: docSnap.id,
+              name: sanitizedMember.name || existing.name || emailLower.split('@')[0],
+              email: emailLower,
+              role: sanitizedMember.role || existing.role || 'Editor',
+              status: sanitizedMember.status || existing.status || 'invited',
+              avatar: sanitizedMember.avatar || existing.avatar || ''
+            };
+            await setDoc(doc(db, 'members', docSnap.id), recordToSave);
             isFirst = false;
           } else {
             await deleteDoc(doc(db, 'members', docSnap.id));
           }
         }
       } else {
-        const newDocId = newMember.id || `usr-${Date.now()}`;
-        await setDoc(doc(db, 'members', newDocId), {
-          ...newMember,
-          id: newDocId
-        });
+        const newDocId = sanitizedMember.id;
+        await setDoc(doc(db, 'members', newDocId), sanitizedMember);
       }
 
-      await syncToPostgres('sync-member', 'POST', newMember);
+      await syncToPostgres('sync-member', 'POST', sanitizedMember);
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `members/${newMember.id}`);
+      console.warn("Firestore member invite write warning:", err);
     }
 
     const inviteLog: AuditActivity = {
       id: `act-${Date.now()}`,
       userId: firebaseUser?.uid || auth.currentUser?.uid || '',
       userName: user?.name || user?.email?.split('@')[0] || 'User',
-      action: `Dispatched tenancy invitation to ${newMember.email}`,
+      action: `Dispatched tenancy invitation to ${sanitizedMember.email}`,
       timestamp: 'Just now'
     };
     try {
@@ -1507,8 +1564,14 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   const handleDeleteMember = async (id: string, email: string) => {
     const emailLower = (email || '').toLowerCase().trim();
 
-    // Optimistically update local members state
-    setMembers(prev => prev.filter(m => m.id !== id && m.email.toLowerCase().trim() !== emailLower));
+    // Optimistically update local members state & localStorage
+    setMembers(prev => {
+      const updated = prev.filter(m => m.id !== id && m.email.toLowerCase().trim() !== emailLower);
+      try {
+        localStorage.setItem('app_team_members', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
 
     try {
       if (id) {
@@ -1559,26 +1622,36 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     if (!targetMember) return;
 
     const updatedMember: TeamMember = {
-      ...targetMember,
+      id: targetMember.id,
+      name: targetMember.name,
+      email: emailLower,
+      role: targetMember.role || 'Editor',
       status: accessDenied ? 'denied' : 'active',
+      avatar: targetMember.avatar || '',
       accessDenied: accessDenied,
       deniedAt: accessDenied ? new Date().toISOString() : undefined,
       deniedBy: accessDenied ? (user?.email || 'admin') : undefined
     };
 
-    // Optimistically update local members state
-    setMembers(prev => prev.map(m => (m.id === id || m.email.toLowerCase().trim() === emailLower) ? updatedMember : m));
+    // Optimistically update local members state & localStorage
+    setMembers(prev => {
+      const updated = prev.map(m => (m.id === id || m.email.toLowerCase().trim() === emailLower) ? updatedMember : m);
+      try {
+        localStorage.setItem('app_team_members', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
 
     try {
       if (id) {
-        await setDoc(doc(db, 'members', id), updatedMember, { merge: true });
+        await setDoc(doc(db, 'members', id), updatedMember);
       }
 
       if (emailLower) {
         const q = query(collection(db, 'members'), where('email', '==', emailLower));
         const querySnap = await getDocs(q);
         for (const docSnap of querySnap.docs) {
-          await setDoc(doc(db, 'members', docSnap.id), updatedMember, { merge: true });
+          await setDoc(doc(db, 'members', docSnap.id), updatedMember);
         }
       }
 
