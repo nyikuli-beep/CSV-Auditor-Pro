@@ -2285,7 +2285,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                               setActiveTab(tab.id);
                               setMobileMenuOpen(false);
                             }}
-                            className={`w-full px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between transition-all cursor-pointer ${isActive ? isDarkMode ? 'bg-[#1e293b]/80 text-blue-400 font-bold border-l-2 border-blue-500 pl-2.5' : 'bg-blue-50/80 text-blue-700 font-bold border-l-2 border-blue-600 pl-2.5' : isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800/40' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+                            className={`w-full px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between transition-all cursor-pointer ${isActive ? isDarkMode ? 'bg-[#1D4ED8] text-white font-bold' : 'bg-[#DBEAFE] text-[#2563EB] font-bold' : isDarkMode ? 'text-[#CBD5E1] hover:text-white hover:bg-[#1E293B]' : 'text-[#475569] hover:bg-[#F8FAFC] hover:text-[#0F172A]'}`}
                           >
                             <span className="flex items-center gap-2.5">
                               <Icon className={`w-4 h-4 ${isActive ? 'text-blue-500' : ''}`} />
@@ -2380,7 +2380,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
-                      className={`w-full px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between transition-all cursor-pointer group ${isActive ? isDarkMode ? 'bg-[#1e293b]/80 text-blue-400 font-bold border-l-2 border-blue-500 pl-2.5' : 'bg-blue-50/80 text-blue-700 font-bold border-l-2 border-blue-600 pl-2.5' : isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800/40' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+                      className={`w-full px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between transition-all cursor-pointer group ${isActive ? isDarkMode ? 'bg-[#1D4ED8] text-white font-bold' : 'bg-[#DBEAFE] text-[#2563EB] font-bold' : isDarkMode ? 'text-[#CBD5E1] hover:text-white hover:bg-[#1E293B]' : 'text-[#475569] hover:bg-[#F8FAFC] hover:text-[#0F172A]'}`}
                       title={`Navigate to ${tab.label} (${tab.shortcut})`}
                     >
                       <span className="flex items-center gap-2.5">
@@ -2436,7 +2436,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.45, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
-            className={`flex-1 flex flex-col min-w-0 max-w-full overflow-x-hidden ${isDarkMode ? 'bg-[#0b0f19]' : 'bg-[#F8FAFC]'}`}
+            className={`flex-1 flex flex-col min-w-0 max-w-full overflow-x-hidden ${isDarkMode ? 'bg-[#0F172A]' : 'bg-[#F8FAFC]'}`}
           >
             {/* Top Workspace Header */}
             <header className={`h-14 px-3 sm:px-6 border-b flex items-center justify-between gap-2 sm:gap-4 shrink-0 max-w-full overflow-x-hidden ${isDarkMode ? 'bg-[#0f172a] border-slate-800' : 'bg-white border-slate-200'}`}>

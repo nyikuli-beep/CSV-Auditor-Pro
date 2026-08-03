@@ -800,20 +800,10 @@ export default function DashboardHome({
             <div className="h-56 relative w-full mt-2 select-none">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={trendData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="scoreGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#3B82F6" stopOpacity={isDarkMode ? 0.25 : 0.15}/>
-                      <stop offset="100%" stopColor="#3B82F6" stopOpacity="0.0"/>
-                    </linearGradient>
-                    <linearGradient id="errorGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#F43F5E" stopOpacity={isDarkMode ? 0.1 : 0.05}/>
-                      <stop offset="100%" stopColor="#F43F5E" stopOpacity="0.0"/>
-                    </linearGradient>
-                  </defs>
                   <CartesianGrid 
                     strokeDasharray="3 3" 
                     vertical={false} 
-                    stroke={isDarkMode ? "rgba(30, 41, 59, 0.5)" : "rgba(226, 232, 240, 0.8)"} 
+                    stroke={isDarkMode ? "rgba(51, 65, 85, 0.5)" : "rgba(226, 232, 240, 0.8)"} 
                   />
                   <XAxis 
                     dataKey="date" 
@@ -841,21 +831,21 @@ export default function DashboardHome({
                     yAxisId="left"
                     type="monotone" 
                     dataKey="score" 
-                    stroke="#3B82F6" 
-                    strokeWidth={2.5} 
-                    fillOpacity={1} 
-                    fill="url(#scoreGrad)" 
+                    stroke="#2563EB" 
+                    strokeWidth={2} 
+                    fill="#2563EB"
+                    fillOpacity={0.12} 
                     name="Hygiene Score"
                   />
                   <Area 
                     yAxisId="right"
                     type="monotone" 
                     dataKey="errors" 
-                    stroke="#F43F5E" 
+                    stroke="#DC2626" 
                     strokeWidth={1.5} 
                     strokeDasharray="4 4"
-                    fillOpacity={1} 
-                    fill="url(#errorGrad)" 
+                    fill="#DC2626"
+                    fillOpacity={0.08} 
                     name="Anomalies Found"
                   />
                 </AreaChart>
@@ -872,7 +862,7 @@ export default function DashboardHome({
         </div>
 
         {/* Files Requiring Attention / Quick Actions list */}
-        <div className={`lg:col-span-4 p-4 rounded-xl border flex flex-col justify-between ${isDarkMode ? 'bg-[#131b2e] border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+        <div className={`lg:col-span-4 p-4 rounded-xl border flex flex-col justify-between ${isDarkMode ? 'bg-[#1E293B] border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
           <div>
             <h3 className={`font-bold text-sm mb-3.5 ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Audited Datasets</h3>
             <div className="space-y-3">
@@ -928,7 +918,7 @@ export default function DashboardHome({
       </div>
 
       {/* Collaboration Timeline Feed (Screen 10 Component) */}
-      <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#131b2e] border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+      <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#1E293B] border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
         <div className="flex justify-between items-center mb-4">
           <div className="flex items-center gap-2">
             <div className="p-1.5 bg-purple-500/10 text-purple-500 rounded-lg"><Activity className="w-4 h-4" /></div>

@@ -647,7 +647,7 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
                   <div className={`p-2 rounded-full font-bold text-[9px] flex items-center justify-center shrink-0 w-8 h-8 text-white ${msg.role === 'user' ? 'bg-blue-600' : 'bg-slate-800'}`}>
                     {msg.role === 'user' ? 'ME' : 'AI'}
                   </div>
-                  <div className={`p-3.5 rounded-2xl relative ${msg.role === 'user' ? 'bg-blue-600/15 border border-blue-500/20 text-blue-200 rounded-tr-none' : isDarkMode ? 'bg-slate-950/60 border border-slate-800 rounded-tl-none' : 'bg-slate-100 rounded-tl-none text-slate-800'}`}>
+                  <div className={`p-3.5 rounded-2xl relative ${msg.role === 'user' ? 'bg-[#2563EB] text-white rounded-tr-none shadow-sm' : isDarkMode ? 'bg-[#1E293B] border border-[#334155] text-[#F8FAFC] rounded-tl-none' : 'bg-[#F1F5F9] border border-[#E2E8F0] text-[#0F172A] rounded-tl-none'}`}>
                     
                     {/* Intent Classification & Tool Badges Header for Assistant */}
                     {msg.role === 'assistant' && (msg.intentCategory || msg.executedTools) && (

@@ -330,40 +330,14 @@ export default function QualityTrendChart({ activeFile, allFiles = [], isDarkMod
         <ResponsiveContainer width="100%" height="100%">
           {chartType === 'area' ? (
             <AreaChart data={activeChartData} margin={{ top: 15, right: 15, left: -20, bottom: 5 }}>
-              <defs>
-                <linearGradient id="scoreAreaGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.45} />
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke={isDarkMode ? '#334155' : '#e2e8f0'} opacity={0.5} />
-              <XAxis 
-                dataKey="timeLabel" 
-                stroke={isDarkMode ? '#94a3b8' : '#64748b'} 
-                fontSize={11} 
-                tickLine={false} 
-              />
-              <YAxis 
-                domain={[0, 100]} 
-                stroke={isDarkMode ? '#94a3b8' : '#64748b'} 
-                fontSize={11} 
-                tickFormatter={(val) => `${val}%`} 
-              />
-              <Tooltip content={<CustomRechartsTooltip isDarkMode={isDarkMode} />} />
-              <ReferenceLine 
-                y={80} 
-                stroke="#10b981" 
-                strokeDasharray="4 4" 
-                label={{ value: 'Target 80%', fill: '#10b981', fontSize: 10, position: 'insideTopRight' }} 
-              />
               <Area 
                 type="monotone" 
                 dataKey="score" 
-                stroke="#3b82f6" 
-                strokeWidth={3} 
-                fillOpacity={1} 
-                fill="url(#scoreAreaGradient)" 
-                activeDot={{ r: 6, fill: '#60a5fa', stroke: '#1e3a8a', strokeWidth: 2 }} 
+                stroke="#2563EB" 
+                strokeWidth={2.5} 
+                fill="#2563EB"
+                fillOpacity={0.15} 
+                activeDot={{ r: 6, fill: '#2563EB', stroke: '#FFFFFF', strokeWidth: 2 }} 
               />
             </AreaChart>
           ) : (

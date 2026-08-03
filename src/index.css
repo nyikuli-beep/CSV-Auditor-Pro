@@ -23,7 +23,42 @@
   }
 }
 
-/* High Density Custom Design Theme Overrides with Smooth Cross-Fade Transitions */
+/* Solid Color System - Enterprise Theme Tokens inspired by WhatsApp, ChatGPT, Vercel, Linear, Notion */
+:root {
+  --color-primary: #2563EB;
+  --color-primary-hover: #1D4ED8;
+  --color-success: #16A34A;
+  --color-warning: #F59E0B;
+  --color-error: #DC2626;
+  --color-info: #0EA5E9;
+  
+  /* Light Theme */
+  --bg-app: #FFFFFF;
+  --bg-secondary: #F8FAFC;
+  --bg-card: #FFFFFF;
+  --bg-header-table: #F1F5F9;
+  --border-color: #E2E8F0;
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-muted: #94A3B8;
+  --bg-hover: #EFF6FF;
+  --bg-selected: #DBEAFE;
+}
+
+.dark {
+  /* Dark Theme */
+  --bg-app: #0F172A;
+  --bg-secondary: #111827;
+  --bg-card: #1E293B;
+  --bg-header-table: #1E293B;
+  --border-color: #334155;
+  --text-primary: #F8FAFC;
+  --text-secondary: #CBD5E1;
+  --text-muted: #64748B;
+  --bg-hover: #1E3A5F;
+  --bg-selected: #1D4ED8;
+}
+
 html, body, #root {
   min-height: 100%;
   width: 100%;
@@ -34,10 +69,10 @@ html, body, #root {
 }
 
 body {
-  background-color: #f8fafc;
-  color: #1e293b;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-  transition: background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 html.dark,
@@ -45,19 +80,16 @@ body.dark,
 .dark body,
 html.dark #root,
 body.dark #root {
-  background-color: #0b0f19 !important;
-  color: #f8fafc;
+  background-color: #0F172A !important;
+  color: #F8FAFC;
 }
 
-/* Smooth cross-fade transition for cards, sidebars, borders, and main containers */
+/* Transitions for cards, sidebars, borders */
 header, aside, main, footer, nav, .hd-card, .hd-border, .hd-bg-sidebar, .hd-bg-app {
-  transition: background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1), 
-              border-color 0.35s cubic-bezier(0.4, 0, 0.2, 1), 
-              color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
-/* Thin modern high-density scrollbars */
+/* Thin modern scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -68,31 +100,30 @@ header, aside, main, footer, nav, .hd-card, .hd-border, .hd-bg-sidebar, .hd-bg-a
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(156, 163, 175, 0.3);
+  background: rgba(148, 163, 184, 0.3);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(156, 163, 175, 0.5);
+  background: rgba(148, 163, 184, 0.5);
 }
 
-/* High Density Card and Utility Classes */
+/* High Density Flat Card and Utility Classes */
 .hd-card {
-  background-color: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.75rem; /* 12px rounded-xl */
-  box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
-  transition: all 0.15s ease;
+  background-color: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 0.75rem; /* 12px */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .dark .hd-card {
-  background-color: #1e293b;
+  background-color: #1E293B;
   border-color: #334155;
   box-shadow: none;
 }
 
 .hd-border {
-  border-color: #e2e8f0;
+  border-color: #E2E8F0;
 }
 
 .dark .hd-border {
@@ -100,18 +131,19 @@ header, aside, main, footer, nav, .hd-card, .hd-border, .hd-bg-sidebar, .hd-bg-a
 }
 
 .hd-bg-sidebar {
-  background-color: #ffffff;
+  background-color: #FFFFFF;
 }
 
 .dark .hd-bg-sidebar {
-  background-color: #0f172a;
+  background-color: #0F172A;
 }
 
 .hd-bg-app {
-  background-color: #f8fafc;
+  background-color: #F8FAFC;
 }
 
 .dark .hd-bg-app {
-  background-color: #0f172a;
+  background-color: #0F172A;
 }
+
 
