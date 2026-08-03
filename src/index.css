@@ -36,11 +36,11 @@
   --bg-app: #FFFFFF;
   --bg-secondary: #F8FAFC;
   --bg-card: #FFFFFF;
-  --bg-header-table: #F1F5F9;
-  --border-color: #E2E8F0;
+  --bg-header-table: #F8FAFC;
+  --border-color: #CBD5E1;
   --text-primary: #0F172A;
-  --text-secondary: #475569;
-  --text-muted: #94A3B8;
+  --text-secondary: #334155;
+  --text-muted: #64748B;
   --bg-hover: #EFF6FF;
   --bg-selected: #DBEAFE;
 }
@@ -113,7 +113,7 @@ header, aside, main, footer, nav, .hd-card, .hd-border, .hd-bg-sidebar, .hd-bg-a
   background-color: #FFFFFF;
   border: 1px solid #E2E8F0;
   border-radius: 0.75rem; /* 12px */
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .dark .hd-card {
@@ -144,6 +144,78 @@ header, aside, main, footer, nav, .hd-card, .hd-border, .hd-bg-sidebar, .hd-bg-a
 
 .dark .hd-bg-app {
   background-color: #0F172A;
+}
+
+/* Accessible focus ring for keyboard navigation */
+:focus-visible {
+  outline: 2px solid #2563EB;
+  outline-offset: 2px;
+}
+
+/* Input placeholder contrast fix for light mode */
+input::placeholder, textarea::placeholder {
+  color: #64748B;
+  opacity: 1;
+}
+
+.dark input::placeholder, .dark textarea::placeholder {
+  color: #64748B;
+  opacity: 1;
+}
+
+/* Alert Box Semantic Styles */
+.alert-success {
+  background-color: #ECFDF5;
+  border: 1px solid #16A34A;
+  color: #065F46;
+}
+
+.alert-warning {
+  background-color: #FFFBEB;
+  border: 1px solid #F59E0B;
+  color: #92400E;
+}
+
+.alert-danger {
+  background-color: #FEF2F2;
+  border: 1px solid #DC2626;
+  color: #991B1B;
+}
+
+.alert-info {
+  background-color: #EFF6FF;
+  border: 1px solid #2563EB;
+  color: #1E40AF;
+}
+
+/* High Contrast Spreadsheet Table Defaults */
+.spreadsheet-table th {
+  background-color: #F8FAFC;
+  color: #0F172A;
+  border-bottom: 1px solid #E2E8F0;
+  font-weight: 600;
+}
+
+.dark .spreadsheet-table th {
+  background-color: #1E293B;
+  color: #F8FAFC;
+  border-bottom: 1px solid #334155;
+}
+
+.spreadsheet-table tr:nth-child(even) {
+  background-color: #FAFAFA;
+}
+
+.dark .spreadsheet-table tr:nth-child(even) {
+  background-color: #0F172A;
+}
+
+.spreadsheet-table tr:hover {
+  background-color: #EFF6FF;
+}
+
+.dark .spreadsheet-table tr:hover {
+  background-color: #1E3A5F;
 }
 
 
