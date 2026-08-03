@@ -46,6 +46,16 @@ import {
 // Import Types
 import { CSVFile, TeamMember, AuditActivity, ChatMessage, SystemSettings, SlotRequest } from './types';
 
+// Import File Storage persistence engine
+import { 
+  saveFilesToStorage, 
+  loadFilesFromStorage, 
+  loadFilesFromLocalStorageSync, 
+  saveActiveFileIdToStorage, 
+  loadActiveFileIdFromStorage, 
+  deleteFileFromStorage 
+} from './lib/fileStorage';
+
 // Import Profile Upload, Keyboard Shortcuts & Onboarding Tour Modals
 import ProfileUploadModal from './components/ProfileUploadModal';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
@@ -184,12 +194,49 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
 
-  // Files Registry (Initial mock messy CSV loaded by default)
-  const [files, setFiles] = useState<CSVFile[]>([]);
+  // Files Registry (with persistent IndexedDB + localStorage storage)
+  const [files, setFiles] = useState<CSVFile[]>(() => {
+    return loadFilesFromLocalStorageSync();
+  });
   const [activeFileIndex, setActiveFileIndex] = useState<number>(0);
-  const [activeFileId, setActiveFileId] = useState<string>('file-active');
+  const [activeFileId, setActiveFileId] = useState<string>(() => {
+    return loadActiveFileIdFromStorage();
+  });
   const [isFixingActiveFile, setIsFixingActiveFile] = useState<boolean>(false);
   const [fixAllSuccessMsg, setFixAllSuccessMsg] = useState<string>('');
+
+  // Async load persistent uploaded files from IndexedDB engine on initial mount
+  useEffect(() => {
+    let isMounted = true;
+    loadFilesFromStorage().then(storedFiles => {
+      if (!isMounted) return;
+      if (storedFiles && storedFiles.length > 0) {
+        setFiles(prev => {
+          const map = new Map<string, CSVFile>();
+          prev.forEach(f => { if (f && f.id) map.set(f.id, f); });
+          storedFiles.forEach(f => { if (f && f.id) map.set(f.id, f); });
+          return Array.from(map.values());
+        });
+      }
+    }).catch(err => {
+      console.warn("Failed to load files from storage engine on mount:", err);
+    });
+    return () => { isMounted = false; };
+  }, []);
+
+  // Auto-persist files whenever files state changes
+  useEffect(() => {
+    if (files && files.length > 0) {
+      saveFilesToStorage(files);
+    }
+  }, [files]);
+
+  // Auto-persist active file ID whenever activeFileId changes
+  useEffect(() => {
+    if (activeFileId) {
+      saveActiveFileIdToStorage(activeFileId);
+    }
+  }, [activeFileId]);
 
   // Collaboration registry (with persistence from localStorage)
   const [members, setMembers] = useState<TeamMember[]>(() => {
@@ -555,7 +602,6 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
         if (!isCancelled) {
           setFirebaseUser(null);
           setUser(null);
-          setFiles([]);
           setActivities([]);
           setMembers([]);
           setSlotRequests([]);
@@ -569,16 +615,13 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
         return;
       }
 
-      // 1. Clear previous user state & cache immediately so old profile/dashboard never flashes
-      setFiles([]);
-      setActivities([]);
-      setMembers([]);
-      setSlotRequests([]);
-      localStorage.removeItem('user_profile_uid');
-      localStorage.removeItem('user_profile_avatar');
-      localStorage.removeItem('user_profile_name');
-
-      setActiveFileId('file-active-' + fUser.uid);
+      // 1. Maintain workspace files and update user session
+      const lastUid = localStorage.getItem('user_profile_uid');
+      if (lastUid && lastUid !== fUser.uid) {
+        setActivities([]);
+        setSlotRequests([]);
+      }
+      localStorage.setItem('user_profile_uid', fUser.uid);
       
       const isOwnerEmail = ['nyikulibramwel@gmail.com'].some(
         p => p.toLowerCase() === (fUser.email || '').trim().toLowerCase()
@@ -764,10 +807,6 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   // Sync collections in real-time with proper unsubscribes on user switch
   useEffect(() => {
     if (authLoading || !firebaseUser || !user || firebaseUser.uid !== user.uid) {
-      setFiles([]);
-      setMembers([]);
-      setActivities([]);
-      setSlotRequests([]);
       return;
     }
 
@@ -782,30 +821,35 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
         filesList.push(docSnap.data() as CSVFile);
       });
 
-      if (filesList.length === 0) {
-        setFiles([]);
-      } else {
-        setFiles(prev => {
-          const unsynced = prev.filter(p => !filesList.some(f => f.id === p.id) && !p.id.startsWith('file-active'));
-          const combined = [...unsynced, ...filesList];
-          
-          combined.sort((a, b) => {
-            let timeA = 0;
-            let timeB = 0;
-            
-            if (a.uploadedAt) {
-              const parsed = Date.parse(a.uploadedAt);
-              if (!isNaN(parsed)) timeA = parsed;
-            }
-            if (b.uploadedAt) {
-              const parsed = Date.parse(b.uploadedAt);
-              if (!isNaN(parsed)) timeB = parsed;
-            }
-            return timeB - timeA;
-          });
-          return combined;
+      setFiles(prev => {
+        const map = new Map<string, CSVFile>();
+        // Add existing local files first
+        prev.forEach(f => {
+          if (f && f.id) map.set(f.id, f);
         });
-      }
+        // Add / override with Firestore files
+        filesList.forEach(f => {
+          if (f && f.id) map.set(f.id, f);
+        });
+
+        const combined = Array.from(map.values());
+        combined.sort((a, b) => {
+          let timeA = 0;
+          let timeB = 0;
+          if (a.uploadedAt) {
+            const parsed = Date.parse(a.uploadedAt);
+            if (!isNaN(parsed)) timeA = parsed;
+          }
+          if (b.uploadedAt) {
+            const parsed = Date.parse(b.uploadedAt);
+            if (!isNaN(parsed)) timeB = parsed;
+          }
+          return timeB - timeA;
+        });
+
+        saveFilesToStorage(combined);
+        return combined;
+      });
     }, (err) => {
       handleFirestoreError(err, OperationType.LIST, 'files');
     });
@@ -1109,10 +1153,13 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     // Optimistically update files and transition immediately for instant, high-performance UI feedback
     setFiles(prev => {
       const filtered = prev.filter(f => f.id !== fileId);
-      return [fileToUpload, ...filtered];
+      const updated = [fileToUpload, ...filtered];
+      saveFilesToStorage(updated);
+      return updated;
     });
 
     setActiveFileId(fileId);
+    saveActiveFileIdToStorage(fileId);
     setActiveFileIndex(0);
     setActiveTab('clean'); // Switch directly to the Cleaning Center for cleaning
 
@@ -1157,7 +1204,11 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     }
 
     // Always update local state
-    setFiles(prev => prev.map(f => f.id === updatedFile.id ? updatedFile : f));
+    setFiles(prev => {
+      const updated = prev.map(f => f.id === updatedFile.id ? updatedFile : f);
+      saveFilesToStorage(updated);
+      return updated;
+    });
 
     const cleanLog: AuditActivity = {
       id: `act-${Date.now()}`,
@@ -1491,10 +1542,14 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     }
 
     // Always update local state
-    setFiles(prev => prev.map(f => {
-      const match = updatedFiles.find(uf => uf.id === f.id);
-      return match ? match : f;
-    }));
+    setFiles(prev => {
+      const updated = prev.map(f => {
+        const match = updatedFiles.find(uf => uf.id === f.id);
+        return match ? match : f;
+      });
+      saveFilesToStorage(updated);
+      return updated;
+    });
 
     const batchCleanLog: AuditActivity = {
       id: `act-${Date.now()}`,
@@ -1515,6 +1570,8 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
 
   // Delete file from workspace registry
   const handleDeleteFile = async (id: string, name: string) => {
+    deleteFileFromStorage(id);
+
     try {
       await deleteDoc(doc(db, 'files', id));
       await syncToPostgres(`delete-file/${id}`, 'DELETE');
@@ -1523,7 +1580,11 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     }
 
     // Always update local state first
-    setFiles(prev => prev.filter(f => f.id !== id));
+    setFiles(prev => {
+      const updated = prev.filter(f => f.id !== id);
+      saveFilesToStorage(updated);
+      return updated;
+    });
 
     // Safely shift active file index and ID
     const deletedIndex = files.findIndex(f => f.id === id);
@@ -1924,6 +1985,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   const handlePurgeInactiveFiles = async () => {
     const inactiveFiles = files.filter(f => f.id !== activeFileId);
     for (const file of inactiveFiles) {
+      deleteFileFromStorage(file.id);
       try {
         await deleteDoc(doc(db, 'files', file.id));
         await syncToPostgres(`delete-file/${file.id}`, 'DELETE').catch(() => {});
@@ -1931,7 +1993,11 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
         console.error(`Error purging file ${file.name}:`, err);
       }
     }
-    setFiles(files.filter(f => f.id === activeFileId));
+    setFiles(prev => {
+      const remaining = prev.filter(f => f.id === activeFileId);
+      saveFilesToStorage(remaining);
+      return remaining;
+    });
   };
 
 
