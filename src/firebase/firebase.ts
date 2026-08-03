@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence, browserSessionPersistence } from 'firebase/auth';
 import { initializeFirestore } from 'firebase/firestore';
+import { getDatabase, Database } from 'firebase/database';
 import firebaseConfigJson from '../../firebase-applet-config.json';
 
 // Initialize Firebase using environment variables with safe config fallbacks
@@ -12,6 +13,7 @@ const firebaseConfig = {
   storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || firebaseConfigJson.storageBucket,
   messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseConfigJson.messagingSenderId,
   appId: env.VITE_FIREBASE_APP_ID || firebaseConfigJson.appId,
+  databaseURL: env.VITE_FIREBASE_DATABASE_URL || (firebaseConfigJson as any).databaseURL || `https://${firebaseConfigJson.projectId}-default-rtdb.firebaseio.com`
 };
 
 // Singleton App Instance
@@ -30,6 +32,19 @@ const databaseId = (firebaseConfigJson as any).firestoreDatabaseId || 'ai-studio
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
 }, databaseId);
+
+// Firebase Realtime Database Instance
+let rtdbInstance: Database | null = null;
+try {
+  rtdbInstance = getDatabase(app, firebaseConfig.databaseURL);
+} catch (e) {
+  try {
+    rtdbInstance = getDatabase(app);
+  } catch (err) {
+    console.warn("RTDB initialization warning:", err);
+  }
+}
+export const rtdb = rtdbInstance;
 
 // Google Auth Provider
 export const googleProvider = new GoogleAuthProvider();
