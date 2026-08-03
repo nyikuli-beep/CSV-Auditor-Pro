@@ -553,7 +553,24 @@ app.post('/api/gemini/chat', async (req, res) => {
   }
 });
 
-// 1c. API: AI Anomaly Detection in Numeric Columns (Gemini 2.5 Pro for Complex Reasoning)
+import { executeToolByName } from './src/lib/aiToolRegistry.ts';
+
+// API: Direct Execution of CSV Audit Tools from Tool Registry
+app.post('/api/gemini/tools/execute', async (req, res) => {
+  try {
+    const { toolName, headers = [], rows = [], options = {} } = req.body;
+    if (!toolName) {
+      res.status(400).json({ error: 'toolName parameter is required' });
+      return;
+    }
+
+    const result = executeToolByName(toolName, { headers, rows, ...options });
+    res.json(result);
+  } catch (err: any) {
+    console.error('Error executing tool via API:', err);
+    res.status(500).json({ error: err.message || 'Failed to execute tool' });
+  }
+});
 app.post('/api/gemini/detect-anomalies', async (req, res) => {
   const requestId = `req-anom-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
   const startTime = Date.now();

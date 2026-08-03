@@ -2058,6 +2058,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
           fileContext: activeFile ? {
             fileName: activeFile.name,
             headers: activeFile.headers,
+            rows: activeFile.rows.slice(0, 50),
             rowCount: activeFile.rows.length,
             issuesCount: activeFile.issues.length,
             score: activeFile.score,
@@ -2077,6 +2078,10 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       let currentCitations: any[] = aiThinkingMsg.citations || [];
       let retrievedDocs: string[] = [];
       let intent = '';
+      let intentCategory: any = undefined;
+      let confidenceScore: number | undefined = undefined;
+      let executedTools: string[] = [];
+      let reasoning: string | undefined = undefined;
       let sseBuffer = '';
 
       while (true) {
@@ -2099,6 +2104,10 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
               if (parsed.citations) currentCitations = parsed.citations;
               if (parsed.retrievedDocs) retrievedDocs = parsed.retrievedDocs;
               if (parsed.intent) intent = parsed.intent;
+              if (parsed.intentCategory) intentCategory = parsed.intentCategory;
+              if (parsed.confidenceScore) confidenceScore = parsed.confidenceScore;
+              if (parsed.executedTools) executedTools = parsed.executedTools;
+              if (parsed.reasoning) reasoning = parsed.reasoning;
             } else if (parsed.type === 'chunk' && parsed.text) {
               accumulatedText += parsed.text;
             } else if (parsed.type === 'error') {
@@ -2113,6 +2122,10 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                     citations: currentCitations,
                     retrievedDocs: retrievedDocs,
                     intent: intent,
+                    intentCategory,
+                    confidenceScore,
+                    executedTools,
+                    reasoning,
                     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
                   }
                 : m

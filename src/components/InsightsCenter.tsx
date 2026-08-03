@@ -648,6 +648,36 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
                     {msg.role === 'user' ? 'ME' : 'AI'}
                   </div>
                   <div className={`p-3.5 rounded-2xl relative ${msg.role === 'user' ? 'bg-blue-600/15 border border-blue-500/20 text-blue-200 rounded-tr-none' : isDarkMode ? 'bg-slate-950/60 border border-slate-800 rounded-tl-none' : 'bg-slate-100 rounded-tl-none text-slate-800'}`}>
+                    
+                    {/* Intent Classification & Tool Badges Header for Assistant */}
+                    {msg.role === 'assistant' && (msg.intentCategory || msg.executedTools) && (
+                      <div className="mb-2.5 pb-2 border-b border-slate-800/40 flex flex-wrap items-center gap-1.5">
+                        {msg.intentCategory && (
+                          <span className={`px-2 py-0.5 rounded-md text-[9px] font-mono font-bold border uppercase flex items-center gap-1 ${
+                            msg.intentCategory === 'CSV_ANALYSIS' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
+                            msg.intentCategory === 'GENERAL_AI' ? 'bg-blue-500/10 text-blue-400 border-blue-500/30' :
+                            msg.intentCategory === 'MIXED_REQUEST' ? 'bg-purple-500/10 text-purple-400 border-purple-500/30' :
+                            'bg-slate-800 text-slate-300 border-slate-700'
+                          }`}>
+                            <Zap className="w-2.5 h-2.5" />
+                            <span>
+                              {msg.intentCategory === 'CSV_ANALYSIS' ? 'CSV Analysis' :
+                               msg.intentCategory === 'GENERAL_AI' ? 'General AI' :
+                               msg.intentCategory === 'MIXED_REQUEST' ? 'Hybrid AI' : 'AI Response'}
+                              {msg.confidenceScore ? ` (${Math.round(msg.confidenceScore * 100)}%)` : ''}
+                            </span>
+                          </span>
+                        )}
+
+                        {msg.executedTools && msg.executedTools.map((tName, tIdx) => (
+                          <span key={tIdx} className="px-1.5 py-0.5 rounded text-[8px] font-mono bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1">
+                            <Bot className="w-2.5 h-2.5 text-amber-400" />
+                            <span>Tool: {tName}</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
                     <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
                     
                     {/* RAG Grounded Sources & Citations */}
@@ -677,7 +707,21 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
                       </div>
                     )}
 
-                    <span className="text-[8px] text-slate-500 font-mono block mt-2 text-right">{msg.timestamp}</span>
+                    <div className="mt-2 pt-1 flex items-center justify-between text-[8px] text-slate-500 font-mono">
+                      {msg.role === 'assistant' ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(msg.content);
+                            alert("Response copied to clipboard!");
+                          }}
+                          className="hover:text-blue-400 transition-colors cursor-pointer flex items-center gap-1"
+                        >
+                          Copy Output
+                        </button>
+                      ) : <span />}
+                      <span>{msg.timestamp}</span>
+                    </div>
                   </div>
                 </div>
               ))}

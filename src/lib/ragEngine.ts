@@ -1,4 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
+import { detectUserIntent, AIIntentCategory, IntentAnalysisResult } from './intentDetectionEngine';
+import { executeToolByName, ToolResult } from './aiToolRegistry';
+import { buildStructuredCSVContext, StructuredCSVContext } from './csvContextEngine';
 
 export interface KnowledgeChunk {
   id: string;
@@ -10,6 +13,7 @@ export interface KnowledgeChunk {
 }
 
 export interface DatasetContext {
+  fileId?: string;
   fileName: string;
   rowCount: number;
   columnCount?: number;
@@ -23,6 +27,7 @@ export interface DatasetContext {
   cleaningOperationsPerformed?: string[];
   activeSchema?: string | null;
   anomaliesSummary?: string[];
+  rows?: Record<string, any>[];
 }
 
 export interface UserContext {
@@ -361,9 +366,9 @@ export const KNOWLEDGE_BASE_CHUNKS: KnowledgeChunk[] = [
 ];
 
 /**
- * Intent detection algorithm for user prompts
+ * Legacy Intent detection helper for user prompts
  */
-export function detectUserIntent(prompt: string): { intent: string; plainLanguageMode: boolean } {
+export function detectLegacyUserIntent(prompt: string): { intent: string; plainLanguageMode: boolean } {
   const p = prompt.toLowerCase().trim();
 
   const isPlainLanguage = 
@@ -455,21 +460,46 @@ export function retrieveKnowledgeChunks(prompt: string, limit: number = 4): Know
 export function buildDynamicRAGPrompt(
   options: RagRequestOptions,
   relevantDocs: KnowledgeChunk[]
-): { systemInstruction: string; fullPrompt: string; citations: Array<{ type: 'doc' | 'dataset' | 'memory' | 'product'; label: string }> } {
+): {
+  systemInstruction: string;
+  fullPrompt: string;
+  citations: Array<{ type: 'doc' | 'dataset' | 'memory' | 'product'; label: string }>;
+  intentAnalysis: IntentAnalysisResult;
+  executedToolsResults: ToolResult[];
+} {
   const { prompt, datasetContext, userContext, history = [], persona = 'auditor' } = options;
-  const { intent, plainLanguageMode } = detectUserIntent(prompt);
+  const hasActiveDataset = Boolean(datasetContext && datasetContext.fileName);
+  const activeHeaders = datasetContext?.headers || [];
+
+  const intentAnalysis = detectUserIntent(prompt, hasActiveDataset, activeHeaders);
 
   const citations: Array<{ type: 'doc' | 'dataset' | 'memory' | 'product'; label: string }> = [
     { type: 'product', label: 'Product Knowledge' }
   ];
 
-  // Base System Prompt as specified in guidelines
-  let systemInstruction = 
-    `You are the official AI assistant for CSV Auditor Pro. You understand every feature of the application.\n` +
-    `Always answer using information from the knowledge base first. If the user asks about CSV Auditor Pro, explain using product documentation.\n` +
-    `If information cannot be found, politely say that the feature is unavailable. Never invent functionality.\n` +
-    `When the user requests simple language, explain as if talking to someone with no technical background. Use friendly, concise, accurate language.\n` +
-    `Never mention unrelated technical fallbacks or PostgreSQL migration errors unless explicitly asked.`;
+  // System Prompt Customization by Intent Category
+  let systemInstruction = '';
+
+  if (intentAnalysis.category === 'GENERAL_AI') {
+    systemInstruction =
+      `You are an expert General AI Assistant and CSV Auditor Pro guide. You provide clear, accurate, and comprehensive answers to everyday questions across programming, math, science, database architecture, business, and general knowledge.\n` +
+      `Since the user query is general, answer directly without forcing CSV dataset context if not relevant.\n` +
+      `Always maintain high clarity, professional tone, and precise formatting using Markdown headers and lists.`;
+  } else if (intentAnalysis.category === 'CSV_ANALYSIS') {
+    systemInstruction =
+      `You are a Senior CSV Data Auditor and Analytics Expert for CSV Auditor Pro.\n` +
+      `Your task is to analyze, explain, clean, validate, and summarize the uploaded dataset.\n` +
+      `Be accurate, reference exact headers and metrics, and NEVER invent fake data or raw rows that do not exist.\n` +
+      `Provide actionable cleaning routines and clear statistical insights.`;
+  } else if (intentAnalysis.category === 'MIXED_REQUEST') {
+    systemInstruction =
+      `You are a Senior AI Systems Architect and Data Scientist for CSV Auditor Pro.\n` +
+      `The user has asked a hybrid question that combines CSV dataset analysis with general AI/programming concepts.\n` +
+      `Address both parts thoroughly: answer the CSV dataset questions using exact metrics, and provide general explanations or code snippets where applicable.`;
+  } else {
+    systemInstruction =
+      `You are the official AI assistant for CSV Auditor Pro. Provide polite, helpful, and grounded assistance.`;
+  }
 
   if (persona === 'architect') {
     systemInstruction += `\nRole Persona: PostgreSQL Database Architect. Focus on relational schemas, SQL DDLs, and database normalization.`;
@@ -477,8 +507,23 @@ export function buildDynamicRAGPrompt(
     systemInstruction += `\nRole Persona: Business Intelligence Analyst. Focus on dataset trends, executive summaries, and business growth.`;
   }
 
-  if (plainLanguageMode) {
-    systemInstruction += `\nCRITICAL: The user requested a simple explanation. Explain concepts in plain, easy-to-understand layman's terms without technical jargon.`;
+  // Execute suggested backend tools deterministically if rows are available in datasetContext
+  const executedToolsResults: ToolResult[] = [];
+  if (hasActiveDataset && datasetContext?.rows && datasetContext.rows.length > 0) {
+    intentAnalysis.suggestedTools.forEach(toolName => {
+      try {
+        const res = executeToolByName(toolName, {
+          headers: datasetContext.headers,
+          rows: datasetContext.rows,
+          column: datasetContext.headers[0]
+        });
+        if (res.success) {
+          executedToolsResults.push(res);
+        }
+      } catch (err) {
+        console.warn(`Failed to auto-execute tool "${toolName}":`, err);
+      }
+    });
   }
 
   // Construct Document Context
@@ -510,6 +555,15 @@ export function buildDynamicRAGPrompt(
     datasetSection += `No active dataset currently loaded in workspace.\n`;
   }
 
+  // Construct Tool Results Section if tools executed
+  let toolResultsSection = '';
+  if (executedToolsResults.length > 0) {
+    toolResultsSection = '### EXECUTED BACKEND AUDIT TOOL RESULTS:\n';
+    executedToolsResults.forEach(tr => {
+      toolResultsSection += `- **${tr.toolName}**: ${tr.summary} | Data: ${JSON.stringify(tr.data)}\n`;
+    });
+  }
+
   // Construct User & Team Workspace Context
   let userSection = '### CURRENT USER & WORKSPACE CONTEXT:\n';
   if (userContext) {
@@ -538,6 +592,8 @@ ${docsSection}
 
 ${datasetSection}
 
+${toolResultsSection}
+
 ${userSection}
 
 ${historySection}
@@ -545,13 +601,15 @@ ${historySection}
 ### USER QUESTION / COMMAND:
 "${prompt}"
 
-Please generate a grounded, accurate, and helpful response based on the above knowledge base, dataset context, user workspace, and conversation memory.
+Please generate a grounded, accurate, and helpful response based on the above knowledge base, intent analysis, dataset context, tool results, user workspace, and conversation memory.
 `;
 
   return {
     systemInstruction,
     fullPrompt,
-    citations
+    citations,
+    intentAnalysis,
+    executedToolsResults
   };
 }
 
@@ -561,18 +619,28 @@ Please generate a grounded, accurate, and helpful response based on the above kn
 export async function generateRAGResponseStream(
   ai: GoogleGenAI | null,
   options: RagRequestOptions,
-  onMeta: (meta: { requestId: string; model: string; citations: any[]; intent: string; plainLanguageMode: boolean; retrievedDocs: string[] }) => void,
+  onMeta: (meta: {
+    requestId: string;
+    model: string;
+    citations: any[];
+    intent: string;
+    plainLanguageMode: boolean;
+    retrievedDocs: string[];
+    intentCategory?: AIIntentCategory;
+    confidenceScore?: number;
+    reasoning?: string;
+    executedTools?: string[];
+  }) => void,
   onChunk: (textChunk: string) => void
 ): Promise<void> {
   const requestId = `req-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
   const startTime = Date.now();
   const selectedModel = selectGeminiModel(options);
   const { prompt } = options;
-  const { intent, plainLanguageMode } = detectUserIntent(prompt);
 
   // Retrieve top relevant knowledge docs
   const relevantDocs = retrieveKnowledgeChunks(prompt, 4);
-  const { systemInstruction, fullPrompt, citations } = buildDynamicRAGPrompt(options, relevantDocs);
+  const { systemInstruction, fullPrompt, citations, intentAnalysis, executedToolsResults } = buildDynamicRAGPrompt(options, relevantDocs);
   const docNames = relevantDocs.map(d => d.sourceFile);
 
   // Send metadata upfront
@@ -580,9 +648,13 @@ export async function generateRAGResponseStream(
     requestId,
     model: selectedModel,
     citations,
-    intent,
-    plainLanguageMode,
-    retrievedDocs: docNames
+    intent: intentAnalysis.category,
+    plainLanguageMode: false,
+    retrievedDocs: docNames,
+    intentCategory: intentAnalysis.category,
+    confidenceScore: intentAnalysis.confidenceScore,
+    reasoning: intentAnalysis.reasoning,
+    executedTools: executedToolsResults.map(r => r.toolName)
   });
 
   // Check In-Memory Cache first
@@ -702,13 +774,11 @@ export async function generateRAGResponseStream(
   const docSummary = relevantDocs.map(d => `**${d.title}**: ${d.content}`).join('\n\n');
   let fallbackAnswer = '';
 
-  if (intent === 'product_explanation') {
-    fallbackAnswer = plainLanguageMode
-      ? `CSV Auditor Pro is an easy-to-use tool that checks your spreadsheets for mistakes, duplicate rows, or missing information before you upload them into a database. It works right inside your browser so your data stays safe!`
-      : `CSV Auditor Pro is an enterprise spreadsheet audit and data compliance platform. It provides automated anomaly detection, real-time data cleaning (deduplication, missing value imputation, ISO date formatting), schema validation, and team collaboration.`;
-  } else if (intent === 'dataset_query' && options.datasetContext?.fileName) {
+  if (intentAnalysis.category === 'CSV_ANALYSIS' && options.datasetContext?.fileName) {
     const ds = options.datasetContext;
     fallbackAnswer = `Here is the current audit breakdown for **${ds.fileName}**:\n- **Quality Score**: ${ds.score ?? 100}/100\n- **Total Rows**: ${ds.rowCount}\n- **Duplicates Found**: ${ds.duplicatesCount ?? 0}\n- **Blank/Missing Cells**: ${ds.missingValuesCount ?? 0}\n- **Applied Cleanings**: ${ds.cleaningOperationsPerformed?.length ? ds.cleaningOperationsPerformed.join(', ') : 'None yet'}\n\nYou can run automated cleaning routines directly in the **Cleaning Center** tab!`;
+  } else if (intentAnalysis.category === 'GENERAL_AI') {
+    fallbackAnswer = `I am here to assist with general questions, programming, database queries, and data science concepts! How else can I help you today?`;
   } else {
     fallbackAnswer = `Based on CSV Auditor Pro product documentation and your workspace context:\n\n${docSummary}`;
   }
@@ -748,7 +818,11 @@ export async function generateRAGResponse(
   const startTime = Date.now();
   const selectedModel = selectGeminiModel(options);
   const { prompt } = options;
-  const { intent, plainLanguageMode } = detectUserIntent(prompt);
+  const hasActiveDataset = Boolean(options.datasetContext && options.datasetContext.fileName);
+  const activeHeaders = options.datasetContext?.headers || [];
+  const intentAnalysis = detectUserIntent(prompt, hasActiveDataset, activeHeaders);
+  const intent = intentAnalysis.category;
+  const plainLanguageMode = false;
 
   const relevantDocs = retrieveKnowledgeChunks(prompt, 4);
   const { systemInstruction, fullPrompt, citations } = buildDynamicRAGPrompt(options, relevantDocs);
@@ -871,7 +945,7 @@ export async function generateRAGResponse(
   const docSummary = relevantDocs.map(d => `**${d.title}**: ${d.content}`).join('\n\n');
   let fallbackAnswer = `Based on CSV Auditor Pro product documentation and your workspace context:\n\n${docSummary}`;
 
-  if (intent === 'product_explanation') {
+  if (intent === 'CSV_ANALYSIS') {
     fallbackAnswer = `CSV Auditor Pro is an enterprise spreadsheet audit and data compliance platform providing automated anomaly detection, real-time data cleaning, schema validation, and team collaboration.`;
   }
 

@@ -94,6 +94,10 @@ export interface ChatMessage {
   citations?: Array<{ type: 'doc' | 'dataset' | 'memory' | 'product' | string; label: string }>;
   retrievedDocs?: string[];
   intent?: string;
+  intentCategory?: 'CSV_ANALYSIS' | 'GENERAL_AI' | 'MIXED_REQUEST' | 'UNKNOWN';
+  confidenceScore?: number;
+  executedTools?: string[];
+  reasoning?: string;
   statusStep?: string;
 }
 
