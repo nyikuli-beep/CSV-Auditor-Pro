@@ -1,8 +1,8 @@
 import { doc, getDocFromServer } from 'firebase/firestore';
 import { signInWithPopup, signInWithRedirect, GoogleAuthProvider } from 'firebase/auth';
-import { app, auth, db, googleProvider } from './firebase/firebase';
+import { app, auth, db, rtdb, googleProvider } from './firebase/firebase';
 
-export { app, auth, db, googleProvider };
+export { app, auth, db, rtdb, googleProvider };
 
 // Monkeypatch console.error to intercept and downgrade internal Firestore reachability issues.
 // In sandboxed environments or during initial container cold-starts, Firestore may take a moment

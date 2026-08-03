@@ -76,7 +76,21 @@ export default function CollaborationChat({
   }, []);
 
   // UI State
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    try {
+      const room = `tenant_${tenantId}_file_${activeFileId}`.replace(/[\.\#\$\/\[\]]/g, '_');
+      const raw = localStorage.getItem(`chat_cache_${room}`) || localStorage.getItem(`chat_cache_global`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to load initial cached messages:", e);
+    }
+    return [];
+  });
   const [inputText, setInputText] = useState('');
   const [cellRef, setCellRef] = useState('');
   const [showCellRefInput, setShowCellRefInput] = useState(false);

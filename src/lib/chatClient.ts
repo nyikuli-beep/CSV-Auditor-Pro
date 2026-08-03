@@ -117,6 +117,37 @@ export class ChatClient {
     this.tenantId = config.tenantId;
     this.fileId = config.fileId;
     this.user = config.user;
+    this.loadLocalCache();
+  }
+
+  private loadLocalCache(): void {
+    try {
+      const room = this.getRoomId();
+      const raw = localStorage.getItem(`chat_cache_${room}`) || localStorage.getItem(`chat_cache_global`);
+      if (raw) {
+        const list: ChatMessage[] = JSON.parse(raw);
+        if (Array.isArray(list)) {
+          list.forEach(msg => {
+            if (msg && msg.id && msg.text) {
+              this.currentMessages.set(msg.id, msg);
+            }
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("[RTDB Chat] Error loading local cache:", e);
+    }
+  }
+
+  private saveLocalCache(): void {
+    try {
+      const room = this.getRoomId();
+      const list = this.getSortedMessages();
+      localStorage.setItem(`chat_cache_${room}`, JSON.stringify(list));
+      localStorage.setItem(`chat_cache_global`, JSON.stringify(list));
+    } catch (e) {
+      console.warn("[RTDB Chat] Error saving local cache:", e);
+    }
   }
 
   public getRoomId(): string {
@@ -129,6 +160,9 @@ export class ChatClient {
 
     this.updateStatus('connecting');
     console.log(`[RTDB Chat] Connecting to real-time session for room: ${this.getRoomId()}`);
+
+    this.loadLocalCache();
+    this.broadcastMessages();
 
     this.setupPresence();
     this.attachRoomListeners();
@@ -338,31 +372,38 @@ export class ChatClient {
         let hasNew = false;
         snap.forEach(d => {
           const raw = d.data();
-          if (raw && raw.text && (raw.tenantId === this.tenantId || raw.fileId === this.fileId)) {
-            const msg: ChatMessage = {
-              id: d.id || raw.id,
-              tenantId: raw.tenantId || this.tenantId,
-              fileId: raw.fileId || this.fileId,
-              userId: raw.userId,
-              userName: raw.userName,
-              userEmail: raw.userEmail || '',
-              userRole: raw.userRole || 'Editor',
-              userAvatar: raw.userAvatar || '',
-              text: raw.text,
-              cellRef: raw.cellRef || undefined,
-              timestamp: typeof raw.timestamp === 'number' ? raw.timestamp : Date.now(),
-              timeFormatted: raw.timeFormatted || new Date(raw.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              status: raw.status || 'delivered',
-              replyTo: raw.replyTo || undefined,
-              reactions: raw.reactions || {},
-              edited: raw.edited || false,
-              editedAt: raw.editedAt || undefined,
-              deleted: raw.deleted || false,
-              pinned: raw.pinned || false,
-              pinnedBy: raw.pinnedBy || undefined
-            };
-            this.currentMessages.set(msg.id, msg);
-            hasNew = true;
+          if (raw && raw.text) {
+            const isMatch = !raw.fileId || raw.fileId === this.fileId || 
+                            raw.tenantId === this.tenantId || 
+                            raw.roomId === roomId || 
+                            (!raw.tenantId && !raw.fileId);
+
+            if (isMatch) {
+              const msg: ChatMessage = {
+                id: d.id || raw.id,
+                tenantId: raw.tenantId || this.tenantId,
+                fileId: raw.fileId || this.fileId,
+                userId: raw.userId || 'anon',
+                userName: raw.userName || 'Team Member',
+                userEmail: raw.userEmail || '',
+                userRole: raw.userRole || 'Editor',
+                userAvatar: raw.userAvatar || '',
+                text: raw.text,
+                cellRef: raw.cellRef || undefined,
+                timestamp: typeof raw.timestamp === 'number' ? raw.timestamp : Date.now(),
+                timeFormatted: raw.timeFormatted || new Date(raw.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                status: raw.status || 'delivered',
+                replyTo: raw.replyTo || undefined,
+                reactions: raw.reactions || {},
+                edited: raw.edited || false,
+                editedAt: raw.editedAt || undefined,
+                deleted: raw.deleted || false,
+                pinned: raw.pinned || false,
+                pinnedBy: raw.pinnedBy || undefined
+              };
+              this.currentMessages.set(msg.id, msg);
+              hasNew = true;
+            }
           }
         });
         if (hasNew) {
@@ -767,6 +808,7 @@ export class ChatClient {
 
   private broadcastMessages(): void {
     const list = this.getSortedMessages();
+    this.saveLocalCache();
     this.messageListeners.forEach(cb => cb(list));
   }
 

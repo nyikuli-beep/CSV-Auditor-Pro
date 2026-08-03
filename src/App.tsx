@@ -99,7 +99,8 @@ function LoadingSpinner({ message }: { message: string }) {
 }
 
 // Import Firebase integration
-import { auth, db, OperationType, handleFirestoreError, setGmailAccessToken } from './firebase';
+import { auth, db, rtdb, OperationType, handleFirestoreError, setGmailAccessToken } from './firebase';
+import { ref, onValue, off, set } from 'firebase/database';
 import { onAuthStateChanged, signOut, getRedirectResult, GoogleAuthProvider } from 'firebase/auth';
 import { 
   collection, 
@@ -207,6 +208,81 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   });
   const [activities, setActivities] = useState<AuditActivity[]>([]);
   const knownActiveMemberEmailsRef = useRef<Set<string>>(new Set());
+
+  // Realtime Database Unread Count for Team Tenancy Navigation Link
+  const [teamUnreadCount, setTeamUnreadCount] = useState<number>(0);
+
+  useEffect(() => {
+    if (!rtdb) return;
+
+    const tenantId = 'default-tenant-01';
+    const currentFileId = activeFileId || 'master-audit-01';
+    const roomId = `tenant_${tenantId}_file_${currentFileId}`.replace(/[\.\#\$\/\[\]]/g, '_');
+    const safeUid = (user?.uid || user?.email || 'anon-usr').replace(/[\.\#\$\/\[\]]/g, '_');
+
+    // Mark room as read when user opens Team Tenancy tab
+    if (activeTab === 'team') {
+      setTeamUnreadCount(0);
+      try {
+        const unreadRef = ref(rtdb, `unread/${roomId}/${safeUid}`);
+        set(unreadRef, { count: 0, lastReadTime: Date.now() });
+        localStorage.setItem(`chat_last_read_${roomId}`, Date.now().toString());
+      } catch (e) {
+        console.warn("RTDB mark read error:", e);
+      }
+      return;
+    }
+
+    let unsubUnread: (() => void) | null = null;
+    let unsubMessages: (() => void) | null = null;
+
+    try {
+      // 1. Direct RTDB unread count
+      const userUnreadRef = ref(rtdb, `unread/${roomId}/${safeUid}`);
+      onValue(userUnreadRef, (snap) => {
+        const val = snap.val();
+        if (val && typeof val.count === 'number') {
+          setTeamUnreadCount(val.count);
+        }
+      });
+      unsubUnread = () => off(userUnreadRef);
+
+      // 2. Computed unread count from incoming RTDB messages
+      const messagesRef = ref(rtdb, `chatRooms/${roomId}/messages`);
+      onValue(messagesRef, (snap) => {
+        const val = snap.val();
+        if (val && activeTab !== 'team') {
+          const lastReadStr = localStorage.getItem(`chat_last_read_${roomId}`) || '0';
+          const lastReadTime = parseInt(lastReadStr, 10);
+          const currentUserEmailLower = (user?.email || '').toLowerCase();
+
+          let newMsgsCount = 0;
+          Object.keys(val).forEach(msgKey => {
+            const msg = val[msgKey];
+            if (
+              msg && 
+              typeof msg.timestamp === 'number' && 
+              msg.timestamp > lastReadTime && 
+              msg.userEmail?.toLowerCase() !== currentUserEmailLower
+            ) {
+              newMsgsCount++;
+            }
+          });
+
+          setTeamUnreadCount(prev => Math.max(prev, newMsgsCount));
+        }
+      });
+      unsubMessages = () => off(messagesRef);
+
+    } catch (err) {
+      console.warn("RTDB unread badge listener error:", err);
+    }
+
+    return () => {
+      if (unsubUnread) unsubUnread();
+      if (unsubMessages) unsubMessages();
+    };
+  }, [activeTab, activeFileId, user?.email, user?.uid]);
 
   // Chat message stack
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
@@ -2117,7 +2193,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                         { id: 'gmail', label: 'Gmail Compliance', icon: Mail },
                         { id: 'reports', label: 'Branded Reports', icon: FileText },
                         { id: 'history', label: 'File Archive', icon: History },
-                        { id: 'team', label: 'Team Tenancy', icon: Users },
+                        { id: 'team', label: 'Team Tenancy', icon: Users, badge: teamUnreadCount },
                         ...(user?.role === 'Admin' || user?.role === 'Owner' ? [{ id: 'admin', label: 'Admin Panel', icon: Lock }] : []),
                         { id: 'settings', label: 'API & settings', icon: Settings }
                       ].map((tab) => {
@@ -2214,7 +2290,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                   { id: 'gmail', label: 'Gmail Compliance', icon: Mail, shortcut: 'Alt+G' },
                   { id: 'reports', label: 'Branded Reports', icon: FileText, shortcut: 'Alt+P' },
                   { id: 'history', label: 'File Archive', icon: History, shortcut: 'Alt+H' },
-                  { id: 'team', label: 'Team Tenancy', icon: Users, shortcut: 'Alt+T' },
+                  { id: 'team', label: 'Team Tenancy', icon: Users, badge: teamUnreadCount, shortcut: 'Alt+T' },
                   // Admin panel toggleable
                   ...(user?.role === 'Admin' || user?.role === 'Owner' ? [{ id: 'admin', label: 'Admin Panel', icon: Lock, shortcut: 'Alt+A' }] : []),
                   { id: 'settings', label: 'API & settings', icon: Settings, shortcut: 'Alt+O' }
