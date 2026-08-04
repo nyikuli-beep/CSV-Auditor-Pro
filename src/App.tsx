@@ -62,6 +62,19 @@ import ProfileUploadModal from './components/ProfileUploadModal';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 import OnboardingTourModal from './components/OnboardingTourModal';
 
+// Network Resilience, Error Boundary, 404 & State Persistence Imports
+import { useNetworkStatus } from './hooks/useNetworkStatus';
+import NetworkOfflineOverlay from './components/NetworkOfflineOverlay';
+import GlobalErrorBoundary from './components/GlobalErrorBoundary';
+import BrandedNotFound from './components/BrandedNotFound';
+import { 
+  saveNavigationState, 
+  loadNavigationState, 
+  saveScrollPosition, 
+  restoreScrollPosition 
+} from './lib/appStatePersistence';
+import { fetchWithRetry } from './lib/apiClient';
+
 // Import Mock Initial Data
 import { SAMPLE_MESSY_FILE, TEAM_MEMBERS, AUDIT_ACTIVITIES } from './sampleData';
 
@@ -131,11 +144,31 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   const { user: authUser, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const mainContentRef = useRef<HTMLDivElement>(null);
 
-  // Tab State inside SaaS workspace
+  // Network Status Monitor (Detect online/offline status, show full-screen recovery interface)
+  const {
+    isOnline,
+    isReconnecting,
+    reconnectAttempts,
+    triggerManualRetry
+  } = useNetworkStatus(() => {
+    if (triggerShortcutToast) {
+      triggerShortcutToast('Network restored! Resuming workspace session...', 'CONNECTIVITY #ONLINE');
+    }
+  });
+
+  // Tab State inside SaaS workspace (Restores saved navigation state)
   const [activeTab, setActiveTab] = useState<string>(() => {
+    const savedNav = loadNavigationState();
     const path = location.pathname.substring(1);
-    return path || initialTab;
+    if (path && ['dashboard', 'upload', 'schema', 'results', 'clean', 'insights', 'gmail', 'reports', 'history', 'team', 'admin', 'settings'].includes(path)) {
+      return path;
+    }
+    if (savedNav && savedNav.activeTab) {
+      return savedNav.activeTab;
+    }
+    return initialTab;
   });
 
   useEffect(() => {
@@ -146,6 +179,20 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       setActiveTab('settings');
     }
   }, [location.pathname]);
+
+  // Persist navigation state and restore scroll position on tab change
+  useEffect(() => {
+    if (activeTab) {
+      saveNavigationState(activeTab, location.pathname);
+      restoreScrollPosition(activeTab, mainContentRef.current);
+    }
+  }, [activeTab, location.pathname]);
+
+  const handleContentScroll = () => {
+    if (mainContentRef.current && activeTab) {
+      saveScrollPosition(activeTab, mainContentRef.current.scrollTop);
+    }
+  };
   
   // Session / Persona State
   const [user, setUser] = useState<{ uid: string; email: string; role: string; name?: string; avatar?: string } | null>(null);
@@ -1111,7 +1158,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       if (body) {
         options.body = JSON.stringify(body);
       }
-      const res = await fetch(`/api/sql/${path}`, options);
+      const res = await fetchWithRetry(`/api/sql/${path}`, options, { maxRetries: 2, initialDelayMs: 800 });
       if (res.ok) {
         return await res.json();
       }
@@ -2260,6 +2307,18 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       className={`min-h-screen w-full max-w-full overflow-x-hidden font-sans transition-colors duration-500 ease-in-out ${isDarkMode ? 'bg-[#0b0f19] text-slate-100' : 'bg-[#F8FAFC] text-[#1E293B]'}`}
     >
+      {/* Network Resilience Full-Screen Recovery Overlay */}
+      <NetworkOfflineOverlay 
+        isOffline={!isOnline}
+        isReconnecting={isReconnecting}
+        reconnectAttempts={reconnectAttempts}
+        onRetry={() => triggerManualRetry()}
+        onReturnToDashboard={() => handleNavigateTab('dashboard')}
+        cachedFiles={files}
+        onSelectRecentProject={(fileId) => setActiveFileId(fileId)}
+        isDarkMode={isDarkMode}
+      />
+
       <div className="flex min-h-screen w-full max-w-full overflow-x-hidden">
           
           {/* Mobile Drawer Backdrop Overlay */}
@@ -2669,7 +2728,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
             </header>
 
             {/* Container for active view tabs */}
-            <div className="p-3 sm:p-6 flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full mx-auto max-w-7xl">
+            <div ref={mainContentRef} onScroll={handleContentScroll} className="p-3 sm:p-6 flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full mx-auto max-w-7xl">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={activeTab}
@@ -2981,45 +3040,49 @@ export default function App() {
   }, []);
 
   return (
-    <Routes>
-      <Route 
-        path="/" 
-        element={
-          user ? (
-            <Navigate to="/dashboard" replace />
-          ) : (
-            <Suspense fallback={<LoadingSpinner message="Initializing CSV Auditor Pro..." />}>
-              <LandingPage 
-                onStartTrial={() => navigate('/login')}
-                isDarkMode={isDarkMode}
-                toggleTheme={() => setIsDarkMode(!isDarkMode)}
-                accentClass="bg-blue-600 hover:bg-blue-700"
-              />
-            </Suspense>
-          )
-        } 
-      />
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
-      <Route path="/forgot-password" element={<ForgotPassword />} />
-      <Route path="/verify-email" element={<VerifyEmail />} />
+    <GlobalErrorBoundary>
+      <Routes>
+        <Route 
+          path="/" 
+          element={
+            user ? (
+              <Navigate to="/dashboard" replace />
+            ) : (
+              <Suspense fallback={<LoadingSpinner message="Initializing CSV Auditor Pro..." />}>
+                <LandingPage 
+                  onStartTrial={() => navigate('/login')}
+                  isDarkMode={isDarkMode}
+                  toggleTheme={() => setIsDarkMode(!isDarkMode)}
+                  accentClass="bg-blue-600 hover:bg-blue-700"
+                />
+              </Suspense>
+            )
+          } 
+        />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
 
-      {/* Protected Workspace Routes */}
-      <Route path="/dashboard" element={<ProtectedRoute><WorkspaceContent initialTab="dashboard" /></ProtectedRoute>} />
-      <Route path="/upload" element={<ProtectedRoute><WorkspaceContent initialTab="upload" /></ProtectedRoute>} />
-      <Route path="/schema" element={<ProtectedRoute><WorkspaceContent initialTab="schema" /></ProtectedRoute>} />
-      <Route path="/results" element={<ProtectedRoute><WorkspaceContent initialTab="results" /></ProtectedRoute>} />
-      <Route path="/clean" element={<ProtectedRoute><WorkspaceContent initialTab="clean" /></ProtectedRoute>} />
-      <Route path="/insights" element={<ProtectedRoute><WorkspaceContent initialTab="insights" /></ProtectedRoute>} />
-      <Route path="/gmail" element={<ProtectedRoute><WorkspaceContent initialTab="gmail" /></ProtectedRoute>} />
-      <Route path="/reports" element={<ProtectedRoute><WorkspaceContent initialTab="reports" /></ProtectedRoute>} />
-      <Route path="/history" element={<ProtectedRoute><WorkspaceContent initialTab="history" /></ProtectedRoute>} />
-      <Route path="/team" element={<ProtectedRoute><WorkspaceContent initialTab="team" /></ProtectedRoute>} />
-      <Route path="/settings" element={<ProtectedRoute><WorkspaceContent initialTab="settings" /></ProtectedRoute>} />
-      <Route path="/profile" element={<ProtectedRoute><WorkspaceContent initialTab="settings" /></ProtectedRoute>} />
-      <Route path="/admin" element={<ProtectedRoute><WorkspaceContent initialTab="admin" /></ProtectedRoute>} />
+        {/* Protected Workspace Routes */}
+        <Route path="/dashboard" element={<ProtectedRoute><WorkspaceContent initialTab="dashboard" /></ProtectedRoute>} />
+        <Route path="/upload" element={<ProtectedRoute><WorkspaceContent initialTab="upload" /></ProtectedRoute>} />
+        <Route path="/schema" element={<ProtectedRoute><WorkspaceContent initialTab="schema" /></ProtectedRoute>} />
+        <Route path="/results" element={<ProtectedRoute><WorkspaceContent initialTab="results" /></ProtectedRoute>} />
+        <Route path="/clean" element={<ProtectedRoute><WorkspaceContent initialTab="clean" /></ProtectedRoute>} />
+        <Route path="/insights" element={<ProtectedRoute><WorkspaceContent initialTab="insights" /></ProtectedRoute>} />
+        <Route path="/gmail" element={<ProtectedRoute><WorkspaceContent initialTab="gmail" /></ProtectedRoute>} />
+        <Route path="/reports" element={<ProtectedRoute><WorkspaceContent initialTab="reports" /></ProtectedRoute>} />
+        <Route path="/history" element={<ProtectedRoute><WorkspaceContent initialTab="history" /></ProtectedRoute>} />
+        <Route path="/team" element={<ProtectedRoute><WorkspaceContent initialTab="team" /></ProtectedRoute>} />
+        <Route path="/settings" element={<ProtectedRoute><WorkspaceContent initialTab="settings" /></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute><WorkspaceContent initialTab="settings" /></ProtectedRoute>} />
+        <Route path="/admin" element={<ProtectedRoute><WorkspaceContent initialTab="admin" /></ProtectedRoute>} />
 
-      <Route path="*" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
-    </Routes>
+        {/* Branded CSV Auditor Pro 404 Route */}
+        <Route path="/404" element={<BrandedNotFound isDarkMode={isDarkMode} />} />
+        <Route path="*" element={<BrandedNotFound isDarkMode={isDarkMode} />} />
+      </Routes>
+    </GlobalErrorBoundary>
   );
 }
