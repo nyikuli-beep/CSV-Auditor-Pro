@@ -8,6 +8,8 @@ import {
   Download, 
   Trash2, 
   Clock, 
+  Calendar,
+  Shield,
   CheckCircle2, 
   AlertCircle,
   Eye,
@@ -179,15 +181,19 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
                   <td className="p-4">
                     {file.retentionPolicy ? (
                       <div className="flex flex-col gap-0.5">
-                        <span className="text-[10px] font-bold text-blue-400 font-mono">
-                          {getRetentionOptionDetail(file.retentionPolicy.option).badge}
+                        <span className="text-[10px] font-bold text-blue-400 font-mono flex items-center gap-1">
+                          {file.retentionPolicy.option === 'immediate' && <Trash2 className="w-3 h-3 text-rose-400 shrink-0" />}
+                          {file.retentionPolicy.option === '24h' && <Clock className="w-3 h-3 text-blue-400 shrink-0" />}
+                          {(file.retentionPolicy.option === '3d' || file.retentionPolicy.option === '7d' || file.retentionPolicy.option === '14d' || file.retentionPolicy.option === '30d') && <Calendar className="w-3 h-3 text-indigo-400 shrink-0" />}
+                          {file.retentionPolicy.option === 'forever' && <Shield className="w-3 h-3 text-emerald-400 shrink-0" />}
+                          <span>{getRetentionOptionDetail(file.retentionPolicy.option).badge}</span>
                         </span>
                         <span className="text-[9px] font-mono text-slate-400">
                           {formatTimeRemaining(file.retentionPolicy.expiresAt, file.retentionPolicy.originalFileDeleted).label}
                         </span>
                       </div>
                     ) : (
-                      <span className="text-[10px] text-slate-500 font-mono">24 Hours (Default)</span>
+                      <span className="text-[10px] text-slate-500 font-mono flex items-center gap-1"><Clock className="w-3 h-3 text-slate-400 shrink-0" /> 24 Hours (Default)</span>
                     )}
                   </td>
                   <td className="p-4">

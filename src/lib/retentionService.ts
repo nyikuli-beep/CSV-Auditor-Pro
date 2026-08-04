@@ -15,7 +15,7 @@ export const RETENTION_OPTIONS: RetentionOptionDetail[] = [
   {
     id: 'immediate',
     label: 'Delete immediately after validation',
-    badge: '🗑 Immediate',
+    badge: 'Immediate',
     description: 'Raw CSV is purged right after validation & AI report generation. Zero lingering storage.',
     durationMs: 0,
     iconName: 'Trash2',
@@ -23,7 +23,7 @@ export const RETENTION_OPTIONS: RetentionOptionDetail[] = [
   {
     id: '24h',
     label: '24 Hours (Default & Recommended)',
-    badge: '⏱ 24 Hours',
+    badge: '24 Hours',
     description: 'Raw file is safely held for 24 hours for audit verification, then automatically purged.',
     durationMs: 24 * 60 * 60 * 1000,
     iconName: 'Clock',
@@ -31,7 +31,7 @@ export const RETENTION_OPTIONS: RetentionOptionDetail[] = [
   {
     id: '3d',
     label: '3 Days',
-    badge: '📅 3 Days',
+    badge: '3 Days',
     description: 'Retain raw CSV for 72 hours before automated system cleanup.',
     durationMs: 3 * 24 * 60 * 60 * 1000,
     iconName: 'Calendar',
@@ -39,7 +39,7 @@ export const RETENTION_OPTIONS: RetentionOptionDetail[] = [
   {
     id: '7d',
     label: '7 Days',
-    badge: '📅 7 Days',
+    badge: '7 Days',
     description: 'Retain raw CSV for 1 week for extended team review.',
     durationMs: 7 * 24 * 60 * 60 * 1000,
     iconName: 'Calendar',
@@ -47,7 +47,7 @@ export const RETENTION_OPTIONS: RetentionOptionDetail[] = [
   {
     id: '14d',
     label: '14 Days',
-    badge: '📅 14 Days',
+    badge: '14 Days',
     description: 'Two-week compliance holding window.',
     durationMs: 14 * 24 * 60 * 60 * 1000,
     iconName: 'Calendar',
@@ -55,7 +55,7 @@ export const RETENTION_OPTIONS: RetentionOptionDetail[] = [
   {
     id: '30d',
     label: '30 Days',
-    badge: '📅 30 Days',
+    badge: '30 Days',
     description: 'Monthly audit cycle retention window.',
     durationMs: 30 * 24 * 60 * 60 * 1000,
     iconName: 'Calendar',
@@ -63,7 +63,7 @@ export const RETENTION_OPTIONS: RetentionOptionDetail[] = [
   {
     id: 'forever',
     label: 'Keep until I manually delete it',
-    badge: '♾ Indefinite',
+    badge: 'Indefinite',
     description: 'File stays in secure storage until explicitly purged by an Owner or Admin.',
     durationMs: null,
     iconName: 'Shield',
