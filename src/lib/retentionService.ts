@@ -1,5 +1,7 @@
 import { CSVFile, RetentionPeriodOption, RetentionPolicy, TeamMember } from '../types';
 
+export type { RetentionPeriodOption, RetentionPolicy } from '../types';
+
 export interface RetentionOptionDetail {
   id: RetentionPeriodOption;
   label: string;
@@ -203,7 +205,7 @@ export function executeScheduledRetentionCleanup(
         rows: [], // Clear original raw CSV rows
         retentionPolicy: {
           ...policy,
-          status: 'deleted_expired',
+          status: 'deleted_expired' as const,
           originalFileDeleted: true,
           originalDeletedAt: deletedAtIso,
           deletedBy: 'System Cleanup Service',

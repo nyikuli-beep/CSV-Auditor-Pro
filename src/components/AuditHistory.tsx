@@ -14,6 +14,7 @@ import {
   SlidersHorizontal
 } from 'lucide-react';
 import { CSVFile } from '../types';
+import { formatTimeRemaining, getRetentionOptionDetail } from '../lib/retentionService';
 
 interface AuditHistoryProps {
   files: CSVFile[];
@@ -140,6 +141,7 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
                 <th className="p-4 font-semibold">Audited Date</th>
                 <th className="p-4 font-semibold">File Size</th>
                 <th className="p-4 font-semibold">Compliance Rating</th>
+                <th className="p-4 font-semibold">Retention Policy</th>
                 <th className="p-4 font-semibold">Status</th>
                 <th className="p-4 font-semibold text-right">Actions</th>
               </tr>
@@ -172,6 +174,20 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
                       </div>
                     ) : (
                       <span className="text-slate-500 italic">Not available</span>
+                    )}
+                  </td>
+                  <td className="p-4">
+                    {file.retentionPolicy ? (
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[10px] font-bold text-blue-400 font-mono">
+                          {getRetentionOptionDetail(file.retentionPolicy.option).badge}
+                        </span>
+                        <span className="text-[9px] font-mono text-slate-400">
+                          {formatTimeRemaining(file.retentionPolicy.expiresAt, file.retentionPolicy.originalFileDeleted).label}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-slate-500 font-mono">24 Hours (Default)</span>
                     )}
                   </td>
                   <td className="p-4">

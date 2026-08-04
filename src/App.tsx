@@ -55,6 +55,7 @@ import {
   loadActiveFileIdFromStorage, 
   deleteFileFromStorage 
 } from './lib/fileStorage';
+import { executeScheduledRetentionCleanup } from './lib/retentionService';
 
 // Import Profile Upload, Keyboard Shortcuts & Onboarding Tour Modals
 import ProfileUploadModal from './components/ProfileUploadModal';
@@ -573,6 +574,50 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       document.body.style.backgroundColor = '#f8fafc';
     }
   }, [isDarkMode]);
+
+  // Automated background scheduler for CSV retention policies
+  useEffect(() => {
+    if (!files || files.length === 0) return;
+
+    const runCleanup = async () => {
+      const { updatedFiles, deletedCount } = executeScheduledRetentionCleanup(files);
+      if (deletedCount > 0) {
+        setFiles(updatedFiles);
+        saveFilesToStorage(updatedFiles);
+
+        // Sync cleaned files to Firestore
+        for (const file of updatedFiles) {
+          if (file.retentionPolicy?.status === 'deleted_expired') {
+            try {
+              await setDoc(doc(db, 'files', file.id), file);
+              await syncToPostgres('sync-file', 'POST', file);
+            } catch (e) {
+              console.warn('Firestore sync during retention auto-cleanup:', e);
+            }
+          }
+        }
+
+        // Log retention cleanup activity
+        const retentionLog: AuditActivity = {
+          id: `act-${Date.now()}`,
+          userId: 'system',
+          userName: 'Retention Scheduler',
+          action: `Automated Retention Policy: Auto-purged ${deletedCount} expired CSV file(s) according to compliance schedules`,
+          timestamp: 'Just now'
+        };
+        try {
+          await setDoc(doc(db, 'activities', retentionLog.id), retentionLog);
+        } catch (e) {}
+        setActivities(prev => [retentionLog, ...prev]);
+
+        triggerShortcutToast(`Auto-purged ${deletedCount} expired CSV file(s) based on retention policy`, 'COMPLIANCE #PURGE');
+      }
+    };
+
+    runCleanup();
+    const interval = setInterval(runCleanup, 30000); // Check retention expiration every 30s
+    return () => clearInterval(interval);
+  }, [files]);
 
   // Capture incoming Firebase Auth redirect results (for Vercel & mobile browser OAuth redirects)
   useEffect(() => {
@@ -2657,6 +2702,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                         files={files}
                         isDarkMode={isDarkMode}
                         accentClass={accentClass}
+                        userRole={user?.role || 'Owner'}
                       />
                     )}
 
@@ -2679,6 +2725,8 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                         isDarkMode={isDarkMode}
                         accentClass={accentClass}
                         onUpdateFile={handleUpdateFile}
+                        userRole={user?.role || 'Owner'}
+                        logAuditActivity={(action) => handleAddNewActivity(action)}
                       />
                     )}
 

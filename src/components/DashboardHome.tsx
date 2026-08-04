@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { CSVFile, AuditActivity, SlotRequest } from '../types';
+import { formatTimeRemaining } from '../lib/retentionService';
 import { 
   ResponsiveContainer, 
   AreaChart, 
@@ -900,6 +901,15 @@ export default function DashboardHome({
                       </span>
                       <span>{file.uploadedAt.split(' ')[0]}</span>
                     </div>
+
+                    {file.retentionPolicy && (
+                      <div className="mt-1.5 pt-1.5 border-t border-slate-800/20 flex justify-between items-center text-[9px] font-mono">
+                        <span className="text-slate-400">Auto-purge:</span>
+                        <span className={file.retentionPolicy.originalFileDeleted ? 'text-slate-500 line-through' : 'text-amber-400 font-bold'}>
+                          {formatTimeRemaining(file.retentionPolicy.expiresAt, file.retentionPolicy.originalFileDeleted).label}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 ))
               )}

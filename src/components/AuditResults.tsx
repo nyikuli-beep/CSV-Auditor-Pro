@@ -24,9 +24,11 @@ import {
   ArrowUp,
   ArrowDown
 } from 'lucide-react';
-import { CSVFile, AuditIssue, Severity, IssueType } from '../types';
+import { CSVFile, AuditIssue, Severity, IssueType, RetentionPeriodOption, RetentionPolicy } from '../types';
 import { exportCleanedAuditToExcel } from '../lib/excelExporter';
 import QualityTrendChart from './QualityTrendChart';
+import { RetentionPolicyBanner } from './RetentionPolicySelector';
+import { calculateExpiration, getRetentionOptionDetail } from '../lib/retentionService';
 
 interface AuditResultsProps {
   activeFile: CSVFile | null;
@@ -35,11 +37,13 @@ interface AuditResultsProps {
   isDarkMode: boolean;
   accentClass: string;
   onUpdateFile: (updatedFile: CSVFile) => void;
+  userRole?: string;
+  logAuditActivity?: (action: string, fileName?: string) => void;
 }
 
 export type SortField = 'type' | 'row' | 'column' | 'severity' | 'status' | 'value' | 'description';
 
-export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkMode, accentClass, onUpdateFile }: AuditResultsProps) {
+export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkMode, accentClass, onUpdateFile, userRole, logAuditActivity }: AuditResultsProps) {
   const [severityFilter, setSeverityFilter] = useState<'all' | Severity>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | IssueType>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -53,6 +57,52 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
   // Issues Pagination State
   const [issuesPage, setIssuesPage] = useState(1);
   const [issuesPageSize, setIssuesPageSize] = useState(25);
+
+  const handleUpdatePolicy = (fileId: string, newOption: RetentionPeriodOption) => {
+    if (!activeFile) return;
+    const now = new Date();
+    const expiresAt = calculateExpiration(newOption, now);
+    const updatedPolicy: RetentionPolicy = {
+      option: newOption,
+      selectedAt: now.toISOString(),
+      expiresAt,
+      status: newOption === 'forever' ? 'kept_forever' : 'scheduled_deletion',
+      originalFileDeleted: false,
+    };
+    const updatedFile: CSVFile = {
+      ...activeFile,
+      retentionPolicy: updatedPolicy,
+    };
+    onUpdateFile(updatedFile);
+    if (logAuditActivity) {
+      logAuditActivity(`Retention policy changed to: ${getRetentionOptionDetail(newOption).badge}`, activeFile.name);
+    }
+  };
+
+  const handleManualDelete = (fileId: string) => {
+    if (!activeFile) return;
+    const deletedAtIso = new Date().toISOString();
+    const updatedPolicy: RetentionPolicy = {
+      ...(activeFile.retentionPolicy || {
+        option: '24h',
+        selectedAt: deletedAtIso,
+        expiresAt: null,
+      }),
+      status: 'deleted_manually',
+      originalFileDeleted: true,
+      originalDeletedAt: deletedAtIso,
+      deletedBy: `${userRole || 'Owner'} (Manual Purge)`,
+    };
+    const updatedFile: CSVFile = {
+      ...activeFile,
+      rows: [], // Purge raw original rows
+      retentionPolicy: updatedPolicy,
+    };
+    onUpdateFile(updatedFile);
+    if (logAuditActivity) {
+      logAuditActivity('Original raw CSV file manually deleted permanently', activeFile.name);
+    }
+  };
 
   const handleSort = (col: SortField) => {
     if (sortColumn === col) {
@@ -688,6 +738,17 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
           Open Cleaning Center <ArrowRight className="w-4 h-4" />
         </button>
       </div>
+
+      {/* File Retention Policy Banner */}
+      {activeFile && (
+        <RetentionPolicyBanner
+          file={activeFile}
+          userRole={userRole}
+          isDarkMode={isDarkMode}
+          onUpdatePolicy={handleUpdatePolicy}
+          onManualDelete={handleManualDelete}
+        />
+      )}
 
       {/* Circle Meter and KPI cards */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-8">

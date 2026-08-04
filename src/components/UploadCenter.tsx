@@ -2589,6 +2589,14 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
             </button>
           </div>
 
+          {/* Retention Policy Selector */}
+          <RetentionUploadSelector
+            selectedOption={selectedRetentionOption}
+            onChangeOption={setSelectedRetentionOption}
+            userRole={userRole}
+            isDarkMode={isDarkMode}
+          />
+
           {/* Progress or Errors */}
           {uploadProgress !== null && fileDetails && (
             <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#131b2e] border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
