@@ -126,16 +126,247 @@ export interface ReportConfig {
   companyLogoUrl?: string;
 }
 
-export interface SystemSettings {
-  theme: 'light' | 'dark';
-  accentColor: 'blue' | 'emerald' | 'violet' | 'amber';
-  language: string;
-  timezone: string;
-  emailNotifications: {
-    auditCompleted: boolean;
-    teamInvites: boolean;
-    weeklyDigest: boolean;
+export interface CustomTheme {
+  id: string;
+  name: string;
+  colors: {
+    primary: string;
+    secondary: string;
+    background: string;
+    surface: string;
+    card: string;
+    sidebar: string;
+    header: string;
+    footer: string;
+    text: string;
+    mutedText: string;
+    success: string;
+    warning: string;
+    danger: string;
+    info: string;
+    borders: string;
+    hover: string;
+    selection: string;
+    buttons: string;
+    charts: string;
+    tables: string;
   };
+}
+
+export interface SystemSettings {
+  theme: 'light' | 'dark' | 'deep_black' | 'dark_gray' | 'system';
+  accentColor: 'blue' | 'emerald' | 'violet' | 'amber' | 'green' | 'purple' | 'orange' | 'red' | 'cyan' | 'indigo' | 'slate' | 'custom';
+  customAccentHex?: string;
+  favoriteAccents?: string[];
+  borderRadius: 'sharp' | 'rounded' | 'extra_rounded';
+  density: 'compact' | 'comfortable' | 'spacious';
+  typography: {
+    fontSize: 'small' | 'medium' | 'large' | 'xlarge';
+    fontFamily: 'sans' | 'mono' | 'serif' | 'dyslexic';
+    lineSpacing: 'tight' | 'normal' | 'relaxed';
+    letterSpacing: 'normal' | 'wide' | 'extra_wide';
+  };
+  animations: 'enabled' | 'reduced' | 'disabled';
+  blurEffects: boolean;
+
+  dashboard: {
+    widgets: Array<{
+      id: string;
+      name: string;
+      enabled: boolean;
+      order: number;
+      size: 'small' | 'medium' | 'full';
+    }>;
+    activeLayoutPreset?: string;
+    savedLayouts?: Record<string, any>;
+  };
+
+  spreadsheet: {
+    gridlines: boolean;
+    alternateRowColors: boolean;
+    stickyHeader: boolean;
+    stickyFirstColumn: boolean;
+    cellPadding: 'compact' | 'comfortable' | 'spacious';
+    rowHeight: number;
+    columnWidth: number;
+    wrapText: boolean;
+    highlightActiveRow: boolean;
+    highlightActiveColumn: boolean;
+    showRowNumbers: boolean;
+    showColumnLetters: boolean;
+    zoomLevel: number;
+    defaultSortDirection: 'asc' | 'desc' | 'none';
+    defaultDelimiter: 'comma' | 'semicolon' | 'tab' | 'pipe' | 'auto';
+  };
+
+  aiAssistant: {
+    preferredModel: string;
+    responseStyle: 'short' | 'balanced' | 'detailed';
+    technicalLevel: 'beginner' | 'intermediate' | 'expert';
+    autoAnalyzeUploads: boolean;
+    autoSummarizeDatasets: boolean;
+    autoDetectAnomalies: boolean;
+    suggestCleaningOperations: boolean;
+    suggestFormulas: boolean;
+    generateCharts: boolean;
+    generateReports: boolean;
+    displayConfidenceScore: boolean;
+    showReasoningSummary: boolean;
+    allowConversationalGeneralQA: boolean;
+  };
+
+  collaboration: {
+    typingIndicators: boolean;
+    readReceipts: boolean;
+    onlinePresence: boolean;
+    mentionNotifications: boolean;
+    defaultAnnotationColor: string;
+    defaultAnnotationVisibility: 'public' | 'team' | 'private';
+    autoScrollChat: boolean;
+    playNotificationSound: boolean;
+    muteConversations: boolean;
+    teamColorTags: boolean;
+  };
+
+  notifications: {
+    emailNotifications: {
+      auditCompleted: boolean;
+      teamInvites: boolean;
+      weeklyDigest: boolean;
+      monthlyDigest: boolean;
+      securityAlerts: boolean;
+      fileShared: boolean;
+    };
+    pushNotifications: boolean;
+    desktopNotifications: boolean;
+    eventAlerts: {
+      processingCompleted: boolean;
+      validationCompleted: boolean;
+      reportGenerated: boolean;
+      aiFinishedAnalysis: boolean;
+      teamMentions: boolean;
+    };
+    notificationSound: boolean;
+    notificationVolume: number;
+    dndSchedule: {
+      enabled: boolean;
+      startTime: string;
+      endTime: string;
+    };
+  };
+
+  privacy: {
+    fileRetention: 'immediate' | '24h' | '7d' | '30d' | '90d' | 'custom';
+    customRetentionDays?: number;
+    autoDeleteTempFiles: boolean;
+    autoDeleteCachedPreviews: boolean;
+    allowAnalytics: boolean;
+    shareAnonymousStats: boolean;
+    hidePersonalInfo: boolean;
+    blurSensitiveCells: boolean;
+    maskEmailAddresses: boolean;
+    maskPhoneNumbers: boolean;
+    maskIDs: boolean;
+  };
+
+  security: {
+    twoFactorAuth: boolean;
+    sessionManagement: Array<{
+      id: string;
+      device: string;
+      ip: string;
+      location: string;
+      lastActive: string;
+      isCurrent: boolean;
+    }>;
+    trustedDevices: Array<{ id: string; name: string; addedAt: string }>;
+    loginAlerts: boolean;
+    recoveryEmail: string;
+    biometricAuth: boolean;
+    sessionTimeoutMinutes: number;
+    loginHistory?: Array<{ timestamp: string; ip: string; device: string; status: 'success' | 'failed' }>;
+  };
+
+  upload: {
+    encoding: 'utf-8' | 'utf-16' | 'ascii' | 'auto';
+    dateFormat: string;
+    numberFormat: string;
+    currency: string;
+    missingValueSymbol: string;
+    maxPreviewRows: number;
+    autoTypeDetection: boolean;
+    autoDuplicateDetection: boolean;
+    autoMissingValueDetection: boolean;
+    autoEncodingDetection: boolean;
+    autoDelimiterDetection: boolean;
+  };
+
+  export: {
+    defaultFormat: 'csv' | 'excel' | 'pdf' | 'json';
+    includeCharts: boolean;
+    includeAiSummary: boolean;
+    includeValidationReport: boolean;
+    includeMetadata: boolean;
+    includeCompanyLogo: boolean;
+    includeWatermark: boolean;
+    theme: 'light' | 'dark' | 'system';
+    orientation: 'landscape' | 'portrait';
+    paperSize: 'a4' | 'letter' | 'legal';
+  };
+
+  accessibility: {
+    highContrastMode: boolean;
+    screenReaderOptimization: boolean;
+    keyboardNavigation: boolean;
+    largeCursor: boolean;
+    largeClickTargets: boolean;
+    reducedMotion: boolean;
+    highFocusIndicators: boolean;
+    dyslexiaFont: boolean;
+    fontScale: number;
+  };
+
+  performance: {
+    lowMemoryMode: boolean;
+    hardwareAcceleration: boolean;
+    gpuRendering: boolean;
+    backgroundProcessing: boolean;
+    lazyLoading: boolean;
+    cacheControl: boolean;
+    preloadDatasets: boolean;
+    maxMemoryUsageMB: number;
+    autoSaveIntervalSeconds: number;
+  };
+
+  localization: {
+    language: string;
+    timezone: string;
+    dateFormat: string;
+    timeFormat: '12h' | '24h';
+    currency: string;
+    numberSeparator: 'comma_dot' | 'dot_comma' | 'space_dot';
+    weekStartsOn: 'sunday' | 'monday';
+  };
+
+  profile: {
+    displayName: string;
+    jobTitle: string;
+    organization: string;
+    department: string;
+    bio: string;
+    preferredDashboard: string;
+    defaultLandingPage: string;
+    avatarUrl?: string;
+  };
+
+  advanced: {
+    developerMode: boolean;
+    experimentalFeatures: boolean;
+    customThemes: CustomTheme[];
+    activeCustomThemeId?: string;
+    activeWorkspacePreset?: string;
+  };
+
   apiKey: string;
 }
 

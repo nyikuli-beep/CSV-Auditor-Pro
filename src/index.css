@@ -29,7 +29,7 @@
 }
 
 .dark {
-  /* Dark Mode Tokens */
+  /* Dark Gray Mode Tokens */
   --primary-blue: #60A5FA;
   --link-color: #60A5FA;
   --text-primary: #F3F4F6;
@@ -47,6 +47,90 @@
   --bg-blue-subtle: rgba(30, 58, 138, 0.25);
   --border-blue-subtle: #1D4ED8;
   --text-blue-subtle: #60A5FA;
+}
+
+/* Deep Black OLED Theme (#000000) */
+html.deep-black,
+body.deep-black,
+.deep-black body,
+html.deep-black #root,
+body.deep-black #root,
+.deep-black {
+  --primary-blue: #3B82F6;
+  --link-color: #60A5FA;
+  --text-primary: #FFFFFF !important;
+  --text-secondary: #B3B3B3 !important;
+  --text-muted: #888888 !important;
+  
+  --bg-app: #000000 !important;
+  --bg-card: #0A0A0A !important;
+  --bg-secondary: #121212 !important;
+  --border-color: #1E1E1E !important;
+  --border-hover: #2E2E2E !important;
+  
+  --bg-hover: #141414 !important;
+  --bg-active: #1F1F1F !important;
+  --bg-blue-subtle: rgba(37, 99, 235, 0.15) !important;
+  --border-blue-subtle: #1E1E1E !important;
+  --text-blue-subtle: #60A5FA !important;
+  background-color: #000000 !important;
+  color: #FFFFFF !important;
+}
+
+.deep-black .hd-card,
+.deep-black div[class*="bg-slate-900"],
+.deep-black div[class*="bg-slate-950"],
+.deep-black aside,
+.deep-black header,
+.deep-black nav {
+  background-color: #0A0A0A !important;
+  border-color: #1E1E1E !important;
+  color: #FFFFFF !important;
+  background-image: none !important;
+}
+
+/* Border Radius Customization Modes */
+.radius-sharp,
+.radius-sharp * {
+  border-radius: 0px !important;
+}
+
+.radius-rounded .rounded-xl,
+.radius-rounded .rounded-2xl,
+.radius-rounded .hd-card {
+  border-radius: 8px !important;
+}
+
+.radius-extra-rounded .rounded-xl,
+.radius-extra-rounded .rounded-2xl,
+.radius-extra-rounded .hd-card {
+  border-radius: 20px !important;
+}
+
+/* Animation Customization Modes */
+.animations-disabled *,
+.animations-disabled {
+  animation: none !important;
+  transition: none !important;
+}
+
+.animations-reduced * {
+  animation-duration: 0.05s !important;
+  transition-duration: 0.05s !important;
+}
+
+/* High Contrast Mode */
+.high-contrast-mode {
+  contrast: 130%;
+}
+.high-contrast-mode .border,
+.high-contrast-mode border-app {
+  border-width: 2px !important;
+}
+
+/* Dyslexia Friendly Font Option */
+.font-family-dyslexic {
+  font-family: 'OpenDyslexic', 'Comic Sans MS', sans-serif !important;
 }
 
 html, body, #root {
