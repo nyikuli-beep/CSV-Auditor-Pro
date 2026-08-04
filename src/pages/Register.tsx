@@ -122,36 +122,36 @@ export const Register: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0F172A] text-[#F8FAFC] flex flex-col justify-center items-center px-4 py-10">
+    <div className="min-h-screen bg-slate-50 dark:bg-[#0F172A] text-slate-900 dark:text-[#F8FAFC] flex flex-col justify-center items-center px-4 py-10 transition-colors">
       <div className="w-full max-w-md">
         
         {/* Header Branding */}
         <div className="text-center mb-6 space-y-2">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-600/10 border border-blue-500/20 text-blue-400 text-xs font-semibold">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-600/10 border border-blue-200 dark:border-blue-500/20 text-blue-700 dark:text-blue-400 text-xs font-semibold">
             <Sparkles className="w-3.5 h-3.5" /> CSV Auditor Pro Workspace
           </div>
           <div className="flex items-center justify-center gap-2.5">
             <div className="p-2.5 rounded-xl bg-blue-600 text-white shadow-md">
               <FileSpreadsheet className="w-6 h-6" />
             </div>
-            <h1 className="text-2xl font-extrabold tracking-tight">Create Account</h1>
+            <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Create Account</h1>
           </div>
-          <p className="text-xs text-slate-400">Production-grade security & automated data hygiene</p>
+          <p className="text-xs text-slate-600 dark:text-slate-400">Production-grade security & automated data hygiene</p>
         </div>
 
         {/* Card Box */}
-        <div className="bg-[#1E293B] border border-[#334155] rounded-2xl p-6 sm:p-8 shadow-xl space-y-5">
+        <div className="bg-white dark:bg-[#1E293B] border border-slate-200 dark:border-[#334155] rounded-2xl p-6 sm:p-8 shadow-sm dark:shadow-xl space-y-5">
           
           {/* Status Banners */}
           {errorMsg && (
-            <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-start gap-2.5">
+            <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-xs flex items-start gap-2.5">
               <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{errorMsg}</span>
             </div>
           )}
 
           {successMsg && (
-            <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-start gap-2.5">
+            <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-xs flex items-start gap-2.5">
               <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{successMsg}</span>
             </div>
@@ -161,56 +161,56 @@ export const Register: React.FC = () => {
             
             {/* Full Name */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Full Name</label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Full Name</label>
               <div className="relative">
-                <User className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                <User className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
                 <input
                   type="text"
                   required
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="Nyikuli Bramwel"
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#0F172A] border border-[#334155] text-slate-100 placeholder:text-slate-500 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-[#0F172A] border border-slate-200 dark:border-[#334155] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-sm focus:outline-none focus:border-blue-600 dark:focus:border-blue-500 focus:ring-1 focus:ring-blue-600 transition-all"
                 />
               </div>
             </div>
 
             {/* Email Address */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Work Email</label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Work Email</label>
               <div className="relative">
-                <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@company.com"
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#0F172A] border border-[#334155] text-slate-100 placeholder:text-slate-500 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-[#0F172A] border border-slate-200 dark:border-[#334155] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-sm focus:outline-none focus:border-blue-600 dark:focus:border-blue-500 focus:ring-1 focus:ring-blue-600 transition-all"
                 />
               </div>
               {email.length > 0 && !emailValidation.isValid && (
-                <p className="text-[11px] text-rose-400 mt-1">{emailValidation.message}</p>
+                <p className="text-[11px] text-rose-600 dark:text-rose-400 mt-1">{emailValidation.message}</p>
               )}
             </div>
 
             {/* Password */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Password</label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Password</label>
               <div className="relative">
-                <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Create a strong password"
-                  className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-[#0F172A] border border-[#334155] text-slate-100 placeholder:text-slate-500 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+                  className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-slate-50 dark:bg-[#0F172A] border border-slate-200 dark:border-[#334155] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-sm focus:outline-none focus:border-blue-600 dark:focus:border-blue-500 focus:ring-1 focus:ring-blue-600 transition-all"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer p-1"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer p-1"
                   aria-label="Toggle password visibility"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -220,22 +220,22 @@ export const Register: React.FC = () => {
 
             {/* Real-time Password Strength Meter */}
             {password.length > 0 && (
-              <div className="p-3.5 rounded-xl bg-[#0F172A] border border-[#334155] space-y-2.5">
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#0F172A] border border-slate-200 dark:border-[#334155] space-y-2.5">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-400 font-medium">Password Strength:</span>
+                  <span className="text-slate-600 dark:text-slate-400 font-medium">Password Strength:</span>
                   <span className={`font-bold ${
                     strength.level === 'Excellent' || strength.level === 'Strong'
-                      ? 'text-emerald-400'
+                      ? 'text-emerald-700 dark:text-emerald-400'
                       : strength.level === 'Fair'
-                      ? 'text-amber-400'
-                      : 'text-rose-400'
+                      ? 'text-amber-700 dark:text-amber-400'
+                      : 'text-rose-700 dark:text-rose-400'
                   }`}>
                     {strength.level} ({strength.score}%)
                   </span>
                 </div>
 
                 {/* Strength Meter Bar */}
-                <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
                   <div
                     className={`h-full transition-all duration-300 ${strength.colorClass}`}
                     style={{ width: `${strength.score}%` }}
@@ -244,32 +244,32 @@ export const Register: React.FC = () => {
 
                 {/* Password Requirements Live Checklist */}
                 <div className="grid grid-cols-2 gap-1.5 pt-1 text-[11px]">
-                  <div className={`flex items-center gap-1.5 ${strength.requirements.minChars ? 'text-emerald-400' : 'text-slate-500'}`}>
+                  <div className={`flex items-center gap-1.5 ${strength.requirements.minChars ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-500'}`}>
                     {strength.requirements.minChars ? <Check className="w-3.5 h-3.5 shrink-0" /> : <X className="w-3.5 h-3.5 shrink-0" />}
                     <span>8+ Characters</span>
                   </div>
 
-                  <div className={`flex items-center gap-1.5 ${strength.requirements.hasUppercase ? 'text-emerald-400' : 'text-slate-500'}`}>
+                  <div className={`flex items-center gap-1.5 ${strength.requirements.hasUppercase ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-500'}`}>
                     {strength.requirements.hasUppercase ? <Check className="w-3.5 h-3.5 shrink-0" /> : <X className="w-3.5 h-3.5 shrink-0" />}
                     <span>Uppercase Letter</span>
                   </div>
 
-                  <div className={`flex items-center gap-1.5 ${strength.requirements.hasLowercase ? 'text-emerald-400' : 'text-slate-500'}`}>
+                  <div className={`flex items-center gap-1.5 ${strength.requirements.hasLowercase ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-500'}`}>
                     {strength.requirements.hasLowercase ? <Check className="w-3.5 h-3.5 shrink-0" /> : <X className="w-3.5 h-3.5 shrink-0" />}
                     <span>Lowercase Letter</span>
                   </div>
 
-                  <div className={`flex items-center gap-1.5 ${strength.requirements.hasNumber ? 'text-emerald-400' : 'text-slate-500'}`}>
+                  <div className={`flex items-center gap-1.5 ${strength.requirements.hasNumber ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-500'}`}>
                     {strength.requirements.hasNumber ? <Check className="w-3.5 h-3.5 shrink-0" /> : <X className="w-3.5 h-3.5 shrink-0" />}
                     <span>Number</span>
                   </div>
 
-                  <div className={`flex items-center gap-1.5 ${strength.requirements.hasSpecialChar ? 'text-emerald-400' : 'text-slate-500'}`}>
+                  <div className={`flex items-center gap-1.5 ${strength.requirements.hasSpecialChar ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-500'}`}>
                     {strength.requirements.hasSpecialChar ? <Check className="w-3.5 h-3.5 shrink-0" /> : <X className="w-3.5 h-3.5 shrink-0" />}
                     <span>Special Character</span>
                   </div>
 
-                  <div className={`flex items-center gap-1.5 ${strength.requirements.maxChars ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  <div className={`flex items-center gap-1.5 ${strength.requirements.maxChars ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                     {strength.requirements.maxChars ? <Check className="w-3.5 h-3.5 shrink-0" /> : <X className="w-3.5 h-3.5 shrink-0" />}
                     <span>Max 128 Chars</span>
                   </div>
@@ -279,28 +279,28 @@ export const Register: React.FC = () => {
 
             {/* Confirm Password */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Confirm Password</label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Confirm Password</label>
               <div className="relative">
-                <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
                 <input
                   type={showConfirmPassword ? 'text' : 'password'}
                   required
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Re-enter password"
-                  className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-[#0F172A] border border-[#334155] text-slate-100 placeholder:text-slate-500 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+                  className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-slate-50 dark:bg-[#0F172A] border border-slate-200 dark:border-[#334155] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-sm focus:outline-none focus:border-blue-600 dark:focus:border-blue-500 focus:ring-1 focus:ring-blue-600 transition-all"
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer p-1"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer p-1"
                   aria-label="Toggle confirm password visibility"
                 >
                   {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
               {confirmPassword.length > 0 && !passwordsMatch && (
-                <p className="text-[11px] text-rose-400 mt-1">Passwords do not match.</p>
+                <p className="text-[11px] text-rose-600 dark:text-rose-400 mt-1">Passwords do not match.</p>
               )}
             </div>
 
@@ -308,7 +308,7 @@ export const Register: React.FC = () => {
             <button
               type="submit"
               disabled={isLoading || isGoogleLoading || !isFormValid}
-              className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/40 disabled:text-slate-400 text-white font-bold text-sm transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed mt-2"
+              className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/40 disabled:text-slate-400 text-white font-bold text-sm transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed mt-2"
             >
               {isLoading ? (
                 <>
@@ -327,10 +327,10 @@ export const Register: React.FC = () => {
           {/* Divider */}
           <div className="relative my-4">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-[#334155]" />
+              <div className="w-full border-t border-slate-200 dark:border-[#334155]" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-[#1E293B] px-3 text-slate-400 font-medium">Or continue with</span>
+              <span className="bg-white dark:bg-[#1E293B] px-3 text-slate-500 dark:text-slate-400 font-medium">Or continue with</span>
             </div>
           </div>
 
@@ -339,7 +339,7 @@ export const Register: React.FC = () => {
             type="button"
             onClick={handleGoogleSignIn}
             disabled={isLoading || isGoogleLoading}
-            className="w-full py-2.5 px-4 rounded-xl border border-[#334155] bg-[#0F172A] hover:bg-slate-800 text-slate-200 font-semibold text-sm flex items-center justify-center gap-3 transition-all cursor-pointer"
+            className="w-full py-2.5 px-4 rounded-xl border border-slate-200 dark:border-[#334155] bg-white dark:bg-[#0F172A] hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold text-sm flex items-center justify-center gap-3 transition-all cursor-pointer"
           >
             {isGoogleLoading ? (
               <div className="w-4 h-4 border-2 border-slate-400/30 border-t-slate-400 rounded-full animate-spin" />
@@ -369,9 +369,9 @@ export const Register: React.FC = () => {
         </div>
 
         {/* Footer Link */}
-        <p className="text-center text-xs text-slate-400 mt-6">
+        <p className="text-center text-xs text-slate-600 dark:text-slate-400 mt-6">
           Already have an account?{' '}
-          <Link to="/login" className="text-blue-400 hover:text-blue-300 font-semibold inline-flex items-center gap-1">
+          <Link to="/login" className="text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-semibold inline-flex items-center gap-1">
             Sign in here <ArrowRight className="w-3 h-3" />
           </Link>
         </p>

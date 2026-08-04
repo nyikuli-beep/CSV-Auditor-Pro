@@ -2478,13 +2478,13 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
           isDarkMode ? 'bg-blue-500/10 border-blue-500/20 text-slate-200' : 'bg-blue-50 border-blue-200 text-slate-800 shadow-sm'
         }`}>
           <div className="flex items-start gap-3">
-            <div className={`p-2 rounded-lg shrink-0 ${isDarkMode ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600'}`}>
-              <Clock className="w-5 h-5 animate-pulse text-blue-500" />
+            <div className={`p-2 rounded-lg shrink-0 ${isDarkMode ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
+              <Clock className="w-5 h-5 animate-pulse text-blue-700 dark:text-blue-400" />
             </div>
             <div>
               <h4 className="font-bold text-xs">Unfinished Schema Mapping Progress Detected</h4>
-              <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
-                You have an active, unsaved ingestion session for <span className="font-semibold text-blue-500">"{savedDraft.pendingFile.name}"</span> ({savedDraft.pendingFile.rows?.length || 0} rows) from {new Date(savedDraft.updatedAt).toLocaleDateString() + ' ' + new Date(savedDraft.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                You have an active, unsaved ingestion session for <span className="font-semibold text-blue-700 dark:text-blue-400">"{savedDraft.pendingFile.name}"</span> ({savedDraft.pendingFile.rows?.length || 0} rows) from {new Date(savedDraft.updatedAt).toLocaleDateString() + ' ' + new Date(savedDraft.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.
               </p>
             </div>
           </div>
@@ -2492,7 +2492,7 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
             <button
               onClick={handleDiscardDraft}
               className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
-                isDarkMode ? 'border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-900/60' : 'border-slate-200 text-slate-500 bg-white hover:bg-slate-50'
+                isDarkMode ? 'border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-900/60' : 'border-slate-200 text-slate-600 bg-white hover:bg-slate-50'
               }`}
             >
               Discard Draft
@@ -2527,21 +2527,21 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
             />
             
             <div className="max-w-md mx-auto space-y-3">
-              <div className={`mx-auto p-3.5 rounded-full w-fit ${isDarkMode ? 'bg-slate-950 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+              <div className={`mx-auto p-3.5 rounded-full w-fit ${isDarkMode ? 'bg-slate-950 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
                 <Upload className="w-6 h-6 animate-pulse" />
               </div>
 
               <div>
                 <h3 className="font-bold text-sm mb-1">Drag and drop your spreadsheet</h3>
-                <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                  Supports standard comma-delimited <span className="font-bold text-blue-500">.CSV</span> files up to 25MB.
+                <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                  Supports standard comma-delimited <span className="font-bold text-blue-700 dark:text-blue-400">.CSV</span> files up to 25MB.
                 </p>
               </div>
 
               <div className="pt-1">
                 <button 
                   onClick={() => fileInputRef.current?.click()}
-                  className="px-4 py-1.5 text-xs font-bold text-white rounded-lg cursor-pointer bg-blue-600 hover:bg-blue-700 shadow-sm hover:scale-[1.01] transition-all"
+                  className="px-4 py-1.5 text-xs font-bold text-white rounded-lg cursor-pointer bg-[#2563EB] hover:bg-[#1D4ED8] shadow-sm hover:scale-[1.01] transition-all"
                 >
                   Browse local files
                 </button>

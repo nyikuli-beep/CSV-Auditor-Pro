@@ -80,10 +80,10 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
     <div className="space-y-8 animate-fadeIn">
       {/* Header */}
       <div>
-        <span className="text-xs font-mono font-bold text-blue-500 uppercase tracking-widest flex items-center gap-1">
+        <span className="text-xs font-mono font-bold text-blue-700 dark:text-blue-400 uppercase tracking-widest flex items-center gap-1">
           <Clock className="w-3.5 h-3.5" /> Workspace Archives
         </span>
-        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Audit Archive</h1>
+        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">Audit Archive</h1>
         <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
           Search, filter, and inspect previous spreadsheet evaluation logs and compliance history profiles.
         </p>
@@ -93,13 +93,13 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
       <div className={`p-4 rounded-2xl border flex flex-col md:flex-row gap-4 items-center justify-between ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200'}`}>
         {/* Search bar */}
         <div className="relative w-full md:w-80">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500" />
           <input 
             type="text" 
             placeholder="Search files by name..." 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className={`w-full pl-9 pr-4 py-2.5 rounded-xl text-xs border focus:outline-none focus:ring-1 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500' : 'bg-white border-slate-200 text-slate-950'}`}
+            className={`w-full pl-9 pr-4 py-2.5 rounded-xl text-xs border focus:outline-none focus:ring-1 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500' : 'bg-white border-slate-200 text-slate-900 focus:border-blue-600'}`}
           />
         </div>
 
@@ -119,16 +119,16 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
           {/* Sort Button */}
           <button 
             onClick={() => toggleSort('score')}
-            className={`px-3 py-2 rounded-xl border flex items-center gap-1.5 font-semibold hover:bg-slate-800/40 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
+            className={`px-3 py-2 rounded-xl border flex items-center gap-1.5 font-semibold hover:bg-slate-100 dark:hover:bg-slate-800/40 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
           >
-            <ArrowUpDown className="w-3.5 h-3.5 text-blue-500" /> Sort Score
+            <ArrowUpDown className="w-3.5 h-3.5 text-blue-700 dark:text-blue-400" /> Sort Score
           </button>
           
           <button 
             onClick={() => toggleSort('date')}
-            className={`px-3 py-2 rounded-xl border flex items-center gap-1.5 font-semibold hover:bg-slate-800/40 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
+            className={`px-3 py-2 rounded-xl border flex items-center gap-1.5 font-semibold hover:bg-slate-100 dark:hover:bg-slate-800/40 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
           >
-            <ArrowUpDown className="w-3.5 h-3.5 text-blue-500" /> Sort Date
+            <ArrowUpDown className="w-3.5 h-3.5 text-blue-700 dark:text-blue-400" /> Sort Date
           </button>
         </div>
       </div>
@@ -138,7 +138,7 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className={`border-b ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+              <tr className={`border-b ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
                 <th className="p-4 font-semibold">File Name</th>
                 <th className="p-4 font-semibold">Audited Date</th>
                 <th className="p-4 font-semibold">File Size</th>
@@ -148,18 +148,18 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
                 <th className="p-4 font-semibold text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/50">
+            <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800/50' : 'divide-slate-200'}`}>
               {sortedFiles.map((file) => (
                 <tr 
                   key={file.id}
-                  className={`hover:bg-slate-800/10 transition-colors ${isDarkMode ? '' : 'hover:bg-slate-50/50'}`}
+                  className={`hover:bg-slate-800/10 transition-colors ${isDarkMode ? '' : 'hover:bg-slate-50'}`}
                 >
-                  <td className="p-4 font-bold flex items-center gap-2.5 truncate max-w-[240px]">
-                    <FileSpreadsheet className="w-4 h-4 text-blue-500 shrink-0" />
+                  <td className="p-4 font-bold flex items-center gap-2.5 truncate max-w-[240px] text-slate-900 dark:text-slate-100">
+                    <FileSpreadsheet className="w-4 h-4 text-blue-700 dark:text-blue-400 shrink-0" />
                     <span>{file.name}</span>
                   </td>
-                  <td className="p-4 text-slate-400 font-mono text-[10px]">{file.uploadedAt}</td>
-                  <td className="p-4 text-slate-400 font-mono text-[10px]">
+                  <td className="p-4 text-slate-600 dark:text-slate-400 font-mono text-[10px]">{file.uploadedAt}</td>
+                  <td className="p-4 text-slate-600 dark:text-slate-400 font-mono text-[10px]">
                     {file.size > 1024 * 1024 
                       ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 
                       : `${(file.size / 1024).toFixed(1)} KB`}
@@ -167,11 +167,11 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
                   <td className="p-4">
                     {file.status === 'completed' ? (
                       <div className="flex items-center gap-2">
-                        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md font-bold ${file.score > 80 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md font-bold ${file.score > 80 ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-400' : 'bg-amber-100 dark:bg-amber-500/10 text-amber-800 dark:text-amber-400'}`}>
                           {file.score}%
                         </span>
-                        <div className="w-16 bg-slate-700/20 rounded-full h-1">
-                          <div className={`h-full rounded-full ${file.score > 80 ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${file.score}%` }}></div>
+                        <div className="w-16 bg-slate-200 dark:bg-slate-700/20 rounded-full h-1">
+                          <div className={`h-full rounded-full ${file.score > 80 ? 'bg-emerald-600 dark:bg-emerald-500' : 'bg-amber-600 dark:bg-amber-500'}`} style={{ width: `${file.score}%` }}></div>
                         </div>
                       </div>
                     ) : (
@@ -181,14 +181,14 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
                   <td className="p-4">
                     {file.retentionPolicy ? (
                       <div className="flex flex-col gap-0.5">
-                        <span className="text-[10px] font-bold text-blue-400 font-mono flex items-center gap-1">
-                          {file.retentionPolicy.option === 'immediate' && <Trash2 className="w-3 h-3 text-rose-400 shrink-0" />}
-                          {file.retentionPolicy.option === '24h' && <Clock className="w-3 h-3 text-blue-400 shrink-0" />}
-                          {(file.retentionPolicy.option === '3d' || file.retentionPolicy.option === '7d' || file.retentionPolicy.option === '14d' || file.retentionPolicy.option === '30d') && <Calendar className="w-3 h-3 text-indigo-400 shrink-0" />}
-                          {file.retentionPolicy.option === 'forever' && <Shield className="w-3 h-3 text-emerald-400 shrink-0" />}
+                        <span className="text-[10px] font-bold text-blue-700 dark:text-blue-400 font-mono flex items-center gap-1">
+                          {file.retentionPolicy.option === 'immediate' && <Trash2 className="w-3 h-3 text-rose-600 dark:text-rose-400 shrink-0" />}
+                          {file.retentionPolicy.option === '24h' && <Clock className="w-3 h-3 text-blue-700 dark:text-blue-400 shrink-0" />}
+                          {(file.retentionPolicy.option === '3d' || file.retentionPolicy.option === '7d' || file.retentionPolicy.option === '14d' || file.retentionPolicy.option === '30d') && <Calendar className="w-3 h-3 text-indigo-700 dark:text-indigo-400 shrink-0" />}
+                          {file.retentionPolicy.option === 'forever' && <Shield className="w-3 h-3 text-emerald-700 dark:text-emerald-400 shrink-0" />}
                           <span>{getRetentionOptionDetail(file.retentionPolicy.option).badge}</span>
                         </span>
-                        <span className="text-[9px] font-mono text-slate-400">
+                        <span className="text-[9px] font-mono text-slate-500 dark:text-slate-400">
                           {formatTimeRemaining(file.retentionPolicy.expiresAt, file.retentionPolicy.originalFileDeleted).label}
                         </span>
                       </div>
@@ -198,9 +198,9 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
                   </td>
                   <td className="p-4">
                     {file.status === 'completed' ? (
-                      <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 w-fit"><CheckCircle2 className="w-3.5 h-3.5" /> Approved</span>
+                      <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 w-fit"><CheckCircle2 className="w-3.5 h-3.5" /> Approved</span>
                     ) : (
-                      <span className="text-[10px] font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 w-fit"><AlertCircle className="w-3.5 h-3.5" /> Corrupted</span>
+                      <span className="text-[10px] font-bold text-rose-800 dark:text-rose-400 bg-rose-100 dark:bg-rose-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 w-fit"><AlertCircle className="w-3.5 h-3.5" /> Corrupted</span>
                     )}
                   </td>
                   <td className="p-4 text-right">
@@ -212,14 +212,14 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
                               if (onDeleteFile) onDeleteFile(file.id, file.name);
                               setDeletingId(null);
                             }}
-                            className="px-2 py-1.5 rounded bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all font-bold text-[9px] uppercase cursor-pointer"
+                            className="px-2 py-1.5 rounded bg-rose-100 dark:bg-red-500/20 text-rose-700 dark:text-red-400 hover:bg-rose-600 hover:text-white dark:hover:bg-red-500 dark:hover:text-white transition-all font-bold text-[9px] uppercase cursor-pointer"
                           >
                             Confirm
                           </button>
                           <button
                             onClick={() => setDeletingId(null)}
                             className={`px-2 py-1.5 rounded transition-all font-bold text-[9px] uppercase cursor-pointer ${
-                              isDarkMode ? 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700'
+                              isDarkMode ? 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
                             }`}
                           >
                             Cancel
@@ -232,7 +232,7 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
                               onSelectFile(file);
                               onNavigate('results');
                             }}
-                            className={`p-2 rounded-lg border hover:scale-105 transition-all text-blue-500 ${isDarkMode ? 'bg-slate-950 border-slate-850 hover:bg-slate-900' : 'bg-white border-slate-200 hover:bg-slate-100'}`}
+                            className={`p-2 rounded-lg border hover:scale-105 transition-all text-blue-700 dark:text-blue-400 ${isDarkMode ? 'bg-slate-950 border-slate-800 hover:bg-slate-900' : 'bg-white border-slate-200 hover:bg-slate-100'}`}
                             title="View Report"
                           >
                             <Eye className="w-3.5 h-3.5" />
@@ -240,7 +240,7 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
                           <button 
                             onClick={() => downloadHistoryReport(file)}
                             disabled={file.status !== 'completed'}
-                            className={`p-2 rounded-lg border hover:scale-105 transition-all text-emerald-500 disabled:opacity-30 disabled:pointer-events-none ${isDarkMode ? 'bg-slate-950 border-slate-850 hover:bg-slate-900' : 'bg-white border-slate-200 hover:bg-slate-100'}`}
+                            className={`p-2 rounded-lg border hover:scale-105 transition-all text-emerald-700 dark:text-emerald-400 disabled:opacity-30 disabled:pointer-events-none ${isDarkMode ? 'bg-slate-950 border-slate-800 hover:bg-slate-900' : 'bg-white border-slate-200 hover:bg-slate-100'}`}
                             title="Download Report"
                           >
                             <Download className="w-3.5 h-3.5" />
@@ -248,7 +248,7 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
                           {onDeleteFile && (
                             <button 
                               onClick={() => setDeletingId(file.id)}
-                              className={`p-2 rounded-lg border hover:scale-105 transition-all text-rose-500 ${isDarkMode ? 'bg-slate-950 border-slate-850 hover:bg-slate-900 hover:bg-rose-500/10' : 'bg-white border-slate-200 hover:bg-slate-100 hover:bg-rose-50'}`}
+                              className={`p-2 rounded-lg border hover:scale-105 transition-all text-rose-700 dark:text-rose-400 ${isDarkMode ? 'bg-slate-950 border-slate-800 hover:bg-slate-900 hover:bg-rose-500/10' : 'bg-white border-slate-200 hover:bg-slate-100 hover:bg-rose-50'}`}
                               title="Delete Dataset"
                             >
                               <Trash2 className="w-3.5 h-3.5" />

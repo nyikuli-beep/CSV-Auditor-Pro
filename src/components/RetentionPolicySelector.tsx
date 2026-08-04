@@ -43,20 +43,20 @@ export const RetentionUploadSelector: React.FC<RetentionUploadSelectorProps> = (
     }`}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
+          <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400">
             <Clock className="w-4 h-4" />
           </div>
           <div>
             <h4 className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
               CSV File Retention Policy
             </h4>
-            <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+            <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
               Configure how long the raw original CSV remains in system storage before automatic purging.
             </p>
           </div>
         </div>
         {!isAllowed && (
-          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-1 rounded">
+          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-500/10 px-2 py-1 rounded">
             <Lock className="w-3 h-3" /> Owner/Admin Only
           </span>
         )}
@@ -82,11 +82,11 @@ export const RetentionUploadSelector: React.FC<RetentionUploadSelectorProps> = (
               } ${!isAllowed ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
               <div className="flex items-start justify-between w-full mb-1">
-                <span className={`text-xs font-bold flex items-center gap-1.5 ${isSelected ? 'text-[#2563EB] dark:text-blue-400' : ''}`}>
-                  {opt.id === 'immediate' && <Trash2 className="w-3.5 h-3.5 text-rose-500 shrink-0" />}
-                  {opt.id === '24h' && <Clock className="w-3.5 h-3.5 text-blue-500 shrink-0" />}
-                  {(opt.id === '3d' || opt.id === '7d' || opt.id === '14d' || opt.id === '30d') && <Calendar className="w-3.5 h-3.5 text-indigo-500 shrink-0" />}
-                  {opt.id === 'forever' && <Shield className="w-3.5 h-3.5 text-emerald-500 shrink-0" />}
+                <span className={`text-xs font-bold flex items-center gap-1.5 ${isSelected ? 'text-[#1D4ED8] dark:text-blue-400' : ''}`}>
+                  {opt.id === 'immediate' && <Trash2 className="w-3.5 h-3.5 text-rose-600 dark:text-rose-500 shrink-0" />}
+                  {opt.id === '24h' && <Clock className="w-3.5 h-3.5 text-blue-700 dark:text-blue-400 shrink-0" />}
+                  {(opt.id === '3d' || opt.id === '7d' || opt.id === '14d' || opt.id === '30d') && <Calendar className="w-3.5 h-3.5 text-indigo-700 dark:text-indigo-400 shrink-0" />}
+                  {opt.id === 'forever' && <Shield className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-500 shrink-0" />}
                   <span>{opt.badge}</span>
                 </span>
                 {isSelected && (
