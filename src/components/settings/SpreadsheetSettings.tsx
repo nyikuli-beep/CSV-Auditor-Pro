@@ -103,11 +103,11 @@ export const SpreadsheetSettings: React.FC<{ isDarkMode: boolean }> = ({ isDarkM
           <select
             value={sp.rowHeight || 40}
             onChange={(e) => handleValueChange('rowHeight', Number(e.target.value))}
-            className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-xs font-semibold text-slate-900 dark:text-slate-100"
+            className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-xs font-semibold text-slate-900 dark:text-slate-100 cursor-pointer"
           >
-            <option value="32">32px (Tight / High Density)</option>
-            <option value="40">40px (Standard / Balanced)</option>
-            <option value="48">48px (Touch / Comfortable)</option>
+            <option value="32" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">32px (Tight / High Density)</option>
+            <option value="40" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">40px (Standard / Balanced)</option>
+            <option value="48" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">48px (Touch / Comfortable)</option>
           </select>
         </div>
 
@@ -117,13 +117,13 @@ export const SpreadsheetSettings: React.FC<{ isDarkMode: boolean }> = ({ isDarkM
           <select
             value={sp.defaultDelimiter || 'auto'}
             onChange={(e) => handleValueChange('defaultDelimiter', e.target.value)}
-            className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-xs font-semibold text-slate-900 dark:text-slate-100"
+            className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-xs font-semibold text-slate-900 dark:text-slate-100 cursor-pointer"
           >
-            <option value="auto">Auto-Detect (Smart Parser)</option>
-            <option value="comma">Comma (,)</option>
-            <option value="semicolon">Semicolon (;)</option>
-            <option value="tab">Tab (\t TSV)</option>
-            <option value="pipe">Pipe (|)</option>
+            <option value="auto" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Auto-Detect (Smart Parser)</option>
+            <option value="comma" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Comma (,)</option>
+            <option value="semicolon" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Semicolon (;)</option>
+            <option value="tab" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Tab (\t TSV)</option>
+            <option value="pipe" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Pipe (|)</option>
           </select>
         </div>
       </div>

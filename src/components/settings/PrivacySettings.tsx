@@ -48,13 +48,13 @@ export const PrivacySettings: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode 
         <select
           value={priv.fileRetention || '30d'}
           onChange={(e) => handleSelect('fileRetention', e.target.value)}
-          className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-xs font-semibold text-slate-900 dark:text-slate-100"
+          className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-xs font-semibold text-slate-900 dark:text-slate-100 cursor-pointer"
         >
-          <option value="immediate">Delete Immediately After Session / Tab Close</option>
-          <option value="24h">Retain for 24 Hours</option>
-          <option value="7d">Retain for 7 Days</option>
-          <option value="30d">Retain for 30 Days (Recommended)</option>
-          <option value="90d">Retain for 90 Days</option>
+          <option value="immediate" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Delete Immediately After Session / Tab Close</option>
+          <option value="24h" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Retain for 24 Hours</option>
+          <option value="7d" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Retain for 7 Days</option>
+          <option value="30d" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Retain for 30 Days (Recommended)</option>
+          <option value="90d" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Retain for 90 Days</option>
         </select>
       </div>
 

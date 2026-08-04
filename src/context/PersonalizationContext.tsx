@@ -4,6 +4,24 @@ import { getDefaultSettings, mergeWithDefaults } from '../lib/personalizationDef
 
 export type WorkspacePreset = 'Data Cleaning' | 'Audit Mode' | 'Executive Dashboard' | 'AI Analysis' | 'Collaboration' | 'Presentation';
 
+export type SettingsCategory =
+  | 'appearance'
+  | 'dashboard'
+  | 'spreadsheet'
+  | 'ai'
+  | 'privacy'
+  | 'security'
+  | 'collaboration'
+  | 'notifications'
+  | 'upload'
+  | 'export'
+  | 'accessibility'
+  | 'performance'
+  | 'localization'
+  | 'profile'
+  | 'advanced'
+  | 'all';
+
 interface PersonalizationContextType {
   settings: SystemSettings;
   updateSettings: (updater: Partial<SystemSettings> | ((prev: SystemSettings) => SystemSettings)) => Promise<void>;
@@ -13,7 +31,7 @@ interface PersonalizationContextType {
   applyWorkspacePreset: (preset: WorkspacePreset) => void;
   saveCustomTheme: (theme: CustomTheme) => void;
   deleteCustomTheme: (themeId: string) => void;
-  resetCategory: (category: 'appearance' | 'dashboard' | 'spreadsheet' | 'ai' | 'privacy' | 'security' | 'all') => void;
+  resetCategory: (category: SettingsCategory) => void;
   exportSettingsJSON: () => void;
   importSettingsJSON: (jsonStr: string) => boolean;
 }
@@ -274,7 +292,7 @@ export function PersonalizationProvider({ children }: { children: React.ReactNod
   }, [updateSettings, showToast]);
 
   // Reset category
-  const resetCategory = useCallback((category: 'appearance' | 'dashboard' | 'spreadsheet' | 'ai' | 'privacy' | 'security' | 'all') => {
+  const resetCategory = useCallback((category: SettingsCategory) => {
     const defaults = getDefaultSettings();
     updateSettings(prev => {
       if (category === 'all') return defaults;
@@ -298,6 +316,24 @@ export function PersonalizationProvider({ children }: { children: React.ReactNod
         next.privacy = defaults.privacy;
       } else if (category === 'security') {
         next.security = defaults.security;
+      } else if (category === 'collaboration') {
+        next.collaboration = defaults.collaboration;
+      } else if (category === 'notifications') {
+        next.notifications = defaults.notifications;
+      } else if (category === 'upload') {
+        next.upload = defaults.upload;
+      } else if (category === 'export') {
+        next.export = defaults.export;
+      } else if (category === 'accessibility') {
+        next.accessibility = defaults.accessibility;
+      } else if (category === 'performance') {
+        next.performance = defaults.performance;
+      } else if (category === 'localization') {
+        next.localization = defaults.localization;
+      } else if (category === 'profile') {
+        next.profile = defaults.profile;
+      } else if (category === 'advanced') {
+        next.advanced = defaults.advanced;
       }
       return next;
     });

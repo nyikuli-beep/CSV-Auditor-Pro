@@ -33,7 +33,7 @@ export const PerformanceSettings: React.FC<{ isDarkMode: boolean }> = ({ isDarkM
         </div>
         <button
           type="button"
-          onClick={() => resetCategory('appearance')}
+          onClick={() => resetCategory('performance')}
           className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all flex items-center gap-1.5 text-slate-700 dark:text-slate-300 cursor-pointer"
         >
           <RefreshCw className="w-3.5 h-3.5" /> Restore Defaults
@@ -77,12 +77,12 @@ export const PerformanceSettings: React.FC<{ isDarkMode: boolean }> = ({ isDarkM
           <select
             value={perf.maxMemoryUsageMB || 1024}
             onChange={(e) => handleSelect('maxMemoryUsageMB', Number(e.target.value))}
-            className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-xs font-semibold text-slate-900 dark:text-slate-100"
+            className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-xs font-semibold text-slate-900 dark:text-slate-100 cursor-pointer"
           >
-            <option value="512">512 MB (Strict / Mobile)</option>
-            <option value="1024">1,024 MB / 1 GB (Recommended)</option>
-            <option value="2048">2,048 MB / 2 GB (High Performance)</option>
-            <option value="4096">4,096 MB / 4 GB (Enterprise Large Datasets)</option>
+            <option value="512" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">512 MB (Strict / Mobile)</option>
+            <option value="1024" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">1,024 MB / 1 GB (Recommended)</option>
+            <option value="2048" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">2,048 MB / 2 GB (High Performance)</option>
+            <option value="4096" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">4,096 MB / 4 GB (Enterprise Large Datasets)</option>
           </select>
         </div>
 
@@ -94,13 +94,13 @@ export const PerformanceSettings: React.FC<{ isDarkMode: boolean }> = ({ isDarkM
           <select
             value={perf.autoSaveIntervalSeconds || 10}
             onChange={(e) => handleSelect('autoSaveIntervalSeconds', Number(e.target.value))}
-            className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-xs font-semibold text-slate-900 dark:text-slate-100"
+            className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-xs font-semibold text-slate-900 dark:text-slate-100 cursor-pointer"
           >
-            <option value="5">Every 5 Seconds (Instant)</option>
-            <option value="10">Every 10 Seconds (Balanced)</option>
-            <option value="30">Every 30 Seconds</option>
-            <option value="60">Every 60 Seconds</option>
-            <option value="0">Manual Save Only</option>
+            <option value="5" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Every 5 Seconds (Instant)</option>
+            <option value="10" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Every 10 Seconds (Balanced)</option>
+            <option value="30" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Every 30 Seconds</option>
+            <option value="60" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Every 60 Seconds</option>
+            <option value="0" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Manual Save Only</option>
           </select>
         </div>
       </div>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { usePersonalization, WorkspacePreset } from '../../context/PersonalizationContext';
 import { CustomTheme } from '../../types';
-import { Sliders, RefreshCw, Palette, Download, Upload, Copy, Trash2, Plus, Sparkles, Check, Code } from 'lucide-react';
+import { Sliders, RefreshCw, Palette, Download, Upload, Copy, Trash2, Plus, Sparkles, Check, Code, Search, BarChart3, Bot, Users, Monitor, Wand2 } from 'lucide-react';
 
 export const AdvancedThemePresets: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => {
   const {
@@ -47,13 +47,13 @@ export const AdvancedThemePresets: React.FC<{ isDarkMode: boolean }> = ({ isDark
     },
   });
 
-  const workspacePresets: Array<{ name: WorkspacePreset; desc: string; icon: string }> = [
-    { name: 'Data Cleaning', desc: 'Compact gridlines, zebra striping, anomaly highlights & proactive cleaning recipes.', icon: '🧹' },
-    { name: 'Audit Mode', desc: 'Pinned column headers, line numbers, PII masking redaction & strict compliance logs.', icon: '🔍' },
-    { name: 'Executive Dashboard', desc: 'Spacious cards, extra rounded corners, PDF report export defaults & chart cards.', icon: '📊' },
-    { name: 'AI Analysis', desc: 'Gemini 2.5 Pro model default, in-depth reasoning summaries & confidence ratings.', icon: '🤖' },
-    { name: 'Collaboration', desc: 'Real-time typing indicators, read receipts, online badges & team color tags.', icon: '👥' },
-    { name: 'Presentation', desc: 'Large typography, high contrast, backdrop blur & spacious layout padding.', icon: '🖥️' },
+  const workspacePresets: Array<{ name: WorkspacePreset; desc: string; icon: React.ComponentType<{ className?: string }> }> = [
+    { name: 'Data Cleaning', desc: 'Compact gridlines, zebra striping, anomaly highlights & proactive cleaning recipes.', icon: Wand2 },
+    { name: 'Audit Mode', desc: 'Pinned column headers, line numbers, PII masking redaction & strict compliance logs.', icon: Search },
+    { name: 'Executive Dashboard', desc: 'Spacious cards, extra rounded corners, PDF report export defaults & chart cards.', icon: BarChart3 },
+    { name: 'AI Analysis', desc: 'Gemini 2.5 Pro model default, in-depth reasoning summaries & confidence ratings.', icon: Bot },
+    { name: 'Collaboration', desc: 'Real-time typing indicators, read receipts, online badges & team color tags.', icon: Users },
+    { name: 'Presentation', desc: 'Large typography, high contrast, backdrop blur & spacious layout padding.', icon: Monitor },
   ];
 
   const handleCreateTheme = () => {
@@ -83,6 +83,7 @@ export const AdvancedThemePresets: React.FC<{ isDarkMode: boolean }> = ({ isDark
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {workspacePresets.map((p) => {
             const isActive = settings.advanced?.activeWorkspacePreset === p.name;
+            const Icon = p.icon;
             return (
               <button
                 key={p.name}
@@ -95,7 +96,9 @@ export const AdvancedThemePresets: React.FC<{ isDarkMode: boolean }> = ({ isDark
                 }`}
               >
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-lg">{p.icon}</span>
+                  <div className="p-2 rounded-lg bg-blue-50 dark:bg-slate-800 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-slate-700">
+                    <Icon className="w-4 h-4" />
+                  </div>
                   {isActive && (
                     <span className="p-1 rounded-full bg-blue-600 text-white">
                       <Check className="w-3 h-3" />

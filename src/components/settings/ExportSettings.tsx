@@ -33,7 +33,7 @@ export const ExportSettings: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }
         </div>
         <button
           type="button"
-          onClick={() => resetCategory('appearance')}
+          onClick={() => resetCategory('export')}
           className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all flex items-center gap-1.5 text-slate-700 dark:text-slate-300 cursor-pointer"
         >
           <RefreshCw className="w-3.5 h-3.5" /> Restore Defaults
@@ -47,12 +47,12 @@ export const ExportSettings: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }
           <select
             value={exp.defaultFormat || 'pdf'}
             onChange={(e) => handleSelect('defaultFormat', e.target.value)}
-            className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-xs font-semibold text-slate-900 dark:text-slate-100"
+            className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-xs font-semibold text-slate-900 dark:text-slate-100 cursor-pointer"
           >
-            <option value="pdf">PDF Audit Report</option>
-            <option value="csv">Cleaned CSV Data File</option>
-            <option value="excel">Microsoft Excel (.xlsx)</option>
-            <option value="json">Structured JSON Schema</option>
+            <option value="pdf" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">PDF Audit Report</option>
+            <option value="csv" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Cleaned CSV Data File</option>
+            <option value="excel" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Microsoft Excel (.xlsx)</option>
+            <option value="json" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Structured JSON Schema</option>
           </select>
         </div>
 
@@ -62,10 +62,10 @@ export const ExportSettings: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }
           <select
             value={exp.orientation || 'landscape'}
             onChange={(e) => handleSelect('orientation', e.target.value)}
-            className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-xs font-semibold text-slate-900 dark:text-slate-100"
+            className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-xs font-semibold text-slate-900 dark:text-slate-100 cursor-pointer"
           >
-            <option value="landscape">Landscape (Best for Wide Tables)</option>
-            <option value="portrait">Portrait (Executive Summary)</option>
+            <option value="landscape" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Landscape (Best for Wide Tables)</option>
+            <option value="portrait" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Portrait (Executive Summary)</option>
           </select>
         </div>
 
@@ -75,11 +75,11 @@ export const ExportSettings: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }
           <select
             value={exp.paperSize || 'a4'}
             onChange={(e) => handleSelect('paperSize', e.target.value)}
-            className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-xs font-semibold text-slate-900 dark:text-slate-100"
+            className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-xs font-semibold text-slate-900 dark:text-slate-100 cursor-pointer"
           >
-            <option value="a4">A4 (Standard International)</option>
-            <option value="letter">US Letter</option>
-            <option value="legal">US Legal</option>
+            <option value="a4" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">A4 (Standard International)</option>
+            <option value="letter" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">US Letter</option>
+            <option value="legal" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">US Legal</option>
           </select>
         </div>
       </div>

@@ -180,7 +180,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
 
         {/* API Key Banner if owner */}
-        {isOwner && (
+        {isOwner ? (
           <form onSubmit={handleSaveApiKey} className="pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <Key className="w-4 h-4 text-amber-500 shrink-0" />
@@ -203,6 +203,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </button>
             </div>
           </form>
+        ) : (
+          <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+            <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+            <span>Master API Key configuration is restricted to primary workspace owners.</span>
+          </div>
         )}
       </div>
 
@@ -249,7 +254,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           {activeCategory === 'appearance' && <AppearanceSettings isDarkMode={isDarkMode} />}
           {activeCategory === 'dashboard' && <DashboardSettings isDarkMode={isDarkMode} />}
           {activeCategory === 'spreadsheet' && <SpreadsheetSettings isDarkMode={isDarkMode} />}
-          {activeCategory === 'ai' && <AISettings isDarkMode={isDarkMode} />}
+          {activeCategory === 'ai' && <AISettings isDarkMode={isDarkMode} isOwner={isOwner} />}
           {activeCategory === 'collaboration' && <CollaborationSettings isDarkMode={isDarkMode} />}
           {activeCategory === 'notifications' && <NotificationSettings isDarkMode={isDarkMode} />}
           {activeCategory === 'privacy' && <PrivacySettings isDarkMode={isDarkMode} />}
