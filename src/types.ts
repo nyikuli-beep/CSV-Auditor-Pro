@@ -25,6 +25,18 @@ export interface DetectedFormatMetadata {
   }[];
 }
 
+export type RetentionPeriodOption = 'immediate' | '24h' | '3d' | '7d' | '14d' | '30d' | 'forever';
+
+export interface RetentionPolicy {
+  option: RetentionPeriodOption;
+  selectedAt: string;
+  expiresAt: string | null;
+  status: 'active' | 'deleted_immediately' | 'scheduled_deletion' | 'deleted_expired' | 'deleted_manually' | 'kept_forever';
+  originalDeletedAt?: string;
+  deletedBy?: string;
+  originalFileDeleted: boolean;
+}
+
 export interface CSVFile {
   id: string;
   name: string;
@@ -43,6 +55,8 @@ export interface CSVFile {
   headerMappings?: Record<string, string>;
   mappingExplanations?: Record<string, string>;
   isQuickCleaned?: boolean;
+  retentionPolicy?: RetentionPolicy;
+  isRetentionWarningSent?: boolean;
   securityScanSummary?: {
     formulasSanitized: number;
     maliciousThreatsDetected: number;

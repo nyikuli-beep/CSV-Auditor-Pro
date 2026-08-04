@@ -38,6 +38,8 @@ import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import CustomValidationPanel from './CustomValidationPanel';
 import CSVTemplatesPanel from './CSVTemplatesPanel';
 import ColumnMappingPanel from './ColumnMappingPanel';
+import { RetentionUploadSelector } from './RetentionPolicySelector';
+import { createDefaultRetentionPolicy, RetentionPeriodOption } from '../lib/retentionService';
 
 
 interface UploadCenterProps {
@@ -45,9 +47,11 @@ interface UploadCenterProps {
   files?: CSVFile[];
   isDarkMode: boolean;
   accentClass: string;
+  userRole?: string;
 }
 
-export default function UploadCenter({ onFileUpload, files = [], isDarkMode, accentClass }: UploadCenterProps) {
+export default function UploadCenter({ onFileUpload, files = [], isDarkMode, accentClass, userRole }: UploadCenterProps) {
+  const [selectedRetentionOption, setSelectedRetentionOption] = useState<RetentionPeriodOption>('24h');
   const [dragActive, setDragActive] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [processingStageMessage, setProcessingStageMessage] = useState<string>('');
@@ -324,9 +328,31 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     setCustomRules(prev => prev.filter(r => r.id !== id));
   };
 
+  const prepareFileForSubmission = (file: CSVFile): CSVFile => {
+    let processed = quickCleanEnabled ? executeDefaultHygiene(file) : file;
+    if (!processed.retentionPolicy) {
+      processed.retentionPolicy = createDefaultRetentionPolicy(selectedRetentionOption);
+    }
+    // Check if immediate deletion option was selected
+    if (processed.retentionPolicy?.option === 'immediate') {
+      processed = {
+        ...processed,
+        rows: [], // Purge raw CSV content immediately after validation
+        retentionPolicy: {
+          ...processed.retentionPolicy,
+          status: 'deleted_immediately',
+          originalFileDeleted: true,
+          originalDeletedAt: new Date().toISOString(),
+          deletedBy: 'System Post-Validation Purge'
+        }
+      };
+    }
+    return processed;
+  };
+
   const removePendingFileAtIndex = (indexToRemove: number, updatedFileToSubmit?: CSVFile) => {
     if (updatedFileToSubmit) {
-      const fileToSubmit = quickCleanEnabled ? executeDefaultHygiene(updatedFileToSubmit) : updatedFileToSubmit;
+      const fileToSubmit = prepareFileForSubmission(updatedFileToSubmit);
       onFileUpload(fileToSubmit);
     }
     
@@ -1345,7 +1371,8 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
         issues: generatedIssues,
         totalRowsCount: mergedRows.length,
         isLargeFile: totalSize > 5 * 1024 * 1024,
-        detectedMetadata: detectedMetadata
+        detectedMetadata: detectedMetadata,
+        retentionPolicy: createDefaultRetentionPolicy(selectedRetentionOption)
       };
 
       onFileUpload(mergedFile);
@@ -1506,6 +1533,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
             totalRowsCount: scanResult.sanitizedRows.length,
             isLargeFile: isLargeFile,
             detectedMetadata: detectedMetadata,
+            retentionPolicy: createDefaultRetentionPolicy(selectedRetentionOption),
             securityScanSummary: {
               formulasSanitized: scanResult.formulasSanitizedCount,
               maliciousThreatsDetected: scanResult.maliciousThreatsCount,
@@ -1618,6 +1646,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
                 totalRowsCount: scanResult.sanitizedRows.length,
                 isLargeFile: isLargeFile,
                 detectedMetadata: detectedMetadata,
+                retentionPolicy: createDefaultRetentionPolicy(selectedRetentionOption),
                 securityScanSummary: {
                   formulasSanitized: scanResult.formulasSanitizedCount,
                   maliciousThreatsDetected: scanResult.maliciousThreatsCount,
