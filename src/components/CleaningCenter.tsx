@@ -1164,33 +1164,6 @@ export default function CleaningCenter({
     }
   };
 
-  const handleRestoreOriginal = () => {
-    if (activeFile && history.length > 0) {
-      const originalRows = history[0] || activeFile.rows;
-      const originalHeaders = headersHistory[0] || activeFile.headers;
-      setHistoryIndex(0);
-      setAppliedSteps([]);
-      onUpdateFile({
-        ...activeFile,
-        cleanedRows: originalRows,
-        headers: originalHeaders
-      });
-    }
-  };
-
-  const handleRestoreVersion = (targetIndex: number) => {
-    if (activeFile && targetIndex >= 0 && targetIndex < history.length) {
-      const targetRows = history[targetIndex];
-      const targetHeaders = headersHistory[targetIndex];
-      setHistoryIndex(targetIndex);
-      onUpdateFile({
-        ...activeFile,
-        cleanedRows: targetRows,
-        headers: targetHeaders
-      });
-    }
-  };
-
   // Cleaning operations
   const removeDuplicates = () => {
     const seen = new Set<string>();
@@ -2267,50 +2240,17 @@ export default function CleaningCenter({
             <button 
               onClick={handleUndo}
               disabled={historyIndex === 0 || isViewer}
-              title="Undo last cleaning step"
-              className={`px-3 py-2.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${historyIndex === 0 ? 'opacity-40 cursor-not-allowed' : ''} ${isDarkMode ? 'bg-slate-950 border-slate-800 hover:bg-slate-900 text-slate-200' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'}`}
+              className={`p-2.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all ${historyIndex === 0 ? 'opacity-40 cursor-not-allowed' : ''} ${isDarkMode ? 'bg-slate-950 border-slate-800 hover:bg-slate-900' : 'bg-white border-slate-200 hover:bg-slate-50'}`}
             >
               <RotateCcw className="w-4 h-4" /> Undo
             </button>
             <button 
               onClick={handleRedo}
               disabled={historyIndex === history.length - 1 || isViewer}
-              title="Redo next cleaning step"
-              className={`px-3 py-2.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${historyIndex === history.length - 1 ? 'opacity-40 cursor-not-allowed' : ''} ${isDarkMode ? 'bg-slate-950 border-slate-800 hover:bg-slate-900 text-slate-200' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'}`}
+              className={`p-2.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all ${historyIndex === history.length - 1 ? 'opacity-40 cursor-not-allowed' : ''} ${isDarkMode ? 'bg-slate-950 border-slate-800 hover:bg-slate-900' : 'bg-white border-slate-200 hover:bg-slate-50'}`}
             >
               <RotateCw className="w-4 h-4" /> Redo
             </button>
-            {history.length > 1 && (
-              <div className="flex items-center gap-1.5">
-                <select
-                  value={historyIndex}
-                  onChange={(e) => handleRestoreVersion(Number(e.target.value))}
-                  disabled={isViewer}
-                  title="Select version snapshot to restore"
-                  className={`px-3 py-2 rounded-xl border text-xs font-semibold focus:outline-none cursor-pointer ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'}`}
-                >
-                  {history.map((_, idx) => (
-                    <option key={idx} value={idx}>
-                      {idx === 0 ? 'v0: Raw Original' : `v${idx}: ${appliedSteps[idx - 1] || 'Modification'}`}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={handleRestoreOriginal}
-                  disabled={historyIndex === 0 || isViewer}
-                  title="Restore raw uncleaned version"
-                  className={`px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                    historyIndex === 0 ? 'opacity-40 cursor-not-allowed' : ''
-                  } ${
-                    isDarkMode
-                      ? 'border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
-                      : 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100'
-                  }`}
-                >
-                  <RotateCcw className="w-3.5 h-3.5" /> Restore Original
-                </button>
-              </div>
-            )}
           </div>
         </div>
       </div>
