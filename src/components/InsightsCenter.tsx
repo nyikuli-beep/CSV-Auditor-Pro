@@ -608,7 +608,7 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
         </div>
 
         {/* Right Side: Advanced Chat Assistant Panel */}
-        <div className="lg:col-span-7 flex flex-col justify-between h-[680px]">
+        <div className="lg:col-span-7 flex flex-col justify-between h-[520px]">
           <div className={`p-6 rounded-3xl border flex-1 flex flex-col justify-between overflow-hidden relative ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
             
             {/* Active Model Indicator Header */}

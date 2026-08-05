@@ -338,7 +338,7 @@ export default function CollaborationChat({
   };
 
   return (
-    <div className={`flex flex-col h-[620px] rounded-3xl border transition-all overflow-hidden relative ${
+    <div className={`flex flex-col h-[500px] rounded-3xl border transition-all overflow-hidden relative ${
       isDarkMode ? 'bg-slate-900/90 border-slate-800 shadow-2xl text-slate-100' : 'bg-white border-slate-200 shadow-md text-slate-900'
     }`}>
       {/* Header Bar */}
