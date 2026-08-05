@@ -916,10 +916,11 @@ export default function CollaborationChat({
                         <p className="text-[10px] text-slate-400 font-mono mt-0.5">{m.role}</p>
                       </div>
                     </div>
-                    <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                    <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded flex items-center gap-1 ${
                       isOnline ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-700 text-slate-400'
                     }`}>
-                      {isOnline ? '🟢 Online' : '⚪ Offline'}
+                      <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                      <span>{isOnline ? 'Online' : 'Offline'}</span>
                     </span>
                   </div>
                 );

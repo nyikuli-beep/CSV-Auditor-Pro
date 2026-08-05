@@ -2685,7 +2685,7 @@ export default function CleaningCenter({
             <h3 className="font-bold text-sm uppercase tracking-wider text-slate-400 mb-5">Automated Actions</h3>
             
             <div className="space-y-4">
-              {/* ⭐ AI Smart Data Correction */}
+              {/* AI Smart Data Correction */}
               <button
                 onClick={handleRunAiCorrectionScan}
                 disabled={isViewer}
@@ -2701,7 +2701,7 @@ export default function CleaningCenter({
                 </div>
               </button>
 
-              {/* ⭐ AI Missing Value Prediction */}
+              {/* AI Missing Value Prediction */}
               <button
                 onClick={handleRunMissingPredictionScan}
                 disabled={isViewer}
@@ -2717,7 +2717,7 @@ export default function CleaningCenter({
                 </div>
               </button>
 
-              {/* ⭐ Intelligent Fuzzy Duplicate Detection */}
+              {/* Intelligent Fuzzy Duplicate Detection */}
               <button
                 onClick={handleRunFuzzyDuplicateScan}
                 disabled={isViewer}
@@ -2733,7 +2733,7 @@ export default function CleaningCenter({
                 </div>
               </button>
 
-              {/* ⭐ Invisible Control Character Cleaner */}
+              {/* Invisible Control Character Cleaner */}
               <button
                 onClick={handleRunInvisibleCharCleaner}
                 disabled={isViewer}
@@ -2746,7 +2746,7 @@ export default function CleaningCenter({
                 </div>
               </button>
 
-              {/* ⭐ PII Protection */}
+              {/* PII Protection */}
               <button
                 onClick={() => {
                   const firstCol = currentHeaders[0] || '';
@@ -2763,7 +2763,7 @@ export default function CleaningCenter({
                 </div>
               </button>
 
-              {/* ⭐ Formula & CSV Injection Protection */}
+              {/* Formula & CSV Injection Protection */}
               <button
                 onClick={handleRunFormulaProtect}
                 disabled={isViewer}

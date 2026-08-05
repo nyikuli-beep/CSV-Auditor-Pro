@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail, CheckCircle2, RefreshCw, LogOut, AlertCircle, ArrowLeft, ShieldCheck, Sparkles } from 'lucide-react';
+import { Mail, CheckCircle2, RefreshCw, LogOut, AlertCircle, ArrowLeft, ShieldCheck, Sparkles, Info } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { getFriendlyErrorMessage } from '../utils/firebaseErrors';
 
@@ -183,8 +183,9 @@ export const VerifyEmail: React.FC = () => {
           </div>
 
           {/* Spam Warning Callout */}
-          <div className="p-3 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl text-[11px] text-slate-600 dark:text-slate-400 text-center leading-normal">
-            💡 Didn't receive the email? Check your <span className="text-slate-900 dark:text-slate-200 font-semibold">Spam/Junk</span> folder or ensure your email address was entered correctly.
+          <div className="p-3 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl text-[11px] text-slate-600 dark:text-slate-400 text-center leading-normal flex items-center justify-center gap-1">
+            <Info className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+            <span>Didn't receive the email? Check your <span className="text-slate-900 dark:text-slate-200 font-semibold">Spam/Junk</span> folder or ensure your email address was entered correctly.</span>
           </div>
 
           {/* Footer Back/Logout */}

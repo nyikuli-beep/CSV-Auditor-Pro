@@ -83,7 +83,7 @@ export default function NetworkOfflineOverlay({
           id="offline-heading"
           className="text-2xl sm:text-3xl font-black tracking-tight mb-2 flex items-center justify-center gap-2"
         >
-          <span>😔</span>
+          <AlertCircle className="w-7 h-7 text-amber-500 shrink-0" />
           <span>Oops!</span>
         </h1>
 
