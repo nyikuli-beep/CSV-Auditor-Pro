@@ -2627,39 +2627,43 @@ export default function CleaningCenter({
       )}
 
       {/* Enterprise Quick Action Toolbar */}
-      <div className={`p-4 rounded-2xl border flex flex-wrap items-center justify-between gap-4 ${isDarkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
-        <div className="flex items-center gap-2 flex-wrap">
+      <div className={`p-4 rounded-2xl border flex flex-wrap items-center justify-between gap-3 ${isDarkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
           <button
             onClick={handleRunProfiler}
-            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-2 shadow cursor-pointer transition-all whitespace-nowrap shrink-0"
+            className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 shadow cursor-pointer transition-all whitespace-nowrap shrink-0"
           >
-            <BarChart2 className="w-4 h-4 shrink-0" /> Data Profiler & Health Index
+            <BarChart2 className="w-4 h-4 shrink-0" />
+            <span>Data Profiler</span>
           </button>
 
           <button
             onClick={() => setIsCopilotOpen(true)}
-            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-2 shadow cursor-pointer transition-all whitespace-nowrap shrink-0"
+            className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 shadow cursor-pointer transition-all whitespace-nowrap shrink-0"
           >
-            <Bot className="w-4 h-4 shrink-0" /> AI Copilot
+            <Bot className="w-4 h-4 shrink-0" />
+            <span>AI Copilot</span>
           </button>
 
           <button
             onClick={() => setIsWorkflowOpen(true)}
-            className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold flex items-center gap-2 shadow cursor-pointer transition-all whitespace-nowrap shrink-0"
+            className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold flex items-center gap-1.5 shadow cursor-pointer transition-all whitespace-nowrap shrink-0"
           >
-            <SlidersHorizontal className="w-4 h-4 shrink-0" /> Workflow Recorder
+            <SlidersHorizontal className="w-4 h-4 shrink-0" />
+            <span>Workflow Recorder</span>
           </button>
 
           <button
             onClick={handleGenerateAuditReport}
-            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-2 shadow cursor-pointer transition-all whitespace-nowrap shrink-0"
+            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow cursor-pointer transition-all whitespace-nowrap shrink-0"
           >
-            <FileText className="w-4 h-4 shrink-0" /> Audit & Compliance Report
+            <FileText className="w-4 h-4 shrink-0" />
+            <span>Audit & Compliance Report</span>
           </button>
         </div>
 
         {/* Search Input */}
-        <div className="relative flex-1 max-w-xs">
+        <div className="relative flex-1 min-w-[180px] max-w-xs">
           <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
           <input
             type="text"
@@ -4299,8 +4303,8 @@ export default function CleaningCenter({
                         isDarkMode ? 'bg-slate-950 border-slate-800 border text-slate-200' : 'bg-slate-50 border-slate-200 border text-slate-800'
                       }`}
                     >
-                      <option value="landscape">Landscape ↔</option>
-                      <option value="portrait">Portrait ↕</option>
+                      <option value="landscape">Landscape</option>
+                      <option value="portrait">Portrait</option>
                     </select>
                   </div>
 

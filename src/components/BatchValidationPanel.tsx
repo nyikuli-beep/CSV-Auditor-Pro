@@ -395,7 +395,7 @@ export default function BatchValidationPanel({
       {/* Header Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4 border-slate-500/10">
         <div className="flex items-start gap-3">
-          <div className="p-3 rounded-2xl bg-gradient-to-br from-blue-500/20 to-emerald-500/20 border border-blue-500/30 text-blue-400 shrink-0">
+          <div className="p-3 rounded-2xl bg-blue-500/10 border border-blue-500/30 text-blue-400 shrink-0">
             <ShieldCheck className="w-6 h-6 animate-pulse" />
           </div>
           <div>
@@ -660,7 +660,7 @@ export default function BatchValidationPanel({
                 isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-200 shadow-inner'
               }`}>
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 transition-all duration-300 relative overflow-hidden"
+                  className="h-full rounded-full bg-blue-600 transition-all duration-300 relative overflow-hidden"
                   style={{ width: `${overallProgress}%` }}
                 >
                   <div className="absolute inset-0 bg-white/20 animate-pulse" />
