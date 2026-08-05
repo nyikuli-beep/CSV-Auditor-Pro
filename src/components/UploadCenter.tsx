@@ -38,6 +38,7 @@ import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import CustomValidationPanel from './CustomValidationPanel';
 import CSVTemplatesPanel from './CSVTemplatesPanel';
 import ColumnMappingPanel from './ColumnMappingPanel';
+import BatchValidationPanel from './BatchValidationPanel';
 import { RetentionUploadSelector } from './RetentionPolicySelector';
 import { createDefaultRetentionPolicy, RetentionPeriodOption } from '../lib/retentionService';
 
@@ -2655,6 +2656,16 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
             onDeleteRule={handleDeleteRule}
             isDarkMode={isDarkMode}
             accentClass={accentClass}
+          />
+
+          {/* Batch CSV Integrity Validation Panel */}
+          <BatchValidationPanel
+            files={files}
+            onFileUpload={onFileUpload}
+            customRules={customRules}
+            isDarkMode={isDarkMode}
+            accentClass={accentClass}
+            userRole={userRole}
           />
 
           {/* Merge Datasets Segment */}

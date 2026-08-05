@@ -1364,24 +1364,139 @@ export default function CleaningCenter({
   const handleRunCopilotPlan = (plan: CopilotPlan) => {
     let tempRows = [...currentRows];
     let tempHeaders = [...currentHeaders];
+    const stepSummaries: string[] = [];
 
     plan.plannedSteps.forEach(step => {
-      if (step.actionType === 'deduplicate') {
+      if (step.actionType === 'remove_duplicates' || step.actionType === 'deduplicate') {
         const seen = new Set<string>();
+        const colParam = step.params?.column;
+        const initialCount = tempRows.length;
         tempRows = tempRows.filter(r => {
-          const key = JSON.stringify(r);
+          if (colParam && r[colParam] !== undefined) {
+            const key = String(r[colParam]).trim().toLowerCase();
+            if (!key) return true;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          }
+          const key = tempHeaders.map(h => String(r[h] ?? '').trim().toLowerCase()).join('|||');
           if (seen.has(key)) return false;
           seen.add(key);
           return true;
         });
-      } else if (step.actionType === 'clean_invisible') {
-        tempRows = cleanInvisibleCharacters(tempHeaders, tempRows).updatedRows;
-      } else if (step.actionType === 'protect_pii') {
-        tempRows = maskPiiData(tempHeaders, tempRows, tempHeaders[0] || '', 'mask').updatedRows;
+        const removed = initialCount - tempRows.length;
+        stepSummaries.push(`Removed ${removed} duplicate row(s)`);
+      } else if (step.actionType === 'normalize_contacts' || step.actionType === 'phone') {
+        const res = normalizeContactInformation(tempHeaders, tempRows);
+        tempRows = res.updatedRows;
+        stepSummaries.push(`Normalized contacts (${res.changesCount} cell(s))`);
+      } else if (step.actionType === 'mask_pii' || step.actionType === 'protect_pii') {
+        const emailCol = step.params?.column || tempHeaders.find(h => h.toLowerCase().includes('email')) || tempHeaders[0] || '';
+        if (emailCol) {
+          const res = maskPiiData(tempHeaders, tempRows, emailCol, 'mask');
+          tempRows = res.updatedRows;
+          stepSummaries.push(`Masked PII in '${emailCol}' (${res.changesCount} cell(s))`);
+        }
+      } else if (step.actionType === 'standardize_dates' || step.actionType === 'dates') {
+        const dateFormats = activeFile?.detectedMetadata?.dateFormats || {};
+        let dateChanges = 0;
+        tempRows = tempRows.map(row => {
+          const updated = { ...row };
+          tempHeaders.forEach(col => {
+            const fmt = dateFormats[col];
+            if (fmt || col.toLowerCase().includes('date')) {
+              const raw = (row[col] || '').trim();
+              if (!raw || /^\d{4}-\d{2}-\d{2}$/.test(raw)) return;
+              let parts: string[] = [];
+              if (raw.includes('/')) parts = raw.split('/');
+              else if (raw.includes('-')) parts = raw.split('-');
+              else if (raw.includes('.')) parts = raw.split('.');
+              
+              if (parts.length === 3) {
+                let year = '', month = '', day = '';
+                const formatStr = fmt || 'MM/DD/YYYY';
+                const upperFmt = formatStr.toUpperCase();
+                if (upperFmt.startsWith('YYYY')) { year = parts[0]; month = parts[1]; day = parts[2]; }
+                else if (upperFmt.startsWith('DD')) { day = parts[0]; month = parts[1]; year = parts[2]; }
+                else if (upperFmt.startsWith('MM')) { month = parts[0]; day = parts[1]; year = parts[2]; }
+                else {
+                  const p0 = parseInt(parts[0]);
+                  const p1 = parseInt(parts[1]);
+                  year = parts[2];
+                  if (p0 > 12) { day = parts[0]; month = parts[1]; }
+                  else if (p1 > 12) { day = parts[1]; month = parts[0]; }
+                  else { month = parts[0]; day = parts[1]; }
+                }
+                if (year.length === 2) {
+                  const yrNum = parseInt(year);
+                  year = yrNum > 50 ? `19${year}` : `20${year}`;
+                }
+                if (year && month && day) {
+                  const newDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                  if (newDate !== raw) {
+                    updated[col] = newDate;
+                    dateChanges++;
+                  }
+                }
+              }
+            }
+          });
+          return updated;
+        });
+        stepSummaries.push(`Standardized dates (${dateChanges} cell(s))`);
+      } else if (step.actionType === 'ai_smart_correction' || step.actionType === 'ai_correction') {
+        const items = scanSmartCorrections(tempHeaders, tempRows);
+        items.forEach(item => {
+          if (tempRows[item.rowIndex]) {
+            tempRows[item.rowIndex] = {
+              ...tempRows[item.rowIndex],
+              [item.columnName]: item.suggestedValue
+            };
+          }
+        });
+        stepSummaries.push(`Applied ${items.length} AI smart correction(s)`);
+      } else if (step.actionType === 'clean_invisible_chars' || step.actionType === 'clean_invisible') {
+        const res = cleanInvisibleCharacters(tempHeaders, tempRows);
+        tempRows = res.updatedRows;
+        stepSummaries.push(`Cleaned control chars (${res.changesCount} cell(s))`);
+      } else if (step.actionType === 'protect_formulas' || step.actionType === 'protect_formula') {
+        const res = protectFormulaInjection(tempHeaders, tempRows);
+        tempRows = res.updatedRows;
+        stepSummaries.push(`Shielded formulas (${res.changesCount} cell(s))`);
+      } else if (step.actionType === 'normalize_nulls' || step.actionType === 'fill_missing') {
+        const res = normalizeNulls(tempHeaders, tempRows);
+        tempRows = res.updatedRows;
+        stepSummaries.push(`Normalized nulls (${res.changesCount} cell(s))`);
+      } else if (step.actionType === 'standardize_addresses') {
+        const res = standardizeAddresses(tempHeaders, tempRows);
+        tempRows = res.updatedRows;
+        stepSummaries.push(`Standardized addresses (${res.changesCount} cell(s))`);
+      } else if (step.actionType === 'clean_html') {
+        const res = cleanHtmlAndMarkdown(tempHeaders, tempRows);
+        tempRows = res.updatedRows;
+        stepSummaries.push(`Stripped HTML/Markdown (${res.changesCount} cell(s))`);
+      } else if (step.actionType === 'repair_unicode') {
+        const res = repairUnicodeEncoding(tempHeaders, tempRows);
+        tempRows = res.updatedRows;
+        stepSummaries.push(`Repaired UTF-8 (${res.changesCount} cell(s))`);
+      } else if (step.actionType === 'outliers') {
+        const numCol = step.params?.column || tempHeaders.find(h => {
+          const l = h.toLowerCase();
+          return l.includes('price') || l.includes('amount') || l.includes('cost') || l.includes('score') || l.includes('num');
+        }) || tempHeaders[0];
+        if (numCol) {
+          const res = detectAndHandleOutliers(tempHeaders, tempRows, numCol, 'cap_bounds');
+          tempRows = res.updatedRows;
+          stepSummaries.push(`Capped outliers in '${numCol}' (${res.changesCount} value(s))`);
+        }
       }
     });
 
-    pushState(tempRows, `Executed AI Copilot pipeline: ${plan.understoodIntent}`);
+    const summaryMsg = stepSummaries.length > 0 
+      ? `Executed AI Copilot pipeline: ${stepSummaries.join('; ')}.`
+      : `Executed AI Copilot pipeline: ${plan.understoodIntent}`;
+
+    pushState(tempRows, summaryMsg, tempHeaders);
   };
 
   const handleGenerateAuditReport = () => {
@@ -1418,8 +1533,7 @@ export default function CleaningCenter({
   const removeDuplicates = () => {
     const seen = new Set<string>();
     const uniqueRows = currentRows.filter(row => {
-      // Create a unique key using all values (or a primary key like Transaction_ID)
-      const key = row.Transaction_ID || JSON.stringify(row);
+      const key = currentHeaders.map(h => String(row[h] ?? '').trim().toLowerCase()).join('|||');
       if (seen.has(key)) return false;
       seen.add(key);
       return true;

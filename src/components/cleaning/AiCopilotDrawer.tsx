@@ -23,12 +23,13 @@ export default function AiCopilotDrawer({
 
   if (!isOpen) return null;
 
-  const handleGeneratePlan = async () => {
-    if (!prompt.trim()) return;
+  const handleGeneratePlan = async (customPrompt?: string) => {
+    const targetPrompt = customPrompt !== undefined ? customPrompt : prompt;
+    if (!targetPrompt.trim()) return;
     setIsGenerating(true);
-    await new Promise((r) => setTimeout(r, 600));
+    await new Promise((r) => setTimeout(r, 200));
 
-    const plan = parseCopilotPrompt(prompt, headers);
+    const plan = parseCopilotPrompt(targetPrompt, headers);
     setCurrentPlan(plan);
     setIsGenerating(false);
   };
@@ -92,7 +93,7 @@ export default function AiCopilotDrawer({
               }`}
             />
             <button
-              onClick={handleGeneratePlan}
+              onClick={() => handleGeneratePlan()}
               disabled={isGenerating || !prompt.trim()}
               className="absolute right-1.5 p-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-40 cursor-pointer transition-all"
             >
@@ -114,7 +115,10 @@ export default function AiCopilotDrawer({
             ].map((cmd) => (
               <button
                 key={cmd}
-                onClick={() => setPrompt(cmd)}
+                onClick={() => {
+                  setPrompt(cmd);
+                  handleGeneratePlan(cmd);
+                }}
                 className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold border whitespace-nowrap cursor-pointer transition-all ${
                   isDarkMode
                     ? 'bg-slate-950 border-slate-800 text-slate-300 hover:border-blue-500 hover:text-white'
