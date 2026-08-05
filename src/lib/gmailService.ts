@@ -69,12 +69,40 @@ export function buildAndValidateRfc822Mime(
 ): MimeValidationResult {
   const errors: string[] = [];
 
-  // Validate recipient
-  const recipient = (to || '').trim();
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!recipient || !emailRegex.test(recipient)) {
-    errors.push(`Invalid recipient email address: "${to}". Must be a valid RFC 5322 email address.`);
+  // Validate and parse recipients (supporting single or comma/semicolon/newline separated addresses, e.g. "user1@a.com, user2@b.com" or "Name <user@a.com>")
+  const rawRecipientString = (to || '').trim();
+  if (!rawRecipientString) {
+    errors.push('Recipient email address cannot be empty.');
   }
+
+  const rawParts = rawRecipientString.split(/[,;\n\r]+/).map(p => p.trim()).filter(Boolean);
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const validRecipients: string[] = [];
+  const invalidParts: string[] = [];
+
+  for (const part of rawParts) {
+    let extractedEmail = part;
+    const angleMatch = part.match(/<([^>]+)>/);
+    if (angleMatch && angleMatch[1]) {
+      extractedEmail = angleMatch[1].trim();
+    }
+
+    if (emailRegex.test(extractedEmail)) {
+      validRecipients.push(part);
+    } else {
+      invalidParts.push(part);
+    }
+  }
+
+  if (invalidParts.length > 0) {
+    errors.push(`Invalid recipient email address(es): ${invalidParts.map(p => `"${p}"`).join(', ')}. Each recipient must be a valid email address (e.g. user@domain.com).`);
+  }
+
+  if (validRecipients.length === 0 && errors.length === 0) {
+    errors.push('No valid recipient email address could be parsed from input.');
+  }
+
+  const recipient = validRecipients.join(', ');
 
   // Validate subject
   const sanitizedSubject = (subject || '').replace(/[\r\n]+/g, ' ').trim();
@@ -91,11 +119,18 @@ export function buildAndValidateRfc822Mime(
     return { valid: false, errors, recipient, sanitizedSubject };
   }
 
+  // Encode non-ASCII Subject if needed (RFC 2047 encoded-word)
+  let mimeSubject = sanitizedSubject;
+  if (/[^\x00-\x7F]/.test(sanitizedSubject)) {
+    const encodedSubjectBase64 = Buffer.from(sanitizedSubject, 'utf-8').toString('base64');
+    mimeSubject = `=?UTF-8?B?${encodedSubjectBase64}?=`;
+  }
+
   // Build RFC 822 MIME headers and body
   const headers = [
     `To: ${recipient}`,
     ...(fromEmail && emailRegex.test(fromEmail.trim()) ? [`From: ${fromEmail.trim()}`] : []),
-    `Subject: ${sanitizedSubject}`,
+    `Subject: ${mimeSubject}`,
     'MIME-Version: 1.0',
     'Content-Type: text/html; charset=utf-8',
     'Content-Transfer-Encoding: 8bit'
@@ -400,6 +435,26 @@ export async function dispatchGmailEmail(options: GmailDispatchOptions): Promise
   }
 
   // 4. Translate Google API HTTP status code into user-friendly error response
+  if (lastStatus === 400) {
+    const googleErrorMsg = lastData?.error?.message || lastData?.message || 'Invalid recipient or malformed email message format.';
+    return {
+      success: false,
+      method: 'gmail_api',
+      message: `Gmail API rejected dispatch (400 Bad Request): ${googleErrorMsg}`,
+      httpStatus: 400,
+      errorCode: 'GMAIL_BAD_REQUEST',
+      requestId,
+      details: {
+        recipient,
+        sanitizedSubject,
+        googleError: lastData,
+        tokenAgeSeconds,
+        attempts: attempt,
+        envCheck
+      }
+    };
+  }
+
   if (lastStatus === 401) {
     return {
       success: false,

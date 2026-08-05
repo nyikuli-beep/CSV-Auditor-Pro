@@ -423,8 +423,15 @@ export default function GmailCenter({
     }
   };
 
-  const selectContactItem = (email: string) => {
-    setToEmail(email);
+  const selectContactItem = (email: string, append = false) => {
+    if (append && toEmail.trim()) {
+      const existing = toEmail.split(/[,;\s]+/).map(e => e.trim()).filter(Boolean);
+      if (!existing.includes(email)) {
+        setToEmail([...existing, email].join(', '));
+      }
+    } else {
+      setToEmail(email);
+    }
     setSelectedContact(email);
     setActiveSubTab('compose');
   };
@@ -628,13 +635,16 @@ export default function GmailCenter({
                     
                     {/* Recipient Input */}
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Recipient Address</label>
+                      <div className="flex justify-between items-center">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Recipient Address(es)</label>
+                        <span className="text-[10px] text-slate-400">Separate multiple recipients with commas or semicolons</span>
+                      </div>
                       <input 
-                        type="email"
+                        type="text"
                         required
                         value={toEmail}
                         onChange={(e) => setToEmail(e.target.value)}
-                        placeholder="client-support@acme.com"
+                        placeholder="e.g. client-support@acme.com, audit-team@company.com"
                         className={`w-full px-3 py-2 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500 ${
                           isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-950 border'
                         }`}
@@ -734,12 +744,22 @@ export default function GmailCenter({
                               <td className="p-3 font-mono">{item.email}</td>
                               <td className="p-3"><span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono text-[10px]">Row {item.row}</span></td>
                               <td className="p-3 text-right">
-                                <button
-                                  onClick={() => selectContactItem(item.email)}
-                                  className={`px-2.5 py-1 text-[10px] font-bold rounded-lg text-white transition-all cursor-pointer ${accentClass}`}
-                                >
-                                  Draft Email
-                                </button>
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <button
+                                    onClick={() => selectContactItem(item.email, false)}
+                                    className={`px-2.5 py-1 text-[10px] font-bold rounded-lg text-white transition-all cursor-pointer ${accentClass}`}
+                                  >
+                                    Draft Email
+                                  </button>
+                                  <button
+                                    onClick={() => selectContactItem(item.email, true)}
+                                    className={`px-2 py-1 text-[10px] font-bold rounded-lg border transition-all cursor-pointer ${
+                                      isDarkMode ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                    }`}
+                                  >
+                                    + Add
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           ))}
