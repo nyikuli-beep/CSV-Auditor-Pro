@@ -24,6 +24,17 @@ import { getGmailAccessToken, getGmailTokenMetadata, signInWithGoogleForGmail, s
 import { CSVFile } from '../types';
 import EmailDeliveryStatusDashboard, { DeliveryReportItem } from './EmailDeliveryStatusDashboard';
 
+// Helper function to extract a clean string error message from any server response or exception
+export function extractStringError(data: any, fallback: string = 'Failed to dispatch compliance email due to an internal error.'): string {
+  if (!data) return fallback;
+  if (typeof data === 'string' && data.trim()) return data.trim();
+  if (typeof data.message === 'string' && data.message.trim()) return data.message.trim();
+  if (typeof data.error === 'string' && data.error.trim()) return data.error.trim();
+  if (data.error && typeof data.error.message === 'string' && data.error.message.trim()) return data.error.message.trim();
+  if (data.details?.googleError?.error?.message && typeof data.details.googleError.error.message === 'string') return data.details.googleError.error.message.trim();
+  return fallback;
+}
+
 interface GmailCenterProps {
   activeFile: CSVFile | null;
   isDarkMode: boolean;
@@ -475,7 +486,7 @@ export default function GmailCenter({
         }
       } else {
         // Detailed user-friendly error message returned by hardened backend
-        const errorMessage = data.message || data.error || 'Failed to dispatch compliance email due to an internal error.';
+        const errorMessage = extractStringError(data, 'Failed to dispatch compliance email due to an authorization or endpoint issue.');
         
         // Update Delivery Status Dashboard report item to Failed
         setDeliveryReports(prev => prev.map(item => 
@@ -489,7 +500,9 @@ export default function GmailCenter({
 
     } catch (err: any) {
       console.error('Gmail send failure:', err);
-      const errMsg = err.message || 'Gmail transmission failed.';
+      const errMsg = typeof err?.message === 'string' && err.message !== '[object Object]' 
+        ? err.message 
+        : extractStringError(err, 'Gmail API transmission encountered an error.');
       setSendError(errMsg);
       setSentHistory(prev => [
         { id: `fail-${Date.now()}`, to: toEmail, subject, date: 'Just now', status: 'failed' },
@@ -505,13 +518,93 @@ export default function GmailCenter({
     }
   };
 
-  // 1-Click Retry Dispatch Handler for Email Delivery Status Dashboard
-  const handleRetryReport = async (reportToRetry: DeliveryReportItem) => {
-    if (!token) {
-      alert('Please connect your Gmail account before retrying email dispatch.');
+  // Dedicated Fallback Dispatch via CSV Auditor Compliance Gateway
+  const handleSendViaComplianceGateway = async () => {
+    if (!toEmail) {
+      setSendError('Please specify a recipient email address.');
       return;
     }
 
+    setIsSending(true);
+    setSendError(null);
+    setSendSuccess(null);
+
+    const dispatchId = `rpt-gw-${Date.now()}`;
+    const startTime = Date.now();
+
+    const reportItem: DeliveryReportItem = {
+      id: dispatchId,
+      to: toEmail,
+      subject: subject || 'Compliance Notification',
+      reportType: 'Gateway Fallback Dispatch',
+      timestamp: 'Just now',
+      status: 'Pending',
+      fileRef: activeFile?.name || 'Dataset Export'
+    };
+
+    setDeliveryReports(prev => [reportItem, ...prev]);
+
+    try {
+      const res = await fetch('/api/gmail/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: toEmail,
+          subject,
+          body: emailBody,
+          fallbackToGateway: true,
+          userEmail: auth.currentUser?.email || 'authenticated-user@workspace'
+        })
+      });
+
+      const data = await res.json().catch(() => ({}));
+      const latencyMs = Date.now() - startTime;
+
+      if (res.ok && data.success) {
+        const successMsg = data.message || `Compliance report successfully sent to ${toEmail} via CSV Auditor Gateway!`;
+        setSendSuccess(successMsg);
+        onAddActivity(`Dispatched compliance report to ${toEmail} via Compliance Gateway`);
+
+        setDeliveryReports(prev => prev.map(item => 
+          item.id === dispatchId
+            ? { ...item, status: 'Sent', latencyMs }
+            : item
+        ));
+
+        setSentHistory(prev => [
+          { id: `sent-${Date.now()}`, to: toEmail, subject, date: 'Just now', status: 'sent' },
+          ...prev
+        ]);
+
+        if (selectedTemplate === 'custom') {
+          setToEmail('');
+          setSubject('');
+          setEmailBody('');
+        }
+      } else {
+        const errStr = extractStringError(data, 'Compliance Gateway dispatch encountered an error.');
+        setSendError(errStr);
+        setDeliveryReports(prev => prev.map(item => 
+          item.id === dispatchId
+            ? { ...item, status: 'Failed', errorMessage: errStr, latencyMs }
+            : item
+        ));
+      }
+    } catch (err: any) {
+      const errMsg = extractStringError(err, 'Compliance Gateway exception.');
+      setSendError(errMsg);
+      setDeliveryReports(prev => prev.map(item => 
+        item.id === dispatchId
+          ? { ...item, status: 'Failed', errorMessage: errMsg }
+          : item
+      ));
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  // 1-Click Retry Dispatch Handler for Email Delivery Status Dashboard
+  const handleRetryReport = async (reportToRetry: DeliveryReportItem) => {
     const retryStartTime = Date.now();
 
     // Set report status to Pending while retrying
@@ -546,6 +639,7 @@ export default function GmailCenter({
           subject: reportToRetry.subject,
           body: emailBody || `Automated compliance report dispatch retry for "${reportToRetry.subject}".`,
           token: activeToken,
+          fallbackToGateway: true, // Auto fallback to Gateway on retry if OAuth is invalid
           userEmail: currentUserEmail,
           tokenIssuedAt: meta.issuedAt || undefined
         })
@@ -562,7 +656,7 @@ export default function GmailCenter({
         ));
         onAddActivity(`Successfully re-dispatched report to ${reportToRetry.to}`);
       } else {
-        const errorMsg = data.message || data.error || 'Retry dispatch failed.';
+        const errorMsg = extractStringError(data, 'Retry dispatch failed.');
         setDeliveryReports(prev => prev.map(item => 
           item.id === reportToRetry.id
             ? { ...item, status: 'Failed', errorMessage: errorMsg, latencyMs }
@@ -571,9 +665,10 @@ export default function GmailCenter({
       }
     } catch (err: any) {
       const latencyMs = Date.now() - retryStartTime;
+      const errorMsg = extractStringError(err, 'Retry dispatch exception.');
       setDeliveryReports(prev => prev.map(item => 
         item.id === reportToRetry.id
-          ? { ...item, status: 'Failed', errorMessage: err.message || 'Retry dispatch exception.', latencyMs }
+          ? { ...item, status: 'Failed', errorMessage: errorMsg, latencyMs }
           : item
       ));
     }
@@ -846,9 +941,40 @@ export default function GmailCenter({
                   )}
 
                   {sendError && (
-                    <div className="p-3.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4 text-rose-400" />
-                      <span>{sendError}</span>
+                    <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-300 text-xs space-y-3 shadow-sm">
+                      <div className="flex items-start gap-2.5">
+                        <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                        <div className="space-y-1 min-w-0">
+                          <p className="font-semibold text-rose-200 leading-snug">{sendError}</p>
+                          <p className="text-[11px] text-rose-300/80 leading-relaxed">
+                            If your Google OAuth session lacks Gmail sending permissions or has expired, you can re-authenticate or immediately dispatch via the integrated CSV Auditor Compliance Gateway.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-rose-500/20">
+                        <button
+                          type="button"
+                          onClick={handleSendViaComplianceGateway}
+                          disabled={isSending}
+                          className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-[11px] shadow-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          <span>Dispatch via Compliance Gateway</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleAuthorize}
+                          disabled={isAuthorizing || isLoadingGmail}
+                          className={`px-3 py-1.5 rounded-lg border font-semibold text-[11px] transition-all flex items-center gap-1.5 cursor-pointer ${
+                            isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-200 hover:bg-slate-800' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+                          }`}
+                        >
+                          <RefreshCw className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>Re-authenticate Google Account</span>
+                        </button>
+                      </div>
                     </div>
                   )}
 

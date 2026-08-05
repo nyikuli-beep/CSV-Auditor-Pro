@@ -477,7 +477,7 @@ app.get('/api/gmail/status', (req, res) => {
 // API: Send Gmail / Compliance Email Proxy with Hardened Error Handling & Exponential Retry
 app.post('/api/gmail/send', async (req, res) => {
   try {
-    const { to, subject, body, token, userEmail, tokenIssuedAt } = req.body;
+    const { to, subject, body, token, userEmail, tokenIssuedAt, fallbackToGateway } = req.body;
 
     const result = await dispatchGmailEmail({
       to,
@@ -485,7 +485,8 @@ app.post('/api/gmail/send', async (req, res) => {
       body,
       token,
       userEmail,
-      tokenIssuedAt: tokenIssuedAt ? Number(tokenIssuedAt) : undefined
+      tokenIssuedAt: tokenIssuedAt ? Number(tokenIssuedAt) : undefined,
+      fallbackToGateway: Boolean(fallbackToGateway)
     });
 
     if (result.success) {

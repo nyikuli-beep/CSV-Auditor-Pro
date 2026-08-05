@@ -432,8 +432,15 @@ export default function EmailDeliveryStatusDashboard({
                             <p className="font-mono text-[11px] text-rose-300 leading-relaxed bg-black/30 p-2.5 rounded-lg border border-rose-500/20 break-all">
                               {report.errorMessage || 'No detailed trace provided by mail transport.'}
                             </p>
-                            <div className="text-[10px] text-slate-400 flex items-center gap-2">
-                              <span>Troubleshooting Tip: Verify recipient email syntax, check if Google OAuth scope includes `gmail.send`, or re-authorize Gmail account.</span>
+                            <div className="text-[10px] text-slate-400 flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-rose-500/20">
+                              <span>Troubleshooting Tip: Verify recipient email syntax, check if Google OAuth scope includes `gmail.send`, or click Retry to dispatch via the integrated Compliance Gateway.</span>
+                              <button
+                                type="button"
+                                onClick={() => onRetry(report)}
+                                className="px-2.5 py-1 rounded bg-rose-500 hover:bg-rose-600 text-white font-bold text-[10px] flex items-center gap-1 transition-all cursor-pointer"
+                              >
+                                <RotateCcw className="w-3 h-3" /> Retry Dispatch Now
+                              </button>
                             </div>
                           </div>
                         )}
