@@ -2517,30 +2517,30 @@ export default function CleaningCenter({
         <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={handleRunProfiler}
-            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-2 shadow cursor-pointer transition-all"
+            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-2 shadow cursor-pointer transition-all whitespace-nowrap shrink-0"
           >
-            <BarChart2 className="w-4 h-4" /> Data Profiler & Health Index
+            <BarChart2 className="w-4 h-4 shrink-0" /> Data Profiler & Health Index
           </button>
 
           <button
             onClick={() => setIsCopilotOpen(true)}
-            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-2 shadow cursor-pointer transition-all"
+            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-2 shadow cursor-pointer transition-all whitespace-nowrap shrink-0"
           >
-            <Bot className="w-4 h-4" /> AI Copilot
+            <Bot className="w-4 h-4 shrink-0" /> AI Copilot
           </button>
 
           <button
             onClick={() => setIsWorkflowOpen(true)}
-            className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold flex items-center gap-2 shadow cursor-pointer transition-all"
+            className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold flex items-center gap-2 shadow cursor-pointer transition-all whitespace-nowrap shrink-0"
           >
-            <SlidersHorizontal className="w-4 h-4" /> Workflow Recorder
+            <SlidersHorizontal className="w-4 h-4 shrink-0" /> Workflow Recorder
           </button>
 
           <button
             onClick={handleGenerateAuditReport}
-            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-2 shadow cursor-pointer transition-all"
+            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-2 shadow cursor-pointer transition-all whitespace-nowrap shrink-0"
           >
-            <FileText className="w-4 h-4" /> Audit & Compliance Report
+            <FileText className="w-4 h-4 shrink-0" /> Audit & Compliance Report
           </button>
         </div>
 

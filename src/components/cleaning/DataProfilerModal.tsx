@@ -36,15 +36,15 @@ export default function DataProfilerModal({
         }`}
       >
         {/* Header */}
-        <div className={`p-5 border-b flex items-center justify-between ${isDarkMode ? 'border-slate-800 bg-slate-950/50' : 'border-slate-100 bg-slate-50'}`}>
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-blue-600 text-white shadow-md">
+        <div className={`p-5 border-b flex flex-wrap items-center justify-between gap-3 ${isDarkMode ? 'border-slate-800 bg-slate-950/50' : 'border-slate-100 bg-slate-50'}`}>
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2.5 rounded-xl bg-blue-600 text-white shadow-md shrink-0">
               <BarChart2 className="w-5 h-5" />
             </div>
-            <div>
-              <h2 className="text-lg font-bold flex items-center gap-2">
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-bold flex flex-wrap items-center gap-2">
                 Column Profiling & Quality Intelligence
-                <span className="px-2 py-0.5 text-xs font-mono font-bold rounded-full bg-blue-500/10 text-blue-500 border border-blue-500/20">
+                <span className="px-2 py-0.5 text-xs font-mono font-bold rounded-full bg-blue-500/10 text-blue-500 border border-blue-500/20 whitespace-nowrap shrink-0">
                   {profile.totalRows} Rows · {profile.totalColumns} Cols
                 </span>
               </h2>
@@ -55,7 +55,7 @@ export default function DataProfilerModal({
           </div>
           <button
             onClick={onClose}
-            className={`p-2 rounded-lg cursor-pointer transition-colors ${
+            className={`p-2 rounded-lg cursor-pointer transition-colors shrink-0 ${
               isDarkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-600'
             }`}
           >
@@ -64,10 +64,10 @@ export default function DataProfilerModal({
         </div>
 
         {/* Tab Navigation */}
-        <div className={`px-5 pt-3 border-b flex items-center gap-2 ${isDarkMode ? 'border-slate-800 bg-slate-950/20' : 'border-slate-100 bg-white'}`}>
+        <div className={`px-5 pt-3 border-b flex items-center gap-2 overflow-x-auto scrollbar-none flex-nowrap ${isDarkMode ? 'border-slate-800 bg-slate-950/20' : 'border-slate-100 bg-white'}`}>
           <button
             onClick={() => setActiveTab('overview')}
-            className={`px-4 py-2 text-xs font-bold border-b-2 cursor-pointer transition-all ${
+            className={`px-4 py-2 text-xs font-bold border-b-2 cursor-pointer transition-all whitespace-nowrap shrink-0 ${
               activeTab === 'overview'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -77,7 +77,7 @@ export default function DataProfilerModal({
           </button>
           <button
             onClick={() => setActiveTab('columns')}
-            className={`px-4 py-2 text-xs font-bold border-b-2 cursor-pointer transition-all ${
+            className={`px-4 py-2 text-xs font-bold border-b-2 cursor-pointer transition-all whitespace-nowrap shrink-0 ${
               activeTab === 'columns'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -87,13 +87,13 @@ export default function DataProfilerModal({
           </button>
           <button
             onClick={() => setActiveTab('recommendations')}
-            className={`px-4 py-2 text-xs font-bold border-b-2 cursor-pointer transition-all flex items-center gap-1.5 ${
+            className={`px-4 py-2 text-xs font-bold border-b-2 cursor-pointer transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
               activeTab === 'recommendations'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+            <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
             Smart Recommendations ({recommendations.length})
           </button>
         </div>
@@ -104,20 +104,20 @@ export default function DataProfilerModal({
             <div className="space-y-6">
               {/* Score Hero Card */}
               <div
-                className={`p-6 rounded-2xl border flex flex-col md:flex-row items-center justify-between gap-6 ${
+                className={`p-6 rounded-2xl border flex flex-col md:flex-row items-start md:items-center justify-between gap-6 ${
                   isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'
                 }`}
               >
-                <div className="flex items-center gap-5">
-                  <div className="relative flex items-center justify-center w-24 h-24 rounded-2xl bg-blue-600 text-white shadow-lg">
-                    <span className="text-3xl font-extrabold font-mono">{qualityMetrics.overallScore}</span>
+                <div className="flex items-center gap-5 min-w-0">
+                  <div className="relative flex items-center justify-center w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-blue-600 text-white shadow-lg shrink-0">
+                    <span className="text-2xl sm:text-3xl font-extrabold font-mono">{qualityMetrics.overallScore}</span>
                     <span className="absolute bottom-1 text-[10px] font-bold uppercase tracking-widest text-blue-200">/ 100</span>
                   </div>
-                  <div className="space-y-1">
+                  <div className="space-y-1 min-w-0">
                     <span className="text-xs font-bold uppercase tracking-wider text-blue-500 font-mono">
                       Overall Health Score
                     </span>
-                    <h3 className="text-xl font-black">
+                    <h3 className="text-lg sm:text-xl font-black">
                       {qualityMetrics.overallScore >= 90
                         ? 'Production Ready'
                         : qualityMetrics.overallScore >= 75
@@ -132,9 +132,9 @@ export default function DataProfilerModal({
 
                 <button
                   onClick={() => setActiveTab('recommendations')}
-                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow flex items-center gap-2 cursor-pointer transition-all"
+                  className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow flex items-center gap-2 cursor-pointer transition-all whitespace-nowrap shrink-0"
                 >
-                  <Sparkles className="w-4 h-4" /> View {recommendations.length} Recommended Fixes
+                  <Sparkles className="w-4 h-4 shrink-0" /> View {recommendations.length} Recommended Fixes
                 </button>
               </div>
 
@@ -235,13 +235,13 @@ export default function DataProfilerModal({
                 recommendations.map((rec) => (
                   <div
                     key={rec.id}
-                    className={`p-4 rounded-xl border flex items-center justify-between gap-4 ${
+                    className={`p-4 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
                       isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'
                     }`}
                   >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 text-[10px] font-bold rounded uppercase bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded uppercase bg-amber-500/10 text-amber-500 border border-amber-500/20 whitespace-nowrap shrink-0">
                           {rec.category}
                         </span>
                         <h4 className="text-xs font-bold">{rec.title}</h4>
@@ -253,9 +253,9 @@ export default function DataProfilerModal({
 
                     <button
                       onClick={() => onApplyRecommendation(rec)}
-                      className="px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shrink-0 transition-all shadow"
+                      className="px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shrink-0 transition-all shadow whitespace-nowrap"
                     >
-                      <Zap className="w-3.5 h-3.5" /> 1-Click Fix
+                      <Zap className="w-3.5 h-3.5 shrink-0" /> 1-Click Fix
                     </button>
                   </div>
                 ))
