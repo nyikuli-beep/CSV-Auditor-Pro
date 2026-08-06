@@ -16,6 +16,30 @@
         if (typeof window.process.cwd !== 'function') {
           window.process.cwd = function() { return '/'; };
         }
+        var pathPoly = {
+          resolve: function() { return Array.prototype.slice.call(arguments).filter(Boolean).join('/').replace(/\/+/g, '/'); },
+          join: function() { return Array.prototype.slice.call(arguments).filter(Boolean).join('/').replace(/\/+/g, '/'); },
+          dirname: function(p) { return (p || '').split('/').slice(0, -1).join('/') || '/'; },
+          basename: function(p, ext) {
+            var b = (p || '').split('/').pop() || '';
+            if (ext && b.endsWith(ext)) return b.slice(0, -ext.length);
+            return b;
+          },
+          extname: function(p) {
+            var b = (p || '').split('/').pop() || '';
+            var idx = b.lastIndexOf('.');
+            return idx > 0 ? b.slice(idx) : '';
+          },
+          normalize: function(p) { return p; },
+          isAbsolute: function(p) { return (p || '').startsWith('/'); },
+          relative: function(from, to) { return to; },
+          sep: '/',
+          delimiter: ':'
+        };
+        window.path = window.path || pathPoly;
+        if (typeof globalThis !== 'undefined') {
+          globalThis.path = globalThis.path || pathPoly;
+        }
       }
     </script>
   </head>

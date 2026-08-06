@@ -1,6 +1,4 @@
-import dotenv from 'dotenv';
-
-dotenv.config();
+// Gmail Service for email dispatch & MIME payload handling
 
 export interface GmailDispatchOptions {
   to: string;

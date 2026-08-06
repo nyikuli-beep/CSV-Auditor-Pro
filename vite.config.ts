@@ -9,6 +9,8 @@ export default defineConfig(() => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
+        'path': path.resolve(__dirname, 'src/utils/pathPolyfill.ts'),
+        'node:path': path.resolve(__dirname, 'src/utils/pathPolyfill.ts'),
       },
     },
     server: {
