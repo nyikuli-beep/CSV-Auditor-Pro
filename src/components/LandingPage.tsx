@@ -49,9 +49,19 @@ interface LandingPageProps {
   isDarkMode: boolean;
   toggleTheme: () => void;
   accentClass: string;
+  onOpenEnterpriseModal?: () => void;
+  onSelectPlan?: (plan: 'free' | 'pro' | 'enterprise') => void;
 }
 
-export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, accentClass }: LandingPageProps) {
+export default function LandingPage({ 
+  onStartTrial, 
+  isDarkMode, 
+  toggleTheme, 
+  accentClass,
+  onOpenEnterpriseModal,
+  onSelectPlan 
+}: LandingPageProps) {
+
   const [activeFaq, setActiveFaq] = useState<number | null>(null);
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [newsletterStatus, setNewsletterStatus] = useState<'idle' | 'loading' | 'success'>('idle');
@@ -382,7 +392,10 @@ export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, acc
                 </ul>
               </div>
               <button 
-                onClick={onStartTrial}
+                onClick={() => {
+                  if (onSelectPlan) onSelectPlan('free');
+                  else onStartTrial();
+                }}
                 className={`w-full py-3 rounded-xl text-sm font-bold border transition-all duration-200 cursor-pointer border-[#2563EB] text-[#2563EB] dark:text-[#60A5FA] dark:border-[#60A5FA] bg-transparent hover:bg-[#EFF6FF] dark:hover:bg-[#0F172A]`}
               >
                 Get Started Free
@@ -409,7 +422,10 @@ export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, acc
                 </ul>
               </div>
               <button 
-                onClick={onStartTrial}
+                onClick={() => {
+                  if (onSelectPlan) onSelectPlan('pro');
+                  else onStartTrial();
+                }}
                 className="w-full py-3 text-white bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#1E40AF] text-sm font-bold rounded-xl transition-all duration-200 shadow-sm cursor-pointer"
               >
                 Start Free Trial
@@ -433,11 +449,16 @@ export default function LandingPage({ onStartTrial, isDarkMode, toggleTheme, acc
                 </ul>
               </div>
               <button 
-                onClick={onStartTrial}
+                onClick={() => {
+                  if (onOpenEnterpriseModal) onOpenEnterpriseModal();
+                  else if (onSelectPlan) onSelectPlan('enterprise');
+                  else onStartTrial();
+                }}
                 className={`w-full py-3 rounded-xl text-sm font-bold border transition-all duration-200 cursor-pointer border-[#2563EB] text-[#2563EB] dark:text-[#60A5FA] dark:border-[#60A5FA] bg-transparent hover:bg-[#EFF6FF] dark:hover:bg-[#0F172A]`}
               >
                 Contact Sales
               </button>
+
             </div>
           </div>
         </div>

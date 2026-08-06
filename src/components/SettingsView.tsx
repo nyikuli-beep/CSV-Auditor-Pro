@@ -18,6 +18,8 @@ import {
   Code2,
   Shield,
   ShieldAlert,
+  CreditCard,
+
   ShieldCheck,
   UserX,
   EyeOff,
@@ -39,6 +41,9 @@ import {
 } from 'lucide-react';
 import { SystemSettings, CSVFile, AuditActivity, ChatMessage } from '../types';
 import { auth } from '../firebase/firebase';
+import BillingDashboard from './BillingDashboard';
+import AdminBillingDashboard from './AdminBillingDashboard';
+
 
 interface SettingsViewProps {
   settings: SystemSettings;
@@ -1830,8 +1835,33 @@ export default function SettingsView({
           </div>
         </div>
 
+        {/* Paddle Billing & Subscription Management Section */}
+        <div className="space-y-4 pt-4 border-t border-slate-800/60">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-extrabold tracking-tight flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-blue-500" /> Subscription & Billing Management
+              </h2>
+              <p className="text-xs text-slate-400">Manage plan tier, usage quotas, invoice receipts, and Paddle customer portal</p>
+            </div>
+          </div>
+
+          <BillingDashboard 
+            isDarkMode={isDarkMode} 
+            currentUserEmail={activeEmail || 'nyikulibramwel@gmail.com'} 
+          />
+        </div>
+
+        {/* Admin Revenue Analytics (Owner Only) */}
+        {isOwner && (
+          <div className="space-y-4 pt-6 border-t border-slate-800/60">
+            <AdminBillingDashboard isDarkMode={isDarkMode} />
+          </div>
+        )}
+
         {/* Terms of Service & Privacy Policy Panel */}
         <div className={`p-6 rounded-2xl border transition-all duration-300 ${isDarkMode ? 'bg-slate-900/40 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
+
           <button
             type="button"
             onClick={() => setTosOpen(!tosOpen)}

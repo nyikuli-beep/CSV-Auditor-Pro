@@ -7,6 +7,17 @@
     <link rel="manifest" href="/manifest.json" />
     <meta name="google-site-verification" content="google518921bf2d03f72d" />
     <title>CSV Auditor Pro </title>
+    <script>
+      if (typeof window !== 'undefined') {
+        window.process = window.process || { env: {} };
+        if (!window.process.env) {
+          window.process.env = {};
+        }
+        if (typeof window.process.cwd !== 'function') {
+          window.process.cwd = function() { return '/'; };
+        }
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

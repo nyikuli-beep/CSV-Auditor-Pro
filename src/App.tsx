@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from './hooks/useAuth';
@@ -7,6 +7,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import VerifyEmail from './pages/VerifyEmail';
+import LandingPage from './components/LandingPage';
 import { 
   FileSpreadsheet, 
   Upload, 
@@ -61,6 +62,12 @@ import { executeScheduledRetentionCleanup } from './lib/retentionService';
 import ProfileUploadModal from './components/ProfileUploadModal';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 import OnboardingTourModal from './components/OnboardingTourModal';
+import UpgradeModal from './components/UpgradeModal';
+import EnterpriseContactModal from './components/EnterpriseContactModal';
+import TrialExpirationBanner from './components/TrialExpirationBanner';
+import { runTrialExpirationCheck, dismissTrialAlert, TrialAlert } from './utils/trialChecker';
+import { openPaddleCheckout } from './lib/paddle';
+
 
 // Network Resilience, Error Boundary, 404 & State Persistence Imports
 import { useNetworkStatus } from './hooks/useNetworkStatus';
@@ -96,7 +103,6 @@ function safeLazy<T extends React.ComponentType<any>>(
 }
 
 // Import Views (Lazy Loaded for Low-Memory Devices & Mobile Startup Performance)
-const LandingPage = safeLazy(() => import('./components/LandingPage'));
 const AuthView = safeLazy(() => import('./components/AuthView'));
 const DashboardHome = safeLazy(() => import('./components/DashboardHome'));
 const UploadCenter = safeLazy(() => import('./components/UploadCenter'));
@@ -205,6 +211,25 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   const [securityAlert, setSecurityAlert] = useState<{ title: string; message: string } | null>(null);
   const [slotRequests, setSlotRequests] = useState<SlotRequest[]>([]);
   const [showNotificationsDropdown, setShowNotificationsDropdown] = useState<boolean>(false);
+  const [trialAlert, setTrialAlert] = useState<TrialAlert | null>(null);
+
+  // Background check utility upon user login to verify if a trial is within 7, 3, or 1 day(s) of expiry
+  useEffect(() => {
+    if (user?.email) {
+      runTrialExpirationCheck(user.email).then(alert => {
+        setTrialAlert(alert);
+      });
+    } else {
+      setTrialAlert(null);
+    }
+  }, [user?.email]);
+
+  const handleDismissTrialAlert = () => {
+    if (user?.email && trialAlert) {
+      dismissTrialAlert(user.email, trialAlert.daysRemaining);
+    }
+    setTrialAlert(null);
+  };
 
   const PROTECTED_ADMIN_EMAILS = ['nyikulibramwel@gmail.com'];
 
@@ -2542,6 +2567,18 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
             transition={{ duration: 0.45, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
             className={`flex-1 flex flex-col min-w-0 max-w-full overflow-x-hidden ${isDarkMode ? 'bg-[#0F172A]' : 'bg-[#F8FAFC]'}`}
           >
+            {/* Trial Expiration Background Check Alert Banner */}
+            {trialAlert && (
+              <TrialExpirationBanner
+                alert={trialAlert}
+                isDarkMode={isDarkMode}
+                onUpgrade={() => {
+                  openPaddleCheckout('pro', user?.email || undefined);
+                }}
+                onDismiss={handleDismissTrialAlert}
+              />
+            )}
+
             {/* Top Workspace Header */}
             <header className={`h-14 px-3 sm:px-6 border-b flex items-center justify-between gap-2 sm:gap-4 shrink-0 max-w-full overflow-x-hidden ${isDarkMode ? 'bg-[#0f172a] border-slate-800' : 'bg-white border-slate-200'}`}>
               <div className="flex items-center gap-4">
@@ -3054,7 +3091,15 @@ export default function App() {
                   isDarkMode={isDarkMode}
                   toggleTheme={() => setIsDarkMode(!isDarkMode)}
                   accentClass="bg-blue-600 hover:bg-blue-700"
+                  onSelectPlan={(plan) => {
+                    if (plan === 'pro' || plan === 'enterprise') {
+                      openPaddleCheckout(plan, user?.email || undefined);
+                    } else {
+                      navigate('/login');
+                    }
+                  }}
                 />
+
               </Suspense>
             )
           } 

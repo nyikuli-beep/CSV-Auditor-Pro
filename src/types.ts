@@ -151,3 +151,59 @@ export interface CustomValidationRule {
   isActive: boolean;
 }
 
+export type UserPlan = 'free' | 'pro' | 'enterprise';
+export type SubscriptionStatus = 'trial' | 'active' | 'past_due' | 'canceled' | 'expired' | 'paused';
+
+export interface UserBillingInfo {
+  plan: UserPlan;
+  subscriptionStatus: SubscriptionStatus;
+  subscriptionId?: string | null;
+  customerId?: string | null;
+  billingCycle: 'monthly' | 'yearly';
+  renewalDate?: string | null;
+  trialEndsAt?: string | null;
+}
+
+export interface BillingInvoice {
+  id: string;
+  paddleInvoiceId: string;
+  amount: number; // cents
+  currency: string;
+  status: 'paid' | 'failed' | 'refunded' | 'pending';
+  invoicePdfUrl?: string;
+  paymentMethod?: string;
+  createdAt: string;
+}
+
+export interface BillingTransaction {
+  id: string;
+  paddleTransactionId: string;
+  amount: number; // cents
+  currency: string;
+  status: 'completed' | 'failed' | 'refunded';
+  paymentMethod?: string;
+  description?: string;
+  createdAt: string;
+}
+
+export interface UsageMetrics {
+  auditCount: number;
+  maxAudits: number | 'unlimited';
+  rowsProcessed: number;
+  storageUsedBytes: number;
+  apiCallsCount: number;
+  periodMonth: string;
+}
+
+export interface PlanEntitlements {
+  allowAiInsights: boolean;
+  allowAiAssistant: boolean;
+  allowUnlimitedRows: boolean;
+  allowAdvancedCleaning: boolean;
+  allowCustomBranding: boolean;
+  allowPdfReports: boolean;
+  allowTeamCollab: boolean;
+  allowDeveloperApi: boolean;
+}
+
+
