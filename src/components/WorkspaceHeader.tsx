@@ -100,7 +100,7 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
   };
 
   return (
-    <header className={`h-14 px-3 sm:px-5 border-b flex items-center justify-between gap-2 sm:gap-4 shrink-0 w-full max-w-full overflow-hidden z-30 transition-colors duration-200 ${
+    <header className={`h-14 px-3 sm:px-5 border-b flex items-center justify-between gap-2 sm:gap-4 shrink-0 w-full max-w-full relative z-30 transition-colors duration-200 ${
       isDarkMode ? 'bg-[#0f172a] border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
     }`}>
       {/* LEFT SECTION: Hamburger + Workspace Title + Status Badge */}
@@ -205,7 +205,7 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 8, scale: 0.95 }}
                   transition={{ duration: 0.15 }}
-                  className={`absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl border shadow-2xl p-4 z-50 ${
+                  className={`absolute right-0 top-full mt-2 w-80 sm:w-96 rounded-2xl border shadow-2xl p-4 z-50 ${
                     isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
                   }`}
                 >
@@ -333,7 +333,7 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
         </button>
 
         {/* OVERFLOW MENU BUTTON (⋮ More) */}
-        <div className="relative" ref={overflowRef}>
+        <div className="relative z-50" ref={overflowRef}>
           <button
             onClick={() => setShowOverflowMenu(!showOverflowMenu)}
             aria-label="More Actions Menu"
@@ -357,13 +357,52 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 8, scale: 0.95 }}
                 transition={{ duration: 0.15 }}
-                className={`absolute right-0 mt-2 w-56 rounded-2xl border shadow-2xl p-2 z-50 space-y-1 ${
+                className={`absolute right-0 top-full mt-2 w-64 rounded-2xl border shadow-2xl p-2 z-50 space-y-1 ${
                   isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
                 }`}
               >
                 <div className="px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400 border-b border-slate-200 dark:border-slate-800/80 mb-1">
                   Workspace Actions
                 </div>
+
+                <button
+                  onClick={() => {
+                    onOpenTour();
+                    setShowOverflowMenu(false);
+                  }}
+                  className={`w-full px-3 py-2 rounded-xl flex items-center gap-2.5 text-xs font-semibold transition-colors cursor-pointer ${
+                    isDarkMode ? 'hover:bg-slate-800 text-slate-200' : 'hover:bg-slate-100 text-slate-800'
+                  }`}
+                >
+                  <Compass className="w-4 h-4 text-emerald-500" />
+                  <span>Onboarding Tour</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    onOpenShortcuts();
+                    setShowOverflowMenu(false);
+                  }}
+                  className={`w-full px-3 py-2 rounded-xl flex items-center gap-2.5 text-xs font-semibold transition-colors cursor-pointer ${
+                    isDarkMode ? 'hover:bg-slate-800 text-slate-200' : 'hover:bg-slate-100 text-slate-800'
+                  }`}
+                >
+                  <Keyboard className="w-4 h-4 text-sky-500" />
+                  <span>Keyboard Shortcuts</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    onToggleThemeInspector();
+                    setShowOverflowMenu(false);
+                  }}
+                  className={`w-full px-3 py-2 rounded-xl flex items-center gap-2.5 text-xs font-semibold transition-colors cursor-pointer ${
+                    isDarkMode ? 'hover:bg-slate-800 text-slate-200' : 'hover:bg-slate-100 text-slate-800'
+                  }`}
+                >
+                  <Palette className="w-4 h-4 text-amber-500" />
+                  <span>Theme & Accessibility (WCAG AA)</span>
+                </button>
 
                 <button
                   onClick={() => {
@@ -393,41 +432,15 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
 
                 <button
                   onClick={() => {
-                    onToggleThemeInspector();
+                    onOpenProfile();
                     setShowOverflowMenu(false);
                   }}
                   className={`w-full px-3 py-2 rounded-xl flex items-center gap-2.5 text-xs font-semibold transition-colors cursor-pointer ${
                     isDarkMode ? 'hover:bg-slate-800 text-slate-200' : 'hover:bg-slate-100 text-slate-800'
                   }`}
                 >
-                  <Palette className="w-4 h-4 text-amber-500" />
-                  <span>Theme Inspector (WCAG)</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    onOpenTour();
-                    setShowOverflowMenu(false);
-                  }}
-                  className={`w-full px-3 py-2 rounded-xl flex items-center gap-2.5 text-xs font-semibold transition-colors cursor-pointer ${
-                    isDarkMode ? 'hover:bg-slate-800 text-slate-200' : 'hover:bg-slate-100 text-slate-800'
-                  }`}
-                >
-                  <Compass className="w-4 h-4 text-indigo-500" />
-                  <span>Onboarding Tour</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    onOpenShortcuts();
-                    setShowOverflowMenu(false);
-                  }}
-                  className={`w-full px-3 py-2 rounded-xl flex items-center gap-2.5 text-xs font-semibold transition-colors cursor-pointer ${
-                    isDarkMode ? 'hover:bg-slate-800 text-slate-200' : 'hover:bg-slate-100 text-slate-800'
-                  }`}
-                >
-                  <Keyboard className="w-4 h-4 text-sky-500" />
-                  <span>Keyboard Shortcuts</span>
+                  <Camera className="w-4 h-4 text-indigo-400" />
+                  <span>User Profile Settings</span>
                 </button>
 
                 {isOwner && (
@@ -441,13 +454,15 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
                     }`}
                   >
                     <ShieldAlert className="w-4 h-4 text-rose-500" />
-                    <span>Compliance Admin</span>
+                    <span>Compliance Administration</span>
                   </button>
                 )}
 
                 <div className="pt-1 mt-1 border-t border-slate-200 dark:border-slate-800 text-[10px] text-slate-400 px-3 py-1 font-mono flex items-center justify-between">
-                  <span>System Time:</span>
-                  <span className="font-bold">{currentTime}</span>
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-blue-500" /> System Time:
+                  </span>
+                  <span className="font-bold text-slate-700 dark:text-slate-300">{currentTime}</span>
                 </div>
               </motion.div>
             )}
