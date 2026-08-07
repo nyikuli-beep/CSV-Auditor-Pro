@@ -304,9 +304,14 @@ export const ThemeInspector: React.FC<ThemeInspectorProps> = ({
     }, 400);
   };
 
-  // Live Mutation Observer for Self-Healing Guard (Handles Dynamic Chart Rerenders)
+  // Live Mutation Observer for Self-Healing Guard (Handles Dynamic Chart Rerenders safely)
   useEffect(() => {
+    let isRepairing = false;
+
     const repairChartAndTextElements = () => {
+      if (isRepairing) return;
+      isRepairing = true;
+
       const isLightMode = !isDarkMode;
       const targetColor = isLightMode ? '#111827' : '#f9fafb';
       const secondaryColor = isLightMode ? '#4b5563' : '#9ca3af';
@@ -318,19 +323,25 @@ export const ThemeInspector: React.FC<ThemeInspectorProps> = ({
         
         // Fix center labels and chart labels
         if (el.classList.contains('chart-center-label-primary')) {
-          el.setAttribute('fill', targetColor);
-          el.style.fill = targetColor;
-          el.style.opacity = '1';
-        } else if (el.classList.contains('chart-center-label-secondary')) {
-          el.setAttribute('fill', secondaryColor);
-          el.style.fill = secondaryColor;
-          el.style.opacity = '1';
-        } else {
-          const currentFill = el.getAttribute('fill') || window.getComputedStyle(el).fill;
-          if (isLightMode && (currentFill === '#ffffff' || currentFill === 'rgb(255, 255, 255)' || currentFill === 'currentColor' || currentFill === 'inherit')) {
+          if (el.getAttribute('fill') !== targetColor) {
             el.setAttribute('fill', targetColor);
             el.style.fill = targetColor;
             el.style.opacity = '1';
+          }
+        } else if (el.classList.contains('chart-center-label-secondary')) {
+          if (el.getAttribute('fill') !== secondaryColor) {
+            el.setAttribute('fill', secondaryColor);
+            el.style.fill = secondaryColor;
+            el.style.opacity = '1';
+          }
+        } else {
+          const currentFill = el.getAttribute('fill') || el.style.fill;
+          if (isLightMode && (currentFill === '#ffffff' || currentFill === 'rgb(255, 255, 255)' || currentFill === 'currentColor' || currentFill === 'inherit')) {
+            if (el.getAttribute('fill') !== targetColor) {
+              el.setAttribute('fill', targetColor);
+              el.style.fill = targetColor;
+              el.style.opacity = '1';
+            }
           }
         }
       });
@@ -339,53 +350,39 @@ export const ThemeInspector: React.FC<ThemeInspectorProps> = ({
       const centerOverlays = document.querySelectorAll<HTMLElement>('.chart-donut-center span, .chart-dial-center span, .chart-meter-center span');
       centerOverlays.forEach((el, index) => {
         if (el.closest('.theme-inspector-root')) return;
-        el.style.opacity = '1';
-        if (index % 2 === 0) {
-          el.style.color = targetColor;
-          el.style.fontWeight = '900';
-        } else {
-          el.style.color = secondaryColor;
-          el.style.fontWeight = '700';
+        const color = index % 2 === 0 ? targetColor : secondaryColor;
+        if (el.style.color !== color) {
+          el.style.color = color;
+          el.style.opacity = '1';
+          el.style.fontWeight = index % 2 === 0 ? '900' : '700';
         }
       });
 
-      // 3. Repair Standard HTML Text Elements with Low Contrast
-      const htmlElements = document.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6, p, span, button, a, label, th, td');
-      htmlElements.forEach(el => {
-        if (el.closest('.theme-inspector-root')) return;
-        if (el.hasAttribute('data-theme-repaired')) return;
-
-        const style = window.getComputedStyle(el);
-        if (style.display !== 'none' && style.visibility !== 'hidden') {
-          const color = style.color;
-          let bg = style.backgroundColor;
-          if (bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') {
-            bg = isDarkMode ? 'rgb(15, 23, 42)' : 'rgb(248, 250, 252)';
-          }
-          const ratio = calculateContrast(color, bg);
-          if (ratio < 3.0) {
-            const isLightBg = isBackgroundLight(bg);
-            el.style.color = isLightBg ? '#111827' : '#f9fafb';
-            el.setAttribute('data-theme-repaired', 'true');
-          }
-        }
-      });
+      setTimeout(() => {
+        isRepairing = false;
+      }, 50);
     };
 
-    // Run repair immediately on mount and theme change
     repairChartAndTextElements();
+
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
     if (liveGuard) {
       observerRef.current = new MutationObserver(() => {
-        repairChartAndTextElements();
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          repairChartAndTextElements();
+        }, 150);
       });
 
-      observerRef.current.observe(document.body, { childList: true, subtree: true, attributes: true });
+      // Only observe childList and subtree additions, NOT attributes to avoid infinite loops
+      observerRef.current.observe(document.body, { childList: true, subtree: true });
     } else if (observerRef.current) {
       observerRef.current.disconnect();
     }
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       if (observerRef.current) {
         observerRef.current.disconnect();
       }
