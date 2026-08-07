@@ -2398,17 +2398,17 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
           {/* Live Grid Preview */}
           <div className="space-y-2">
             <div className="flex justify-between items-center">
-              <span className="text-xs font-bold text-slate-300 block">Live Parser Column Grid Preview</span>
-              <span className="text-[9px] font-mono text-slate-400 uppercase">First 3 Rows parsed with "{selectedDelimiter}"</span>
+              <span className={`text-xs font-bold block ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>Live Parser Column Grid Preview</span>
+              <span className={`text-[9px] font-mono uppercase ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>First 3 Rows parsed with "{selectedDelimiter}"</span>
             </div>
             
             <div className={`border rounded-xl overflow-hidden ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className={isDarkMode ? 'bg-slate-950 border-b border-slate-800' : 'bg-slate-50 border-b border-slate-200'}>
+                    <tr className={isDarkMode ? 'bg-slate-950 border-b border-slate-800' : 'bg-slate-100 border-b border-slate-200'}>
                       {previewData.headers.map((h, i) => (
-                        <th key={i} className="p-3 text-[11px] font-mono font-bold text-slate-400 uppercase border-r last:border-r-0 border-slate-800/30 whitespace-nowrap">
+                        <th key={i} className={`p-3 text-[11px] font-mono font-bold uppercase border-r last:border-r-0 whitespace-nowrap ${isDarkMode ? 'text-slate-400 border-slate-800/30' : 'text-slate-700 border-slate-200'}`}>
                           {h || `Column ${i + 1}`}
                         </th>
                       ))}
@@ -2423,8 +2423,8 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
                       previewData.rows.map((row, rIdx) => (
                         <tr key={rIdx} className={`border-b last:border-b-0 ${isDarkMode ? 'border-slate-800/50 hover:bg-slate-900/20' : 'border-slate-200/50 hover:bg-slate-50'}`}>
                           {previewData.headers.map((_, cIdx) => (
-                            <td key={cIdx} className="p-3 text-[11px] text-slate-300 font-mono border-r last:border-r-0 border-slate-800/30 truncate max-w-[200px]" title={row[cIdx]}>
-                              {row[cIdx] !== undefined ? row[cIdx] : <span className="text-slate-500 italic">null</span>}
+                            <td key={cIdx} className={`p-3 text-[11px] font-mono border-r last:border-r-0 truncate max-w-[200px] ${isDarkMode ? 'text-slate-300 border-slate-800/30' : 'text-slate-800 border-slate-200'}`} title={row[cIdx]}>
+                              {row[cIdx] !== undefined ? row[cIdx] : <span className="text-slate-400 italic">null</span>}
                             </td>
                           ))}
                         </tr>

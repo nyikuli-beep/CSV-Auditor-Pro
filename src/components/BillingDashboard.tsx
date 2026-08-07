@@ -224,28 +224,28 @@ export default function BillingDashboard({
         }`}>
           <div>
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+              <span className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                 <CreditCard className="w-3.5 h-3.5 text-blue-500" /> Current Plan
               </span>
               <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
                 plan === 'enterprise' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30' :
                 plan === 'pro' ? 'bg-blue-500/10 text-blue-400 border-blue-500/30' :
-                'bg-slate-800 text-slate-400 border-slate-700'
+                isDarkMode ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-100 text-slate-600 border-slate-200'
               }`}>
                 {plan} Plan
               </span>
             </div>
 
-            <h3 className="text-2xl font-extrabold tracking-tight capitalize mb-1">
+            <h3 className={`text-2xl font-extrabold tracking-tight capitalize mb-1 ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
               {plan === 'pro' ? 'Pro Monthly' : plan === 'enterprise' ? 'Enterprise Unlimited' : 'Free Auditor'}
             </h3>
             <p className="text-xl font-mono font-bold text-blue-500 mb-4">{priceDisplay}</p>
           </div>
 
-          <div className="pt-3 border-t border-slate-800/40 flex items-center justify-between text-xs">
-            <span className="text-slate-400">Merchant of Record:</span>
-            <span className="font-bold text-slate-200 flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Paddle Billing
+          <div className={`pt-3 border-t flex items-center justify-between text-xs ${isDarkMode ? 'border-slate-800/80' : 'border-slate-200'}`}>
+            <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>Merchant of Record:</span>
+            <span className={`font-bold flex items-center gap-1 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" /> Paddle Billing
             </span>
           </div>
         </div>
@@ -255,7 +255,7 @@ export default function BillingDashboard({
           isDarkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
         }`}>
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1 mb-3">
+            <span className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 mb-3 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
               <Clock className="w-3.5 h-3.5 text-emerald-500" /> Subscription Status
             </span>
 
@@ -265,29 +265,29 @@ export default function BillingDashboard({
                 status === 'trial' ? 'bg-blue-500 animate-pulse' :
                 status === 'canceled' ? 'bg-amber-500' : 'bg-rose-500'
               }`} />
-              <span className="text-base font-extrabold capitalize text-slate-100">
+              <span className={`text-base font-extrabold capitalize ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
                 {status === 'trial' ? '14-Day Free Trial' : status}
               </span>
             </div>
 
             {billing?.renewalDate && (
-              <p className="text-xs text-slate-400 flex items-center gap-1.5 mb-2">
+              <p className={`text-xs flex items-center gap-1.5 mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                 <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                <span>Next Billing Date: <strong className="text-slate-200">{new Date(billing.renewalDate).toLocaleDateString()}</strong></span>
+                <span>Next Billing Date: <strong className={isDarkMode ? 'text-slate-200' : 'text-slate-900'}>{new Date(billing.renewalDate).toLocaleDateString()}</strong></span>
               </p>
             )}
 
             {billing?.trialEndsAt && (
-              <p className="text-xs text-blue-400 flex items-center gap-1.5 font-mono">
+              <p className="text-xs text-blue-500 flex items-center gap-1.5 font-mono">
                 <Clock className="w-3.5 h-3.5" />
                 <span>Trial Expires: {new Date(billing.trialEndsAt).toLocaleDateString()}</span>
               </p>
             )}
           </div>
 
-          <div className="pt-3 border-t border-slate-800/40 flex items-center justify-between text-xs">
-            <span className="text-slate-400">Payment Retry:</span>
-            <span className="font-bold text-emerald-400">Automated Dunning</span>
+          <div className={`pt-3 border-t flex items-center justify-between text-xs ${isDarkMode ? 'border-slate-800/80' : 'border-slate-200'}`}>
+            <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>Payment Retry:</span>
+            <span className="font-bold text-emerald-500">Automated Dunning</span>
           </div>
         </div>
 

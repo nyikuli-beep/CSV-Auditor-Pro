@@ -781,12 +781,14 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
               />
             </svg>
             <div className="absolute text-center">
-              <span className="text-4xl font-black tracking-tight">{activeFile.score}%</span>
-              <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Compliance</span>
+              <span className={`text-4xl font-black tracking-tight ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>{activeFile.score}%</span>
+              <span className={`block text-[10px] font-bold uppercase tracking-wider mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Compliance</span>
             </div>
           </div>
 
-          <div className="mt-6 text-xs text-slate-400 flex items-center gap-1 bg-slate-950/20 px-3 py-1.5 rounded-full">
+          <div className={`mt-6 text-xs flex items-center gap-1 px-3 py-1.5 rounded-full ${
+            isDarkMode ? 'text-slate-300 bg-slate-950/40 border border-slate-800' : 'text-slate-700 bg-slate-100 border border-slate-200'
+          }`}>
             <Sparkles className="w-3.5 h-3.5 text-yellow-500 animate-pulse" />
             Grade {activeFile.score > 80 ? 'Excellent' : activeFile.score > 60 ? 'Moderate Anomaly Rate' : 'Highly Corrupted'}
           </div>
@@ -1566,7 +1568,7 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
               </span>
 
               {/* Per page size selector */}
-              <div className="flex items-center gap-1.5 text-slate-400 font-medium">
+              <div className={`flex items-center gap-1.5 font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                 <span>Per page:</span>
                 <select
                   value={issuesPageSize}
@@ -1574,7 +1576,7 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                     setIssuesPageSize(Number(e.target.value));
                     setIssuesPage(1);
                   }}
-                  className={`px-2 py-1 rounded-lg border text-xs font-bold font-mono focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
+                  className={`px-2 py-1 rounded-lg border text-xs font-bold font-mono focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'}`}
                 >
                   <option value={10}>10</option>
                   <option value={25}>25</option>
@@ -1586,12 +1588,12 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
 
             <div className="flex flex-wrap items-center gap-2">
               {/* Page jump selector */}
-              <div className="flex items-center gap-1.5 text-slate-400 font-medium">
+              <div className={`flex items-center gap-1.5 font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                 <span>Jump to:</span>
                 <select
                   value={issuesPage}
                   onChange={(e) => setIssuesPage(Number(e.target.value))}
-                  className={`px-2 py-1 rounded-lg border text-xs font-bold font-mono focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
+                  className={`px-2 py-1 rounded-lg border text-xs font-bold font-mono focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'}`}
                 >
                   {Array.from({ length: Math.ceil(filteredIssues.length / issuesPageSize) || 1 }, (_, i) => i + 1).map(p => (
                     <option key={p} value={p}>
@@ -1606,7 +1608,9 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                   type="button"
                   disabled={issuesPage === 1}
                   onClick={() => setIssuesPage(1)}
-                  className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
+                  className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all disabled:opacity-30 disabled:pointer-events-none cursor-pointer ${
+                    isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-900' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                  }`}
                   title="First Page"
                 >
                   « First
@@ -1615,19 +1619,25 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                   type="button"
                   disabled={issuesPage === 1}
                   onClick={() => setIssuesPage(prev => Math.max(1, prev - 1))}
-                  className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
+                  className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all disabled:opacity-30 disabled:pointer-events-none cursor-pointer ${
+                    isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-900' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                  }`}
                   title="Previous Page"
                 >
                   ‹ Prev
                 </button>
-                <span className="px-2.5 py-1.5 rounded-lg bg-blue-600/10 border border-blue-500/20 text-blue-400 font-bold font-mono text-[10px]">
+                <span className={`px-2.5 py-1.5 rounded-lg border font-bold font-mono text-[10px] ${
+                  isDarkMode ? 'bg-blue-600/10 border-blue-500/20 text-blue-400' : 'bg-blue-50 border-blue-200 text-blue-700'
+                }`}>
                   {issuesPage} / {Math.ceil(filteredIssues.length / issuesPageSize) || 1}
                 </span>
                 <button
                   type="button"
                   disabled={issuesPage >= Math.ceil(filteredIssues.length / issuesPageSize)}
                   onClick={() => setIssuesPage(prev => Math.min(Math.ceil(filteredIssues.length / issuesPageSize), prev + 1))}
-                  className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
+                  className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all disabled:opacity-30 disabled:pointer-events-none cursor-pointer ${
+                    isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-900' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                  }`}
                   title="Next Page"
                 >
                   Next ›
@@ -1636,7 +1646,9 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                   type="button"
                   disabled={issuesPage >= Math.ceil(filteredIssues.length / issuesPageSize)}
                   onClick={() => setIssuesPage(Math.ceil(filteredIssues.length / issuesPageSize))}
-                  className="px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all bg-slate-950 border-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-900 cursor-pointer"
+                  className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all disabled:opacity-30 disabled:pointer-events-none cursor-pointer ${
+                    isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-900' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                  }`}
                   title="Last Page"
                 >
                   Last »

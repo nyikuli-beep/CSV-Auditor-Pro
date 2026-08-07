@@ -1323,7 +1323,7 @@ export default function DashboardHome({
 
                               return (
                                 <tr key={col.name} className={`hover:bg-slate-500/5 transition-colors`}>
-                                  <td className="py-3 px-4 font-bold font-sans text-slate-200 truncate max-w-[180px]">
+                                  <td className={`py-3 px-4 font-bold font-sans truncate max-w-[180px] ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
                                     {col.name}
                                   </td>
                                   <td className="py-3 px-3">
@@ -1333,11 +1333,11 @@ export default function DashboardHome({
                                   </td>
                                   <td className="py-3 px-3">
                                     <div className="flex items-center gap-2">
-                                      <span className={col.nullCount > 0 ? 'text-amber-400 font-bold' : 'text-slate-400'}>
+                                      <span className={col.nullCount > 0 ? (isDarkMode ? 'text-amber-400 font-bold' : 'text-amber-600 font-bold') : (isDarkMode ? 'text-slate-400' : 'text-slate-600')}>
                                         {col.nullCount} ({col.nullPercentage}%)
                                       </span>
                                       {col.nullPercentage > 0 && (
-                                        <div className="w-12 h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                                        <div className={`w-12 h-1.5 rounded-full overflow-hidden ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`}>
                                           <div
                                             className={`h-full ${col.nullPercentage > 20 ? 'bg-rose-500' : 'bg-amber-500'}`}
                                             style={{ width: `${col.nullPercentage}%` }}
@@ -1346,16 +1346,16 @@ export default function DashboardHome({
                                       )}
                                     </div>
                                   </td>
-                                  <td className="py-3 px-3 text-slate-300 truncate max-w-[120px]" title={col.min}>
+                                  <td className={`py-3 px-3 truncate max-w-[120px] ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`} title={col.min}>
                                     {col.min}
                                   </td>
-                                  <td className="py-3 px-3 text-slate-300 truncate max-w-[120px]" title={col.max}>
+                                  <td className={`py-3 px-3 truncate max-w-[120px] ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`} title={col.max}>
                                     {col.max}
                                   </td>
-                                  <td className="py-3 px-3 font-bold text-slate-200">
+                                  <td className={`py-3 px-3 font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
                                     {col.distinctCount.toLocaleString()}
                                   </td>
-                                  <td className="py-3 px-4 text-[10px] text-slate-400 truncate max-w-[200px]" title={col.sampleValues.join(', ')}>
+                                  <td className={`py-3 px-4 text-[10px] truncate max-w-[200px] ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} title={col.sampleValues.join(', ')}>
                                     {col.sampleValues.length > 0 ? col.sampleValues.join(', ') : '—'}
                                   </td>
                                 </tr>

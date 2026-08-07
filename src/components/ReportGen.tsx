@@ -177,10 +177,12 @@ ${reportConfig.companyName}`;
 
   if (!activeFile) {
     return (
-      <div className="text-center py-20 border-2 border-dashed border-slate-800 rounded-3xl animate-fadeIn">
-        <FileSpreadsheet className="w-12 h-12 text-slate-500 mx-auto mb-4" />
-        <h3 className="font-bold text-lg mb-1">No Active Audit Loaded for Reports</h3>
-        <p className="text-sm text-slate-400 max-w-sm mx-auto mb-6">
+      <div className={`text-center py-20 border-2 border-dashed rounded-3xl animate-fadeIn ${
+        isDarkMode ? 'border-slate-800 bg-slate-900/20' : 'border-slate-300 bg-slate-50/50'
+      }`}>
+        <FileSpreadsheet className={`w-12 h-12 mx-auto mb-4 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} />
+        <h3 className={`font-bold text-lg mb-1 ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>No Active Audit Loaded for Reports</h3>
+        <p className={`text-sm max-w-sm mx-auto mb-6 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
           Upload a local spreadsheet or load our messy company transactions CSV to generate compliance PDFs.
         </p>
       </div>
@@ -306,12 +308,12 @@ ${reportConfig.companyName}`;
         {/* Configuration inputs */}
         <div className="lg:col-span-5 space-y-6">
           <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
-            <h3 className="font-bold text-sm uppercase tracking-wider text-slate-400 mb-5 flex items-center gap-1.5"><Sliders className="w-4 h-4 text-violet-500" /> Branding Config</h3>
+            <h3 className={`font-bold text-sm uppercase tracking-wider mb-5 flex items-center gap-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}><Sliders className="w-4 h-4 text-violet-500" /> Branding Config</h3>
             
             <div className="space-y-4">
               {/* Title input */}
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">Report Title</label>
+                <label className={`block text-[10px] font-bold mb-2 uppercase tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Report Title</label>
                 <input 
                   type="text" 
                   value={reportConfig.title}
@@ -322,7 +324,7 @@ ${reportConfig.companyName}`;
 
               {/* Company input */}
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">Company Name</label>
+                <label className={`block text-[10px] font-bold mb-2 uppercase tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Company Name</label>
                 <input 
                   type="text" 
                   value={reportConfig.companyName}
@@ -333,7 +335,7 @@ ${reportConfig.companyName}`;
 
               {/* Theme color picker */}
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">Accent Theme Color</label>
+                <label className={`block text-[10px] font-bold mb-2 uppercase tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Accent Theme Color</label>
                 <div className="flex gap-2">
                   {['blue', 'emerald', 'violet', 'amber'].map((c) => (
                     <button
@@ -348,7 +350,7 @@ ${reportConfig.companyName}`;
 
               {/* Logo Upload Simulated */}
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">Company Logo</label>
+                <label className={`block text-[10px] font-bold mb-2 uppercase tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Company Logo</label>
                 <div className={`border-2 border-dashed rounded-xl p-4 text-center relative ${isDarkMode ? 'border-slate-800 bg-slate-950/40 hover:border-slate-700' : 'border-slate-200 bg-slate-50 hover:border-slate-300'}`}>
                   <input 
                     type="file" 
@@ -361,7 +363,7 @@ ${reportConfig.companyName}`;
                       <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Logo Attached
                     </div>
                   ) : (
-                    <div className="text-[10px] text-slate-400 flex flex-col items-center gap-1">
+                    <div className={`text-[10px] flex flex-col items-center gap-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                       <Upload className="w-5 h-5 text-slate-500" /> Click or drag logo file here
                     </div>
                   )}
@@ -370,7 +372,7 @@ ${reportConfig.companyName}`;
 
               {/* Template Picker */}
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">Report Template</label>
+                <label className={`block text-[10px] font-bold mb-2 uppercase tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Report Template</label>
                 <select
                   value={reportConfig.templateType}
                   onChange={(e) => setReportConfig({ ...reportConfig, templateType: e.target.value as any })}

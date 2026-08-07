@@ -492,7 +492,7 @@ export default function BatchValidationPanel({
                         <span className={`text-xs font-bold block truncate ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
                           {file.name}
                         </span>
-                        <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-400 font-mono">
+                        <div className={`flex items-center gap-2 mt-0.5 text-[10px] font-mono ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                           <span>{file.headers.length} headers</span>
                           <span>•</span>
                           <span>{(file.rows?.length || file.totalRowsCount || 0).toLocaleString()} rows</span>
@@ -506,7 +506,7 @@ export default function BatchValidationPanel({
                       </div>
                     </div>
 
-                    <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                    <span className={`text-[10px] font-mono shrink-0 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                       {file.size > 1024 * 1024 
                         ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 
                         : `${(file.size / 1024).toFixed(1)} KB`}
@@ -762,7 +762,7 @@ export default function BatchValidationPanel({
               </div>
               <div>
                 <h4 className="font-black text-base sm:text-lg">Executive Batch Integrity Report</h4>
-                <p className="text-xs text-slate-400">Simultaneous compliance audit completed across {batchReport.totalFiles} CSV dataset(s).</p>
+                <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Simultaneous compliance audit completed across {batchReport.totalFiles} CSV dataset(s).</p>
               </div>
             </div>
 
@@ -777,7 +777,7 @@ export default function BatchValidationPanel({
               </button>
               <button
                 onClick={() => setBatchReport(null)}
-                className="text-xs text-slate-400 hover:text-slate-200 p-1 cursor-pointer"
+                className={`text-xs p-1 cursor-pointer ${isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'}`}
               >
                 Dismiss
               </button>
@@ -786,8 +786,8 @@ export default function BatchValidationPanel({
 
           {/* Key Executive Metrics Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            <div className={`p-3.5 rounded-xl border text-center ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Global Score</span>
+            <div className={`p-3.5 rounded-xl border text-center ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-xs'}`}>
+              <span className={`text-[10px] font-bold uppercase tracking-wider block ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Global Score</span>
               <span className={`text-xl sm:text-2xl font-black mt-1 block ${
                 batchReport.globalQualityScore >= 90 ? 'text-emerald-400' : batchReport.globalQualityScore >= 70 ? 'text-amber-400' : 'text-rose-400'
               }`}>
@@ -795,24 +795,24 @@ export default function BatchValidationPanel({
               </span>
             </div>
 
-            <div className={`p-3.5 rounded-xl border text-center ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Files</span>
-              <span className="text-xl sm:text-2xl font-black text-blue-400 mt-1 block">{batchReport.totalFiles}</span>
+            <div className={`p-3.5 rounded-xl border text-center ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-xs'}`}>
+              <span className={`text-[10px] font-bold uppercase tracking-wider block ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Total Files</span>
+              <span className="text-xl sm:text-2xl font-black text-blue-500 mt-1 block">{batchReport.totalFiles}</span>
             </div>
 
-            <div className={`p-3.5 rounded-xl border text-center ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Rows Audited</span>
-              <span className="text-xl sm:text-2xl font-black text-cyan-400 mt-1 block">{batchReport.totalRows.toLocaleString()}</span>
+            <div className={`p-3.5 rounded-xl border text-center ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-xs'}`}>
+              <span className={`text-[10px] font-bold uppercase tracking-wider block ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Rows Audited</span>
+              <span className="text-xl sm:text-2xl font-black text-cyan-500 mt-1 block">{batchReport.totalRows.toLocaleString()}</span>
             </div>
 
-            <div className={`p-3.5 rounded-xl border text-center ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Issues Found</span>
-              <span className="text-xl sm:text-2xl font-black text-amber-400 mt-1 block">{batchReport.totalIssues}</span>
+            <div className={`p-3.5 rounded-xl border text-center ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-xs'}`}>
+              <span className={`text-[10px] font-bold uppercase tracking-wider block ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Issues Found</span>
+              <span className="text-xl sm:text-2xl font-black text-amber-500 mt-1 block">{batchReport.totalIssues}</span>
             </div>
 
-            <div className={`p-3.5 rounded-xl border text-center col-span-2 sm:col-span-1 ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Clean Files</span>
-              <span className="text-xl sm:text-2xl font-black text-emerald-400 mt-1 block">
+            <div className={`p-3.5 rounded-xl border text-center col-span-2 sm:col-span-1 ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-xs'}`}>
+              <span className={`text-[10px] font-bold uppercase tracking-wider block ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Clean Files</span>
+              <span className="text-xl sm:text-2xl font-black text-emerald-500 mt-1 block">
                 {batchReport.cleanFilesCount} / {batchReport.totalFiles}
               </span>
             </div>

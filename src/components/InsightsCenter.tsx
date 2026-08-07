@@ -89,10 +89,12 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
 
   if (!activeFile) {
     return (
-      <div className="text-center py-20 border-2 border-dashed border-slate-800 rounded-3xl animate-fadeIn">
-        <FileSpreadsheet className="w-12 h-12 text-slate-500 mx-auto mb-4" />
-        <h3 className="font-bold text-lg mb-1">No Active Audit Dataset Loaded</h3>
-        <p className="text-sm text-slate-400 max-w-sm mx-auto mb-6">
+      <div className={`text-center py-20 border-2 border-dashed rounded-3xl animate-fadeIn ${
+        isDarkMode ? 'border-slate-800 bg-slate-900/20' : 'border-slate-300 bg-slate-50/50'
+      }`}>
+        <FileSpreadsheet className={`w-12 h-12 mx-auto mb-4 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} />
+        <h3 className={`font-bold text-lg mb-1 ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>No Active Audit Dataset Loaded</h3>
+        <p className={`text-sm max-w-sm mx-auto mb-6 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
           Upload a local spreadsheet or load our messy company transaction data to generate compliance insights.
         </p>
       </div>

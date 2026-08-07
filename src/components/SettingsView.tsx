@@ -938,7 +938,7 @@ export default function SettingsView({
               </h3>
               
               <div className="space-y-4">
-                <p className="text-[10px] leading-relaxed text-slate-400">
+                <p className={`text-[10px] leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                   Verify your app on Google Search Console using HTML Meta Tag or dynamic HTML File verification.
                 </p>
 
@@ -951,7 +951,7 @@ export default function SettingsView({
 
                 {/* Meta Tag Code */}
                 <div className="space-y-1">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  <label className={`block text-[10px] font-bold uppercase tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                     Method A: HTML Meta Tag Content Code
                   </label>
                   <input 
@@ -961,16 +961,16 @@ export default function SettingsView({
                     placeholder="e.g. google1234567890abcdef" 
                     className={`w-full px-3 py-2 rounded-xl text-xs border focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-950'}`}
                   />
-                  <span className="text-[9px] text-slate-500 block">
+                  <span className={`text-[9px] block ${isDarkMode ? 'text-slate-500' : 'text-slate-600'}`}>
                     Places verification meta tag in your document header.
                   </span>
                 </div>
 
-                <div className="border-t border-slate-800/40 my-3"></div>
+                <div className={`border-t my-3 ${isDarkMode ? 'border-slate-800/40' : 'border-slate-200'}`}></div>
 
                 {/* Dynamic HTML File serving */}
                 <div className="space-y-3">
-                  <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  <span className={`block text-[10px] font-bold uppercase tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                     Method B: Dynamic HTML File
                   </span>
                   
