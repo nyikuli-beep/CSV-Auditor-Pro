@@ -198,6 +198,14 @@ export const KNOWLEDGE_BASE_CHUNKS: KnowledgeChunk[] = [
     keywords: ['about', 'what is', 'csv auditor pro', 'overview', 'mission', 'app', 'product', 'platform', 'spreadsheet']
   },
   {
+    id: 'how-app-operates-non-technical',
+    sourceFile: 'about.md',
+    title: 'How CSV Auditor Pro Works for Non-Technical Staff',
+    category: 'Product Knowledge',
+    content: 'CSV Auditor Pro is an automated spell-checker and health inspector for company spreadsheets. How it works for non-technical staff: 1. Safe Ingestion: Upload CSV, TSV, or XLSX files up to 50MB. Files are processed privately in browser memory. 2. Automated Quality Score (0-100): Scans for duplicate entries, missing boxes, malformed dates, and unusual numbers. 3. 1-Click Smart Cleaning: Single-click buttons automatically remove duplicates, fill empty boxes with defaults, and format dates. 4. Structure Guard: Ensures spreadsheet columns match company standards. 5. Exporting & Email Reports: Download clean files or send PDF compliance reports via email.',
+    keywords: ['non-technical', 'non technical', 'non technical staff', 'explain how the application works', 'explain how the app works', 'how does the app work', 'how does the application work', 'simple terms', 'layman', 'for beginners', 'explain']
+  },
+  {
     id: 'how-app-operates',
     sourceFile: 'about.md',
     title: 'How the Application Operates (System Operation & Workflow)',
@@ -480,25 +488,37 @@ export function buildDynamicRAGPrompt(
   // System Prompt Customization by Intent Category
   let systemInstruction = '';
 
-  if (intentAnalysis.category === 'GENERAL_AI') {
+  if (intentAnalysis.category === 'APP_EXPLANATION') {
     systemInstruction =
-      `You are an expert General AI Assistant and CSV Auditor Pro guide. You provide clear, accurate, and comprehensive answers to everyday questions across programming, math, science, database architecture, business, and general knowledge.\n` +
-      `Since the user query is general, answer directly without forcing CSV dataset context if not relevant.\n` +
-      `Always maintain high clarity, professional tone, and precise formatting using Markdown headers and lists.`;
+      `You are the friendly, articulate Conversational Auditor and official guide for CSV Auditor Pro.\n` +
+      `The user is asking how the application works, specifically requesting a clear, non-technical explanation suitable for non-technical staff, managers, or beginners.\n` +
+      `Your response MUST be warm, thorough, accessible, and completely free of intimidating technical jargon.\n` +
+      `Use relatable analogies (e.g., comparing CSV Auditor Pro to an automated spell-checker and health inspector for company spreadsheets) and clearly break down the 5 main stages:\n` +
+      `1. What is CSV Auditor Pro? (Automated spreadsheet cleaning and quality auditing platform).\n` +
+      `2. Safe Local Upload (Upload CSV, TSV, or XLSX files up to 50MB. Files are processed privately inside browser memory, keeping company data 100% secure).\n` +
+      `3. Automated Health Scan (Scans for missing values, duplicate entries, bad date formats, and unusual numbers, outputting a 0-100 Quality Score).\n` +
+      `4. 1-Click Smart Clean (Single-click buttons automatically remove duplicates, fill blank boxes, clean text formatting, and fix dates).\n` +
+      `5. Schema & Compliance Guard (Ensures spreadsheet columns match required company standards and database layouts).\n` +
+      `6. Sharing & PDF Reports (Download clean files or send PDF compliance reports via email).\n` +
+      `Always structure your answer cleanly with Markdown subheadings (###), bullet points, bold key terms, and actionable takeaways so non-technical users can easily understand and utilize the platform.`;
+  } else if (intentAnalysis.category === 'GENERAL_AI') {
+    systemInstruction =
+      `You are an expert Conversational Auditor and General AI Assistant for CSV Auditor Pro. You provide clear, thorough, and comprehensive answers to questions across software engineering, data science, database architecture, business, and general knowledge.\n` +
+      `Answer directly with high clarity, professional tone, and rich Markdown formatting (subheadings, lists, code blocks).`;
   } else if (intentAnalysis.category === 'CSV_ANALYSIS') {
     systemInstruction =
       `You are a Senior CSV Data Auditor and Analytics Expert for CSV Auditor Pro.\n` +
-      `Your task is to analyze, explain, clean, validate, and summarize the uploaded dataset.\n` +
-      `Be accurate, reference exact headers and metrics, and NEVER invent fake data or raw rows that do not exist.\n` +
-      `Provide actionable cleaning routines and clear statistical insights.`;
+      `Your task is to analyze, explain, clean, validate, calculate, and summarize the uploaded CSV dataset.\n` +
+      `Be accurate, reference exact headers, data types, column statistics, row counts, and sample values from the session context. NEVER invent fake numbers or missing columns.\n` +
+      `Provide actionable cleaning recommendations and clear statistical insights.`;
   } else if (intentAnalysis.category === 'MIXED_REQUEST') {
     systemInstruction =
       `You are a Senior AI Systems Architect and Data Scientist for CSV Auditor Pro.\n` +
-      `The user has asked a hybrid question that combines CSV dataset analysis with general AI/programming concepts.\n` +
-      `Address both parts thoroughly: answer the CSV dataset questions using exact metrics, and provide general explanations or code snippets where applicable.`;
+      `The user has asked a hybrid question combining CSV dataset analysis with general AI/programming concepts.\n` +
+      `Address both parts thoroughly: answer the CSV dataset questions using exact metrics from the loaded session, and provide general explanations or code snippets where applicable.`;
   } else {
     systemInstruction =
-      `You are the official AI assistant for CSV Auditor Pro. Provide polite, helpful, and grounded assistance.`;
+      `You are the official Conversational Auditor for CSV Auditor Pro. Provide polite, grounded, clear, and comprehensive assistance.`;
   }
 
   if (persona === 'architect') {
@@ -537,6 +557,36 @@ export function buildDynamicRAGPrompt(
   let datasetSection = '### CURRENT ACTIVE DATASET SESSION:\n';
   if (datasetContext && datasetContext.fileName) {
     citations.push({ type: 'dataset', label: `Dataset: ${datasetContext.fileName}` });
+
+    let extraProfilesText = '';
+    if (datasetContext.rows && datasetContext.rows.length > 0 && datasetContext.headers) {
+      try {
+        const structuredCtx = buildStructuredCSVContext(
+          datasetContext.fileId || 'file-1',
+          datasetContext.fileName,
+          datasetContext.rowCount || datasetContext.rows.length,
+          datasetContext.headers,
+          datasetContext.rows
+        );
+
+        extraProfilesText += `\n- COLUMN STATISTICAL PROFILES:\n`;
+        structuredCtx.columnProfiles.forEach(cp => {
+          extraProfilesText += `  * Column "${cp.name}" (${cp.type}): ${cp.missingCount} missing (${cp.nullPercentage}%), ${cp.uniqueValuesCount} unique values. Sample values: [${cp.sampleValues.join(', ')}]`;
+          if (cp.stats) {
+            extraProfilesText += ` | Stats: Min=${cp.stats.min}, Max=${cp.stats.max}, Mean=${cp.stats.mean}, Median=${cp.stats.median}, StdDev=${cp.stats.stdDev}`;
+          }
+          extraProfilesText += `\n`;
+        });
+
+        extraProfilesText += `\n- SAMPLE DATA ROWS PREVIEW (First 5 Rows):\n`;
+        datasetContext.rows.slice(0, 5).forEach((r, idx) => {
+          extraProfilesText += `  Row ${idx + 1}: ${JSON.stringify(r)}\n`;
+        });
+      } catch (err) {
+        console.warn('Failed to build structured CSV context in RAG prompt:', err);
+      }
+    }
+
     datasetSection += `
 - File Name: ${datasetContext.fileName}
 - Row Count: ${datasetContext.rowCount} rows
@@ -548,6 +598,7 @@ export function buildDynamicRAGPrompt(
 - Blank / Missing Cells: ${datasetContext.missingValuesCount ?? 0}
 - Formatting Errors: ${datasetContext.formatErrorsCount ?? 0}
 - Outliers Detected: ${datasetContext.outliersCount ?? 0}
+${extraProfilesText}
 - Cleaning Routines Applied in Session: ${datasetContext.cleaningOperationsPerformed && datasetContext.cleaningOperationsPerformed.length > 0 ? datasetContext.cleaningOperationsPerformed.join(', ') : 'None yet'}
 - Active Schema Status: ${datasetContext.activeSchema || 'Default Standard Auto-Detection'}
 `;
@@ -774,9 +825,11 @@ export async function generateRAGResponseStream(
   const docSummary = relevantDocs.map(d => `**${d.title}**: ${d.content}`).join('\n\n');
   let fallbackAnswer = '';
 
-  if (intentAnalysis.category === 'CSV_ANALYSIS' && options.datasetContext?.fileName) {
+  if (intentAnalysis.category === 'APP_EXPLANATION') {
+    fallbackAnswer = `### How CSV Auditor Pro Works (Simple Non-Technical Guide)\n\nThink of **CSV Auditor Pro** as an automated spell-checker and quality auditor for your company's spreadsheets!\n\nHere is how the application operates in simple, step-by-step terms:\n\n1. **Safe Private Upload**: You drag and drop or upload your CSV, TSV, or Excel files (up to 50MB). The file is processed directly inside your web browser—your sensitive company rows are never saved on public servers.\n\n2. **Automated Health Check**: The engine instantly scans every row and column for 15+ data health errors (like duplicate records, blank cells, invalid date formats, and strange numerical outliers) and calculates an overall **0-100 Quality Score**.\n\n3. **1-Click Smart Cleaning**: Instead of manually editing thousands of spreadsheet cells, you click simple buttons to automatically remove duplicates, fill empty boxes with defaults, clean up messy text, and format dates consistently.\n\n4. **Schema & Structure Guard**: Verify that incoming spreadsheets match your team's required field names and data types before importing them into company databases.\n\n5. **Sharing & Compliance Reports**: Export clean spreadsheets or generate executive PDF compliance reports to send to managers and teammates.\n\n**Key Takeaway**: Non-technical staff can clean and audit complex spreadsheets in minutes without writing Excel formulas or programming code!`;
+  } else if (intentAnalysis.category === 'CSV_ANALYSIS' && options.datasetContext?.fileName) {
     const ds = options.datasetContext;
-    fallbackAnswer = `Here is the current audit breakdown for **${ds.fileName}**:\n- **Quality Score**: ${ds.score ?? 100}/100\n- **Total Rows**: ${ds.rowCount}\n- **Duplicates Found**: ${ds.duplicatesCount ?? 0}\n- **Blank/Missing Cells**: ${ds.missingValuesCount ?? 0}\n- **Applied Cleanings**: ${ds.cleaningOperationsPerformed?.length ? ds.cleaningOperationsPerformed.join(', ') : 'None yet'}\n\nYou can run automated cleaning routines directly in the **Cleaning Center** tab!`;
+    fallbackAnswer = `### Audit Analysis for **${ds.fileName}**\n\n- **Quality Score**: ${ds.score ?? 100}/100\n- **Total Rows**: ${ds.rowCount} rows across ${ds.headers?.length || 0} mapped headers\n- **Headers**: ${ds.headers?.join(', ') || 'None'}\n- **Duplicate Rows**: ${ds.duplicatesCount ?? 0}\n- **Blank / Missing Cells**: ${ds.missingValuesCount ?? 0}\n- **Formatting Errors**: ${ds.formatErrorsCount ?? 0}\n- **Outliers Flagged**: ${ds.outliersCount ?? 0}\n\n**Recommended Next Action**: Visit the **Cleaning Center** to execute 1-click deduplication and missing value imputation on ${ds.fileName}.`;
   } else if (intentAnalysis.category === 'GENERAL_AI') {
     fallbackAnswer = `I am here to assist with general questions, programming, database queries, and data science concepts! How else can I help you today?`;
   } else {
@@ -945,7 +998,9 @@ export async function generateRAGResponse(
   const docSummary = relevantDocs.map(d => `**${d.title}**: ${d.content}`).join('\n\n');
   let fallbackAnswer = `Based on CSV Auditor Pro product documentation and your workspace context:\n\n${docSummary}`;
 
-  if (intent === 'CSV_ANALYSIS') {
+  if (intent === 'APP_EXPLANATION') {
+    fallbackAnswer = `### How CSV Auditor Pro Works (Simple Non-Technical Guide)\n\nThink of **CSV Auditor Pro** as an automated spell-checker and quality auditor for your company's spreadsheets!\n\nHere is how the application operates in simple, step-by-step terms:\n\n1. **Safe Private Upload**: You drag and drop or upload your CSV, TSV, or Excel files (up to 50MB). The file is processed directly inside your web browser—your sensitive company rows are never saved on public servers.\n\n2. **Automated Health Check**: The engine instantly scans every row and column for 15+ data health errors (like duplicate records, blank cells, invalid date formats, and strange numerical outliers) and calculates an overall **0-100 Quality Score**.\n\n3. **1-Click Smart Cleaning**: Instead of manually editing thousands of spreadsheet cells, you click simple buttons to automatically remove duplicates, fill empty boxes with defaults, clean up messy text, and format dates consistently.\n\n4. **Schema & Structure Guard**: Verify that incoming spreadsheets match your team's required field names and data types before importing them into company databases.\n\n5. **Sharing & Compliance Reports**: Export clean spreadsheets or generate executive PDF compliance reports to send to managers and teammates.\n\n**Key Takeaway**: Non-technical staff can clean and audit complex spreadsheets in minutes without writing Excel formulas or programming code!`;
+  } else if (intent === 'CSV_ANALYSIS') {
     fallbackAnswer = `CSV Auditor Pro is an enterprise spreadsheet audit and data compliance platform providing automated anomaly detection, real-time data cleaning, schema validation, and team collaboration.`;
   }
 

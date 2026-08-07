@@ -3,7 +3,7 @@
  * Accurately routes prompts into CSV_ANALYSIS, GENERAL_AI, MIXED_REQUEST, or UNKNOWN.
  */
 
-export type AIIntentCategory = 'CSV_ANALYSIS' | 'GENERAL_AI' | 'MIXED_REQUEST' | 'UNKNOWN';
+export type AIIntentCategory = 'CSV_ANALYSIS' | 'GENERAL_AI' | 'MIXED_REQUEST' | 'APP_EXPLANATION' | 'UNKNOWN';
 
 export interface IntentAnalysisResult {
   category: AIIntentCategory;
@@ -11,6 +11,7 @@ export interface IntentAnalysisResult {
   reasoning: string;
   suggestedTools: string[];
   hasActiveDataset: boolean;
+  isNonTechnical?: boolean;
 }
 
 const CSV_KEYWORDS = [
@@ -20,6 +21,16 @@ const CSV_KEYWORDS = [
   'record', 'records', 'table', 'sheet', 'spreadsheet', 'excel', 'payout', 'email', 'phone',
   'pii', 'correlation', 'chart', 'trend', 'quality', 'score', 'schema', 'drift', 'dedupe',
   'autofix', 'trim', 'format', 'normalize', 'encoding'
+];
+
+const APP_EXPLANATION_KEYWORDS = [
+  'how the application works', 'how the app works', 'how does the application work',
+  'how does the app work', 'explain how the application works', 'explain how the app works',
+  'non technical', 'non-technical', 'non technical stuff', 'non technical staff',
+  'explain to non-technical', 'explain to non technical', 'layman', 'simple terms',
+  'what is csv auditor pro', 'tell me about csv auditor pro', 'overview of the app',
+  'how do i use csv auditor pro', 'what does this app do', 'how does it work',
+  'explain csv auditor pro', 'for beginners', 'simple words'
 ];
 
 const GENERAL_AI_KEYWORDS = [
@@ -46,6 +57,21 @@ export function detectUserIntent(
       reasoning: 'Prompt is too short or ambiguous.',
       suggestedTools: [],
       hasActiveDataset
+    };
+  }
+
+  // Check for App Explanation / Non-technical inquiry
+  const isAppExplanation = APP_EXPLANATION_KEYWORDS.some(kw => p.includes(kw));
+  const isNonTechnical = p.includes('non technical') || p.includes('non-technical') || p.includes('layman') || p.includes('simple terms') || p.includes('simple words');
+
+  if (isAppExplanation) {
+    return {
+      category: 'APP_EXPLANATION',
+      confidenceScore: 0.98,
+      reasoning: 'User explicitly requested an overview or non-technical explanation of how CSV Auditor Pro operates.',
+      suggestedTools: ['summarizeDataset'],
+      hasActiveDataset,
+      isNonTechnical
     };
   }
 
@@ -85,12 +111,12 @@ export function detectUserIntent(
   if (csvScore > 0 && generalScore > 0 && hasActiveDataset) {
     category = 'MIXED_REQUEST';
     confidenceScore = 0.92;
-    reasoning = `Detected a hybrid query that combines CSV dataset questions (${matchedCsvKeywords.join(', ')}) with general AI topics (${matchedGeneralKeywords.join(', ')}).`;
+    reasoning = `Detected a hybrid query combining CSV dataset questions (${matchedCsvKeywords.join(', ')}) with general AI topics (${matchedGeneralKeywords.join(', ')}).`;
     
     if (p.includes('duplicate')) suggestedTools.push('findDuplicates');
     if (p.includes('stat') || p.includes('mean')) suggestedTools.push('calculateStatistics');
     if (p.includes('outlier') || p.includes('anomaly')) suggestedTools.push('detectOutliers');
-  } else if ((csvScore > 1.5 || mentionsActiveColumn) && hasActiveDataset) {
+  } else if ((csvScore > 1.5 || mentionsActiveColumn || p.includes('summarize') || p.includes('tell me about this file') || p.includes('dataset')) && hasActiveDataset) {
     category = 'CSV_ANALYSIS';
     confidenceScore = Math.min(0.98, 0.80 + csvScore * 0.05);
     reasoning = `Query directly requests analysis, auditing, or statistical operations on the uploaded CSV dataset. Matched terms: [${matchedCsvKeywords.join(', ')}].`;
@@ -118,6 +144,7 @@ export function detectUserIntent(
     confidenceScore: Math.round(confidenceScore * 100) / 100,
     reasoning,
     suggestedTools,
-    hasActiveDataset
+    hasActiveDataset,
+    isNonTechnical
   };
 }

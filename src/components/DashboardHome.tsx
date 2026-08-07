@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { CSVFile, AuditActivity, SlotRequest } from '../types';
 import { formatTimeRemaining } from '../lib/retentionService';
 import { 
@@ -27,7 +28,15 @@ import {
   Calculator,
   Bell,
   UserPlus,
-  UserX
+  UserX,
+  FileBarChart,
+  X,
+  Search,
+  Download,
+  CheckCircle2,
+  Filter,
+  Layers,
+  Table
 } from 'lucide-react';
 
 interface DashboardHomeProps {
@@ -124,6 +133,152 @@ export default function DashboardHome({
   const [activePanel, setActivePanel] = useState<'records' | 'issues' | 'savings' | null>(null);
   const [hourlyRate, setHourlyRate] = useState<number>(75);
 
+  // Data Profile Modal State
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [selectedProfileFileId, setSelectedProfileFileId] = useState<string | null>(null);
+  const [profileSearchQuery, setProfileSearchQuery] = useState('');
+
+  // Target file for profile analysis
+  const targetProfileFile = useMemo(() => {
+    if (selectedProfileFileId) {
+      const found = files.find(f => f.id === selectedProfileFileId);
+      if (found) return found;
+    }
+    return activeFile || (files.length > 0 ? files[0] : null);
+  }, [selectedProfileFileId, activeFile, files]);
+
+  // Column Profile Calculations
+  const columnProfiles = useMemo(() => {
+    if (!targetProfileFile || !targetProfileFile.headers || !targetProfileFile.rows) return [];
+    const totalRows = targetProfileFile.rows.length;
+
+    return targetProfileFile.headers.map(col => {
+      let nullCount = 0;
+      const validValues: string[] = [];
+      const numValues: number[] = [];
+      let isNumeric = true;
+      let isBoolean = true;
+      let isDate = true;
+
+      targetProfileFile.rows.forEach(r => {
+        const val = r[col];
+        if (val === null || val === undefined || String(val).trim() === '') {
+          nullCount++;
+        } else {
+          const strVal = String(val).trim();
+          validValues.push(strVal);
+
+          const num = Number(strVal);
+          if (isNaN(num)) {
+            isNumeric = false;
+          } else {
+            numValues.push(num);
+          }
+
+          const lower = strVal.toLowerCase();
+          if (!['true', 'false', '0', '1', 'yes', 'no'].includes(lower)) {
+            isBoolean = false;
+          }
+
+          const parsed = Date.parse(strVal);
+          if (isNaN(parsed) || strVal.length < 4) {
+            isDate = false;
+          }
+        }
+      });
+
+      const hasData = validValues.length > 0;
+      let inferredType: 'Numeric' | 'Date' | 'Boolean' | 'String' = 'String';
+      if (hasData && isNumeric) inferredType = 'Numeric';
+      else if (hasData && isBoolean) inferredType = 'Boolean';
+      else if (hasData && isDate) inferredType = 'Date';
+
+      let minStr = 'N/A';
+      let maxStr = 'N/A';
+
+      if (hasData) {
+        if (inferredType === 'Numeric' && numValues.length > 0) {
+          minStr = String(Math.min(...numValues));
+          maxStr = String(Math.max(...numValues));
+        } else if (inferredType === 'Date') {
+          const sortedDates = [...validValues].sort((a, b) => Date.parse(a) - Date.parse(b));
+          minStr = sortedDates[0];
+          maxStr = sortedDates[sortedDates.length - 1];
+        } else {
+          const sorted = [...validValues].sort((a, b) => a.localeCompare(b));
+          minStr = sorted[0];
+          maxStr = sorted[sorted.length - 1];
+        }
+      }
+
+      const distinctCount = new Set(validValues).size;
+      const nullPercentage = totalRows > 0 ? Math.round((nullCount / totalRows) * 100) : 0;
+      const sampleValues = Array.from(new Set(validValues)).slice(0, 3);
+
+      return {
+        name: col,
+        type: inferredType,
+        nullCount,
+        nullPercentage,
+        distinctCount,
+        min: minStr,
+        max: maxStr,
+        sampleValues
+      };
+    });
+  }, [targetProfileFile]);
+
+  // Filtered profiles for search inside modal
+  const filteredColumnProfiles = useMemo(() => {
+    if (!profileSearchQuery.trim()) return columnProfiles;
+    const q = profileSearchQuery.toLowerCase();
+    return columnProfiles.filter(p => 
+      p.name.toLowerCase().includes(q) || p.type.toLowerCase().includes(q)
+    );
+  }, [columnProfiles, profileSearchQuery]);
+
+  // Overall summary metrics for the target file
+  const profileSummaryStats = useMemo(() => {
+    if (!targetProfileFile) return { totalCols: 0, totalRows: 0, totalNulls: 0, overallNullRatio: 0, typeCounts: {} };
+    const totalCols = targetProfileFile.headers ? targetProfileFile.headers.length : 0;
+    const totalRows = targetProfileFile.rows ? targetProfileFile.rows.length : 0;
+    const totalCells = totalCols * totalRows;
+    const totalNulls = columnProfiles.reduce((acc, c) => acc + c.nullCount, 0);
+    const overallNullRatio = totalCells > 0 ? Math.round((totalNulls / totalCells) * 100) : 0;
+    
+    const typeCounts: Record<string, number> = {};
+    columnProfiles.forEach(c => {
+      typeCounts[c.type] = (typeCounts[c.type] || 0) + 1;
+    });
+
+    return { totalCols, totalRows, totalNulls, overallNullRatio, typeCounts };
+  }, [targetProfileFile, columnProfiles]);
+
+  const handleExportProfileCSV = () => {
+    if (!targetProfileFile || columnProfiles.length === 0) return;
+    const headers = ['Column Name', 'Inferred Type', 'Null Count', 'Null Percentage', 'Distinct Count', 'Min Value', 'Max Value', 'Sample Values'];
+    const rows = columnProfiles.map(c => [
+      `"${c.name.replace(/"/g, '""')}"`,
+      `"${c.type}"`,
+      c.nullCount,
+      `"${c.nullPercentage}%"`,
+      c.distinctCount,
+      `"${c.min.replace(/"/g, '""')}"`,
+      `"${c.max.replace(/"/g, '""')}"`,
+      `"${c.sampleValues.join(' | ').replace(/"/g, '""')}"`
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `data_profile_${targetProfileFile.name.replace(/\.[^/.]+$/, "")}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const totalAuditedFiles = files.length;
   const completedAudits = files.filter(f => f.status === 'completed').length;
   
@@ -197,7 +352,23 @@ export default function DashboardHome({
             Overview of your corporate spreadsheet compliance and quality scoring.
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
+          <button 
+            onClick={() => {
+              if (activeFile) setSelectedProfileFileId(activeFile.id);
+              else if (files.length > 0) setSelectedProfileFileId(files[0].id);
+              setIsProfileModalOpen(true);
+            }}
+            className={`px-4 py-2 text-sm font-semibold border rounded-xl flex items-center gap-2 transition-all cursor-pointer ${
+              isDarkMode 
+                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20' 
+                : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+            }`}
+            id="generate-data-profile-btn"
+          >
+            <FileBarChart className="w-4 h-4 text-emerald-500" />
+            <span>Generate Data Profile</span>
+          </button>
           <button 
             onClick={() => onNavigate('upload')}
             className={`px-4 py-2 text-sm font-semibold text-white rounded-xl flex items-center gap-2 shadow hover:opacity-90 transition-all cursor-pointer ${accentClass}`}
@@ -206,7 +377,7 @@ export default function DashboardHome({
           </button>
           <button 
             onClick={() => onNavigate('insights')}
-            className={`px-4 py-2 text-sm font-semibold border rounded-xl flex items-center gap-2 transition-all ${isDarkMode ? 'bg-slate-900 border-slate-800 hover:bg-slate-800' : 'bg-white border-slate-200 hover:bg-slate-50'}`}
+            className={`px-4 py-2 text-sm font-semibold border rounded-xl flex items-center gap-2 transition-all cursor-pointer ${isDarkMode ? 'bg-slate-900 border-slate-800 hover:bg-slate-800' : 'bg-white border-slate-200 hover:bg-slate-50'}`}
           >
             <Sparkles className="w-4 h-4 text-blue-500" /> AI Insights
           </button>
@@ -965,6 +1136,260 @@ export default function DashboardHome({
           )}
         </div>
       </div>
+
+      {/* Data Profile Analysis Modal */}
+      <AnimatePresence>
+        {isProfileModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className={`relative w-full max-w-5xl rounded-2xl border shadow-2xl overflow-hidden flex flex-col max-h-[90vh] ${
+                isDarkMode ? 'bg-[#0f172a] border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
+              }`}
+            >
+              {/* Modal Header */}
+              <div className={`p-5 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                isDarkMode ? 'border-slate-800/80 bg-slate-950/50' : 'border-slate-200 bg-slate-50'
+              }`}>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 shrink-0">
+                    <FileBarChart className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="font-extrabold text-base md:text-lg flex items-center gap-2">
+                      <span>Data Profile Analysis Report</span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded font-bold bg-emerald-500/10 text-emerald-500 uppercase tracking-wider">
+                        Quick Audit
+                      </span>
+                    </h2>
+                    <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                      Column data types, min/max range analysis, distinct counts, and null distribution
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-end sm:self-center">
+                  {/* File Selector Dropdown if multiple files exist */}
+                  {files.length > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-bold text-slate-400 hidden md:inline">Dataset:</span>
+                      <select
+                        value={targetProfileFile?.id || ''}
+                        onChange={(e) => setSelectedProfileFileId(e.target.value)}
+                        className={`text-xs font-semibold px-3 py-2 rounded-xl border focus:outline-none cursor-pointer ${
+                          isDarkMode 
+                            ? 'bg-slate-900 border-slate-700 text-slate-200' 
+                            : 'bg-white border-slate-200 text-slate-800'
+                        }`}
+                      >
+                        {files.map(f => (
+                          <option key={f.id} value={f.id}>
+                            {f.name} ({f.rows ? f.rows.length : 0} rows)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => setIsProfileModalOpen(false)}
+                    className="p-2 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {!targetProfileFile ? (
+                /* No File Selected / Uploaded View */
+                <div className="p-12 text-center space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-slate-800/50 border border-slate-700 flex items-center justify-center mx-auto text-slate-400">
+                    <Database className="w-8 h-8" />
+                  </div>
+                  <h3 className="font-extrabold text-base">No Dataset Available for Profiling</h3>
+                  <p className="text-xs text-slate-400 max-w-md mx-auto">
+                    Please upload or select a CSV spreadsheet to perform instant column data profiling, min/max value calculation, and null counts.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setIsProfileModalOpen(false);
+                      onNavigate('upload');
+                    }}
+                    className={`px-4 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white inline-flex items-center gap-2 cursor-pointer shadow-md`}
+                  >
+                    <Upload className="w-4 h-4" /> Upload Spreadsheet
+                  </button>
+                </div>
+              ) : (
+                /* Main Profile Analysis View */
+                <div className="p-6 overflow-y-auto space-y-6 flex-1">
+                  {/* Summary Metric Strip */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Total Columns</span>
+                      <span className="text-2xl font-black text-blue-500">{profileSummaryStats.totalCols}</span>
+                      <span className="text-[10px] text-slate-400 block mt-1 font-mono">Parsed headers</span>
+                    </div>
+
+                    <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Total Rows</span>
+                      <span className="text-2xl font-black text-emerald-500">{profileSummaryStats.totalRows.toLocaleString()}</span>
+                      <span className="text-[10px] text-slate-400 block mt-1 font-mono">Evaluated records</span>
+                    </div>
+
+                    <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Missing Cell Ratio</span>
+                      <span className={`text-2xl font-black ${profileSummaryStats.overallNullRatio > 10 ? 'text-amber-500' : 'text-slate-200'}`}>
+                        {profileSummaryStats.overallNullRatio}%
+                      </span>
+                      <span className="text-[10px] text-slate-400 block mt-1 font-mono">{profileSummaryStats.totalNulls.toLocaleString()} empty values</span>
+                    </div>
+
+                    <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Detected Types</span>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {Object.entries(profileSummaryStats.typeCounts).map(([type, count]) => (
+                          <span key={type} className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
+                            {type}: {count}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Filter and Export Bar */}
+                  <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
+                    <div className="relative flex-1 max-w-md">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={profileSearchQuery}
+                        onChange={(e) => setProfileSearchQuery(e.target.value)}
+                        placeholder="Search column header or data type..."
+                        className={`w-full pl-9 pr-3.5 py-2 rounded-xl text-xs border focus:outline-none focus:ring-1 ${
+                          isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-100 focus:border-emerald-500' : 'bg-slate-50 border-slate-200 text-slate-900'
+                        }`}
+                      />
+                      {profileSearchQuery && (
+                        <button
+                          onClick={() => setProfileSearchQuery('')}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-200"
+                        >
+                          &times;
+                        </button>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={handleExportProfileCSV}
+                      disabled={columnProfiles.length === 0}
+                      className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer disabled:opacity-50"
+                    >
+                      <Download className="w-4 h-4 text-white" />
+                      <span>Export Profile CSV</span>
+                    </button>
+                  </div>
+
+                  {/* Column Analysis Table */}
+                  <div className={`border rounded-xl overflow-hidden ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+                    <div className="overflow-x-auto max-h-[400px]">
+                      <table className="w-full text-left text-xs min-w-[700px]">
+                        <thead className={`sticky top-0 z-10 ${isDarkMode ? 'bg-slate-950 border-b border-slate-800 text-slate-400' : 'bg-slate-100 border-b border-slate-200 text-slate-600'} font-bold`}>
+                          <tr>
+                            <th className="py-3 px-4">COLUMN HEADER</th>
+                            <th className="py-3 px-3">DATA TYPE</th>
+                            <th className="py-3 px-3">NULL COUNT</th>
+                            <th className="py-3 px-3">MIN VALUE</th>
+                            <th className="py-3 px-3">MAX VALUE</th>
+                            <th className="py-3 px-3">DISTINCT</th>
+                            <th className="py-3 px-4">SAMPLE VALUES</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/30 font-mono">
+                          {filteredColumnProfiles.length === 0 ? (
+                            <tr>
+                              <td colSpan={7} className="py-8 text-center text-slate-400 font-sans">
+                                No columns matching "{profileSearchQuery}" found in this dataset.
+                              </td>
+                            </tr>
+                          ) : (
+                            filteredColumnProfiles.map((col) => {
+                              let typeBg = 'bg-amber-500/10 text-amber-400 border-amber-500/30';
+                              if (col.type === 'Numeric') typeBg = 'bg-blue-500/10 text-blue-400 border-blue-500/30';
+                              else if (col.type === 'Date') typeBg = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+                              else if (col.type === 'Boolean') typeBg = 'bg-purple-500/10 text-purple-400 border-purple-500/30';
+
+                              return (
+                                <tr key={col.name} className={`hover:bg-slate-500/5 transition-colors`}>
+                                  <td className="py-3 px-4 font-bold font-sans text-slate-200 truncate max-w-[180px]">
+                                    {col.name}
+                                  </td>
+                                  <td className="py-3 px-3">
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${typeBg}`}>
+                                      {col.type}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-3">
+                                    <div className="flex items-center gap-2">
+                                      <span className={col.nullCount > 0 ? 'text-amber-400 font-bold' : 'text-slate-400'}>
+                                        {col.nullCount} ({col.nullPercentage}%)
+                                      </span>
+                                      {col.nullPercentage > 0 && (
+                                        <div className="w-12 h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                                          <div
+                                            className={`h-full ${col.nullPercentage > 20 ? 'bg-rose-500' : 'bg-amber-500'}`}
+                                            style={{ width: `${col.nullPercentage}%` }}
+                                          />
+                                        </div>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-3 text-slate-300 truncate max-w-[120px]" title={col.min}>
+                                    {col.min}
+                                  </td>
+                                  <td className="py-3 px-3 text-slate-300 truncate max-w-[120px]" title={col.max}>
+                                    {col.max}
+                                  </td>
+                                  <td className="py-3 px-3 font-bold text-slate-200">
+                                    {col.distinctCount.toLocaleString()}
+                                  </td>
+                                  <td className="py-3 px-4 text-[10px] text-slate-400 truncate max-w-[200px]" title={col.sampleValues.join(', ')}>
+                                    {col.sampleValues.length > 0 ? col.sampleValues.join(', ') : '—'}
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Modal Footer */}
+              <div className={`p-4 border-t flex justify-between items-center text-xs ${
+                isDarkMode ? 'border-slate-800/80 bg-slate-950/60 text-slate-400' : 'border-slate-200 bg-slate-50 text-slate-600'
+              }`}>
+                <div className="flex items-center gap-2 font-mono text-[10px]">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  <span>Profile generated dynamically from active dataset memory.</span>
+                </div>
+                <button
+                  onClick={() => setIsProfileModalOpen(false)}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                    isDarkMode ? 'border-slate-800 text-slate-300 hover:bg-slate-800' : 'border-slate-200 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  Close Report
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

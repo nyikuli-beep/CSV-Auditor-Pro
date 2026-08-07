@@ -1,6 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { 
+  PieChart, 
+  Pie, 
+  Cell, 
+  ResponsiveContainer, 
+  Tooltip as RechartsTooltip 
+} from 'recharts';
+import { 
   FileSpreadsheet, 
   Trash2, 
   Calendar, 
@@ -248,9 +255,84 @@ export default function CleaningCenter({
   const currentRows = activeFile ? (history[historyIndex] || activeFile.rows) : [];
   const currentHeaders = activeFile ? (headersHistory[historyIndex] || activeFile.headers) : [];
 
+  // Review Filter Mode State ('all' | 'review' | 'cleaned')
+  const [reviewFilterMode, setReviewFilterMode] = useState<'all' | 'review' | 'cleaned'>('all');
+
+  // Distribution calculation for Cleaned vs Manual Review Required rows
+  const rowDistribution = useMemo(() => {
+    if (!activeFile || !currentRows.length) {
+      return {
+        totalRows: 0,
+        cleanedRows: 0,
+        manualReviewRows: 0,
+        cleanedPercentage: 100,
+        manualReviewPercentage: 0,
+        issueRowIndices: new Set<number>(),
+        chartData: [
+          { name: 'Cleaned', value: 0, color: '#10B981', percentage: 100 },
+          { name: 'Manual Review Required', value: 0, color: '#F59E0B', percentage: 0 }
+        ]
+      };
+    }
+
+    const total = currentRows.length;
+    const openIssues = (activeFile.issues || []).filter(i => i.status !== 'resolved');
+
+    const issueRowIndices = new Set<number>();
+    openIssues.forEach(issue => {
+      if (typeof issue.row === 'number') {
+        if (issue.row >= 2 && issue.row < total + 2) {
+          issueRowIndices.add(issue.row - 2);
+        } else if (issue.row >= 1 && issue.row <= total) {
+          issueRowIndices.add(issue.row - 1);
+        } else if (issue.row >= 0 && issue.row < total) {
+          issueRowIndices.add(issue.row);
+        }
+      }
+    });
+
+    if (openIssues.some(i => i.type === 'missing_value')) {
+      currentRows.forEach((row, idx) => {
+        const hasEmptyCell = currentHeaders.some(h => !row[h] || String(row[h]).trim() === '');
+        if (hasEmptyCell) {
+          issueRowIndices.add(idx);
+        }
+      });
+    }
+
+    let manualCount = issueRowIndices.size;
+    if (manualCount === 0 && openIssues.length > 0) {
+      manualCount = Math.min(total, openIssues.length);
+    }
+
+    const cleanedCount = Math.max(0, total - manualCount);
+    const cleanedPct = total > 0 ? Math.round((cleanedCount / total) * 100) : 100;
+    const manualPct = 100 - cleanedPct;
+
+    return {
+      totalRows: total,
+      cleanedRows: cleanedCount,
+      manualReviewRows: manualCount,
+      cleanedPercentage: cleanedPct,
+      manualReviewPercentage: manualPct,
+      issueRowIndices,
+      chartData: [
+        { name: 'Cleaned', value: cleanedCount, color: '#10B981', percentage: cleanedPct },
+        { name: 'Manual Review Required', value: manualCount, color: '#F59E0B', percentage: manualPct }
+      ]
+    };
+  }, [activeFile, currentRows, currentHeaders]);
+
   // Filtered Rows computation preserving original row index (for issue mapping and row numbering)
   const filteredRowsWithIndices = useMemo(() => {
-    return currentRows.map((row, idx) => ({ row, originalIndex: idx })).filter(({ row }) => {
+    return currentRows.map((row, idx) => ({ row, originalIndex: idx })).filter(({ row, originalIndex }) => {
+      // 0. Manual Review / Cleaned filter toggle
+      if (reviewFilterMode === 'review') {
+        if (!rowDistribution.issueRowIndices.has(originalIndex)) return false;
+      } else if (reviewFilterMode === 'cleaned') {
+        if (rowDistribution.issueRowIndices.has(originalIndex)) return false;
+      }
+
       // 1. Text Search across all columns or selected column
       const searchTrimmed = rowSearchQuery.trim().toLowerCase();
       if (searchTrimmed) {
@@ -301,7 +383,7 @@ export default function CleaningCenter({
 
       return true;
     });
-  }, [currentRows, rowSearchQuery, filterColumn, filterOperator, filterValue]);
+  }, [currentRows, rowSearchQuery, filterColumn, filterOperator, filterValue, reviewFilterMode, rowDistribution]);
 
   // Sort handler for data table
   const handleSort = (colName: string) => {
@@ -2674,6 +2756,180 @@ export default function CleaningCenter({
               isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200'
             }`}
           />
+        </div>
+      </div>
+
+      {/* Recharts Row Distribution & Cleaning Progress Widget */}
+      <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-500">
+              <BarChart2 className="w-4 h-4 text-blue-500" />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-sm tracking-tight flex items-center gap-2">
+                Row Distribution & Cleaning Progress
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                  {rowDistribution.cleanedPercentage}% Cleaned
+                </span>
+              </h3>
+              <p className="text-xs text-slate-400">
+                Live breakdown of verified clean rows versus rows requiring manual inspection
+              </p>
+            </div>
+          </div>
+
+          {reviewFilterMode !== 'all' && (
+            <button
+              onClick={() => setReviewFilterMode('all')}
+              className="text-xs font-bold text-slate-400 hover:text-white px-3 py-1.5 rounded-xl border border-slate-800 hover:bg-slate-800 flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>Reset Filter ({reviewFilterMode === 'review' ? 'Manual Review' : 'Cleaned Only'})</span>
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+          {/* Recharts Pie Donut Visualization */}
+          <div className="md:col-span-5 flex flex-col items-center justify-center relative min-h-[160px]">
+            <ResponsiveContainer width="100%" height={160}>
+              <PieChart>
+                <Pie
+                  data={rowDistribution.chartData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={52}
+                  outerRadius={72}
+                  paddingAngle={4}
+                  dataKey="value"
+                  stroke="none"
+                >
+                  {rowDistribution.chartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <RechartsTooltip
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const data = payload[0].payload;
+                      return (
+                        <div className={`p-2.5 rounded-xl border text-xs shadow-xl font-sans ${
+                          isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
+                        }`}>
+                          <p className="font-bold flex items-center gap-1.5" style={{ color: data.color }}>
+                            {data.name}
+                          </p>
+                          <p className="text-slate-400 font-mono text-[11px] mt-1">
+                            {data.value.toLocaleString()} rows ({data.percentage}%)
+                          </p>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            {/* Donut Center Label */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-xl font-black tracking-tight font-mono text-slate-900 dark:text-slate-100">
+                {rowDistribution.cleanedPercentage}%
+              </span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cleaned</span>
+            </div>
+          </div>
+
+          {/* Metric Cards and Quick Actions */}
+          <div className="md:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Cleaned Rows Metric Card */}
+            <div 
+              onClick={() => setReviewFilterMode(reviewFilterMode === 'cleaned' ? 'all' : 'cleaned')}
+              className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+                reviewFilterMode === 'cleaned'
+                  ? 'bg-emerald-500/10 border-emerald-500/50 shadow-md ring-1 ring-emerald-500/30'
+                  : isDarkMode
+                  ? 'bg-slate-950/60 border-slate-800 hover:border-emerald-500/30 hover:bg-slate-900'
+                  : 'bg-slate-50 border-slate-200 hover:border-emerald-300'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-bold text-emerald-500 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                  Cleaned Rows
+                </span>
+                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500">
+                  {rowDistribution.cleanedPercentage}%
+                </span>
+              </div>
+              <p className="text-lg font-extrabold font-mono text-slate-900 dark:text-slate-100">
+                {rowDistribution.cleanedRows.toLocaleString()} <span className="text-xs font-normal text-slate-400">/ {rowDistribution.totalRows.toLocaleString()}</span>
+              </p>
+              <p className="text-[10px] text-slate-400 mt-1 flex items-center justify-between">
+                <span>Verified & sanitized</span>
+                <span className="font-bold text-emerald-500 underline">
+                  {reviewFilterMode === 'cleaned' ? 'Active Filter' : 'Filter Table'}
+                </span>
+              </p>
+            </div>
+
+            {/* Manual Review Required Metric Card */}
+            <div 
+              onClick={() => setReviewFilterMode(reviewFilterMode === 'review' ? 'all' : 'review')}
+              className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+                reviewFilterMode === 'review'
+                  ? 'bg-amber-500/10 border-amber-500/50 shadow-md ring-1 ring-amber-500/30'
+                  : isDarkMode
+                  ? 'bg-slate-950/60 border-slate-800 hover:border-amber-500/30 hover:bg-slate-900'
+                  : 'bg-slate-50 border-slate-200 hover:border-amber-300'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-bold text-amber-500 flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                  Manual Review Required
+                </span>
+                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500">
+                  {rowDistribution.manualReviewPercentage}%
+                </span>
+              </div>
+              <p className="text-lg font-extrabold font-mono text-slate-900 dark:text-slate-100">
+                {rowDistribution.manualReviewRows.toLocaleString()} <span className="text-xs font-normal text-slate-400">rows</span>
+              </p>
+              <p className="text-[10px] text-slate-400 mt-1 flex items-center justify-between">
+                <span>Flagged anomalies</span>
+                <span className="font-bold text-amber-500 underline">
+                  {reviewFilterMode === 'review' ? 'Active Filter' : 'Filter Table'}
+                </span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Proportion Bar */}
+        <div className="mt-4 pt-3 border-t border-slate-800/50 flex flex-col gap-1.5">
+          <div className="w-full h-2 rounded-full overflow-hidden bg-slate-800 flex">
+            <div
+              className="h-full bg-emerald-500 transition-all duration-500"
+              style={{ width: `${rowDistribution.cleanedPercentage}%` }}
+              title={`Cleaned: ${rowDistribution.cleanedRows} rows (${rowDistribution.cleanedPercentage}%)`}
+            />
+            <div
+              className="h-full bg-amber-500 transition-all duration-500"
+              style={{ width: `${rowDistribution.manualReviewPercentage}%` }}
+              title={`Manual Review Required: ${rowDistribution.manualReviewRows} rows (${rowDistribution.manualReviewPercentage}%)`}
+            />
+          </div>
+          <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+            <span className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
+              Cleaned ({rowDistribution.cleanedRows.toLocaleString()})
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
+              Manual Review Required ({rowDistribution.manualReviewRows.toLocaleString()})
+            </span>
+          </div>
         </div>
       </div>
 

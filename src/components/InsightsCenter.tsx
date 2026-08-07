@@ -296,10 +296,10 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
         ];
       default: // auditor
         return [
-          { label: 'Product & Features', text: 'Explain how CSV Auditor Pro works and list all key cleaning and security features.' },
-          { label: 'Dataset Health (Layman)', text: 'Explain my active dataset health score and detected anomalies in simple layman terms.' },
+          { label: 'Non-Technical Staff Guide', text: 'Explain how the application works to non technical staff in simple, clear, non-technical terms.' },
+          { label: 'Summarize Active CSV Dataset', text: 'Summarize my uploaded CSV dataset, key column statistics, data types, sample values, and quality issues.' },
           { label: 'Data Cleaning & Dedupe', text: 'How do duplicate row detection and missing value imputation routines work?' },
-          { label: 'Security & Privacy', text: 'How does CSV Auditor Pro protect my data privacy and prevent third-party AI training?' }
+          { label: 'Security & Data Privacy', text: 'How does CSV Auditor Pro protect my data privacy and prevent third-party AI model training?' }
         ];
     }
   };
