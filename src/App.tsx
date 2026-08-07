@@ -41,8 +41,11 @@ import {
   RefreshCw,
   Bell,
   UserPlus,
-  UserX
+  UserX,
+  Palette
 } from 'lucide-react';
+
+import { ThemeInspector } from './components/ThemeInspector';
 
 // Import Types
 import { CSVFile, TeamMember, AuditActivity, ChatMessage, SystemSettings, SlotRequest } from './types';
@@ -204,6 +207,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   const [user, setUser] = useState<{ uid: string; email: string; role: string; name?: string; avatar?: string } | null>(null);
   const [profileModalOpen, setProfileModalOpen] = useState<boolean>(false);
   const [shortcutsModalOpen, setShortcutsModalOpen] = useState<boolean>(false);
+  const [themeInspectorOpen, setThemeInspectorOpen] = useState<boolean>(false);
   const [tourModalOpen, setTourModalOpen] = useState<boolean>(() => {
     return localStorage.getItem('onboarding_tour_completed') !== 'true';
   });
@@ -2745,6 +2749,24 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                   </AnimatePresence>
                 </motion.button>
 
+                {/* Theme Inspector Developer Tool Toggle */}
+                <motion.button 
+                  onClick={() => setThemeInspectorOpen(!themeInspectorOpen)}
+                  whileTap={{ scale: 0.92 }}
+                  whileHover={{ scale: 1.05 }}
+                  className={`p-1.5 rounded-lg border cursor-pointer transition-colors duration-300 relative overflow-hidden flex items-center gap-1 text-xs font-bold ${
+                    themeInspectorOpen 
+                      ? 'bg-blue-600 border-blue-500 text-white' 
+                      : isDarkMode 
+                        ? 'bg-[#1e293b]/50 border-slate-800 text-slate-300 hover:text-white hover:bg-[#1e293b]' 
+                        : 'bg-white border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                  title="Theme & Accessibility Inspector (WCAG AA)"
+                >
+                  <Palette className="w-4 h-4 text-blue-400" />
+                  <span className="hidden md:inline font-mono text-[10px]">WCAG AA</span>
+                </motion.button>
+
                 <button 
                   onClick={() => setProfileModalOpen(true)}
                   className="flex items-center gap-2.5 p-1 rounded-xl hover:bg-slate-800/20 transition-all cursor-pointer group"
@@ -3002,6 +3024,14 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
         onSaveProfile={handleSaveProfile}
         isDarkMode={isDarkMode}
         accentClass={accentClass}
+      />
+
+      {/* Theme & Accessibility Inspector Developer Tool */}
+      <ThemeInspector 
+        isDarkMode={isDarkMode}
+        onToggleTheme={() => setIsDarkMode(!isDarkMode)}
+        isOpen={themeInspectorOpen}
+        onClose={() => setThemeInspectorOpen(false)}
       />
 
       {/* Cookie Consent & Preferences Inspector Control */}
