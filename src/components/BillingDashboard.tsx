@@ -350,22 +350,26 @@ export default function BillingDashboard({
       <div className={`p-6 rounded-2xl border ${
         isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
       }`}>
-        <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 mb-4 flex items-center justify-between">
+        <h3 className={`text-sm font-bold uppercase tracking-wider mb-4 flex items-center justify-between ${
+          isDarkMode ? 'text-slate-400' : 'text-slate-600'
+        }`}>
           <span className="flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-blue-500" /> Monthly Plan Usage Tracking
           </span>
-          <span className="text-[10px] font-mono text-slate-500">Period: {usage?.periodMonth || 'Current Month'}</span>
+          <span className={`text-[10px] font-mono ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Period: {usage?.periodMonth || 'Current Month'}</span>
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {/* Audits */}
-          <div className="p-4 rounded-xl bg-slate-950/40 border border-slate-800/80">
-            <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">CSV Audits Run</span>
+          <div className={`p-4 rounded-xl border ${
+            isDarkMode ? 'bg-slate-950/40 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+          }`}>
+            <span className={`text-[10px] font-bold uppercase block mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>CSV Audits Run</span>
             <div className="flex items-baseline justify-between mb-2">
-              <span className="text-lg font-extrabold text-slate-100">{usage?.auditCount || 0}</span>
-              <span className="text-xs font-mono text-slate-400">/ {usage?.maxAudits === 'unlimited' ? '∞ Unlimited' : '5 limit'}</span>
+              <span className={`text-lg font-extrabold ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>{usage?.auditCount || 0}</span>
+              <span className={`text-xs font-mono ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>/ {usage?.maxAudits === 'unlimited' ? '∞ Unlimited' : '5 limit'}</span>
             </div>
-            <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+            <div className={`w-full h-1.5 rounded-full overflow-hidden ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`}>
               <div 
                 className={`h-full ${usage?.maxAudits === 'unlimited' ? 'bg-blue-500' : (usage?.auditCount || 0) >= 5 ? 'bg-rose-500' : 'bg-blue-500'}`}
                 style={{ width: `${usage?.maxAudits === 'unlimited' ? 100 : Math.min(((usage?.auditCount || 0) / 5) * 100, 100)}%` }}
@@ -374,32 +378,38 @@ export default function BillingDashboard({
           </div>
 
           {/* Rows */}
-          <div className="p-4 rounded-xl bg-slate-950/40 border border-slate-800/80">
-            <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Rows Processed</span>
-            <span className="text-lg font-extrabold text-slate-100 block mb-1">
+          <div className={`p-4 rounded-xl border ${
+            isDarkMode ? 'bg-slate-950/40 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+          }`}>
+            <span className={`text-[10px] font-bold uppercase block mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Rows Processed</span>
+            <span className={`text-lg font-extrabold block mb-1 ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
               {(usage?.rowsProcessed || 8320).toLocaleString()}
             </span>
-            <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
+            <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-semibold">
               <CheckCircle2 className="w-3 h-3" /> Fully Audited
             </span>
           </div>
 
           {/* Storage */}
-          <div className="p-4 rounded-xl bg-slate-950/40 border border-slate-800/80">
-            <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Storage Used</span>
-            <span className="text-lg font-extrabold text-slate-100 block mb-1">
+          <div className={`p-4 rounded-xl border ${
+            isDarkMode ? 'bg-slate-950/40 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+          }`}>
+            <span className={`text-[10px] font-bold uppercase block mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Storage Used</span>
+            <span className={`text-lg font-extrabold block mb-1 ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
               {Math.round((usage?.storageUsedBytes || 125829120) / (1024 * 1024))} MB
             </span>
-            <span className="text-[10px] font-mono text-slate-400">Auto retention active</span>
+            <span className={`text-[10px] font-mono ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Auto retention active</span>
           </div>
 
           {/* API Calls */}
-          <div className="p-4 rounded-xl bg-slate-950/40 border border-slate-800/80">
-            <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">AI Assistant API Calls</span>
-            <span className="text-lg font-extrabold text-slate-100 block mb-1">
+          <div className={`p-4 rounded-xl border ${
+            isDarkMode ? 'bg-slate-950/40 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+          }`}>
+            <span className={`text-[10px] font-bold uppercase block mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>AI Assistant API Calls</span>
+            <span className={`text-lg font-extrabold block mb-1 ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
               {usage?.apiCallsCount || 42}
             </span>
-            <span className="text-[10px] font-mono text-blue-400">Gemini Grounded</span>
+            <span className="text-[10px] font-mono text-blue-600 dark:text-blue-400 font-semibold">Gemini Grounded</span>
           </div>
         </div>
       </div>
@@ -474,21 +484,25 @@ export default function BillingDashboard({
         isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
       }`}>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+          <h3 className={`text-sm font-bold uppercase tracking-wider flex items-center gap-2 ${
+            isDarkMode ? 'text-slate-400' : 'text-slate-600'
+          }`}>
             <FileText className="w-4 h-4 text-emerald-500" /> Invoices & Payment History
           </h3>
-          <span className="text-xs font-mono text-slate-500">VAT & GST Receipts</span>
+          <span className={`text-xs font-mono ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>VAT & GST Receipts</span>
         </div>
 
         {invoices.length === 0 ? (
-          <div className="p-6 text-center text-xs text-slate-500 font-mono">
+          <div className={`p-6 text-center text-xs font-mono ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
             No invoices generated yet for Free account.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
-                <tr className="border-b border-slate-800 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
+                <tr className={`border-b text-[10px] font-bold uppercase tracking-wider ${
+                  isDarkMode ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-500'
+                }`}>
                   <th className="py-2.5 px-3">Invoice ID</th>
                   <th className="py-2.5 px-3">Date</th>
                   <th className="py-2.5 px-3">Amount</th>
@@ -497,26 +511,30 @@ export default function BillingDashboard({
                   <th className="py-2.5 px-3 text-right">Receipt</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/40">
+              <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800/40' : 'divide-slate-200'}`}>
                 {invoices.map((inv) => (
-                  <tr key={inv.id} className="hover:bg-slate-800/20 transition-colors">
-                    <td className="py-3 px-3 font-mono font-bold text-slate-200">{inv.paddleInvoiceId}</td>
-                    <td className="py-3 px-3 text-slate-400">{new Date(inv.createdAt).toLocaleDateString()}</td>
-                    <td className="py-3 px-3 font-mono font-bold text-slate-100">${(inv.amount / 100).toFixed(2)} USD</td>
+                  <tr key={inv.id} className={isDarkMode ? 'hover:bg-slate-800/20' : 'hover:bg-slate-50 transition-colors'}>
+                    <td className={`py-3 px-3 font-mono font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>{inv.paddleInvoiceId}</td>
+                    <td className={`py-3 px-3 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{new Date(inv.createdAt).toLocaleDateString()}</td>
+                    <td className={`py-3 px-3 font-mono font-bold ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>${(inv.amount / 100).toFixed(2)} USD</td>
                     <td className="py-3 px-3">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                        inv.status === 'paid' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400'
+                        inv.status === 'paid' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
                       }`}>
                         {inv.status}
                       </span>
                     </td>
-                    <td className="py-3 px-3 text-slate-400">{inv.paymentMethod || 'Visa ending 4242'}</td>
+                    <td className={`py-3 px-3 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{inv.paymentMethod || 'Visa ending 4242'}</td>
                     <td className="py-3 px-3 text-right">
                       <a
                         href={inv.invoicePdfUrl || '#'}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-blue-400 font-bold transition-colors cursor-pointer"
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded font-bold transition-colors cursor-pointer ${
+                          isDarkMode
+                            ? 'bg-slate-800 hover:bg-slate-700 text-blue-400'
+                            : 'bg-slate-100 hover:bg-slate-200 text-blue-600 border border-slate-200'
+                        }`}
                       >
                         <Download className="w-3 h-3" /> PDF
                       </a>

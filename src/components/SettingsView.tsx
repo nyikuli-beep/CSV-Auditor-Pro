@@ -1258,7 +1258,7 @@ export default function SettingsView({
                       className={`p-4 rounded-xl border flex flex-col justify-between transition-all ${
                         isDarkMode 
                           ? 'bg-slate-950/60 border-slate-800/80 hover:border-slate-700' 
-                          : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                          : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'
                       }`}
                     >
                       <div>
@@ -1278,9 +1278,9 @@ export default function SettingsView({
                         </h4>
 
                         <div className={`p-2.5 rounded-lg border text-[11px] leading-relaxed mb-3 ${
-                          isDarkMode ? 'bg-slate-900/80 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-700'
+                          isDarkMode ? 'bg-slate-900/80 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'
                         }`}>
-                          <span className="font-bold text-rose-400 block mb-0.5 uppercase text-[9px] tracking-wider">
+                          <span className="font-bold text-rose-500 dark:text-rose-400 block mb-0.5 uppercase text-[9px] tracking-wider">
                             Why Other Users Shouldn't Access:
                           </span>
                           {item.whyRestricted}
@@ -1288,13 +1288,13 @@ export default function SettingsView({
 
                         {/* Recommended Policy */}
                         <div className="space-y-1 mb-3">
-                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block">Recommended Security Policy:</span>
-                          <span className="text-[10px] font-mono font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-1 rounded block">
+                          <span className={`text-[9px] font-bold uppercase tracking-widest block ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Recommended Security Policy:</span>
+                          <span className="text-[10px] font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-1 rounded block">
                             {item.recommendedLevel}
                           </span>
                         </div>
 
-                        <p className="text-[10px] text-slate-400 italic leading-normal mb-4">
+                        <p className={`text-[10px] italic leading-normal mb-4 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                           {item.lockDescription}
                         </p>
                       </div>
@@ -1304,9 +1304,9 @@ export default function SettingsView({
                         isDarkMode ? 'border-slate-800/80' : 'border-slate-200'
                       }`}>
                         <div className="flex items-center gap-1.5">
-                          <Lock className={`w-3.5 h-3.5 ${isRestricted ? 'text-emerald-400' : 'text-amber-400'}`} />
+                          <Lock className={`w-3.5 h-3.5 ${isRestricted ? 'text-emerald-500 dark:text-emerald-400' : 'text-amber-500 dark:text-amber-400'}`} />
                           <span className={`text-[10px] font-bold uppercase tracking-wider ${
-                            isRestricted ? 'text-emerald-400' : 'text-amber-400'
+                            isRestricted ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'
                           }`}>
                             {isRestricted ? 'Restriction Enforced' : 'Access Unlocked'}
                           </span>
@@ -1317,8 +1317,8 @@ export default function SettingsView({
                           onClick={() => toggleSecurityPolicy(item.id)}
                           className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase transition-all cursor-pointer ${
                             isRestricted
-                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30'
-                              : 'bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30'
+                              ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30'
+                              : 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/30'
                           }`}
                         >
                           {isRestricted ? 'Lock Active' : 'Enable Restriction'}
