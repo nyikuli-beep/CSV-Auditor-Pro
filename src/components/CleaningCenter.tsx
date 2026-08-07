@@ -827,13 +827,13 @@ export default function CleaningCenter({
               <div className="flex gap-2 text-[10px] font-bold">
                 <button
                   onClick={() => setSelectedFileIds(files.filter(f => f.status !== 'failed').map(f => f.id))}
-                  className="px-2.5 py-1 rounded bg-slate-800/60 hover:bg-slate-800 text-slate-300 transition-colors uppercase cursor-pointer"
+                  className={`px-2.5 py-1 rounded transition-colors uppercase cursor-pointer ${isDarkMode ? 'bg-slate-800/60 hover:bg-slate-800 text-slate-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}
                 >
                   Select All
                 </button>
                 <button
                   onClick={() => setSelectedFileIds([])}
-                  className="px-2.5 py-1 rounded bg-slate-800/60 hover:bg-slate-800 text-slate-300 transition-colors uppercase cursor-pointer"
+                  className={`px-2.5 py-1 rounded transition-colors uppercase cursor-pointer ${isDarkMode ? 'bg-slate-800/60 hover:bg-slate-800 text-slate-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}
                 >
                   Clear All
                 </button>
@@ -853,9 +853,9 @@ export default function CleaningCenter({
 
             {/* list */}
             {filteredFiles.length === 0 ? (
-              <div className="text-center py-12 border-2 border-dashed border-slate-800 rounded-2xl">
-                <FileSpreadsheet className="w-8 h-8 text-slate-500 mx-auto mb-2" />
-                <p className="text-xs text-slate-400">No matching archived datasets found.</p>
+              <div className={`text-center py-12 border-2 border-dashed rounded-2xl ${isDarkMode ? 'border-slate-800' : 'border-slate-300'}`}>
+                <FileSpreadsheet className={`w-8 h-8 mx-auto mb-2 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} />
+                <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>No matching archived datasets found.</p>
               </div>
             ) : (
               <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-2">

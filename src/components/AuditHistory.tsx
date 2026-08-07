@@ -261,10 +261,10 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
       </AnimatePresence>
 
       {/* Toolbar controls */}
-      <div className={`p-4 rounded-2xl border flex flex-col md:flex-row gap-4 items-center justify-between ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200'}`}>
+      <div className={`p-4 rounded-2xl border flex flex-col md:flex-row gap-4 items-center justify-between ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
         {/* Search bar */}
         <div className="relative w-full md:w-80">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500" />
+          <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} />
           <input 
             type="text" 
             placeholder="Search files by name..." 
@@ -280,32 +280,32 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
           <select 
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as any)}
-            className={`px-3 py-2 rounded-xl border focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
+            className={`px-3 py-2 rounded-xl border focus:outline-none font-semibold cursor-pointer ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'}`}
           >
-            <option value="all">All Statuses</option>
-            <option value="completed">Completed</option>
-            <option value="failed">Failed</option>
+            <option value="all" className={isDarkMode ? 'bg-slate-950 text-slate-200' : 'bg-white text-slate-800'}>All Statuses</option>
+            <option value="completed" className={isDarkMode ? 'bg-slate-950 text-slate-200' : 'bg-white text-slate-800'}>Completed</option>
+            <option value="failed" className={isDarkMode ? 'bg-slate-950 text-slate-200' : 'bg-white text-slate-800'}>Failed</option>
           </select>
 
           {/* Sort Button */}
           <button 
             onClick={() => toggleSort('score')}
-            className={`px-3 py-2 rounded-xl border flex items-center gap-1.5 font-semibold hover:bg-slate-100 dark:hover:bg-slate-800/40 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
+            className={`px-3 py-2 rounded-xl border flex items-center gap-1.5 font-semibold transition-all cursor-pointer ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200 hover:bg-slate-800/40' : 'bg-white border-slate-200 text-slate-800 hover:bg-slate-100'}`}
           >
-            <ArrowUpDown className="w-3.5 h-3.5 text-blue-700 dark:text-blue-400" /> Sort Score
+            <ArrowUpDown className={`w-3.5 h-3.5 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} /> Sort Score
           </button>
           
           <button 
             onClick={() => toggleSort('date')}
-            className={`px-3 py-2 rounded-xl border flex items-center gap-1.5 font-semibold hover:bg-slate-100 dark:hover:bg-slate-800/40 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
+            className={`px-3 py-2 rounded-xl border flex items-center gap-1.5 font-semibold transition-all cursor-pointer ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200 hover:bg-slate-800/40' : 'bg-white border-slate-200 text-slate-800 hover:bg-slate-100'}`}
           >
-            <ArrowUpDown className="w-3.5 h-3.5 text-blue-700 dark:text-blue-400" /> Sort Date
+            <ArrowUpDown className={`w-3.5 h-3.5 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} /> Sort Date
           </button>
         </div>
       </div>
 
       {/* History log list table */}
-      <div className={`p-6 rounded-3xl border overflow-hidden relative ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80 shadow-2xl shadow-blue-500/1' : 'bg-white border-slate-200 shadow-sm'}`}>
+      <div className={`p-6 rounded-3xl border overflow-hidden relative ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80 shadow-2xl shadow-blue-500/5' : 'bg-white border-slate-200 shadow-sm'}`}>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
@@ -314,7 +314,7 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
                   <button
                     onClick={handleToggleSelectAll}
                     disabled={sortedFiles.length === 0}
-                    className="flex items-center justify-center p-1 rounded hover:bg-slate-800/20 text-slate-400 cursor-pointer disabled:opacity-30"
+                    className={`flex items-center justify-center p-1 rounded cursor-pointer disabled:opacity-30 ${isDarkMode ? 'hover:bg-slate-800/20 text-slate-400' : 'hover:bg-slate-200 text-slate-600'}`}
                     title={isAllSelected ? "Deselect All" : "Select All Visible"}
                   >
                     {isAllSelected ? (
@@ -322,27 +322,27 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
                     ) : isSomeSelected ? (
                       <MinusSquare className="w-4 h-4 text-blue-500" />
                     ) : (
-                      <Square className="w-4 h-4 text-slate-400" />
+                      <Square className={`w-4 h-4 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} />
                     )}
                   </button>
                 </th>
-                <th className="p-4 font-semibold">File Name</th>
-                <th className="p-4 font-semibold">Audited Date</th>
-                <th className="p-4 font-semibold">File Size</th>
-                <th className="p-4 font-semibold">Compliance Rating</th>
-                <th className="p-4 font-semibold">Retention Policy</th>
-                <th className="p-4 font-semibold">Status</th>
-                <th className="p-4 font-semibold text-right">Actions</th>
+                <th className={`p-4 font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>File Name</th>
+                <th className={`p-4 font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>Audited Date</th>
+                <th className={`p-4 font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>File Size</th>
+                <th className={`p-4 font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>Compliance Rating</th>
+                <th className={`p-4 font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>Retention Policy</th>
+                <th className={`p-4 font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>Status</th>
+                <th className={`p-4 font-bold text-right ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>Actions</th>
               </tr>
             </thead>
             <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800/50' : 'divide-slate-200'}`}>
               {sortedFiles.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-12 text-center text-slate-400">
+                  <td colSpan={8} className="p-12 text-center">
                     <div className="flex flex-col items-center justify-center gap-2">
-                      <Archive className="w-8 h-8 text-slate-500" />
-                      <p className="font-bold text-sm">No spreadsheet records found</p>
-                      <p className="text-xs text-slate-500">Try adjusting your search query or status filter.</p>
+                      <Archive className={`w-8 h-8 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} />
+                      <p className={`font-bold text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>No spreadsheet records found</p>
+                      <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Try adjusting your search query or status filter.</p>
                     </div>
                   </td>
                 </tr>
@@ -354,28 +354,28 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
                       key={file.id}
                       className={`transition-colors ${
                         isSelected 
-                          ? isDarkMode ? 'bg-blue-950/40 border-l-2 border-l-blue-500' : 'bg-blue-50/70 border-l-2 border-l-blue-600'
+                          ? isDarkMode ? 'bg-blue-950/40 border-l-2 border-l-blue-500' : 'bg-blue-50 border-l-2 border-l-blue-600'
                           : isDarkMode ? 'hover:bg-slate-800/10' : 'hover:bg-slate-50'
                       }`}
                     >
                       <td className="p-4 w-10 text-center">
                         <button
                           onClick={() => handleToggleSelectFile(file.id)}
-                          className="flex items-center justify-center p-1 rounded hover:bg-slate-800/20 text-slate-400 cursor-pointer"
+                          className={`flex items-center justify-center p-1 rounded cursor-pointer ${isDarkMode ? 'hover:bg-slate-800/20 text-slate-400' : 'hover:bg-slate-200 text-slate-600'}`}
                         >
                           {isSelected ? (
                             <CheckSquare className="w-4 h-4 text-blue-500" />
                           ) : (
-                            <Square className="w-4 h-4 text-slate-400 hover:text-slate-200" />
+                            <Square className={`w-4 h-4 ${isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-400 hover:text-slate-700'}`} />
                           )}
                         </button>
                       </td>
-                      <td className="p-4 font-bold flex items-center gap-2.5 truncate max-w-[240px] text-slate-900 dark:text-slate-100">
-                        <FileSpreadsheet className="w-4 h-4 text-blue-700 dark:text-blue-400 shrink-0" />
+                      <td className={`p-4 font-bold flex items-center gap-2.5 truncate max-w-[240px] ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
+                        <FileSpreadsheet className={`w-4 h-4 shrink-0 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
                         <span className="truncate">{file.name}</span>
                       </td>
-                      <td className="p-4 text-slate-600 dark:text-slate-400 font-mono text-[10px]">{file.uploadedAt}</td>
-                      <td className="p-4 text-slate-600 dark:text-slate-400 font-mono text-[10px]">
+                      <td className={`p-4 font-mono text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{file.uploadedAt}</td>
+                      <td className={`p-4 font-mono text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                         {file.size > 1024 * 1024 
                           ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 
                           : `${(file.size / 1024).toFixed(1)} KB`}
@@ -383,40 +383,50 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
                       <td className="p-4">
                         {file.status === 'completed' ? (
                           <div className="flex items-center gap-2">
-                            <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md font-bold ${file.score > 80 ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-400' : 'bg-amber-100 dark:bg-amber-500/10 text-amber-800 dark:text-amber-400'}`}>
+                            <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md font-bold ${
+                              file.score > 80 
+                                ? isDarkMode ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-100 text-emerald-800'
+                                : isDarkMode ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-100 text-amber-800'
+                            }`}>
                               {file.score}%
                             </span>
-                            <div className="w-16 bg-slate-200 dark:bg-slate-700/20 rounded-full h-1">
-                              <div className={`h-full rounded-full ${file.score > 80 ? 'bg-emerald-600 dark:bg-emerald-500' : 'bg-amber-600 dark:bg-amber-500'}`} style={{ width: `${file.score}%` }}></div>
+                            <div className={`w-16 rounded-full h-1 ${isDarkMode ? 'bg-slate-700/30' : 'bg-slate-200'}`}>
+                              <div className={`h-full rounded-full ${file.score > 80 ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${file.score}%` }}></div>
                             </div>
                           </div>
                         ) : (
-                          <span className="text-slate-500 italic">Not available</span>
+                          <span className={`italic text-xs ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Not available</span>
                         )}
                       </td>
                       <td className="p-4">
                         {file.retentionPolicy ? (
                           <div className="flex flex-col gap-0.5">
-                            <span className="text-[10px] font-bold text-blue-700 dark:text-blue-400 font-mono flex items-center gap-1">
-                              {file.retentionPolicy.option === 'immediate' && <Trash2 className="w-3 h-3 text-rose-600 dark:text-rose-400 shrink-0" />}
-                              {file.retentionPolicy.option === '24h' && <Clock className="w-3 h-3 text-blue-700 dark:text-blue-400 shrink-0" />}
-                              {(file.retentionPolicy.option === '3d' || file.retentionPolicy.option === '7d' || file.retentionPolicy.option === '14d' || file.retentionPolicy.option === '30d') && <Calendar className="w-3 h-3 text-indigo-700 dark:text-indigo-400 shrink-0" />}
-                              {file.retentionPolicy.option === 'forever' && <Shield className="w-3 h-3 text-emerald-700 dark:text-emerald-400 shrink-0" />}
+                            <span className={`text-[10px] font-bold font-mono flex items-center gap-1 ${isDarkMode ? 'text-blue-400' : 'text-blue-700'}`}>
+                              {file.retentionPolicy.option === 'immediate' && <Trash2 className={`w-3 h-3 shrink-0 ${isDarkMode ? 'text-rose-400' : 'text-rose-600'}`} />}
+                              {file.retentionPolicy.option === '24h' && <Clock className={`w-3 h-3 shrink-0 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />}
+                              {(file.retentionPolicy.option === '3d' || file.retentionPolicy.option === '7d' || file.retentionPolicy.option === '14d' || file.retentionPolicy.option === '30d') && <Calendar className={`w-3 h-3 shrink-0 ${isDarkMode ? 'text-indigo-400' : 'text-indigo-600'}`} />}
+                              {file.retentionPolicy.option === 'forever' && <Shield className={`w-3 h-3 shrink-0 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`} />}
                               <span>{getRetentionOptionDetail(file.retentionPolicy.option).badge}</span>
                             </span>
-                            <span className="text-[9px] font-mono text-slate-500 dark:text-slate-400">
+                            <span className={`text-[9px] font-mono ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                               {formatTimeRemaining(file.retentionPolicy.expiresAt, file.retentionPolicy.originalFileDeleted).label}
                             </span>
                           </div>
                         ) : (
-                          <span className="text-[10px] text-slate-500 font-mono flex items-center gap-1"><Clock className="w-3 h-3 text-slate-400 shrink-0" /> 24 Hours (Default)</span>
+                          <span className={`text-[10px] font-mono flex items-center gap-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                            <Clock className={`w-3 h-3 shrink-0 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} /> 24 Hours (Default)
+                          </span>
                         )}
                       </td>
                       <td className="p-4">
                         {file.status === 'completed' ? (
-                          <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 w-fit"><CheckCircle2 className="w-3.5 h-3.5" /> Approved</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 w-fit ${isDarkMode ? 'text-emerald-400 bg-emerald-500/10' : 'text-emerald-800 bg-emerald-100'}`}>
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Approved
+                          </span>
                         ) : (
-                          <span className="text-[10px] font-bold text-rose-800 dark:text-rose-400 bg-rose-100 dark:bg-rose-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 w-fit"><AlertCircle className="w-3.5 h-3.5" /> Corrupted</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 w-fit ${isDarkMode ? 'text-rose-400 bg-rose-500/10' : 'text-rose-800 bg-rose-100'}`}>
+                            <AlertCircle className="w-3.5 h-3.5" /> Corrupted
+                          </span>
                         )}
                       </td>
                       <td className="p-4 text-right">
@@ -428,14 +438,14 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
                                   if (onDeleteFile) onDeleteFile(file.id, file.name);
                                   setDeletingId(null);
                                 }}
-                                className="px-2 py-1.5 rounded bg-rose-100 dark:bg-red-500/20 text-rose-700 dark:text-red-400 hover:bg-rose-600 hover:text-white dark:hover:bg-red-500 dark:hover:text-white transition-all font-bold text-[9px] uppercase cursor-pointer"
+                                className="px-2 py-1.5 rounded bg-rose-600 text-white hover:bg-rose-700 transition-all font-bold text-[9px] uppercase cursor-pointer"
                               >
                                 Confirm
                               </button>
                               <button
                                 onClick={() => setDeletingId(null)}
                                 className={`px-2 py-1.5 rounded transition-all font-bold text-[9px] uppercase cursor-pointer ${
-                                  isDarkMode ? 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+                                  isDarkMode ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
                                 }`}
                               >
                                 Cancel
@@ -448,7 +458,7 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
                                   onSelectFile(file);
                                   onNavigate('results');
                                 }}
-                                className={`p-2 rounded-lg border hover:scale-105 transition-all text-blue-700 dark:text-blue-400 ${isDarkMode ? 'bg-slate-950 border-slate-800 hover:bg-slate-900' : 'bg-white border-slate-200 hover:bg-slate-100'}`}
+                                className={`p-2 rounded-lg border hover:scale-105 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 hover:bg-slate-900 text-blue-400' : 'bg-white border-slate-200 hover:bg-slate-100 text-blue-600'}`}
                                 title="View Report"
                               >
                                 <Eye className="w-3.5 h-3.5" />
@@ -456,7 +466,7 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
                               <button 
                                 onClick={() => downloadHistoryReport(file)}
                                 disabled={file.status !== 'completed'}
-                                className={`p-2 rounded-lg border hover:scale-105 transition-all text-emerald-700 dark:text-emerald-400 disabled:opacity-30 disabled:pointer-events-none ${isDarkMode ? 'bg-slate-950 border-slate-800 hover:bg-slate-900' : 'bg-white border-slate-200 hover:bg-slate-100'}`}
+                                className={`p-2 rounded-lg border hover:scale-105 transition-all disabled:opacity-30 disabled:pointer-events-none ${isDarkMode ? 'bg-slate-950 border-slate-800 hover:bg-slate-900 text-emerald-400' : 'bg-white border-slate-200 hover:bg-slate-100 text-emerald-600'}`}
                                 title="Download Report"
                               >
                                 <Download className="w-3.5 h-3.5" />
@@ -464,7 +474,7 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
                               {onDeleteFile && (
                                 <button 
                                   onClick={() => setDeletingId(file.id)}
-                                  className={`p-2 rounded-lg border hover:scale-105 transition-all text-rose-700 dark:text-rose-400 ${isDarkMode ? 'bg-slate-950 border-slate-800 hover:bg-slate-900 hover:bg-rose-500/10' : 'bg-white border-slate-200 hover:bg-slate-100 hover:bg-rose-50'}`}
+                                  className={`p-2 rounded-lg border hover:scale-105 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 hover:bg-slate-900 hover:bg-rose-500/10 text-rose-400' : 'bg-white border-slate-200 hover:bg-slate-100 hover:bg-rose-50 text-rose-600'}`}
                                   title="Delete Dataset"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
@@ -565,12 +575,12 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
                   <AlertTriangle className="w-5 h-5 text-rose-500" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-base tracking-tight">Confirm Batch Delete</h3>
-                  <p className="text-xs text-slate-400">Permanently purge selected files</p>
+                  <h3 className={`font-extrabold text-base tracking-tight ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Confirm Batch Delete</h3>
+                  <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Permanently purge selected files</p>
                 </div>
               </div>
 
-              <p className="text-xs text-slate-300 leading-relaxed">
+              <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
                 Are you sure you want to delete <strong>{selectedIds.length} selected spreadsheet record{selectedIds.length > 1 ? 's' : ''}</strong> from the Audit Archive?
                 This operation will remove all associated compliance evaluation logs and storage drafts.
               </p>
