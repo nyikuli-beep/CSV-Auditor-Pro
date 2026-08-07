@@ -46,6 +46,7 @@ import {
 } from 'lucide-react';
 
 import { ThemeInspector } from './components/ThemeInspector';
+import { WorkspaceHeader } from './components/WorkspaceHeader';
 
 // Import Types
 import { CSVFile, TeamMember, AuditActivity, ChatMessage, SystemSettings, SlotRequest } from './types';
@@ -2584,207 +2585,23 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
             )}
 
             {/* Top Workspace Header */}
-            <header className={`h-14 px-3 sm:px-6 border-b flex items-center justify-between gap-2 sm:gap-4 shrink-0 max-w-full overflow-x-hidden ${isDarkMode ? 'bg-[#0f172a] border-slate-800' : 'bg-white border-slate-200'}`}>
-              <div className="flex items-center gap-4">
-                <button 
-                  onClick={() => setMobileMenuOpen(true)}
-                  className={`md:hidden p-1.5 rounded cursor-pointer transition-all ${isDarkMode ? 'bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-                >
-                  <Menu className="w-4 h-4" />
-                </button>
-                <div className="flex items-center gap-2.5">
-                  <h2 className={`text-sm md:text-base font-semibold ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
-                    {activeTab === 'dashboard' && 'Main Workspace'}
-                    {activeTab === 'upload' && 'Spreadsheet Ingestion'}
-                    {activeTab === 'schema' && 'Schema Compliance'}
-                    {activeTab === 'results' && 'Audit Findings'}
-                    {activeTab === 'clean' && 'Hygiene Laboratory'}
-                    {activeTab === 'insights' && 'AI Intelligence Core'}
-                    {activeTab === 'gmail' && 'Gmail Compliance Hub'}
-                    {activeTab === 'reports' && 'Branded PDF Reports'}
-                    {activeTab === 'history' && 'File Archive Repository'}
-                    {activeTab === 'team' && 'Tenancy Collaboration'}
-                    {activeTab === 'settings' && 'Workspace Credentials'}
-                    {activeTab === 'admin' && 'Compliance Administration'}
-                  </h2>
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded tracking-wide uppercase ${isDarkMode ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>
-                      All Systems Normal
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Profile card & quick dials */}
-              <div className="flex items-center gap-3.5">
-                <div className="hidden lg:flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 text-blue-500" />
-                  <span className="text-[10px] text-slate-400 font-mono font-bold">{currentTime}</span>
-                </div>
-
-                {/* Interactive Tour Button */}
-                <button 
-                  onClick={() => setTourModalOpen(true)}
-                  className={`p-1.5 px-2.5 rounded-lg border cursor-pointer hover:scale-[1.02] transition-all flex items-center gap-1.5 ${
-                    isDarkMode ? 'bg-[#1e293b]/50 border-slate-800 text-slate-400 hover:text-white' : 'bg-white border-slate-200 text-slate-500 hover:text-slate-900'
-                  }`}
-                  title="Take Interactive Onboarding Tour"
-                >
-                  <Compass className="w-4 h-4 text-emerald-500" />
-                  <span className="hidden md:inline text-[11px] font-mono font-bold">Tour</span>
-                </button>
-
-                {/* Keyboard Shortcuts Guide Button */}
-                <button 
-                  onClick={() => setShortcutsModalOpen(true)}
-                  className={`p-1.5 px-2.5 rounded-lg border cursor-pointer hover:scale-[1.02] transition-all flex items-center gap-1.5 ${
-                    isDarkMode ? 'bg-[#1e293b]/50 border-slate-800 text-slate-400 hover:text-white' : 'bg-white border-slate-200 text-slate-500 hover:text-slate-900'
-                  }`}
-                  title="Keyboard Shortcuts Guide (Alt + K or ?)"
-                >
-                  <Keyboard className="w-4 h-4 text-blue-500" />
-                  <span className="hidden md:inline text-[11px] font-mono font-bold">Alt+K</span>
-                </button>
-
-                {/* Notification Bell for Owner Slot Requests */}
-                {user?.email?.toLowerCase() === 'nyikulibramwel@gmail.com' && (
-                  <div className="relative">
-                    <button
-                      onClick={() => setShowNotificationsDropdown(!showNotificationsDropdown)}
-                      className={`p-1.5 rounded-lg border cursor-pointer hover:scale-[1.03] transition-all relative ${
-                        isDarkMode ? 'bg-[#1e293b]/50 border-slate-800 text-slate-400 hover:text-white' : 'bg-white border-slate-200 text-slate-500 hover:text-slate-900'
-                      }`}
-                      title="Team Tenancy Slot Notifications"
-                    >
-                      <Bell className="w-4 h-4 text-amber-400" />
-                      {slotRequests.filter(r => r.status === 'pending').length > 0 && (
-                        <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 text-slate-950 font-black text-[9px] flex items-center justify-center animate-bounce">
-                          {slotRequests.filter(r => r.status === 'pending').length}
-                        </span>
-                      )}
-                    </button>
-
-                    {/* Notification Dropdown Popover */}
-                    {showNotificationsDropdown && (
-                      <div className={`absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl border shadow-2xl p-4 z-50 animate-fadeIn ${
-                        isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
-                      }`}>
-                        <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-800/60">
-                          <div className="flex items-center gap-2">
-                            <Bell className="w-4 h-4 text-amber-400" />
-                            <span className="font-extrabold text-xs uppercase tracking-wider">Owner Notifications</span>
-                          </div>
-                          <button 
-                            onClick={() => setShowNotificationsDropdown(false)}
-                            className="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-
-                        {slotRequests.filter(r => r.status === 'pending').length === 0 ? (
-                          <div className="py-6 text-center text-xs text-slate-400 font-mono">
-                            No pending user slot requests.
-                          </div>
-                        ) : (
-                          <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
-                            {slotRequests.filter(r => r.status === 'pending').map(req => (
-                              <div key={req.id} className="p-3 rounded-xl bg-slate-900/90 border border-amber-500/30 text-left space-y-2">
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="font-bold text-xs text-amber-300 truncate">{req.userName}</span>
-                                  <span className="text-[9px] text-slate-400 font-mono">{req.requestedAt}</span>
-                                </div>
-                                <p className="text-[11px] text-slate-300 font-mono truncate">{req.userEmail}</p>
-                                <p className="text-[10px] text-slate-400">{req.message || 'Requested team slot invitation.'}</p>
-                                
-                                <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-800">
-                                  <button
-                                    onClick={() => {
-                                      handleApproveSlotRequest(req);
-                                      setShowNotificationsDropdown(false);
-                                    }}
-                                    className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] flex items-center gap-1 cursor-pointer"
-                                  >
-                                    <UserPlus className="w-3 h-3" /> Approve & Provision
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      handleDeclineSlotRequest(req);
-                                      setShowNotificationsDropdown(false);
-                                    }}
-                                    className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-rose-900/40 text-slate-300 hover:text-rose-300 font-bold text-[10px] flex items-center gap-1 cursor-pointer border border-slate-700"
-                                  >
-                                    <UserX className="w-3 h-3" /> Decline
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Mode toggle with subtle cross-fade animation */}
-                <motion.button 
-                  onClick={() => setIsDarkMode(!isDarkMode)}
-                  whileTap={{ scale: 0.92 }}
-                  whileHover={{ scale: 1.05 }}
-                  className={`p-1.5 rounded-lg border cursor-pointer transition-colors duration-300 relative overflow-hidden ${isDarkMode ? 'bg-[#1e293b]/50 border-slate-800 text-amber-400 hover:text-amber-300 hover:bg-[#1e293b]' : 'bg-white border-slate-200 text-indigo-600 hover:text-indigo-800 hover:bg-slate-50'}`}
-                  title="Toggle Light / Dark Mode (Alt + Shift + L)"
-                >
-                  <AnimatePresence mode="wait" initial={false}>
-                    <motion.div
-                      key={isDarkMode ? 'dark' : 'light'}
-                      initial={{ opacity: 0, rotate: -90, scale: 0.5 }}
-                      animate={{ opacity: 1, rotate: 0, scale: 1 }}
-                      exit={{ opacity: 0, rotate: 90, scale: 0.5 }}
-                      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                      className="flex items-center justify-center"
-                    >
-                      {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-                    </motion.div>
-                  </AnimatePresence>
-                </motion.button>
-
-                {/* Theme Inspector Developer Tool Toggle */}
-                <motion.button 
-                  onClick={() => setThemeInspectorOpen(!themeInspectorOpen)}
-                  whileTap={{ scale: 0.92 }}
-                  whileHover={{ scale: 1.05 }}
-                  className={`p-1.5 rounded-lg border cursor-pointer transition-colors duration-300 relative overflow-hidden flex items-center gap-1 text-xs font-bold ${
-                    themeInspectorOpen 
-                      ? 'bg-blue-600 border-blue-500 text-white' 
-                      : isDarkMode 
-                        ? 'bg-[#1e293b]/50 border-slate-800 text-slate-300 hover:text-white hover:bg-[#1e293b]' 
-                        : 'bg-white border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-50'
-                  }`}
-                  title="Theme & Accessibility Inspector (WCAG AA)"
-                >
-                  <Palette className="w-4 h-4 text-blue-400" />
-                  <span className="hidden md:inline font-mono text-[10px]">WCAG AA</span>
-                </motion.button>
-
-                <button 
-                  onClick={() => setProfileModalOpen(true)}
-                  className="flex items-center gap-2.5 p-1 rounded-xl hover:bg-slate-800/20 transition-all cursor-pointer group"
-                  title="Upload / Change Profile Picture"
-                >
-                  <div className="relative w-8 h-8 rounded-full overflow-hidden border-2 border-blue-500/50 shadow-sm shrink-0">
-                    <img src={user?.avatar || '/macbook_code.jpg'} alt={user?.name || "User Profile"} className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-slate-950/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
-                      <Camera className="w-3.5 h-3.5" />
-                    </div>
-                  </div>
-                  <div className="hidden sm:flex flex-col text-left text-xs leading-tight">
-                    <span className={`font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>{user?.name?.split(' ')[0] || user?.email?.split('@')[0] || 'Nyikuli B.'}</span>
-                    <span className="text-[9px] font-mono text-blue-500 font-bold uppercase">{user?.role || 'Owner'}</span>
-                  </div>
-                </button>
-              </div>
-            </header>
+            <WorkspaceHeader
+              activeTab={activeTab}
+              onNavigate={handleNavigateTab}
+              onOpenMobileMenu={() => setMobileMenuOpen(true)}
+              currentTime={currentTime}
+              isDarkMode={isDarkMode}
+              onToggleTheme={() => setIsDarkMode(!isDarkMode)}
+              themeInspectorOpen={themeInspectorOpen}
+              onToggleThemeInspector={() => setThemeInspectorOpen(!themeInspectorOpen)}
+              onOpenTour={() => setTourModalOpen(true)}
+              onOpenShortcuts={() => setShortcutsModalOpen(true)}
+              onOpenProfile={() => setProfileModalOpen(true)}
+              slotRequests={slotRequests}
+              onApproveSlotRequest={handleApproveSlotRequest}
+              onDeclineSlotRequest={handleDeclineSlotRequest}
+              user={user}
+            />
 
             {/* Container for active view tabs */}
             <div ref={mainContentRef} onScroll={handleContentScroll} className="p-3 sm:p-6 flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full mx-auto max-w-7xl">
