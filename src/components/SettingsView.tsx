@@ -686,17 +686,13 @@ export default function SettingsView({
             </div>
           </div>
 
-          {/* Database Connection Status (Cloud SQL) */}
-          <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className={`font-bold text-sm uppercase tracking-wider flex items-center gap-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
-                <Database className="w-4 h-4 text-emerald-500" /> Database Integration
-              </h3>
-              {!isOwner ? (
-                <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center gap-1">
-                  <Lock className="w-3 h-3" /> Owner Locked
-                </span>
-              ) : (
+          {/* Database Connection Status (Cloud SQL) - Owner Only */}
+          {isOwner && (
+            <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className={`font-bold text-sm uppercase tracking-wider flex items-center gap-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
+                  <Database className="w-4 h-4 text-emerald-500" /> Database Integration
+                </h3>
                 <button
                   type="button"
                   onClick={() => fetchDbStatus()}
@@ -706,11 +702,9 @@ export default function SettingsView({
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${dbLoading ? 'animate-spin text-emerald-500' : ''}`} />
                 </button>
-              )}
-            </div>
+              </div>
 
-            {isOwner ? (
-              dbLoading ? (
+              {dbLoading ? (
                 <div className="py-4 flex justify-center items-center gap-2 text-xs text-slate-400">
                   <div className="w-4 h-4 border-2 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin"></div>
                   <span>Re-establishing database connection...</span>
@@ -781,37 +775,20 @@ export default function SettingsView({
                     {dbStatus?.error || 'Database connection link is ready to connect. Click "Reconnect Link" to synchronize real-time PostgreSQL metrics.'}
                   </p>
                 </div>
-              )
-            ) : (
-              <div className={`p-4 rounded-xl border space-y-2 ${isDarkMode ? 'bg-slate-950/60 border-rose-500/20 text-slate-300' : 'bg-slate-50 border-rose-200 text-slate-700'}`}>
-                <div className="flex items-center gap-2 text-rose-400 font-extrabold text-xs">
-                  <ShieldAlert className="w-4 h-4 text-rose-500 shrink-0" />
-                  <span>Cloud SQL Database Integration Access Restricted</span>
-                </div>
-                <p className="text-[11px] leading-relaxed text-slate-400">
-                  Cloud SQL database integration status, PostgreSQL schema synchronization, and connection management parameters are restricted exclusively to primary workspace owner <strong className="text-blue-400 font-mono">nyikulibramwel@gmail.com</strong>. Invited non-owner members cannot view or modify database integrations.
-                </p>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Right Side: API Key Management & Notifications */}
         <div className="lg:col-span-6 space-y-6">
-          {/* API Key management */}
-          <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
-            <h3 className={`font-bold text-sm uppercase tracking-wider mb-4 flex items-center justify-between ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
-              <span className="flex items-center gap-2">
+          {/* API Key management - Owner Only */}
+          {isOwner && (
+            <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
+              <h3 className={`font-bold text-sm uppercase tracking-wider mb-4 flex items-center gap-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
                 <Key className="w-4 h-4 text-violet-500" /> Gemini API Settings
-              </span>
-              {!isOwner && (
-                <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center gap-1">
-                  <Lock className="w-3 h-3" /> Owner Locked
-                </span>
-              )}
-            </h3>
-            
-            {isOwner ? (
+              </h3>
+              
               <div className="space-y-4">
                 <p className={`text-[10px] leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                   To bypass standard public Sandbox request throttling, input your private Google Gemini API key. All LLM reasoning will be direct-routed through your billing tier and database settings.
@@ -911,33 +888,16 @@ export default function SettingsView({
                   <span>Default API keys are configured and injected automatically by Google AI Studio at runtime. Standard developer sandbox features are active.</span>
                 </div>
               </div>
-            ) : (
-              <div className={`p-4 rounded-xl border space-y-2 ${isDarkMode ? 'bg-slate-950/60 border-rose-500/20 text-slate-300' : 'bg-slate-50 border-rose-200 text-slate-700'}`}>
-                <div className="flex items-center gap-2 text-rose-400 font-extrabold text-xs">
-                  <ShieldAlert className="w-4 h-4 text-rose-500 shrink-0" />
-                  <span>Gemini API Key & Model Access Restricted</span>
-                </div>
-                <p className="text-[11px] leading-relaxed text-slate-400">
-                  Private Gemini API key configuration, model routing, and billing tier parameters are restricted exclusively to primary owner <strong className="text-blue-400 font-mono">nyikulibramwel@gmail.com</strong>. Invited users cannot view or edit API secret keys.
-                </p>
-              </div>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* Email Notifications */}
-          <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
-            <h3 className={`font-bold text-sm uppercase tracking-wider mb-4 flex items-center justify-between ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
-              <span className="flex items-center gap-2">
+          {/* Email Notifications - Owner Only */}
+          {isOwner && (
+            <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
+              <h3 className={`font-bold text-sm uppercase tracking-wider mb-4 flex items-center gap-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
                 <Bell className="w-4 h-4 text-amber-500" /> Email Configurations
-              </span>
-              {!isOwner && (
-                <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center gap-1">
-                  <Lock className="w-3 h-3" /> Owner Locked
-                </span>
-              )}
-            </h3>
-            
-            {isOwner ? (
+              </h3>
+              
               <div className="space-y-3">
                 {/* Box 1 */}
                 <label className="flex items-start gap-3 cursor-pointer">
@@ -967,33 +927,16 @@ export default function SettingsView({
                   </div>
                 </label>
               </div>
-            ) : (
-              <div className={`p-4 rounded-xl border space-y-2 ${isDarkMode ? 'bg-slate-950/60 border-rose-500/20 text-slate-300' : 'bg-slate-50 border-rose-200 text-slate-700'}`}>
-                <div className="flex items-center gap-2 text-rose-400 font-extrabold text-xs">
-                  <ShieldAlert className="w-4 h-4 text-rose-500 shrink-0" />
-                  <span>Email Dispatch & Server Settings Restricted</span>
-                </div>
-                <p className="text-[11px] leading-relaxed text-slate-400">
-                  Automated email notification dispatches and server SMTP dispatch parameters can only be altered by primary workspace owner <strong className="text-blue-400 font-mono">nyikulibramwel@gmail.com</strong>.
-                </p>
-              </div>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* Google Search Console Verification */}
-          <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
-            <h3 className={`font-bold text-sm uppercase tracking-wider mb-4 flex items-center justify-between ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
-              <span className="flex items-center gap-2">
+          {/* Google Search Console Verification - Owner Only */}
+          {isOwner && (
+            <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
+              <h3 className={`font-bold text-sm uppercase tracking-wider mb-4 flex items-center gap-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
                 <Globe className="w-4 h-4 text-blue-500" /> Search Console Verification
-              </span>
-              {!isOwner && (
-                <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center gap-1">
-                  <Lock className="w-3 h-3" /> Owner Locked
-                </span>
-              )}
-            </h3>
-            
-            {isOwner ? (
+              </h3>
+              
               <div className="space-y-4">
                 <p className="text-[10px] leading-relaxed text-slate-400">
                   Verify your app on Google Search Console using HTML Meta Tag or dynamic HTML File verification.
@@ -1078,23 +1021,14 @@ export default function SettingsView({
                   )}
                 </button>
               </div>
-            ) : (
-              <div className={`p-4 rounded-xl border space-y-2 ${isDarkMode ? 'bg-slate-950/60 border-rose-500/20 text-slate-300' : 'bg-slate-50 border-rose-200 text-slate-700'}`}>
-                <div className="flex items-center gap-2 text-rose-400 font-extrabold text-xs">
-                  <ShieldAlert className="w-4 h-4 text-rose-500 shrink-0" />
-                  <span>Search Console Verification Deployment Restricted</span>
-                </div>
-                <p className="text-[11px] leading-relaxed text-slate-400">
-                  Search Console site verification meta tags and dynamic file endpoint deployment grant domain indexation authority. Permission is strictly granted to primary owner <strong className="text-blue-400 font-mono">nyikulibramwel@gmail.com</strong>.
-                </p>
-              </div>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* Restricted Features & Access Policy Matrix (User & API Settings Security) */}
-          <div className={`lg:col-span-12 p-6 rounded-2xl border transition-all ${
-            isDarkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
-          }`}>
+          {/* Restricted Features & Access Policy Matrix (Owner Only) */}
+          {isOwner && (
+            <div className={`lg:col-span-12 p-6 rounded-2xl border transition-all ${
+              isDarkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+            }`}>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-800/40">
               <div>
                 <div className="flex items-center gap-2 mb-1">
@@ -1329,6 +1263,7 @@ export default function SettingsView({
                 })}
             </div>
           </div>
+          )}
 
           {/* Save Configurations Feedback & Button */}
           <div className="space-y-3 pt-2">
