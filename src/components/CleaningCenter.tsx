@@ -2809,6 +2809,38 @@ export default function CleaningCenter({
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
+                {/* SVG Center Text Labels for Accessibility & SVG Exporters */}
+                <text
+                  x="50%"
+                  y="45%"
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fill={isDarkMode ? '#F9FAFB' : '#111827'}
+                  fontSize="22"
+                  fontWeight="900"
+                  fontFamily="monospace"
+                  opacity="1"
+                  pointerEvents="none"
+                  className="chart-center-label-primary"
+                >
+                  {rowDistribution.cleanedPercentage}%
+                </text>
+                <text
+                  x="50%"
+                  y="62%"
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fill={isDarkMode ? '#9CA3AF' : '#4B5563'}
+                  fontSize="10"
+                  fontWeight="800"
+                  fontFamily="sans-serif"
+                  letterSpacing="0.05em"
+                  opacity="1"
+                  pointerEvents="none"
+                  className="chart-center-label-secondary"
+                >
+                  CLEANED
+                </text>
                 <RechartsTooltip
                   content={({ active, payload }) => {
                     if (active && payload && payload.length) {
@@ -2820,7 +2852,7 @@ export default function CleaningCenter({
                           <p className="font-bold flex items-center gap-1.5" style={{ color: data.color }}>
                             {data.name}
                           </p>
-                          <p className="text-slate-400 font-mono text-[11px] mt-1">
+                          <p className={`font-mono text-[11px] mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                             {data.value.toLocaleString()} rows ({data.percentage}%)
                           </p>
                         </div>
@@ -2831,12 +2863,20 @@ export default function CleaningCenter({
                 />
               </PieChart>
             </ResponsiveContainer>
-            {/* Donut Center Label */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-xl font-black tracking-tight font-mono text-slate-900 dark:text-slate-100">
+            {/* Donut Center Label Overlay */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10 chart-donut-center">
+              <span 
+                className="text-2xl font-black tracking-tight font-mono transition-colors duration-200"
+                style={{ color: isDarkMode ? '#F9FAFB' : '#111827', opacity: 1 }}
+              >
                 {rowDistribution.cleanedPercentage}%
               </span>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cleaned</span>
+              <span 
+                className="text-[10px] font-bold uppercase tracking-wider transition-colors duration-200"
+                style={{ color: isDarkMode ? '#9CA3AF' : '#4B5563', opacity: 1 }}
+              >
+                Cleaned
+              </span>
             </div>
           </div>
 

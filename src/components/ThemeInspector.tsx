@@ -115,8 +115,9 @@ export const ThemeInspector: React.FC<ThemeInspectorProps> = ({
     setIsScanning(true);
     const foundIssues: IssueItem[] = [];
 
-    const elements = Array.from(document.querySelectorAll<HTMLElement>(
-      'h1, h2, h3, h4, h5, h6, p, span, button, a, label, th, td, input, select'
+    // Query both standard HTML text elements and SVG / Chart text elements
+    const elements = Array.from(document.querySelectorAll<HTMLElement | SVGElement>(
+      'h1, h2, h3, h4, h5, h6, p, span, button, a, label, th, td, input, select, text, tspan, foreignObject, .recharts-text, .recharts-cartesian-axis-tick-value, .recharts-legend-item-text, .chart-donut-center span, .chart-dial-center span, .chart-meter-center span'
     ));
 
     let issueId = 1;
@@ -128,6 +129,8 @@ export const ThemeInspector: React.FC<ThemeInspectorProps> = ({
     let tablesIssues = 0;
     let formsCount = 0;
     let formsIssues = 0;
+    let chartTextCount = 0;
+    let chartTextIssues = 0;
     let otherCount = 0;
     let otherIssues = 0;
 
@@ -135,14 +138,26 @@ export const ThemeInspector: React.FC<ThemeInspectorProps> = ({
       if (el.closest('.theme-inspector-root')) return;
 
       const tagName = el.tagName.toLowerCase();
+      const isSvgText = tagName === 'text' || tagName === 'tspan' || el.classList.contains('recharts-text');
+      
       if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tagName)) headingsCount++;
       else if (tagName === 'button' || tagName === 'a') buttonsCount++;
       else if (['th', 'td'].includes(tagName)) tablesCount++;
       else if (['input', 'select', 'label'].includes(tagName)) formsCount++;
+      else if (isSvgText || el.closest('.chart-donut-center, .chart-dial-center, .chart-meter-center')) chartTextCount++;
       else otherCount++;
 
-      const style = window.getComputedStyle(el);
-      const color = style.color;
+      const style = window.getComputedStyle(el as Element);
+      let color = style.color;
+      
+      // For SVG text, fill is primary color property
+      if (isSvgText) {
+        const fillAttr = (el as Element).getAttribute('fill') || style.fill;
+        if (fillAttr && fillAttr !== 'none' && fillAttr !== 'currentColor') {
+          color = fillAttr;
+        }
+      }
+
       let bg = style.backgroundColor;
 
       // Ancestor background resolution if transparent
@@ -176,7 +191,7 @@ export const ThemeInspector: React.FC<ThemeInspectorProps> = ({
             fgColor: color,
             bgColor: bg,
             message: 'Input element lacks explicit aria-label or associated label element.',
-            targetElement: el
+            targetElement: el as HTMLElement
           });
         }
         return;
@@ -184,28 +199,32 @@ export const ThemeInspector: React.FC<ThemeInspectorProps> = ({
 
       if (style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0') {
         const ratio = calculateContrast(color, bg);
-        const fontSize = parseFloat(style.fontSize);
-        const isBold = parseInt(style.fontWeight) >= 600;
+        const fontSize = parseFloat(style.fontSize) || 12;
+        const isBold = parseInt(style.fontWeight) >= 600 || style.fontWeight === 'bold' || style.fontWeight === '900';
         const requiredRatio = (fontSize >= 18 || (isBold && fontSize >= 14)) ? 3.0 : 4.5;
 
-        if (ratio < requiredRatio) {
+        // Trigger repair requirement if contrast is below threshold or if SVG text has low contrast in current mode
+        if (ratio < requiredRatio || (isSvgText && !isDarkMode && (color === '#ffffff' || color === 'rgb(255, 255, 255)' || color === '#94a3b8' || color === '#64748b'))) {
           if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tagName)) headingsIssues++;
           else if (tagName === 'button' || tagName === 'a') buttonsIssues++;
           else if (['th', 'td'].includes(tagName)) tablesIssues++;
           else if (['input', 'select', 'label'].includes(tagName)) formsIssues++;
+          else if (isSvgText || el.closest('.chart-donut-center, .chart-dial-center, .chart-meter-center')) chartTextIssues++;
           else otherIssues++;
 
           foundIssues.push({
             id: `issue-${issueId++}`,
             type: ratio < 2.0 ? 'invisible' : 'contrast',
             severity: ratio < 2.0 ? 'error' : 'warning',
-            elementName: tagName,
+            elementName: isSvgText ? `svg:<${tagName}>` : tagName,
             textSnippet: text.slice(0, 35) + (text.length > 35 ? '...' : ''),
             contrastRatio: parseFloat(ratio.toFixed(2)),
             fgColor: color,
             bgColor: bg,
-            message: `Contrast ratio ${ratio.toFixed(2)}:1 is below WCAG AA threshold (${requiredRatio}:1).`,
-            targetElement: el
+            message: isSvgText 
+              ? `Chart/SVG text '${text}' has contrast ratio ${ratio.toFixed(2)}:1 below WCAG threshold.`
+              : `Contrast ratio ${ratio.toFixed(2)}:1 is below WCAG AA threshold (${requiredRatio}:1).`,
+            targetElement: el as HTMLElement
           });
         }
       }
@@ -223,6 +242,7 @@ export const ThemeInspector: React.FC<ThemeInspectorProps> = ({
       healthScore: score,
       categories: [
         { name: 'Headings & Titles', total: headingsCount, issues: headingsIssues },
+        { name: 'Chart & SVG Labels', total: chartTextCount, issues: chartTextIssues },
         { name: 'Buttons & Controls', total: buttonsCount, issues: buttonsIssues },
         { name: 'Tables & Grid Data', total: tablesCount, issues: tablesIssues },
         { name: 'Forms & Inputs', total: formsCount, issues: formsIssues },
@@ -241,9 +261,10 @@ export const ThemeInspector: React.FC<ThemeInspectorProps> = ({
     issues.forEach(issue => {
       if (issue.targetElement) {
         const el = issue.targetElement;
+        const tagName = el.tagName.toLowerCase();
         
         // Handle input labels missing
-        if (issue.type === 'label' && el.tagName === 'INPUT') {
+        if (issue.type === 'label' && tagName === 'INPUT') {
           const placeholder = (el as HTMLInputElement).placeholder || 'Search or input data';
           el.setAttribute('aria-label', placeholder);
           issue.repaired = true;
@@ -251,12 +272,20 @@ export const ThemeInspector: React.FC<ThemeInspectorProps> = ({
           return;
         }
 
-        // Handle low contrast / invisible text
         const isLight = isBackgroundLight(issue.bgColor);
-        if (isLight) {
-          el.style.color = '#111827'; // WCAG AA Primary Dark Text for Light Backgrounds
+        const targetColor = isLight ? '#111827' : '#f9fafb'; // Semantic Theme Tokens
+
+        if (tagName === 'text' || tagName === 'tspan' || el.classList.contains('recharts-text')) {
+          // SVG Text Repair
+          (el as unknown as SVGElement).setAttribute('fill', targetColor);
+          el.style.fill = targetColor;
+          el.style.opacity = '1';
+          el.style.fontWeight = '700';
+          el.style.pointerEvents = 'none';
         } else {
-          el.style.color = '#f9fafb'; // WCAG AA Primary Light Text for Dark Backgrounds
+          // Standard HTML & Chart Overlay Repair
+          el.style.color = targetColor;
+          el.style.opacity = '1';
         }
 
         // Tag auto-repaired attribute
@@ -275,34 +304,83 @@ export const ThemeInspector: React.FC<ThemeInspectorProps> = ({
     }, 400);
   };
 
-  // Live Mutation Observer for Self-Healing Guard
+  // Live Mutation Observer for Self-Healing Guard (Handles Dynamic Chart Rerenders)
   useEffect(() => {
-    if (liveGuard) {
-      observerRef.current = new MutationObserver(() => {
-        // Quick auto repair on dynamically injected low-contrast nodes
-        const elements = document.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6, p, span, button, a, label, th, td');
-        elements.forEach(el => {
-          if (el.closest('.theme-inspector-root')) return;
-          if (el.hasAttribute('data-theme-repaired')) return;
+    const repairChartAndTextElements = () => {
+      const isLightMode = !isDarkMode;
+      const targetColor = isLightMode ? '#111827' : '#f9fafb';
+      const secondaryColor = isLightMode ? '#4b5563' : '#9ca3af';
 
-          const style = window.getComputedStyle(el);
-          if (style.display !== 'none' && style.visibility !== 'hidden') {
-            const color = style.color;
-            let bg = style.backgroundColor;
-            if (bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') {
-              bg = isDarkMode ? 'rgb(15, 23, 42)' : 'rgb(248, 250, 252)';
-            }
-            const ratio = calculateContrast(color, bg);
-            if (ratio < 3.0) {
-              const isLight = isBackgroundLight(bg);
-              el.style.color = isLight ? '#111827' : '#f9fafb';
-              el.setAttribute('data-theme-repaired', 'true');
-            }
+      // 1. Repair SVG Text and Chart Labels
+      const svgTexts = document.querySelectorAll<SVGElement>('svg text, svg tspan, .recharts-text, .recharts-cartesian-axis-tick-value text');
+      svgTexts.forEach(el => {
+        if (el.closest('.theme-inspector-root')) return;
+        
+        // Fix center labels and chart labels
+        if (el.classList.contains('chart-center-label-primary')) {
+          el.setAttribute('fill', targetColor);
+          el.style.fill = targetColor;
+          el.style.opacity = '1';
+        } else if (el.classList.contains('chart-center-label-secondary')) {
+          el.setAttribute('fill', secondaryColor);
+          el.style.fill = secondaryColor;
+          el.style.opacity = '1';
+        } else {
+          const currentFill = el.getAttribute('fill') || window.getComputedStyle(el).fill;
+          if (isLightMode && (currentFill === '#ffffff' || currentFill === 'rgb(255, 255, 255)' || currentFill === 'currentColor' || currentFill === 'inherit')) {
+            el.setAttribute('fill', targetColor);
+            el.style.fill = targetColor;
+            el.style.opacity = '1';
           }
-        });
+        }
       });
 
-      observerRef.current.observe(document.body, { childList: true, subtree: true });
+      // 2. Repair HTML Donut/Dial Chart Center Overlay Labels
+      const centerOverlays = document.querySelectorAll<HTMLElement>('.chart-donut-center span, .chart-dial-center span, .chart-meter-center span');
+      centerOverlays.forEach((el, index) => {
+        if (el.closest('.theme-inspector-root')) return;
+        el.style.opacity = '1';
+        if (index % 2 === 0) {
+          el.style.color = targetColor;
+          el.style.fontWeight = '900';
+        } else {
+          el.style.color = secondaryColor;
+          el.style.fontWeight = '700';
+        }
+      });
+
+      // 3. Repair Standard HTML Text Elements with Low Contrast
+      const htmlElements = document.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6, p, span, button, a, label, th, td');
+      htmlElements.forEach(el => {
+        if (el.closest('.theme-inspector-root')) return;
+        if (el.hasAttribute('data-theme-repaired')) return;
+
+        const style = window.getComputedStyle(el);
+        if (style.display !== 'none' && style.visibility !== 'hidden') {
+          const color = style.color;
+          let bg = style.backgroundColor;
+          if (bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') {
+            bg = isDarkMode ? 'rgb(15, 23, 42)' : 'rgb(248, 250, 252)';
+          }
+          const ratio = calculateContrast(color, bg);
+          if (ratio < 3.0) {
+            const isLightBg = isBackgroundLight(bg);
+            el.style.color = isLightBg ? '#111827' : '#f9fafb';
+            el.setAttribute('data-theme-repaired', 'true');
+          }
+        }
+      });
+    };
+
+    // Run repair immediately on mount and theme change
+    repairChartAndTextElements();
+
+    if (liveGuard) {
+      observerRef.current = new MutationObserver(() => {
+        repairChartAndTextElements();
+      });
+
+      observerRef.current.observe(document.body, { childList: true, subtree: true, attributes: true });
     } else if (observerRef.current) {
       observerRef.current.disconnect();
     }

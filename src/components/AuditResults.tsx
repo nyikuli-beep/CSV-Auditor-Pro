@@ -780,9 +780,19 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                 className="transition-all duration-1000"
               />
             </svg>
-            <div className="absolute text-center">
-              <span className={`text-4xl font-black tracking-tight ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>{activeFile.score}%</span>
-              <span className={`block text-[10px] font-bold uppercase tracking-wider mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Compliance</span>
+            <div className="absolute text-center z-10 chart-dial-center">
+              <span 
+                className="text-4xl font-black tracking-tight block transition-colors duration-200"
+                style={{ color: isDarkMode ? '#F9FAFB' : '#111827', opacity: 1 }}
+              >
+                {activeFile.score}%
+              </span>
+              <span 
+                className="block text-[10px] font-bold uppercase tracking-wider mt-1 transition-colors duration-200"
+                style={{ color: isDarkMode ? '#9CA3AF' : '#4B5563', opacity: 1 }}
+              >
+                Compliance
+              </span>
             </div>
           </div>
 

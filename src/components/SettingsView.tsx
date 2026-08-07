@@ -1386,9 +1386,19 @@ export default function SettingsView({
                 />
               </svg>
               
-              <div className="text-center z-10 space-y-0.5">
-                <span className="text-2xl font-extrabold tracking-tight">{memoryMetrics.totalKB}</span>
-                <span className="text-xs font-bold text-slate-400 block uppercase">KB Allocated</span>
+              <div className="text-center z-10 space-y-0.5 chart-meter-center">
+                <span 
+                  className="text-2xl font-extrabold tracking-tight block transition-colors duration-200"
+                  style={{ color: isDarkMode ? '#F9FAFB' : '#111827', opacity: 1 }}
+                >
+                  {memoryMetrics.totalKB}
+                </span>
+                <span 
+                  className="text-xs font-bold block uppercase transition-colors duration-200"
+                  style={{ color: isDarkMode ? '#9CA3AF' : '#4B5563', opacity: 1 }}
+                >
+                  KB Allocated
+                </span>
               </div>
             </div>
 
