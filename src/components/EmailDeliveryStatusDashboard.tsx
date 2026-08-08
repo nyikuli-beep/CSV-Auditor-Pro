@@ -135,8 +135,8 @@ export default function EmailDeliveryStatusDashboard({
             </div>
           </div>
           <div className="mt-2 flex items-baseline justify-between">
-            <span className="text-2xl font-black font-mono">{totalCount}</span>
-            <span className="text-[10px] text-slate-400 font-mono">100% Volume</span>
+            <span className={`text-2xl font-black font-mono ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>{totalCount}</span>
+            <span className={`text-[10px] font-mono ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>100% Volume</span>
           </div>
         </div>
 

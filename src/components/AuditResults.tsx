@@ -807,22 +807,22 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
         {/* Categories breakdown count cards & Profiler */}
         <div className="md:col-span-7 flex flex-col justify-between gap-6">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 h-fit">
-            <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/40 border-slate-800/80' : 'bg-white border-slate-200'}`}>
+            <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/40 border-slate-800/80 text-slate-100' : 'bg-white border-slate-200 text-slate-900'}`}>
               <h4 className="text-xs font-bold text-rose-500 uppercase tracking-widest mb-2 flex items-center gap-1.5"><ShieldAlert className="w-4 h-4" /> Critical</h4>
-              <span className="text-3xl font-black">{criticalCount}</span>
-              <p className="text-[10px] text-slate-400 mt-2">Deduplication and integrity errors</p>
+              <span className={`text-3xl font-black block ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>{criticalCount}</span>
+              <p className={`text-[10px] mt-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Deduplication and integrity errors</p>
             </div>
 
-            <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/40 border-slate-800/80' : 'bg-white border-slate-200'}`}>
+            <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/40 border-slate-800/80 text-slate-100' : 'bg-white border-slate-200 text-slate-900'}`}>
               <h4 className="text-xs font-bold text-amber-500 uppercase tracking-widest mb-2 flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> Warnings</h4>
-              <span className="text-3xl font-black">{warningCount}</span>
-              <p className="text-[10px] text-slate-400 mt-2">Formatting and statistical outliers</p>
+              <span className={`text-3xl font-black block ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>{warningCount}</span>
+              <p className={`text-[10px] mt-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Formatting and statistical outliers</p>
             </div>
 
-            <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/40 border-slate-800/80' : 'bg-white border-slate-200'}`}>
+            <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/40 border-slate-800/80 text-slate-100' : 'bg-white border-slate-200 text-slate-900'}`}>
               <h4 className="text-xs font-bold text-blue-500 uppercase tracking-widest mb-2 flex items-center gap-1.5"><Info className="w-4 h-4" /> Info</h4>
-              <span className="text-3xl font-black">{infoCount}</span>
-              <p className="text-[10px] text-slate-400 mt-2">Minor capitalization anomalies</p>
+              <span className={`text-3xl font-black block ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>{infoCount}</span>
+              <p className={`text-[10px] mt-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Minor capitalization anomalies</p>
             </div>
           </div>
 

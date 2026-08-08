@@ -2887,27 +2887,28 @@ export default function CleaningCenter({
               onClick={() => setReviewFilterMode(reviewFilterMode === 'cleaned' ? 'all' : 'cleaned')}
               className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
                 reviewFilterMode === 'cleaned'
-                  ? 'bg-emerald-500/10 border-emerald-500/50 shadow-md ring-1 ring-emerald-500/30'
+                  ? isDarkMode ? 'bg-emerald-500/10 border-emerald-500/50 shadow-md ring-1 ring-emerald-500/30' : 'bg-emerald-50 border-emerald-500/50 shadow-sm ring-1 ring-emerald-500/30'
                   : isDarkMode
                   ? 'bg-slate-950/60 border-slate-800 hover:border-emerald-500/30 hover:bg-slate-900'
-                  : 'bg-slate-50 border-slate-200 hover:border-emerald-300'
+                  : 'bg-white border-slate-200 hover:border-emerald-300 shadow-xs'
               }`}
             >
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-bold text-emerald-500 flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-500 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-500" />
                   Cleaned Rows
                 </span>
-                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500">
+                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-500">
                   {rowDistribution.cleanedPercentage}%
                 </span>
               </div>
-              <p className="text-lg font-extrabold font-mono text-slate-900 dark:text-slate-100">
-                {rowDistribution.cleanedRows.toLocaleString()} <span className="text-xs font-normal text-slate-400">/ {rowDistribution.totalRows.toLocaleString()}</span>
+              <p className="text-lg font-extrabold font-mono">
+                <span className={isDarkMode ? 'text-slate-100' : 'text-slate-900'}>{rowDistribution.cleanedRows.toLocaleString()}</span>{' '}
+                <span className={`text-xs font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>/ {rowDistribution.totalRows.toLocaleString()}</span>
               </p>
-              <p className="text-[10px] text-slate-400 mt-1 flex items-center justify-between">
+              <p className={`text-[10px] mt-1 flex items-center justify-between ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                 <span>Verified & sanitized</span>
-                <span className="font-bold text-emerald-500 underline">
+                <span className="font-bold text-emerald-600 dark:text-emerald-500 underline">
                   {reviewFilterMode === 'cleaned' ? 'Active Filter' : 'Filter Table'}
                 </span>
               </p>
@@ -2918,27 +2919,28 @@ export default function CleaningCenter({
               onClick={() => setReviewFilterMode(reviewFilterMode === 'review' ? 'all' : 'review')}
               className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
                 reviewFilterMode === 'review'
-                  ? 'bg-amber-500/10 border-amber-500/50 shadow-md ring-1 ring-amber-500/30'
+                  ? isDarkMode ? 'bg-amber-500/10 border-amber-500/50 shadow-md ring-1 ring-amber-500/30' : 'bg-amber-50 border-amber-500/50 shadow-sm ring-1 ring-amber-500/30'
                   : isDarkMode
                   ? 'bg-slate-950/60 border-slate-800 hover:border-amber-500/30 hover:bg-slate-900'
-                  : 'bg-slate-50 border-slate-200 hover:border-amber-300'
+                  : 'bg-white border-slate-200 hover:border-amber-300 shadow-xs'
               }`}
             >
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-bold text-amber-500 flex items-center gap-1.5">
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                <span className="text-xs font-bold text-amber-600 dark:text-amber-500 flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-500" />
                   Manual Review Required
                 </span>
-                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500">
+                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-500">
                   {rowDistribution.manualReviewPercentage}%
                 </span>
               </div>
-              <p className="text-lg font-extrabold font-mono text-slate-900 dark:text-slate-100">
-                {rowDistribution.manualReviewRows.toLocaleString()} <span className="text-xs font-normal text-slate-400">rows</span>
+              <p className="text-lg font-extrabold font-mono">
+                <span className={isDarkMode ? 'text-slate-100' : 'text-slate-900'}>{rowDistribution.manualReviewRows.toLocaleString()}</span>{' '}
+                <span className={`text-xs font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>rows</span>
               </p>
-              <p className="text-[10px] text-slate-400 mt-1 flex items-center justify-between">
+              <p className={`text-[10px] mt-1 flex items-center justify-between ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                 <span>Flagged anomalies</span>
-                <span className="font-bold text-amber-500 underline">
+                <span className="font-bold text-amber-600 dark:text-amber-500 underline">
                   {reviewFilterMode === 'review' ? 'Active Filter' : 'Filter Table'}
                 </span>
               </p>

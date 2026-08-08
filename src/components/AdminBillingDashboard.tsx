@@ -126,7 +126,7 @@ export default function AdminBillingDashboard({ isDarkMode = true }: AdminBillin
         <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200'}`}>
           <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Dunning & Failed Payments</span>
           <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-extrabold font-mono text-slate-100">{m.paymentFailures}</span>
+            <span className={`text-2xl font-extrabold font-mono ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>{m.paymentFailures}</span>
             <span className="text-xs font-mono text-emerald-400">0% Default</span>
           </div>
           <span className="text-[10px] text-slate-500 font-mono mt-2 block">Auto-retry via Paddle</span>
@@ -142,7 +142,7 @@ export default function AdminBillingDashboard({ isDarkMode = true }: AdminBillin
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-slate-800 text-slate-400 text-[10px] font-bold uppercase">
+              <tr className={`border-b text-[10px] font-bold uppercase ${isDarkMode ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-500'}`}>
                 <th className="py-2.5 px-3">Transaction ID</th>
                 <th className="py-2.5 px-3">Customer Email</th>
                 <th className="py-2.5 px-3">Plan</th>
@@ -151,19 +151,19 @@ export default function AdminBillingDashboard({ isDarkMode = true }: AdminBillin
                 <th className="py-2.5 px-3 text-right">Time</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/40">
+            <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800/40' : 'divide-slate-200'}`}>
               {(m.latestTransactions || []).map((tx: any) => (
-                <tr key={tx.id} className="hover:bg-slate-800/20">
-                  <td className="py-3 px-3 font-mono font-bold text-slate-200">{tx.id}</td>
-                  <td className="py-3 px-3 text-slate-300">{tx.customer}</td>
+                <tr key={tx.id} className={isDarkMode ? 'hover:bg-slate-800/20' : 'hover:bg-slate-50'}>
+                  <td className={`py-3 px-3 font-mono font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>{tx.id}</td>
+                  <td className={`py-3 px-3 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>{tx.customer}</td>
                   <td className="py-3 px-3">
                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                      tx.plan === 'ENTERPRISE' ? 'bg-indigo-500/10 text-indigo-400' : 'bg-blue-500/10 text-blue-400'
+                      tx.plan === 'ENTERPRISE' ? 'bg-indigo-500/10 text-indigo-400' : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
                     }`}>
                       {tx.plan}
                     </span>
                   </td>
-                  <td className="py-3 px-3 font-mono font-bold text-slate-100">{tx.amount}</td>
+                  <td className={`py-3 px-3 font-mono font-bold ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>{tx.amount}</td>
                   <td className="py-3 px-3">
                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
                       tx.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'
