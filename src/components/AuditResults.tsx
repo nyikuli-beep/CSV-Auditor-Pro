@@ -1091,7 +1091,7 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                       setExportDropdownOpen(false);
                     }}
                   />
-                  <div className={`absolute right-0 mt-2 w-72 rounded-xl border shadow-2xl z-20 py-2 animate-fadeIn ${
+                  <div className={`absolute right-0 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-xl border shadow-2xl z-30 py-2 animate-fadeIn ${
                     isDarkMode 
                       ? 'bg-slate-950 border-slate-800 text-slate-200' 
                       : 'bg-white border-slate-200 text-slate-800'

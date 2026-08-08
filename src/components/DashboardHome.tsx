@@ -1170,15 +1170,15 @@ export default function DashboardHome({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 self-end sm:self-center">
+                <div className="flex items-center gap-2 self-end sm:self-center min-w-0 max-w-full">
                   {/* File Selector Dropdown if multiple files exist */}
                   {files.length > 0 && (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-bold text-slate-400 hidden md:inline">Dataset:</span>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-xs font-bold text-slate-400 hidden md:inline shrink-0">Dataset:</span>
                       <select
                         value={targetProfileFile?.id || ''}
                         onChange={(e) => setSelectedProfileFileId(e.target.value)}
-                        className={`text-xs font-semibold px-3 py-2 rounded-xl border focus:outline-none cursor-pointer ${
+                        className={`text-xs font-semibold px-3 py-2 rounded-xl border focus:outline-none cursor-pointer max-w-[150px] sm:max-w-[220px] md:max-w-[280px] truncate ${
                           isDarkMode 
                             ? 'bg-slate-900 border-slate-700 text-slate-200' 
                             : 'bg-white border-slate-200 text-slate-800'
@@ -1195,7 +1195,7 @@ export default function DashboardHome({
 
                   <button
                     onClick={() => setIsProfileModalOpen(false)}
-                    className="p-2 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors cursor-pointer"
+                    className="p-2 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
                   >
                     <X className="w-5 h-5" />
                   </button>
