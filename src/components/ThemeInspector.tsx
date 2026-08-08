@@ -389,6 +389,99 @@ export const ThemeInspector: React.FC<ThemeInspectorProps> = ({
     };
   }, [liveGuard, isDarkMode]);
 
+  const runAutomatedAuditAndReport = () => {
+    const elements = Array.from(document.querySelectorAll<HTMLElement | SVGElement>(
+      'h1, h2, h3, h4, h5, h6, p, span, button, a, label, th, td, input, select, text, tspan, foreignObject, .recharts-text, .recharts-cartesian-axis-tick-value, .recharts-legend-item-text, .chart-donut-center span, .chart-dial-center span, .chart-meter-center span'
+    ));
+
+    const foundIssuesList: { Element: string; Snippet: string; Ratio: string; Status: string }[] = [];
+    let scanned = 0;
+    let issuesFound = 0;
+    let repaired = 0;
+
+    elements.forEach(el => {
+      if (el.closest('.theme-inspector-root')) return;
+      scanned++;
+
+      const tagName = el.tagName.toLowerCase();
+      const isSvgText = tagName === 'text' || tagName === 'tspan' || el.classList.contains('recharts-text');
+      const style = window.getComputedStyle(el as Element);
+      let color = style.color;
+      if (isSvgText) {
+        const fillAttr = (el as Element).getAttribute('fill') || style.fill;
+        if (fillAttr && fillAttr !== 'none' && fillAttr !== 'currentColor') {
+          color = fillAttr;
+        }
+      }
+      let bg = style.backgroundColor;
+      if (bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') {
+        let parent = el.parentElement;
+        while (parent) {
+          const parentBg = window.getComputedStyle(parent).backgroundColor;
+          if (parentBg && parentBg !== 'rgba(0, 0, 0, 0)' && parentBg !== 'transparent') {
+            bg = parentBg;
+            break;
+          }
+          parent = parent.parentElement;
+        }
+        if (bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') {
+          bg = isDarkMode ? 'rgb(15, 23, 42)' : 'rgb(248, 250, 252)';
+        }
+      }
+
+      const text = el.textContent?.trim() || '';
+      if (text) {
+        const ratio = calculateContrast(color, bg);
+        const fontSize = parseFloat(style.fontSize) || 12;
+        const isBold = parseInt(style.fontWeight) >= 600 || style.fontWeight === 'bold';
+        const requiredRatio = (fontSize >= 18 || (isBold && fontSize >= 14)) ? 3.0 : 4.5;
+
+        if (ratio < requiredRatio || (isSvgText && !isDarkMode && (color === '#ffffff' || color === 'rgb(255, 255, 255)'))) {
+          issuesFound++;
+          const isLight = isBackgroundLight(bg);
+          const targetColor = isLight ? '#111827' : '#f9fafb';
+          if (isSvgText) {
+            (el as unknown as SVGElement).setAttribute('fill', targetColor);
+            el.style.fill = targetColor;
+            el.style.opacity = '1';
+          } else {
+            el.style.color = targetColor;
+            el.style.opacity = '1';
+          }
+          repaired++;
+          foundIssuesList.push({
+            Element: isSvgText ? `svg:<${tagName}>` : tagName,
+            Snippet: text.slice(0, 30),
+            Ratio: `${ratio.toFixed(2)}:1`,
+            Status: 'AUTO-REPAIRED'
+          });
+        }
+      }
+    });
+
+    const healthScore = scanned > 0 ? Math.max(0, Math.round(((scanned - (issuesFound - repaired)) / scanned) * 100)) : 100;
+
+    console.group(`[Theme QA System] Automated Theme & Contrast Inspection (${isDarkMode ? 'Dark' : 'Light'} Mode)`);
+    console.log(`Scanned Elements: ${scanned}`);
+    console.log(`Issues Identified: ${issuesFound}`);
+    console.log(`Issues Auto-Repaired: ${repaired}`);
+    console.log(`WCAG AA Health Score: ${healthScore}%`);
+    if (foundIssuesList.length > 0) {
+      console.table(foundIssuesList);
+    } else {
+      console.log('✓ 100% WCAG AA Compliant - No visual contrast violations detected.');
+    }
+    console.groupEnd();
+  };
+
+  useEffect(() => {
+    // Run automated Theme QA inspection on startup and theme change
+    const timer = setTimeout(() => {
+      runAutomatedAuditAndReport();
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [isDarkMode]);
+
   useEffect(() => {
     if (isOpen) {
       runAudit();

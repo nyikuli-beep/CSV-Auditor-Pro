@@ -1004,35 +1004,37 @@ export default function CleaningCenter({
 
             {/* Cards Grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-850 text-center">
-                <span className="text-[10px] text-slate-400 font-bold uppercase">Files Cleaned</span>
+              <div className={`p-4 rounded-2xl border text-center ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                <span className={`text-[10px] font-bold uppercase ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Files Cleaned</span>
                 <p className="text-xl md:text-2xl font-black text-blue-500 mt-1">{batchResult.filesReport.length}</p>
               </div>
-              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-850 text-center">
-                <span className="text-[10px] text-slate-400 font-bold uppercase">Total Rows Cleaned</span>
+              <div className={`p-4 rounded-2xl border text-center ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                <span className={`text-[10px] font-bold uppercase ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Total Rows Cleaned</span>
                 <p className="text-xl md:text-2xl font-black text-blue-500 mt-1">
                   {batchResult.filesReport.reduce((sum, f) => sum + f.newRows, 0)}
                 </p>
               </div>
-              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-850 text-center">
-                <span className="text-[10px] text-slate-400 font-bold uppercase">Issues Solved</span>
-                <p className="text-xl md:text-2xl font-black text-emerald-400 mt-1">
+              <div className={`p-4 rounded-2xl border text-center ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                <span className={`text-[10px] font-bold uppercase ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Issues Solved</span>
+                <p className="text-xl md:text-2xl font-black text-emerald-500 mt-1">
                   {batchResult.filesReport.reduce((sum, f) => sum + f.issuesSolved, 0)}
                 </p>
               </div>
-              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-850 text-center">
-                <span className="text-[10px] text-slate-400 font-bold uppercase">Average Score Boost</span>
-                <p className="text-xl md:text-2xl font-black text-emerald-400 mt-1">
+              <div className={`p-4 rounded-2xl border text-center ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                <span className={`text-[10px] font-bold uppercase ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Average Score Boost</span>
+                <p className="text-xl md:text-2xl font-black text-emerald-500 mt-1">
                   +{(batchResult.filesReport.reduce((sum, f) => sum + (f.newScore - f.originalScore), 0) / batchResult.filesReport.length).toFixed(0)}%
                 </p>
               </div>
             </div>
 
             {/* Detailed per-file report list */}
-            <div className="overflow-x-auto rounded-2xl border border-slate-800">
+            <div className={`overflow-x-auto rounded-2xl border ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="bg-slate-950 border-b border-slate-800 text-slate-400 font-semibold font-mono text-[10px]">
+                  <tr className={`border-b font-semibold font-mono text-[10px] ${
+                    isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-700'
+                  }`}>
                     <th 
                       onClick={() => handleBatchSort('name')}
                       className="p-4 cursor-pointer hover:bg-slate-900 transition-colors select-none"
@@ -1174,13 +1176,13 @@ export default function CleaningCenter({
             </p>
           </div>
 
-          <div className="flex rounded-xl p-1 bg-slate-950 border border-slate-800 w-fit">
+          <div className={`flex rounded-xl p-1 border w-fit ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
             <button
               onClick={() => setCleaningMode('single')}
               className={`px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
                 (cleaningMode as string) === 'single'
                   ? 'bg-blue-600 text-white shadow'
-                  : 'text-slate-400 hover:text-white'
+                  : isDarkMode ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Single File Hygiene
@@ -1190,7 +1192,7 @@ export default function CleaningCenter({
               className={`px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
                 (cleaningMode as string) === 'batch'
                   ? 'bg-blue-600 text-white shadow'
-                  : 'text-slate-400 hover:text-white'
+                  : isDarkMode ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Batch Processing Engine
@@ -1205,7 +1207,7 @@ export default function CleaningCenter({
             <div className="space-y-2">
               <FileSpreadsheet className="w-10 h-10 text-blue-500" />
               <h3 className="font-extrabold text-base">Launch Single-File Hygiene</h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
+              <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                 Load a single spreadsheet from your workspace archives below or upload a new spreadsheet to unlock column splitting, custom regex extraction, and manual quality overrides.
               </p>
             </div>
@@ -1226,10 +1228,14 @@ export default function CleaningCenter({
                       onUpdateFile(file);
                       setCleaningMode('single');
                     }}
-                    className={`p-2.5 rounded-xl border border-slate-800/60 hover:border-blue-500/50 bg-slate-950/60 hover:bg-slate-900/50 flex items-center justify-between cursor-pointer transition-all`}
+                    className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                      isDarkMode 
+                        ? 'border-slate-800/60 bg-slate-950/60 hover:bg-slate-900/50' 
+                        : 'border-slate-200 bg-slate-50 hover:bg-slate-100'
+                    }`}
                   >
-                    <span className="text-xs font-bold truncate max-w-[180px]">{file.name}</span>
-                    <span className="text-[10px] font-mono font-bold text-slate-400">{file.score}% rating</span>
+                    <span className={`text-xs font-bold truncate max-w-[180px] ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{file.name}</span>
+                    <span className={`text-[10px] font-mono font-bold ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{file.score}% rating</span>
                   </div>
                 ))}
               </div>

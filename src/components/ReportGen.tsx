@@ -634,7 +634,9 @@ ${reportConfig.companyName}`;
               }`}
             >
               {/* Modal Header */}
-              <div className="flex items-center justify-between p-5 border-b border-slate-800/60 bg-slate-950/40">
+              <div className={`flex items-center justify-between p-5 border-b ${
+                isDarkMode ? 'border-slate-800/60 bg-slate-950/40' : 'border-slate-200 bg-slate-50'
+              }`}>
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-500">
                     <Camera className="w-5 h-5 text-blue-500" />
@@ -642,26 +644,30 @@ ${reportConfig.companyName}`;
                   <div>
                     <h3 className="font-extrabold text-base tracking-tight flex items-center gap-2">
                       Client-Side Audit Summary Visual Snapshot
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded font-bold bg-emerald-500/10 text-emerald-500 uppercase">
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 uppercase">
                         High DPI / PNG
                       </span>
                     </h3>
-                    <p className="text-xs text-slate-400">
-                      Visual summary card for <strong className="text-slate-200">{activeFile.name}</strong> ({reportConfig.companyName})
+                    <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                      Visual summary card for <strong className={isDarkMode ? 'text-slate-200' : 'text-slate-900'}>{activeFile.name}</strong> ({reportConfig.companyName})
                     </p>
                   </div>
                 </div>
 
                 <button
                   onClick={() => setIsSnapshotModalOpen(false)}
-                  className="p-2 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors cursor-pointer"
+                  className={`p-2 rounded-xl transition-colors cursor-pointer ${
+                    isDarkMode ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200'
+                  }`}
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
               {/* Modal Body with Snapshot Canvas Image */}
-              <div className="p-6 overflow-y-auto flex-1 flex flex-col items-center bg-slate-950/20">
+              <div className={`p-6 overflow-y-auto flex-1 flex flex-col items-center ${
+                isDarkMode ? 'bg-slate-950/20' : 'bg-slate-50/50'
+              }`}>
                 {snapshotDataUrl ? (
                   <div className="relative group max-w-2xl w-full border border-slate-800 rounded-2xl overflow-hidden shadow-2xl bg-white">
                     <img

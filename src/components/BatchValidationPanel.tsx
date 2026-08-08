@@ -486,7 +486,7 @@ export default function BatchValidationPanel({
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => {}} // handled by row click
-                        className="rounded text-blue-600 bg-slate-950 border-slate-800 w-4 h-4 cursor-pointer focus:ring-0"
+                        className={`rounded text-blue-600 w-4 h-4 cursor-pointer focus:ring-0 ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-300'}`}
                       />
                       <div className="min-w-0">
                         <span className={`text-xs font-bold block truncate ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
