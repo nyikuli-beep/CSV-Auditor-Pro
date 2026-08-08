@@ -180,7 +180,7 @@ export default function OnboardingTourModal({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 12 }}
         transition={{ duration: 0.25 }}
-        className={`w-full max-w-xl rounded-2xl border shadow-2xl overflow-hidden flex flex-col relative z-10 ${
+        className={`w-full max-w-xl max-h-[90vh] rounded-2xl border shadow-2xl overflow-hidden flex flex-col relative z-10 ${
           isDarkMode ? 'bg-[#0f172a] border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
         }`}
       >

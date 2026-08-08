@@ -38,7 +38,7 @@ export default function UpgradeModal({
           initial={{ opacity: 0, scale: 0.95, y: 12 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 12 }}
-          className={`relative w-full max-w-lg p-6 md:p-8 rounded-3xl border shadow-2xl overflow-hidden ${
+          className={`relative w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 md:p-8 rounded-3xl border shadow-2xl ${
             isDarkMode 
               ? 'bg-slate-900 border-slate-800 text-slate-100' 
               : 'bg-white border-slate-200 text-slate-900'

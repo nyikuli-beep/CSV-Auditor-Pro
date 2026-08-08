@@ -555,7 +555,7 @@ export default function BillingDashboard({
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="relative w-full max-w-md p-6 rounded-3xl bg-slate-900 border border-blue-500/50 shadow-2xl text-slate-100 space-y-4"
+              className="relative w-full max-w-md max-h-[90vh] overflow-y-auto p-6 rounded-3xl bg-slate-900 border border-blue-500/50 shadow-2xl text-slate-100 space-y-4"
             >
               <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                 <div className="flex items-center gap-2">

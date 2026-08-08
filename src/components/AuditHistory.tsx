@@ -566,7 +566,7 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className={`p-6 rounded-2xl border max-w-md w-full shadow-2xl space-y-4 ${
+              className={`p-6 rounded-2xl border max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl space-y-4 ${
                 isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
               }`}
             >

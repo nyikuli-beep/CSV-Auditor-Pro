@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { List } from 'react-window';
 import { motion } from 'motion/react';
 import { 
   FileSpreadsheet, 
@@ -54,7 +55,8 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
   const [aiExplanations, setAiExplanations] = useState<Record<string, string>>({});
   const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
 
-  // Issues Pagination State
+  // Virtualized List (react-window) and Pagination State
+  const [viewMode, setViewMode] = useState<'virtualized' | 'paginated'>('virtualized');
   const [issuesPage, setIssuesPage] = useState(1);
   const [issuesPageSize, setIssuesPageSize] = useState(25);
 
@@ -336,6 +338,17 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
     if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
     return 0;
   });
+
+  // Virtualized List (react-window) height calculator
+  const getItemSize = (index: number) => {
+    const issue = sortedIssues[index];
+    if (!issue) return 76;
+    if (expandedIssue === issue.id) {
+      const hasAi = !!(aiExplanations[issue.id] || issue.explanation);
+      return hasAi ? 310 : 210;
+    }
+    return 76;
+  };
 
   const criticalCount = mergedIssues.filter(i => i.severity === 'critical' && i.status === 'open').length;
   const warningCount = mergedIssues.filter(i => i.severity === 'warning' && i.status === 'open').length;
@@ -985,6 +998,38 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
               <span className="uppercase text-[10px] font-mono">{sortDirection}</span>
             </button>
 
+            {/* View Mode Toggle: Virtualized vs Paginated */}
+            <div className={`flex items-center rounded-lg border p-0.5 ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
+              <button
+                type="button"
+                id="audit-results-view-virtualized-btn"
+                onClick={() => setViewMode('virtualized')}
+                className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                  viewMode === 'virtualized'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Virtualized List Rendering with react-window for maximum performance with thousands of rows"
+              >
+                <Activity className="w-3.5 h-3.5" />
+                <span>Virtualized</span>
+              </button>
+              <button
+                type="button"
+                id="audit-results-view-paginated-btn"
+                onClick={() => setViewMode('paginated')}
+                className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                  viewMode === 'paginated'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Paginated Cards View"
+              >
+                <Sliders className="w-3.5 h-3.5" />
+                <span>Paginated</span>
+              </button>
+            </div>
+
             {/* Download CSV (Rows with Issues) Button */}
             <button
               type="button"
@@ -1460,211 +1505,365 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
           </div>
         )}
 
-        {/* Issues Stack */}
-        <div className="space-y-4">
-          {sortedIssues.slice((issuesPage - 1) * issuesPageSize, issuesPage * issuesPageSize).map((issue) => {
-            const isExpanded = expandedIssue === issue.id;
-            return (
-              <div 
-                key={issue.id}
-                className={`border rounded-xl transition-all overflow-hidden ${isDarkMode ? 'bg-slate-950/40 border-slate-800/60 hover:bg-slate-950/80' : 'bg-white border-slate-100 hover:bg-slate-50/50'}`}
-              >
-                {/* Accordion Trigger */}
-                <div 
-                  onClick={() => setExpandedIssue(isExpanded ? null : issue.id)}
-                  className="p-4 flex items-center justify-between cursor-pointer gap-4"
-                >
-                  <div className="flex items-center gap-3.5 min-w-0">
-                    {getIssueIcon(issue.type)}
-                    <div className="min-w-0 text-left">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-xs truncate">{issue.column}</span>
-                        {issue.row && <span className="text-[10px] bg-slate-800/60 px-1.5 py-0.5 rounded text-slate-400 font-mono">Row {issue.row}</span>}
-                        {issue.value !== '' && issue.value !== undefined && <span className="text-[10px] bg-slate-800/30 px-1.5 py-0.5 rounded text-slate-500 truncate max-w-[120px]">Value: {issue.value}</span>}
-                      </div>
-                      <p className={`text-xs mt-1 truncate ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>{issue.description}</p>
-                    </div>
-                  </div>
+        {/* Virtualized vs Paginated Issues Container */}
+        {viewMode === 'virtualized' ? (
+          <div className="w-full space-y-3">
+            {sortedIssues.length > 0 && (
+              <div className={`px-3.5 py-2 rounded-xl border flex items-center justify-between text-xs font-medium ${
+                isDarkMode ? 'bg-blue-950/30 border-blue-800/40 text-blue-300' : 'bg-blue-50 border-blue-200 text-blue-800'
+              }`}>
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-blue-400 animate-pulse shrink-0" />
+                  <span>
+                    <strong>react-window Virtual Engine Active:</strong> High-performance windowing for <strong>{sortedIssues.length}</strong> findings.
+                  </span>
+                </div>
+                <span className="text-[10px] font-mono font-bold bg-blue-500/20 px-2 py-0.5 rounded text-blue-300 uppercase">
+                  60 FPS Virtualized
+                </span>
+              </div>
+            )}
 
-                  <div className="flex items-center gap-4">
-                    {issue.status === 'open' ? (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleQuickFix(issue);
-                        }}
-                        className={`px-3 py-1 text-[11px] font-bold text-white rounded-lg flex items-center gap-1.5 transition-all shadow-xs cursor-pointer hover:scale-[1.02] active:scale-[0.98] ${accentClass}`}
-                      >
-                        <Sparkles className="w-3 h-3.5" />
-                        <span>One-Click Fix</span>
-                      </button>
-                    ) : (
-                      <span className="px-2.5 py-1 text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg flex items-center gap-1.5">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Fixed</span>
-                      </span>
+            {sortedIssues.length > 0 && (
+              <div className={`rounded-xl border p-2 overflow-hidden ${isDarkMode ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50/50 border-slate-200'}`}>
+                <List
+                  rowCount={sortedIssues.length}
+                  rowHeight={getItemSize}
+                  rowProps={{} as any}
+                  style={{ height: Math.min(560, Math.max(220, sortedIssues.length * 76)), width: '100%' }}
+                  rowComponent={({ index, style }: { index: number; style: React.CSSProperties }) => {
+                    const issue = sortedIssues[index];
+                    if (!issue) return null;
+                    const isExpanded = expandedIssue === issue.id;
+
+                    return (
+                      <div style={{ ...style, paddingBottom: '8px' }}>
+                        <div 
+                          className={`border rounded-xl transition-all overflow-hidden h-full flex flex-col justify-between ${
+                            isDarkMode 
+                              ? 'bg-slate-950/60 border-slate-800/80 hover:bg-slate-950' 
+                              : 'bg-white border-slate-200 hover:bg-slate-50 shadow-2xs'
+                          }`}
+                        >
+                          {/* Accordion Trigger */}
+                          <div 
+                            onClick={() => setExpandedIssue(isExpanded ? null : issue.id)}
+                            className="p-3.5 flex items-center justify-between cursor-pointer gap-3 min-h-[64px] select-none"
+                          >
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              {getIssueIcon(issue.type)}
+                              <div className="min-w-0 text-left flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-bold text-xs truncate">{issue.column}</span>
+                                  {issue.row && (
+                                    <span className="text-[10px] bg-slate-800/60 px-1.5 py-0.5 rounded text-slate-400 font-mono">
+                                      Row {issue.row}
+                                    </span>
+                                  )}
+                                  {issue.value !== '' && issue.value !== undefined && (
+                                    <span className="text-[10px] bg-slate-800/30 px-1.5 py-0.5 rounded text-slate-500 truncate max-w-[120px]" title={String(issue.value)}>
+                                      Value: {issue.value}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className={`text-xs mt-0.5 truncate ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                                  {issue.description}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                              {issue.status === 'open' ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleQuickFix(issue);
+                                  }}
+                                  className={`px-2.5 py-1 text-[11px] font-bold text-white rounded-lg flex items-center gap-1.5 transition-all shadow-xs cursor-pointer hover:scale-[1.02] active:scale-[0.98] ${accentClass}`}
+                                >
+                                  <Sparkles className="w-3 h-3.5" />
+                                  <span className="hidden sm:inline">One-Click Fix</span>
+                                  <span className="sm:hidden">Fix</span>
+                                </button>
+                              ) : (
+                                <span className="px-2.5 py-1 text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg flex items-center gap-1.5">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                                  <span className="hidden sm:inline">Fixed</span>
+                                </span>
+                              )}
+                              {getSeverityBadge(issue.severity)}
+                              {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />}
+                            </div>
+                          </div>
+
+                          {/* Accordion Content */}
+                          {isExpanded && (
+                            <div className={`p-4 border-t border-dashed bg-slate-900/10 ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+                              <div className="space-y-3">
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-950/20 p-3 rounded-xl border border-slate-800/40">
+                                  <div className="text-xs text-left">
+                                    <span className="font-bold uppercase tracking-widest text-slate-400 block mb-0.5">Recommended Solution:</span>
+                                    <p className={isDarkMode ? 'text-slate-200 font-semibold' : 'text-slate-700 font-semibold'}>{issue.suggestion}</p>
+                                  </div>
+                                  {issue.status === 'open' && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleQuickFix(issue)}
+                                      className={`px-3 py-1.5 text-xs font-extrabold text-white rounded-xl shadow-md cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center gap-1.5 shrink-0 ${accentClass}`}
+                                    >
+                                      <Sparkles className="w-3.5 h-3.5" />
+                                      <span>Apply Fix</span>
+                                    </button>
+                                  )}
+                                </div>
+
+                                <div className={`space-y-2 pt-2 border-t ${isDarkMode ? 'border-slate-800/40' : 'border-slate-200'}`}>
+                                  <div className="flex justify-between items-center flex-wrap gap-2">
+                                    <span className={`text-[10px] font-bold flex items-center gap-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
+                                      <Sparkles className="w-3 h-3 text-yellow-500" /> Gemini Audit Intelligence
+                                    </span>
+                                    {!aiExplanations[issue.id] && !issue.explanation && (
+                                      <button
+                                        onClick={() => fetchAiExplanation(issue.id, issue)}
+                                        disabled={aiLoading === issue.id}
+                                        className={`px-2.5 py-1 text-[11px] font-semibold text-white rounded-lg flex items-center gap-1 transition-all ${accentClass}`}
+                                      >
+                                        {aiLoading === issue.id ? (
+                                          <><RefreshCw className="w-3 h-3 animate-spin" /> Fetching AI...</>
+                                        ) : (
+                                          <><Sparkles className="w-3 h-3" /> Explain anomaly</>
+                                        )}
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  {(aiExplanations[issue.id] || issue.explanation) && (
+                                    <div className={`p-3 rounded-xl border text-xs leading-relaxed ${isDarkMode ? 'bg-indigo-950/20 border-indigo-950/50 text-indigo-300' : 'bg-indigo-50/50 border-indigo-100 text-indigo-955'}`}>
+                                      {aiExplanations[issue.id] || issue.explanation}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Issues Stack (Paginated Mode) */
+          <div>
+            <div className="space-y-4">
+              {sortedIssues.slice((issuesPage - 1) * issuesPageSize, issuesPage * issuesPageSize).map((issue) => {
+                const isExpanded = expandedIssue === issue.id;
+                return (
+                  <div 
+                    key={issue.id}
+                    className={`border rounded-xl transition-all overflow-hidden ${isDarkMode ? 'bg-slate-950/40 border-slate-800/60 hover:bg-slate-950/80' : 'bg-white border-slate-100 hover:bg-slate-50/50'}`}
+                  >
+                    {/* Accordion Trigger */}
+                    <div 
+                      onClick={() => setExpandedIssue(isExpanded ? null : issue.id)}
+                      className="p-4 flex items-center justify-between cursor-pointer gap-4"
+                    >
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        {getIssueIcon(issue.type)}
+                        <div className="min-w-0 text-left">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-xs truncate">{issue.column}</span>
+                            {issue.row && <span className="text-[10px] bg-slate-800/60 px-1.5 py-0.5 rounded text-slate-400 font-mono">Row {issue.row}</span>}
+                            {issue.value !== '' && issue.value !== undefined && <span className="text-[10px] bg-slate-800/30 px-1.5 py-0.5 rounded text-slate-500 truncate max-w-[120px]">Value: {issue.value}</span>}
+                          </div>
+                          <p className={`text-xs mt-1 truncate ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>{issue.description}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-4">
+                        {issue.status === 'open' ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleQuickFix(issue);
+                            }}
+                            className={`px-3 py-1 text-[11px] font-bold text-white rounded-lg flex items-center gap-1.5 transition-all shadow-xs cursor-pointer hover:scale-[1.02] active:scale-[0.98] ${accentClass}`}
+                          >
+                            <Sparkles className="w-3 h-3.5" />
+                            <span>One-Click Fix</span>
+                          </button>
+                        ) : (
+                          <span className="px-2.5 py-1 text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Fixed</span>
+                          </span>
+                        )}
+                        {getSeverityBadge(issue.severity)}
+                        {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />}
+                      </div>
+                    </div>
+
+                    {/* Accordion Content */}
+                    {isExpanded && (
+                      <div className={`p-5 border-t border-dashed bg-slate-900/10 ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
+                        <div className="space-y-4">
+                          {/* Suggestion block */}
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-950/20 p-3.5 rounded-xl border border-slate-800/40">
+                            <div className="text-xs text-left">
+                              <span className="font-bold uppercase tracking-widest text-slate-400 block mb-1">Recommended Solution:</span>
+                              <p className={isDarkMode ? 'text-slate-200 font-semibold' : 'text-slate-700 font-semibold'}>{issue.suggestion}</p>
+                            </div>
+                            {issue.status === 'open' && (
+                              <button
+                                type="button"
+                                onClick={() => handleQuickFix(issue)}
+                                className={`px-4 py-2 text-xs font-extrabold text-white rounded-xl shadow-md cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center gap-1.5 shrink-0 ${accentClass}`}
+                              >
+                                <Sparkles className="w-3.5 h-3.5" />
+                                <span>Apply Fix</span>
+                              </button>
+                            )}
+                          </div>
+
+                          {/* AI Explanations Screen 7 helper button */}
+                          <div className={`space-y-3 pt-3 border-t ${isDarkMode ? 'border-slate-800/40' : 'border-slate-200'}`}>
+                            <div className="flex justify-between items-center flex-wrap gap-2">
+                              <span className={`text-[10px] font-bold flex items-center gap-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
+                                <Sparkles className="w-3 h-3 text-yellow-500" /> Gemini Audit Intelligence
+                              </span>
+                              {!aiExplanations[issue.id] && !issue.explanation && (
+                                <button
+                                  onClick={() => fetchAiExplanation(issue.id, issue)}
+                                  disabled={aiLoading === issue.id}
+                                  className={`px-3 py-1 text-[11px] font-semibold text-white rounded-lg flex items-center gap-1 transition-all ${accentClass}`}
+                                >
+                                  {aiLoading === issue.id ? (
+                                    <><RefreshCw className="w-3 h-3 animate-spin" /> Fetching AI Explanation...</>
+                                  ) : (
+                                    <><Sparkles className="w-3 h-3" /> Explain anomaly</>
+                                  )}
+                                </button>
+                              )}
+                            </div>
+
+                            {(aiExplanations[issue.id] || issue.explanation) && (
+                              <div className={`p-4 rounded-xl border text-xs leading-relaxed ${isDarkMode ? 'bg-indigo-950/20 border-indigo-950/50 text-indigo-300' : 'bg-indigo-50/50 border-indigo-100 text-indigo-955'}`}>
+                                {aiExplanations[issue.id] || issue.explanation}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     )}
-                    {getSeverityBadge(issue.severity)}
-                    {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Issues Pagination Controls */}
+            {filteredIssues.length > 0 && (
+              <div className="mt-6 flex flex-col md:flex-row items-center justify-between gap-4 text-xs border-t border-slate-800/30 pt-4">
+                <div className="flex flex-wrap items-center gap-4">
+                  <span className="text-slate-400 font-medium">
+                    Showing <span className="font-mono text-blue-500 font-bold">{Math.min(filteredIssues.length, (issuesPage - 1) * issuesPageSize + 1)}</span> to{' '}
+                    <span className="font-mono text-blue-500 font-bold">{Math.min(filteredIssues.length, issuesPage * issuesPageSize)}</span> of{' '}
+                    <span className="font-mono text-blue-500 font-bold">{filteredIssues.length}</span> compliance findings
+                  </span>
+
+                  {/* Per page size selector */}
+                  <div className={`flex items-center gap-1.5 font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                    <span>Per page:</span>
+                    <select
+                      value={issuesPageSize}
+                      onChange={(e) => {
+                        setIssuesPageSize(Number(e.target.value));
+                        setIssuesPage(1);
+                      }}
+                      className={`px-2 py-1 rounded-lg border text-xs font-bold font-mono focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'}`}
+                    >
+                      <option value={10}>10</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
                   </div>
                 </div>
 
-                {/* Accordion Content */}
-                {isExpanded && (
-                  <div className={`p-5 border-t border-dashed bg-slate-900/10 ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
-                    <div className="space-y-4">
-                      {/* Suggestion block */}
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-950/20 p-3.5 rounded-xl border border-slate-800/40">
-                        <div className="text-xs text-left">
-                          <span className="font-bold uppercase tracking-widest text-slate-400 block mb-1">Recommended Solution:</span>
-                          <p className={isDarkMode ? 'text-slate-200 font-semibold' : 'text-slate-700 font-semibold'}>{issue.suggestion}</p>
-                        </div>
-                        {issue.status === 'open' && (
-                          <button
-                            type="button"
-                            onClick={() => handleQuickFix(issue)}
-                            className={`px-4 py-2 text-xs font-extrabold text-white rounded-xl shadow-md cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center gap-1.5 shrink-0 ${accentClass}`}
-                          >
-                            <Sparkles className="w-3.5 h-3.5" />
-                            <span>Apply Fix</span>
-                          </button>
-                        )}
-                      </div>
-
-                      {/* AI Explanations Screen 7 helper button */}
-                      <div className={`space-y-3 pt-3 border-t ${isDarkMode ? 'border-slate-800/40' : 'border-slate-200'}`}>
-                        <div className="flex justify-between items-center flex-wrap gap-2">
-                           <span className={`text-[10px] font-bold flex items-center gap-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
-                            <Sparkles className="w-3 h-3 text-yellow-500" /> Gemini Audit Intelligence
-                          </span>
-                          {!aiExplanations[issue.id] && !issue.explanation && (
-                            <button
-                              onClick={() => fetchAiExplanation(issue.id, issue)}
-                              disabled={aiLoading === issue.id}
-                              className={`px-3 py-1 text-[11px] font-semibold text-white rounded-lg flex items-center gap-1 transition-all ${accentClass}`}
-                            >
-                              {aiLoading === issue.id ? (
-                                <><RefreshCw className="w-3 h-3 animate-spin" /> Fetching AI Explanation...</>
-                              ) : (
-                                <><Sparkles className="w-3 h-3" /> Explain anomaly</>
-                              )}
-                            </button>
-                          )}
-                        </div>
-
-                        {(aiExplanations[issue.id] || issue.explanation) && (
-                          <div className={`p-4 rounded-xl border text-xs leading-relaxed ${isDarkMode ? 'bg-indigo-950/20 border-indigo-950/50 text-indigo-300' : 'bg-indigo-50/50 border-indigo-100 text-indigo-955'}`}>
-                            {aiExplanations[issue.id] || issue.explanation}
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Page jump selector */}
+                  <div className={`flex items-center gap-1.5 font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                    <span>Jump to:</span>
+                    <select
+                      value={issuesPage}
+                      onChange={(e) => setIssuesPage(Number(e.target.value))}
+                      className={`px-2 py-1 rounded-lg border text-xs font-bold font-mono focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'}`}
+                    >
+                      {Array.from({ length: Math.ceil(filteredIssues.length / issuesPageSize) || 1 }, (_, i) => i + 1).map(p => (
+                        <option key={p} value={p}>
+                          Page {p} of {Math.ceil(filteredIssues.length / issuesPageSize) || 1}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
 
-        {/* Issues Pagination Controls */}
-        {filteredIssues.length > 0 && (
-          <div className="mt-6 flex flex-col md:flex-row items-center justify-between gap-4 text-xs border-t border-slate-800/30 pt-4">
-            <div className="flex flex-wrap items-center gap-4">
-              <span className="text-slate-400 font-medium">
-                Showing <span className="font-mono text-blue-500 font-bold">{Math.min(filteredIssues.length, (issuesPage - 1) * issuesPageSize + 1)}</span> to{' '}
-                <span className="font-mono text-blue-500 font-bold">{Math.min(filteredIssues.length, issuesPage * issuesPageSize)}</span> of{' '}
-                <span className="font-mono text-blue-500 font-bold">{filteredIssues.length}</span> compliance findings
-              </span>
-
-              {/* Per page size selector */}
-              <div className={`flex items-center gap-1.5 font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                <span>Per page:</span>
-                <select
-                  value={issuesPageSize}
-                  onChange={(e) => {
-                    setIssuesPageSize(Number(e.target.value));
-                    setIssuesPage(1);
-                  }}
-                  className={`px-2 py-1 rounded-lg border text-xs font-bold font-mono focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'}`}
-                >
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={issuesPage === 1}
+                      onClick={() => setIssuesPage(1)}
+                      className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all disabled:opacity-30 disabled:pointer-events-none cursor-pointer ${
+                        isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-900' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                      }`}
+                      title="First Page"
+                    >
+                      « First
+                    </button>
+                    <button
+                      type="button"
+                      disabled={issuesPage === 1}
+                      onClick={() => setIssuesPage(prev => Math.max(1, prev - 1))}
+                      className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all disabled:opacity-30 disabled:pointer-events-none cursor-pointer ${
+                        isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-900' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                      }`}
+                      title="Previous Page"
+                    >
+                      ‹ Prev
+                    </button>
+                    <span className={`px-2.5 py-1.5 rounded-lg border font-bold font-mono text-[10px] ${
+                      isDarkMode ? 'bg-blue-600/10 border-blue-500/20 text-blue-400' : 'bg-blue-50 border-blue-200 text-blue-700'
+                    }`}>
+                      {issuesPage} / {Math.ceil(filteredIssues.length / issuesPageSize) || 1}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={issuesPage >= Math.ceil(filteredIssues.length / issuesPageSize)}
+                      onClick={() => setIssuesPage(prev => Math.min(Math.ceil(filteredIssues.length / issuesPageSize), prev + 1))}
+                      className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all disabled:opacity-30 disabled:pointer-events-none cursor-pointer ${
+                        isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-900' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                      }`}
+                      title="Next Page"
+                    >
+                      Next ›
+                    </button>
+                    <button
+                      type="button"
+                      disabled={issuesPage >= Math.ceil(filteredIssues.length / issuesPageSize)}
+                      onClick={() => setIssuesPage(Math.ceil(filteredIssues.length / issuesPageSize))}
+                      className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all disabled:opacity-30 disabled:pointer-events-none cursor-pointer ${
+                        isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-900' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                      }`}
+                      title="Last Page"
+                    >
+                      Last »
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Page jump selector */}
-              <div className={`flex items-center gap-1.5 font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                <span>Jump to:</span>
-                <select
-                  value={issuesPage}
-                  onChange={(e) => setIssuesPage(Number(e.target.value))}
-                  className={`px-2 py-1 rounded-lg border text-xs font-bold font-mono focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'}`}
-                >
-                  {Array.from({ length: Math.ceil(filteredIssues.length / issuesPageSize) || 1 }, (_, i) => i + 1).map(p => (
-                    <option key={p} value={p}>
-                      Page {p} of {Math.ceil(filteredIssues.length / issuesPageSize) || 1}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  disabled={issuesPage === 1}
-                  onClick={() => setIssuesPage(1)}
-                  className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all disabled:opacity-30 disabled:pointer-events-none cursor-pointer ${
-                    isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-900' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                  }`}
-                  title="First Page"
-                >
-                  « First
-                </button>
-                <button
-                  type="button"
-                  disabled={issuesPage === 1}
-                  onClick={() => setIssuesPage(prev => Math.max(1, prev - 1))}
-                  className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all disabled:opacity-30 disabled:pointer-events-none cursor-pointer ${
-                    isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-900' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                  }`}
-                  title="Previous Page"
-                >
-                  ‹ Prev
-                </button>
-                <span className={`px-2.5 py-1.5 rounded-lg border font-bold font-mono text-[10px] ${
-                  isDarkMode ? 'bg-blue-600/10 border-blue-500/20 text-blue-400' : 'bg-blue-50 border-blue-200 text-blue-700'
-                }`}>
-                  {issuesPage} / {Math.ceil(filteredIssues.length / issuesPageSize) || 1}
-                </span>
-                <button
-                  type="button"
-                  disabled={issuesPage >= Math.ceil(filteredIssues.length / issuesPageSize)}
-                  onClick={() => setIssuesPage(prev => Math.min(Math.ceil(filteredIssues.length / issuesPageSize), prev + 1))}
-                  className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all disabled:opacity-30 disabled:pointer-events-none cursor-pointer ${
-                    isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-900' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                  }`}
-                  title="Next Page"
-                >
-                  Next ›
-                </button>
-                <button
-                  type="button"
-                  disabled={issuesPage >= Math.ceil(filteredIssues.length / issuesPageSize)}
-                  onClick={() => setIssuesPage(Math.ceil(filteredIssues.length / issuesPageSize))}
-                  className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all disabled:opacity-30 disabled:pointer-events-none cursor-pointer ${
-                    isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-900' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                  }`}
-                  title="Last Page"
-                >
-                  Last »
-                </button>
-              </div>
-            </div>
+            )}
           </div>
         )}
       </div>

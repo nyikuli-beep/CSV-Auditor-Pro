@@ -312,7 +312,7 @@ export const RetentionPolicyBanner: React.FC<RetentionPolicyBannerProps> = ({
       {/* Confirmation Modal for Manual Deletion */}
       {showConfirmDeleteModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className={`w-full max-w-md p-6 rounded-xl border shadow-xl ${
+          <div className={`w-full max-w-md max-h-[90vh] overflow-y-auto p-6 rounded-xl border shadow-xl ${
             isDarkMode ? 'bg-[#1E293B] border-[#334155] text-white' : 'bg-white border-[#CBD5E1] text-[#0F172A]'
           }`}>
             <div className="flex items-center gap-3 mb-3 text-[#DC2626]">
