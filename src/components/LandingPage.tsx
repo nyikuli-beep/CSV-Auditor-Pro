@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   FileSpreadsheet, 
@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { FAQ_ITEMS } from '../sampleData';
 import { FOOTER_DOCS } from '../data/footerDocs';
+import { AboutFounder } from './AboutFounder';
 
 const VALUE_BLOCKS = [
   {
@@ -67,6 +68,16 @@ export default function LandingPage({
   const [newsletterStatus, setNewsletterStatus] = useState<'idle' | 'loading' | 'success'>('idle');
   const [activeModalKey, setActiveModalKey] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+      document.documentElement.style.backgroundColor = '#0F172A';
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.documentElement.style.backgroundColor = '#FFFFFF';
+    }
+  }, [isDarkMode]);
+
   const toggleFaq = (index: number) => {
     setActiveFaq(activeFaq === index ? null : index);
   };
@@ -102,6 +113,7 @@ export default function LandingPage({
             <a href="#value-proposition" className={`hover:text-[#2563EB] transition-colors duration-200 ${isDarkMode ? 'text-[#CBD5E1]' : 'text-[#475569]'}`}>Why CSV Auditor</a>
             <a href="#pricing" className={`hover:text-[#2563EB] transition-colors duration-200 ${isDarkMode ? 'text-[#CBD5E1]' : 'text-[#475569]'}`}>Pricing</a>
             <a href="#faq" className={`hover:text-[#2563EB] transition-colors duration-200 ${isDarkMode ? 'text-[#CBD5E1]' : 'text-[#475569]'}`}>FAQ</a>
+            <a href="#about-founder" className={`hover:text-[#2563EB] transition-colors duration-200 ${isDarkMode ? 'text-[#CBD5E1]' : 'text-[#475569]'}`}>Meet Founder</a>
           </nav>
 
           <div className="flex items-center gap-4">
@@ -502,6 +514,9 @@ export default function LandingPage({
         </div>
       </section>
 
+      {/* About the Founder Section */}
+      <AboutFounder isDarkMode={isDarkMode} />
+
       {/* CTA Section Banner */}
       <section className={`py-20 ${isDarkMode ? 'bg-[#0F172A]' : 'bg-[#F8FAFC]'}`}>
         <div className="max-w-5xl mx-auto px-6">
@@ -542,6 +557,7 @@ export default function LandingPage({
             <h4 className={`font-bold mb-4 ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>Product</h4>
             <ul className="space-y-2.5 text-xs flex flex-col items-start">
               <li><a href="#features" className="hover:text-[#2563EB] transition-colors">Features</a></li>
+              <li><a href="#about-founder" className="hover:text-[#2563EB] transition-colors">Meet the Founder</a></li>
               <li><a href="#pricing" className="hover:text-[#2563EB] transition-colors">Pricing</a></li>
               <li><button onClick={() => setActiveModalKey('api')} className="hover:text-[#2563EB] transition-colors text-left cursor-pointer bg-transparent border-none p-0 outline-none">API Documentation</button></li>
               <li><button onClick={() => setActiveModalKey('integrations')} className="hover:text-[#2563EB] transition-colors text-left cursor-pointer bg-transparent border-none p-0 outline-none">Integrations</button></li>

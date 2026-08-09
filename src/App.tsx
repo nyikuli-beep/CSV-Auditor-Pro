@@ -7,6 +7,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import VerifyEmail from './pages/VerifyEmail';
+import AboutFounderPage from './pages/AboutFounderPage';
 import LandingPage from './components/LandingPage';
 import { 
   FileSpreadsheet, 
@@ -3147,6 +3148,16 @@ export default function App() {
     sessionStorage.removeItem('chunk_reload_attempted');
   }, []);
 
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+      document.documentElement.style.backgroundColor = '#0F172A';
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.documentElement.style.backgroundColor = '#FFFFFF';
+    }
+  }, [isDarkMode]);
+
   return (
     <GlobalErrorBoundary>
       <Routes>
@@ -3179,6 +3190,8 @@ export default function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/about-founder" element={<AboutFounderPage />} />
+        <Route path="/founder" element={<AboutFounderPage />} />
 
         {/* Protected Workspace Routes */}
         <Route path="/dashboard" element={<ProtectedRoute><WorkspaceContent initialTab="dashboard" /></ProtectedRoute>} />
