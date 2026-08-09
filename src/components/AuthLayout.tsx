@@ -338,7 +338,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children, pageType }) =>
                           required
                           value={supportName}
                           onChange={(e) => setSupportName(e.target.value)}
-                          placeholder="Jane Doe"
+                          placeholder="Ahmed Ali"
                           className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB] ${
                             isDarkMode ? 'bg-[#0F172A] border-[#334155] text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
                           }`}
