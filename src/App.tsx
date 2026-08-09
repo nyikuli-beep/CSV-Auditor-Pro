@@ -27,6 +27,10 @@ import {
   Sun,
   Moon,
   ChevronRight,
+  ChevronLeft,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelLeft,
   Menu,
   X,
   MessageSquare,
@@ -271,6 +275,25 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     return false;
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('csv_auditor_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSidebarCollapse = () => {
+    setIsSidebarCollapsed(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('csv_auditor_sidebar_collapsed', String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
 
   // Files Registry (with persistent IndexedDB + localStorage storage)
   const [files, setFiles] = useState<CSVFile[]>(() => {
@@ -579,6 +602,10 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
           e.preventDefault();
           handleToggleTheme();
           triggerShortcutToast('Switched Theme', 'Alt + Shift + L');
+        } else if (key === '[' || e.code === 'BracketLeft') {
+          e.preventDefault();
+          toggleSidebarCollapse();
+          triggerShortcutToast(isSidebarCollapsed ? 'Expanded Sidebar' : 'Collapsed Sidebar', 'Alt + [');
         }
       }
     };
@@ -1513,9 +1540,33 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   };
 
   // Render Miniature Active File Gauge Component with Hover Fix-All Action
-  const renderActiveFileGauge = (file: CSVFile) => {
+  const renderActiveFileGauge = (file: CSVFile, isCollapsed: boolean = false) => {
     const openIssuesCount = file.issues ? file.issues.filter(i => i.status === 'open').length : 0;
     const isAuditingOrProcessing = file.status === 'auditing' || file.status === 'pending' || (isFixingActiveFile && activeFile?.id === file.id);
+
+    if (isCollapsed) {
+      return (
+        <button
+          onClick={() => {
+            setActiveFileId(file.id);
+            setActiveTab('clean');
+          }}
+          title={`Active Dataset: ${file.name} (${openIssuesCount} issues open, ${file.score}% score)`}
+          className={`w-10 h-10 mx-auto rounded-[10px] border flex items-center justify-center relative cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+            isDarkMode 
+              ? 'bg-[#374151] border-[#374151] text-[#F9FAFB] hover:bg-slate-700' 
+              : 'bg-[#F3F4F6] border-[#E5E7EB] text-[#111827] hover:bg-slate-200'
+          }`}
+        >
+          <FileSpreadsheet className="w-4 h-4 text-[#2563EB]" />
+          {openIssuesCount > 0 && (
+            <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold bg-[#2563EB] text-white flex items-center justify-center border border-white dark:border-[#1F2937]">
+              {openIssuesCount > 9 ? '9+' : openIssuesCount}
+            </span>
+          )}
+        </button>
+      );
+    }
 
     return (
       <motion.div 
@@ -2369,33 +2420,44 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                   animate={{ x: 0 }}
                   exit={{ x: '-100%' }}
                   transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-                  className={`fixed inset-y-0 left-0 w-72 max-w-[85vw] h-screen h-dvh z-50 p-5 flex flex-col justify-between md:hidden shadow-2xl overflow-y-auto ${isDarkMode ? 'bg-slate-950/95 border-r border-slate-800/80 text-slate-100 backdrop-blur-xl' : 'bg-white/95 border-r border-slate-200 text-[#1E293B] backdrop-blur-xl'}`}
+                  className={`fixed inset-y-0 left-0 w-72 max-w-[85vw] h-screen h-dvh z-50 p-5 flex flex-col justify-between md:hidden shadow-2xl overflow-y-auto ${
+                    isDarkMode 
+                      ? 'bg-[#1F2937] border-r border-[#374151] text-[#F9FAFB]' 
+                      : 'bg-[#FFFFFF] border-r border-[#E5E7EB] text-[#111827]'
+                  }`}
+                  aria-label="Mobile Navigation"
+                  role="navigation"
                 >
                   <div className="space-y-6">
                     {/* Brand with Close Trigger */}
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between pb-3 border-b border-[#374151] dark:border-[#374151] border-[#E5E7EB]">
                       <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white shrink-0 shadow-sm">
+                        <div className="w-8 h-8 bg-[#2563EB] rounded-lg flex items-center justify-center text-white shrink-0 shadow-sm">
                           <FileSpreadsheet className="w-4.5 h-4.5" />
                         </div>
                         <div>
-                          <h2 className={`font-bold text-sm tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Auditor Pro</h2>
-                          <span className="text-[9px] text-slate-400 block font-bold tracking-wider">WORKSPACE LEVEL</span>
+                          <h2 className={`font-bold text-sm tracking-tight ${isDarkMode ? 'text-[#F9FAFB]' : 'text-[#111827]'}`}>Auditor Pro</h2>
+                          <span className={`text-[9px] block font-bold tracking-wider ${isDarkMode ? 'text-[#D1D5DB]' : 'text-[#4B5563]'}`}>WORKSPACE LEVEL</span>
                         </div>
                       </div>
                       <button 
                         onClick={() => setMobileMenuOpen(false)}
-                        className={`p-1.5 rounded-lg border cursor-pointer transition-all ${isDarkMode ? 'bg-slate-900 border-slate-800 hover:bg-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'}`}
+                        aria-label="Close mobile navigation menu"
+                        className={`p-1.5 rounded-[10px] cursor-pointer transition-colors ${
+                          isDarkMode 
+                            ? 'bg-[#374151] text-[#F9FAFB] hover:bg-slate-700' 
+                            : 'bg-[#F3F4F6] text-[#111827] hover:bg-slate-200'
+                        }`}
                       >
                         <X className="w-4 h-4" />
                       </button>
                     </div>
 
                     {/* Mapped Active File Miniature Gauge */}
-                    {activeFile && renderActiveFileGauge(activeFile)}
+                    {activeFile && renderActiveFileGauge(activeFile, false)}
 
                     {/* Mobile Navigation Tabs Stack */}
-                    <nav className="space-y-1">
+                    <nav className="space-y-1.5">
                       {[
                         { id: 'dashboard', label: 'Dashboard Home', icon: BarChart3 },
                         { id: 'upload', label: 'Upload Center', icon: Upload },
@@ -2419,14 +2481,27 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                               setActiveTab(tab.id);
                               setMobileMenuOpen(false);
                             }}
-                            className={`w-full px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between transition-all cursor-pointer ${isActive ? isDarkMode ? 'bg-[#1D4ED8] text-white font-bold' : 'bg-[#DBEAFE] text-[#2563EB] font-bold' : isDarkMode ? 'text-[#CBD5E1] hover:text-white hover:bg-[#1E293B]' : 'text-[#475569] hover:bg-[#F8FAFC] hover:text-[#0F172A]'}`}
+                            aria-current={isActive ? 'page' : undefined}
+                            className={`w-full px-3 py-2.5 rounded-[10px] text-xs font-medium flex items-center justify-between transition-colors cursor-pointer ${
+                              isActive 
+                                ? 'bg-[#2563EB] text-[#FFFFFF] font-bold shadow-sm' 
+                                : isDarkMode 
+                                  ? 'text-[#F9FAFB] hover:bg-[#374151]' 
+                                  : 'text-[#111827] hover:bg-[#F3F4F6]'
+                            }`}
                           >
                             <span className="flex items-center gap-2.5">
-                              <Icon className={`w-4 h-4 ${isActive ? 'text-blue-500' : ''}`} />
+                              <Icon className={`w-4 h-4 shrink-0 ${
+                                isActive 
+                                  ? 'text-[#FFFFFF]' 
+                                  : isDarkMode 
+                                    ? 'text-[#D1D5DB]' 
+                                    : 'text-[#6B7280]'
+                              }`} />
                               <span>{tab.label}</span>
                             </span>
                             {tab.badge !== undefined && tab.badge > 0 && (
-                              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-rose-500 text-white font-mono shrink-0">
+                              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#2563EB] text-white shrink-0">
                                 {tab.badge}
                               </span>
                             )}
@@ -2437,20 +2512,26 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                   </div>
 
                   {/* Mobile Logout Panel */}
-                  <div className="pt-6 border-t border-slate-900/80">
+                  <div className={`pt-4 border-t ${isDarkMode ? 'border-[#374151]' : 'border-[#E5E7EB]'}`}>
                     <button 
                       onClick={() => setProfileModalOpen(true)}
-                      className="w-full flex items-center gap-3 mb-4 text-xs text-left p-2 rounded-xl hover:bg-slate-900/60 transition-colors group cursor-pointer"
+                      className={`w-full flex items-center gap-3 mb-3 text-xs text-left p-2 rounded-[10px] transition-colors group cursor-pointer ${
+                        isDarkMode ? 'hover:bg-[#374151]' : 'hover:bg-[#F3F4F6]'
+                      }`}
                     >
-                      <div className="relative w-9 h-9 rounded-full overflow-hidden border border-slate-700 shrink-0">
+                      <div className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-blue-500/40 shrink-0">
                         <img src={user?.avatar || '/macbook_code.jpg'} alt={user?.name || "User Profile"} className="w-full h-full object-cover" />
                         <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
                           <Camera className="w-3.5 h-3.5" />
                         </div>
                       </div>
                       <div className="min-w-0 flex-1">
-                        <span className="font-bold block truncate max-w-[120px]">{user?.name || user?.email || 'nyikulibramwel@gmail.com'}</span>
-                        <span className="text-[9px] text-blue-400 block font-mono font-bold uppercase">{user?.role || 'Owner'} • Edit Avatar</span>
+                        <span className={`font-bold block truncate max-w-[120px] ${isDarkMode ? 'text-[#F9FAFB]' : 'text-[#111827]'}`}>
+                          {user?.name || user?.email || 'nyikulibramwel@gmail.com'}
+                        </span>
+                        <span className={`text-[9px] block font-mono font-bold uppercase ${isDarkMode ? 'text-[#D1D5DB]' : 'text-[#4B5563]'}`}>
+                          {user?.role || 'Owner'} • Edit Avatar
+                        </span>
                       </div>
                     </button>
                     <button 
@@ -2458,7 +2539,11 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                         handleLogout();
                         setMobileMenuOpen(false);
                       }}
-                      className="w-full py-2.5 rounded-xl border border-slate-800 text-xs font-bold text-slate-400 hover:text-slate-100 hover:bg-slate-900/60 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                      className={`w-full py-2.5 rounded-[10px] border text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer ${
+                        isDarkMode 
+                          ? 'border-[#374151] text-[#D1D5DB] hover:bg-[#374151] hover:text-[#F9FAFB]' 
+                          : 'border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] hover:text-[#111827]'
+                      }`}
                     >
                       <LogOut className="w-3.5 h-3.5" /> Logout Session
                     </button>
@@ -2468,31 +2553,82 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
             )}
           </AnimatePresence>
           
-          {/* Left Navigation Sidebar */}
+          {/* Left Collapsing Desktop Navigation Sidebar */}
           <motion.aside 
             initial={{ opacity: 0, x: -16 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.45, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
-            className={`w-64 border-r hidden md:flex flex-col justify-between p-5 shrink-0 ${isDarkMode ? 'bg-[#0f172a] border-slate-800' : 'bg-white border-slate-200'}`}
+            animate={{ 
+              opacity: 1, 
+              x: 0,
+              width: isSidebarCollapsed ? 72 : 256
+            }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            className={`border-r hidden md:flex flex-col justify-between shrink-0 transition-colors duration-200 overflow-x-hidden ${
+              isSidebarCollapsed ? 'p-3' : 'p-4'
+            } ${
+              isDarkMode 
+                ? 'bg-[#1F2937] border-[#374151] text-[#F9FAFB]' 
+                : 'bg-[#FFFFFF] border-[#E5E7EB] text-[#111827]'
+            }`}
+            aria-label="Main Navigation"
+            role="navigation"
+            aria-expanded={!isSidebarCollapsed}
           >
-            <div className="space-y-6">
+            <div className="space-y-5">
               
-              {/* Branding Header */}
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white shrink-0 shadow-sm">
-                  <FileSpreadsheet className="w-4.5 h-4.5" />
+              {/* Branding Header & Collapse Toggle */}
+              {isSidebarCollapsed ? (
+                <div className="flex flex-col items-center gap-3.5 w-full pb-2 border-b border-[#374151] dark:border-[#374151] border-[#E5E7EB]">
+                  <div 
+                    onClick={toggleSidebarCollapse}
+                    title="Click to expand navigation sidebar (Alt + [)"
+                    className="w-8 h-8 bg-[#2563EB] rounded-lg flex items-center justify-center text-white shrink-0 cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
+                  >
+                    <FileSpreadsheet className="w-4 h-4" />
+                  </div>
+                  <button
+                    onClick={toggleSidebarCollapse}
+                    aria-label="Expand navigation sidebar"
+                    title="Expand Navigation Sidebar (Alt + [)"
+                    className={`p-1.5 rounded-[10px] cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                      isDarkMode 
+                        ? 'bg-[#374151] text-[#F9FAFB] hover:bg-slate-700' 
+                        : 'bg-[#F3F4F6] text-[#111827] hover:bg-slate-200'
+                    }`}
+                  >
+                    <PanelLeftOpen className="w-4 h-4" />
+                  </button>
                 </div>
-                <div>
-                  <h2 className={`font-bold text-sm tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Auditor Pro</h2>
-                  <span className="text-[9px] text-slate-400 block font-bold tracking-wider">WORKSPACE LEVEL</span>
+              ) : (
+                <div className="flex items-center justify-between pb-2 border-b border-[#374151] dark:border-[#374151] border-[#E5E7EB]">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 bg-[#2563EB] rounded-lg flex items-center justify-center text-white shrink-0 shadow-sm">
+                      <FileSpreadsheet className="w-4.5 h-4.5" />
+                    </div>
+                    <div className="min-w-0 truncate">
+                      <h2 className={`font-bold text-sm tracking-tight truncate ${isDarkMode ? 'text-[#F9FAFB]' : 'text-[#111827]'}`}>Auditor Pro</h2>
+                      <span className={`text-[9px] block font-bold tracking-wider truncate ${isDarkMode ? 'text-[#D1D5DB]' : 'text-[#4B5563]'}`}>WORKSPACE LEVEL</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={toggleSidebarCollapse}
+                    aria-label="Collapse navigation sidebar"
+                    title="Collapse Navigation Sidebar (Alt + [)"
+                    className={`p-1.5 rounded-[10px] cursor-pointer transition-colors shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                      isDarkMode 
+                        ? 'bg-[#374151] text-[#F9FAFB] hover:bg-slate-700' 
+                        : 'bg-[#F3F4F6] text-[#111827] hover:bg-slate-200'
+                    }`}
+                  >
+                    <PanelLeftClose className="w-4 h-4" />
+                  </button>
                 </div>
-              </div>
+              )}
 
               {/* Mapped Active File Miniature Gauge */}
-              {activeFile && renderActiveFileGauge(activeFile)}
+              {activeFile && renderActiveFileGauge(activeFile, isSidebarCollapsed)}
 
               {/* Navigation Tabs Stack */}
-              <nav className="space-y-1">
+              <nav className="space-y-1.5">
                 {[
                   { id: 'dashboard', label: 'Dashboard Home', icon: BarChart3, shortcut: 'Alt+D' },
                   { id: 'upload', label: 'Upload Center', icon: Upload, shortcut: 'Alt+U' },
@@ -2510,24 +2646,71 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                 ].map((tab) => {
                   const Icon = tab.icon;
                   const isActive = activeTab === tab.id;
+
+                  if (isSidebarCollapsed) {
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        aria-current={isActive ? 'page' : undefined}
+                        className={`w-10 h-10 mx-auto rounded-[10px] flex items-center justify-center relative cursor-pointer group transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                          isActive 
+                            ? 'bg-[#2563EB] text-[#FFFFFF] font-bold shadow-sm' 
+                            : isDarkMode 
+                              ? 'text-[#D1D5DB] hover:bg-[#374151] hover:text-[#F9FAFB]' 
+                              : 'text-[#6B7280] hover:bg-[#F3F4F6] hover:text-[#111827]'
+                        }`}
+                        title={`${tab.label} (${tab.shortcut})`}
+                      >
+                        <Icon className={`w-4 h-4 shrink-0 transition-colors ${
+                          isActive 
+                            ? 'text-[#FFFFFF]' 
+                            : isDarkMode 
+                              ? 'text-[#D1D5DB] group-hover:text-[#F9FAFB]' 
+                              : 'text-[#6B7280] group-hover:text-[#111827]'
+                        }`} />
+                        {tab.badge !== undefined && tab.badge > 0 && (
+                          <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold bg-[#2563EB] text-white flex items-center justify-center border border-white dark:border-[#1F2937]">
+                            {tab.badge > 9 ? '9+' : tab.badge}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  }
+
                   return (
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
-                      className={`w-full px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between transition-all cursor-pointer group ${isActive ? isDarkMode ? 'bg-[#1D4ED8] text-white font-bold' : 'bg-[#DBEAFE] text-[#2563EB] font-bold' : isDarkMode ? 'text-[#CBD5E1] hover:text-white hover:bg-[#1E293B]' : 'text-[#475569] hover:bg-[#F8FAFC] hover:text-[#0F172A]'}`}
+                      aria-current={isActive ? 'page' : undefined}
+                      className={`w-full px-3 py-2.5 rounded-[10px] text-xs font-medium flex items-center justify-between transition-colors cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                        isActive 
+                          ? 'bg-[#2563EB] text-[#FFFFFF] font-bold shadow-sm' 
+                          : isDarkMode 
+                            ? 'text-[#F9FAFB] hover:bg-[#374151]' 
+                            : 'text-[#111827] hover:bg-[#F3F4F6]'
+                      }`}
                       title={`Navigate to ${tab.label} (${tab.shortcut})`}
                     >
-                      <span className="flex items-center gap-2.5">
-                        <Icon className={`w-4 h-4 ${isActive ? 'text-blue-500' : ''}`} />
-                        <span>{tab.label}</span>
+                      <span className="flex items-center gap-2.5 min-w-0">
+                        <Icon className={`w-4 h-4 shrink-0 transition-colors ${
+                          isActive 
+                            ? 'text-[#FFFFFF]' 
+                            : isDarkMode 
+                              ? 'text-[#D1D5DB] group-hover:text-[#F9FAFB]' 
+                              : 'text-[#6B7280] group-hover:text-[#111827]'
+                        }`} />
+                        <span className="truncate">{tab.label}</span>
                       </span>
                       <div className="flex items-center gap-1.5 shrink-0">
                         {tab.badge !== undefined && tab.badge > 0 && (
-                          <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-rose-500 text-white font-mono shrink-0">
+                          <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#2563EB] text-white font-mono shrink-0">
                             {tab.badge}
                           </span>
                         )}
-                        <span className={`text-[9px] font-mono font-semibold px-1 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity ${isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-200 text-slate-600'}`}>
+                        <span className={`text-[9px] font-mono font-semibold px-1 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
+                          isDarkMode ? 'bg-[#374151] text-[#D1D5DB]' : 'bg-[#F3F4F6] text-[#4B5563]'
+                        }`}>
                           {tab.shortcut}
                         </span>
                       </div>
@@ -2538,30 +2721,69 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
 
             </div>
 
-            {/* Logout panel */}
-            <div className="pt-6 border-t border-slate-900/80">
-              <button 
-                onClick={() => setProfileModalOpen(true)}
-                className="w-full flex items-center gap-3 mb-4 text-xs text-left p-2 rounded-xl hover:bg-slate-900/60 transition-colors group cursor-pointer"
-                title="Click to edit profile picture & account details"
-              >
-                <div className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-blue-500/40 shrink-0">
-                  <img src={user?.avatar || '/macbook_code.jpg'} alt={user?.name || "User Profile"} className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-slate-950/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
-                    <Camera className="w-4 h-4" />
-                  </div>
+            {/* Logout & Profile panel */}
+            <div className={`pt-4 border-t ${isDarkMode ? 'border-[#374151]' : 'border-[#E5E7EB]'}`}>
+              {isSidebarCollapsed ? (
+                <div className="flex flex-col items-center gap-3">
+                  <button 
+                    onClick={() => setProfileModalOpen(true)}
+                    className="w-9 h-9 rounded-full overflow-hidden border-2 border-blue-500/40 relative group cursor-pointer block focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    title="Edit profile picture & account details"
+                  >
+                    <img src={user?.avatar || '/macbook_code.jpg'} alt={user?.name || "User Profile"} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-slate-950/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                      <Camera className="w-3.5 h-3.5" />
+                    </div>
+                  </button>
+                  <button 
+                    onClick={handleLogout}
+                    title="Logout Session"
+                    aria-label="Logout session"
+                    className={`w-10 h-10 rounded-[10px] border transition-colors flex items-center justify-center cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                      isDarkMode 
+                        ? 'border-[#374151] text-[#D1D5DB] hover:bg-[#374151] hover:text-[#F9FAFB]' 
+                        : 'border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] hover:text-[#111827]'
+                    }`}
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </button>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <span className="font-bold block truncate max-w-[120px]">{user?.name || user?.email?.split('@')[0] || 'Nyikuli B.'}</span>
-                  <span className="text-[9px] text-blue-400 block font-mono font-bold uppercase tracking-wider">{user?.role || 'Owner'} • Edit Avatar</span>
-                </div>
-              </button>
-              <button 
-                onClick={handleLogout}
-                className="w-full py-2.5 rounded-xl border border-slate-800 text-xs font-bold text-slate-400 hover:text-slate-100 hover:bg-slate-900/60 transition-all flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <LogOut className="w-3.5 h-3.5" /> Logout Session
-              </button>
+              ) : (
+                <>
+                  <button 
+                    onClick={() => setProfileModalOpen(true)}
+                    className={`w-full flex items-center gap-3 mb-3 text-xs text-left p-2 rounded-[10px] transition-colors group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                      isDarkMode ? 'hover:bg-[#374151]' : 'hover:bg-[#F3F4F6]'
+                    }`}
+                    title="Click to edit profile picture & account details"
+                  >
+                    <div className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-blue-500/40 shrink-0">
+                      <img src={user?.avatar || '/macbook_code.jpg'} alt={user?.name || "User Profile"} className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-slate-950/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                        <Camera className="w-4 h-4" />
+                      </div>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className={`font-bold block truncate max-w-[120px] ${isDarkMode ? 'text-[#F9FAFB]' : 'text-[#111827]'}`}>
+                        {user?.name || user?.email?.split('@')[0] || 'Nyikuli B.'}
+                      </span>
+                      <span className={`text-[9px] block font-mono font-bold uppercase tracking-wider ${isDarkMode ? 'text-[#D1D5DB]' : 'text-[#4B5563]'}`}>
+                        {user?.role || 'Owner'} • Edit Avatar
+                      </span>
+                    </div>
+                  </button>
+                  <button 
+                    onClick={handleLogout}
+                    className={`w-full py-2.5 rounded-[10px] border text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                      isDarkMode 
+                        ? 'border-[#374151] text-[#D1D5DB] hover:bg-[#374151] hover:text-[#F9FAFB]' 
+                        : 'border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] hover:text-[#111827]'
+                    }`}
+                  >
+                    <LogOut className="w-3.5 h-3.5" /> Logout Session
+                  </button>
+                </>
+              )}
             </div>
           </motion.aside>
 
@@ -2589,6 +2811,8 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
               activeTab={activeTab}
               onNavigate={handleNavigateTab}
               onOpenMobileMenu={() => setMobileMenuOpen(true)}
+              isSidebarCollapsed={isSidebarCollapsed}
+              onToggleSidebar={toggleSidebarCollapse}
               currentTime={currentTime}
               isDarkMode={isDarkMode}
               onToggleTheme={() => setIsDarkMode(!isDarkMode)}

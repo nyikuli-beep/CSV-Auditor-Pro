@@ -37,6 +37,7 @@ export const SHORTCUTS_DEF: Omit<ShortcutItem, 'action'>[] = [
   { keyCombo: 'Alt + O', keys: ['Alt', 'O'], description: 'Navigate to API & Settings', tabId: 'settings', category: 'navigation' },
 
   // Actions & System
+  { keyCombo: 'Alt + [', keys: ['Alt', '['], description: 'Toggle Collapsing Navigation Sidebar', category: 'actions' },
   { keyCombo: 'Alt + K', keys: ['Alt', 'K'], description: 'Toggle Keyboard Shortcuts Guide', category: 'actions' },
   { keyCombo: '?', keys: ['?'], description: 'Show Keyboard Shortcuts (when not typing)', category: 'actions' },
   { keyCombo: 'Alt + Shift + P', keys: ['Alt', 'Shift', 'P'], description: 'Open Profile Picture Uploader', category: 'actions' },

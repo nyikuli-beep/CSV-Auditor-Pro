@@ -19,7 +19,9 @@ import {
   ShieldAlert,
   HelpCircle,
   CheckCircle2,
-  SlidersHorizontal
+  SlidersHorizontal,
+  PanelLeftClose,
+  PanelLeftOpen
 } from 'lucide-react';
 import { SlotRequest } from '../types';
 
@@ -27,6 +29,8 @@ interface WorkspaceHeaderProps {
   activeTab: string;
   onNavigate: (tab: string) => void;
   onOpenMobileMenu: () => void;
+  isSidebarCollapsed?: boolean;
+  onToggleSidebar?: () => void;
   currentTime: string;
   isDarkMode: boolean;
   onToggleTheme: () => void;
@@ -45,6 +49,8 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
   activeTab,
   onNavigate,
   onOpenMobileMenu,
+  isSidebarCollapsed = false,
+  onToggleSidebar,
   currentTime,
   isDarkMode,
   onToggleTheme,
@@ -110,13 +116,32 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
           aria-label="Open sidebar menu"
           className={`p-2 rounded-xl border flex items-center justify-center min-w-[40px] min-h-[40px] md:hidden cursor-pointer transition-colors ${
             isDarkMode 
-              ? 'bg-slate-800/80 border-slate-700 text-slate-200 hover:text-white hover:bg-slate-700' 
-              : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+              ? 'bg-[#374151] border-[#374151] text-[#F9FAFB] hover:bg-slate-700' 
+              : 'bg-[#F3F4F6] border-[#E5E7EB] text-[#111827] hover:bg-slate-200'
           }`}
           title="Open Navigation Menu"
         >
           <Menu className="w-4 h-4" />
         </button>
+
+        {onToggleSidebar && (
+          <button
+            onClick={onToggleSidebar}
+            aria-label={isSidebarCollapsed ? "Expand navigation sidebar" : "Collapse navigation sidebar"}
+            className={`hidden md:flex p-2 rounded-xl border items-center justify-center min-w-[36px] min-h-[36px] cursor-pointer transition-colors ${
+              isDarkMode 
+                ? 'bg-[#374151] border-[#374151] text-[#F9FAFB] hover:bg-slate-700' 
+                : 'bg-[#F3F4F6] border-[#E5E7EB] text-[#111827] hover:bg-slate-200'
+            }`}
+            title={isSidebarCollapsed ? "Expand Sidebar (Alt + [)" : "Collapse Sidebar (Alt + [)"}
+          >
+            {isSidebarCollapsed ? (
+              <PanelLeftOpen className="w-4 h-4" />
+            ) : (
+              <PanelLeftClose className="w-4 h-4" />
+            )}
+          </button>
+        )}
 
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 truncate">
           <h1 className={`font-bold text-xs sm:text-sm md:text-base tracking-tight truncate max-w-[130px] sm:max-w-[220px] md:max-w-[320px] lg:max-w-[420px] ${
