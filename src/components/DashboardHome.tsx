@@ -2,7 +2,6 @@ import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CSVFile, AuditActivity, SlotRequest } from '../types';
 import { formatTimeRemaining } from '../lib/retentionService';
-import { useAuth } from '../hooks/useAuth';
 import { 
   ResponsiveContainer, 
   AreaChart, 
@@ -20,13 +19,13 @@ import {
   Upload, 
   Sparkles, 
   FileText, 
-  FileSpreadsheet,
   ArrowRight, 
   AlertTriangle, 
   Users, 
   Activity,
   ArrowUpRight,
   Database,
+  Calculator,
   Bell,
   UserPlus,
   UserX,
@@ -37,19 +36,7 @@ import {
   CheckCircle2,
   Filter,
   Layers,
-  Table,
-  Cpu,
-  ShieldCheck,
-  Wand2,
-  BarChart3,
-  RefreshCw,
-  Play,
-  Check,
-  RotateCcw,
-  Server,
-  Cloud,
-  ChevronRight,
-  HardDrive
+  Table
 } from 'lucide-react';
 
 interface DashboardHomeProps {
@@ -79,30 +66,6 @@ export default function DashboardHome({
   onDeclineSlotRequest,
   currentUserEmail = ''
 }: DashboardHomeProps) {
-  const { user } = useAuth();
-
-  // Dynamic Greeting based on time of day
-  const greetingTime = useMemo(() => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good Morning';
-    if (hour < 18) return 'Good Afternoon';
-    return 'Good Evening';
-  }, []);
-
-  // Dynamically resolve user's display name or first name from Firebase Auth
-  const userFirstName = useMemo(() => {
-    if (user?.displayName && user.displayName.trim() !== '') {
-      return user.displayName.split(' ')[0];
-    }
-    if (user?.email) {
-      const emailPrefix = user.email.split('@')[0];
-      if (emailPrefix) {
-        return emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1);
-      }
-    }
-    return 'Bramwel';
-  }, [user]);
-
   // Formulate data points for the last 30 days based exclusively on real user files
   const trendData = useMemo(() => {
     return files
@@ -115,7 +78,7 @@ export default function DashboardHome({
             if (parts[0]) {
               const dateParts = parts[0].split('-');
               if (dateParts.length === 3) {
-                displayDate = `${dateParts[1]}-${dateParts[2]}`;
+                displayDate = `${dateParts[1]}-${dateParts[2]}`; // MM-DD
               } else if (parts[0].includes('/')) {
                 const datePartsSlash = parts[0].split('/');
                 if (datePartsSlash.length === 3) {
@@ -146,19 +109,19 @@ export default function DashboardHome({
       return (
         <div className={`p-3 rounded-xl border shadow-xl text-xs leading-relaxed ${
           isDarkMode 
-            ? 'bg-[#0F172A] border-[#334155] text-[#F8FAFC]' 
-            : 'bg-white border-[#E2E8F0] text-[#0F172A]'
+            ? 'bg-slate-950 border-slate-800 text-slate-100' 
+            : 'bg-white border-slate-200 text-slate-900'
         }`}>
-          <p className="font-bold truncate max-w-[180px] mb-1 text-[#94A3B8] text-[10px] uppercase tracking-wider">{data.name}</p>
-          <p className="font-mono text-[9px] text-[#64748B] mb-2">Audit Date: {data.date}</p>
+          <p className="font-bold truncate max-w-[180px] mb-1 text-slate-400 text-[10px] uppercase tracking-wider">{data.name}</p>
+          <p className="font-mono text-[9px] text-slate-500 mb-2">Audit Date: {data.date}</p>
           <div className="space-y-1">
             <div className="flex justify-between items-center gap-4">
-              <span className="flex items-center gap-1 text-[#94A3B8] font-medium"><span className="w-2 h-2 rounded-full bg-[#2563EB]"></span>Hygiene Score:</span>
-              <span className="font-bold text-[#2563EB]">{data.score}%</span>
+              <span className="flex items-center gap-1 text-slate-400 font-medium"><span className="w-2 h-2 rounded-full bg-blue-500"></span>Hygiene Score:</span>
+              <span className="font-bold text-blue-500">{data.score}%</span>
             </div>
             <div className="flex justify-between items-center gap-4">
-              <span className="flex items-center gap-1 text-[#94A3B8] font-medium"><span className="w-2 h-2 rounded-full bg-[#DC2626]"></span>Anomalies:</span>
-              <span className="font-bold text-[#DC2626]">{data.errors}</span>
+              <span className="flex items-center gap-1 text-slate-400 font-medium"><span className="w-2 h-2 rounded-full bg-rose-500"></span>Anomalies:</span>
+              <span className="font-bold text-rose-500">{data.errors}</span>
             </div>
           </div>
         </div>
@@ -166,6 +129,9 @@ export default function DashboardHome({
     }
     return null;
   };
+
+  const [activePanel, setActivePanel] = useState<'records' | 'issues' | 'savings' | null>(null);
+  const [hourlyRate, setHourlyRate] = useState<number>(75);
 
   // Data Profile Modal State
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -313,90 +279,58 @@ export default function DashboardHome({
     document.body.removeChild(link);
   };
 
-  // CSV-Focused Analytics Calculations
-  const totalFilesCount = files.length;
+  const totalAuditedFiles = files.length;
+  const completedAudits = files.filter(f => f.status === 'completed').length;
+  
+  // Calculate aggregate score
+  const completedWithScore = files.filter(f => f.status === 'completed' && f.score > 0);
+  const avgScore = completedWithScore.length > 0 
+    ? Math.round(completedWithScore.reduce((sum, f) => sum + f.score, 0) / completedWithScore.length) 
+    : 100;
 
-  const totalRowsProcessed = useMemo(() => {
-    return files.reduce((sum, f) => sum + (f.totalRowsCount || (f.rows ? f.rows.length : 0)), 0);
+  // Real-time Calculation 1: Total Records Audited
+  const totalRecords = useMemo(() => {
+    return files.reduce((sum, f) => sum + (f.rows ? f.rows.length : 0), 0);
   }, [files]);
 
-  const validationSuccessRate = useMemo(() => {
-    if (files.length === 0) return 100;
-    const validFiles = files.filter(f => f.status === 'completed' && f.score >= 80).length;
-    return Math.round((validFiles / files.length) * 100);
-  }, [files]);
-
-  const { activeIssuesCount, criticalIssuesCount } = useMemo(() => {
+  // Real-time Calculation 2: Active Hygiene Issues Breakdown
+  const { activeIssuesCount, criticalIssuesCount, warningIssuesCount, infoIssuesCount } = useMemo(() => {
     let active = 0;
     let crit = 0;
+    let warn = 0;
+    let info = 0;
     files.forEach(f => {
       if (f.issues) {
         f.issues.forEach(i => {
           if (i.status === 'open') {
             active++;
             if (i.severity === 'critical') crit++;
+            else if (i.severity === 'warning') warn++;
+            else info++;
           }
         });
       }
     });
     return { 
       activeIssuesCount: active, 
-      criticalIssuesCount: crit
+      criticalIssuesCount: crit, 
+      warningIssuesCount: warn, 
+      infoIssuesCount: info 
     };
   }, [files]);
 
-  const resolvedIssuesCount = useMemo(() => {
-    let resolved = 0;
-    files.forEach(f => {
-      if (f.issues) {
-        f.issues.forEach(i => {
-          if (i.status === 'resolved') resolved++;
-        });
-      }
-    });
-    return resolved;
-  }, [files]);
-
-  const aiSuggestionsCount = useMemo(() => {
-    let suggestions = 0;
-    files.forEach(f => {
-      const extraAi = (f as any).aiSuggestions;
-      if (extraAi && Array.isArray(extraAi)) {
-        suggestions += extraAi.length;
-      } else if (f.issues) {
-        suggestions += f.issues.length;
-      }
-    });
-    return Math.max(suggestions, files.length * 4);
-  }, [files]);
-
-  const teamMembersCount = useMemo(() => {
-    const approved = slotRequests.filter(s => s.status === 'approved').length;
-    return approved + 8;
-  }, [slotRequests]);
-
-  const storageUsedFormatted = useMemo(() => {
-    const totalBytes = files.reduce((sum, f) => sum + (f.size || 0), 0);
-    if (totalBytes === 0) return '0.0 KB';
-    if (totalBytes > 1024 * 1024 * 1024) {
-      return `${(totalBytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-    }
-    if (totalBytes > 1024 * 1024) {
-      return `${(totalBytes / (1024 * 1024)).toFixed(1)} MB`;
-    }
-    return `${(totalBytes / 1024).toFixed(1)} KB`;
-  }, [files]);
-
+  // Real-time Calculation 3: Time Saved with AI
   const timeSavedMinutes = useMemo(() => {
     let totalMins = 0;
     files.forEach(f => {
+      // 15 minutes base per audited file (delimiter scanning, structural mapping, etc.)
       totalMins += 15;
       if (f.issues) {
         f.issues.forEach(i => {
           if (i.status === 'resolved') {
-            totalMins += 5;
+            totalMins += 5; // 5 minutes per automated resolution action
           } else if (i.status === 'open') {
-            totalMins += 2;
+            totalMins += 2; // 2 minutes saved by real-time scanning & dynamic recommendation
           }
         });
       }
@@ -410,100 +344,87 @@ export default function DashboardHome({
 
   return (
     <div className="space-y-8 animate-fadeIn w-full max-w-full overflow-x-hidden">
-      {/* Enterprise SaaS Hero Section */}
-      <div className={`p-6 sm:p-8 rounded-2xl border text-left relative overflow-hidden transition-all duration-200 ${
-        isDarkMode ? 'bg-[#1E293B] border-[#334155] shadow-md' : 'bg-white border-[#E2E8F0] shadow-sm'
-      }`}>
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 relative z-10">
-          <div className="space-y-2 max-w-3xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border transition-colors bg-[#EFF6FF] text-[#2563EB] border-[#DBEAFE] dark:bg-[#0F172A] dark:text-[#60A5FA] dark:border-[#334155]">
-              <Sparkles className="w-3.5 h-3.5 text-[#2563EB] dark:text-[#60A5FA]" />
-              <span>Enterprise Workspace • Live Audit Engine v2.4</span>
-            </div>
-            
-            {/* Dynamic Personalized Greeting */}
-            <h1 className={`text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight ${
-              isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'
-            }`}>
-              {greetingTime}, <span className="text-[#2563EB] dark:text-[#60A5FA]">{userFirstName}</span>
-            </h1>
-
-            <p className={`text-sm sm:text-base leading-relaxed ${
-              isDarkMode ? 'text-[#CBD5E1]' : 'text-[#475569]'
-            }`}>
-              Let's make your data cleaner and more reliable today. Oversee corporate spreadsheet compliance, automated row cleaning, and real-time validation across all datasets.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 shrink-0">
-            <button 
-              onClick={() => {
-                if (activeFile) setSelectedProfileFileId(activeFile.id);
-                else if (files.length > 0) setSelectedProfileFileId(files[0].id);
-                setIsProfileModalOpen(true);
-              }}
-              className={`px-4 py-2.5 text-xs sm:text-sm font-bold border rounded-xl flex items-center gap-2 transition-all cursor-pointer ${
-                isDarkMode 
-                  ? 'bg-[#0F172A] border-[#334155] text-[#34D399] hover:bg-[#334155]' 
-                  : 'bg-[#ECFDF5] border-[#A7F3D0] text-[#059669] hover:bg-[#D1FAE5]'
-              }`}
-            >
-              <FileBarChart className="w-4 h-4 text-[#059669] dark:text-[#34D399]" />
-              <span>Data Profile Analysis</span>
-            </button>
-
-            <button 
-              onClick={() => onNavigate('upload')}
-              className="px-5 py-2.5 text-xs sm:text-sm font-bold text-white bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#1E40AF] rounded-xl flex items-center gap-2 transition-all duration-200 cursor-pointer shadow-sm"
-            >
-              <Upload className="w-4 h-4" />
-              <span>Upload CSV</span>
-            </button>
-          </div>
+      {/* Welcome Banner */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Audit Workspace</h1>
+          <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+            Overview of your corporate spreadsheet compliance and quality scoring.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <button 
+            onClick={() => {
+              if (activeFile) setSelectedProfileFileId(activeFile.id);
+              else if (files.length > 0) setSelectedProfileFileId(files[0].id);
+              setIsProfileModalOpen(true);
+            }}
+            className={`px-4 py-2 text-sm font-semibold border rounded-xl flex items-center gap-2 transition-all cursor-pointer ${
+              isDarkMode 
+                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20' 
+                : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+            }`}
+            id="generate-data-profile-btn"
+          >
+            <FileBarChart className="w-4 h-4 text-emerald-500" />
+            <span>Generate Data Profile</span>
+          </button>
+          <button 
+            onClick={() => onNavigate('upload')}
+            className={`px-4 py-2 text-sm font-semibold text-white rounded-xl flex items-center gap-2 shadow hover:opacity-90 transition-all cursor-pointer ${accentClass}`}
+          >
+            <Upload className="w-4 h-4" /> Upload CSV
+          </button>
+          <button 
+            onClick={() => onNavigate('insights')}
+            className={`px-4 py-2 text-sm font-semibold border rounded-xl flex items-center gap-2 transition-all cursor-pointer ${isDarkMode ? 'bg-slate-900 border-slate-800 hover:bg-slate-800' : 'bg-white border-slate-200 hover:bg-slate-50'}`}
+          >
+            <Sparkles className="w-4 h-4 text-blue-500" /> AI Insights
+          </button>
         </div>
       </div>
 
       {/* OWNER NOTIFICATION BANNER FOR TEAM TENANCY SLOT REQUESTS */}
       {isOwner && pendingRequests.length > 0 && (
-        <div className="p-4 rounded-2xl border border-[#F59E0B] bg-[#FEF3C7] dark:bg-[#0F172A] text-left space-y-3 shadow-md">
+        <div className="p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 text-left space-y-3 shadow-md animate-fadeIn">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-[#F59E0B] text-white rounded-xl font-bold text-xs flex items-center justify-center shrink-0">
+              <div className="p-2 bg-amber-500 text-slate-950 rounded-xl font-black text-xs flex items-center justify-center animate-pulse shrink-0">
                 <Bell className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="font-bold text-xs text-[#D97706] dark:text-[#FBBF24] uppercase tracking-wider flex items-center gap-2">
+                <h3 className="font-extrabold text-xs text-amber-400 uppercase tracking-wider flex items-center gap-2">
                   <span>Owner Notification: Team Tenancy Slot Requests</span>
-                  <span className="px-2 py-0.5 rounded-full bg-[#F59E0B] text-white font-black text-[10px]">
+                  <span className="px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 font-black text-[10px]">
                     {pendingRequests.length} Pending
                   </span>
                 </h3>
-                <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-[#CBD5E1]' : 'text-[#475569]'}`}>
+                <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
                   Non-owner team members requested authorization & user slot invitations in team tenancy.
                 </p>
               </div>
             </div>
             <button 
               onClick={() => onNavigate('team')} 
-              className="text-xs text-[#D97706] dark:text-[#FBBF24] hover:underline font-bold hidden md:inline shrink-0 cursor-pointer"
+              className="text-xs text-amber-300 hover:underline font-bold hidden md:inline shrink-0 cursor-pointer"
             >
-              Manage Team Tenancy &rarr;
+              Manage Team Tenancy →
             </button>
           </div>
 
-          <div className="space-y-2 pt-2 border-t border-[#F59E0B]/30">
+          <div className="space-y-2 pt-2 border-t border-amber-500/20">
             {pendingRequests.map(req => (
-              <div key={req.id} className="p-3 rounded-xl bg-white dark:bg-[#1E293B] border border-[#E2E8F0] dark:border-[#334155] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div key={req.id} className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-8 h-8 rounded-full bg-[#FEF3C7] dark:bg-[#0F172A] text-[#D97706] dark:text-[#FBBF24] font-bold text-xs flex items-center justify-center border border-[#F59E0B]/30 shrink-0">
+                  <div className="w-8 h-8 rounded-full bg-amber-500/20 text-amber-300 font-bold text-xs flex items-center justify-center border border-amber-500/40 shrink-0">
                     {req.userName.split(' ').map(n => n[0]).join('')}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`font-bold text-xs ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>{req.userName}</span>
-                      <span className="text-[10px] text-[#2563EB] dark:text-[#60A5FA] font-mono font-bold">{req.userEmail}</span>
+                      <span className="font-bold text-xs text-white">{req.userName}</span>
+                      <span className="text-[10px] text-amber-300 font-mono font-bold">{req.userEmail}</span>
                     </div>
-                    <p className={`text-[11px] font-mono mt-0.5 truncate ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
+                    <p className="text-[11px] text-slate-400 font-mono mt-0.5 truncate">
                       Requested at {req.requestedAt} • {req.message || 'Requesting team slot invitation'}
                     </p>
                   </div>
@@ -513,7 +434,7 @@ export default function DashboardHome({
                   <button
                     type="button"
                     onClick={() => onApproveSlotRequest && onApproveSlotRequest(req)}
-                    className="px-3 py-1.5 rounded-lg bg-[#16A34A] hover:bg-[#15803D] text-white font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
                   >
                     <UserPlus className="w-3.5 h-3.5" />
                     <span>Approve & Provision</span>
@@ -521,7 +442,7 @@ export default function DashboardHome({
                   <button
                     type="button"
                     onClick={() => onDeclineSlotRequest && onDeclineSlotRequest(req)}
-                    className="px-3 py-1.5 rounded-lg bg-[#F8FAFC] dark:bg-[#0F172A] hover:bg-[#DC2626] hover:text-white text-[#475569] dark:text-[#CBD5E1] border border-[#E2E8F0] dark:border-[#334155] font-bold text-xs flex items-center gap-1 transition-all cursor-pointer"
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-rose-900/40 text-slate-300 hover:text-rose-300 border border-slate-700 font-bold text-xs flex items-center gap-1 transition-all cursor-pointer"
                   >
                     <UserX className="w-3.5 h-3.5" />
                     <span>Decline</span>
@@ -533,503 +454,541 @@ export default function DashboardHome({
         </div>
       )}
 
-      {/* Section Header for CSV Analytics */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-        <div>
-          <h2 className={`text-lg font-bold tracking-tight ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
-            CSV Quality & Performance Analytics
-          </h2>
-          <p className={`text-xs ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
-            Real-time metrics calculated directly from active workspace CSV datasets
-          </p>
-        </div>
-        <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-[#EFF6FF] dark:bg-[#0F172A] text-[#2563EB] dark:text-[#60A5FA] border border-[#DBEAFE] dark:border-[#334155]">
-          8 Live Metrics
-        </span>
-      </div>
-
-      {/* 8 CSV-Focused Analytics Widgets Grid */}
+      {/* Interactive KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        {/* Metric 1: Total CSV Files */}
-        <div className={`p-5 rounded-2xl border transition-all duration-200 text-left relative overflow-hidden ${
-          isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-[#E2E8F0] shadow-sm'
-        }`}>
+        {/* Card 1: Total Records Audited */}
+        <div 
+          onClick={() => setActivePanel(activePanel === 'records' ? null : 'records')}
+          className={`p-5 rounded-xl border cursor-pointer select-none transition-all duration-300 relative overflow-hidden group ${
+            activePanel === 'records' 
+              ? isDarkMode 
+                ? 'bg-blue-950/40 border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.15)] ring-1 ring-blue-500/30' 
+                : 'bg-blue-50/70 border-blue-500 shadow-sm ring-1 ring-blue-500/20'
+              : isDarkMode 
+                ? 'bg-[#131b2e] border-slate-800 hover:border-blue-500/50 hover:bg-slate-900/40' 
+                : 'bg-white border-slate-200 shadow-sm hover:border-blue-300 hover:shadow-md'
+          }`}
+          id="kpi-records-card"
+        >
           <div className="flex justify-between items-start mb-3">
-            <span className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
-              Total CSV Files
-            </span>
-            <div className="p-2 rounded-xl bg-[#EFF6FF] dark:bg-[#0F172A] text-[#2563EB] dark:text-[#60A5FA]">
-              <FileSpreadsheet className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <span className={`text-3xl font-extrabold tracking-tight ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
-              {totalFilesCount.toLocaleString()}
-            </span>
-            <p className={`text-xs flex items-center gap-1 ${isDarkMode ? 'text-[#CBD5E1]' : 'text-[#475569]'}`}>
-              <CheckCircle2 className="w-3.5 h-3.5 text-[#16A34A]" />
-              <span>Uploaded in workspace</span>
-            </p>
-          </div>
-        </div>
-
-        {/* Metric 2: Rows Processed */}
-        <div className={`p-5 rounded-2xl border transition-all duration-200 text-left relative overflow-hidden ${
-          isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-[#E2E8F0] shadow-sm'
-        }`}>
-          <div className="flex justify-between items-start mb-3">
-            <span className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
-              Rows Processed
-            </span>
-            <div className="p-2 rounded-xl bg-[#EFF6FF] dark:bg-[#0F172A] text-[#2563EB] dark:text-[#60A5FA]">
-              <Database className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <span className={`text-3xl font-extrabold tracking-tight ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
-              {totalRowsProcessed.toLocaleString()}
-            </span>
-            <p className={`text-xs flex items-center gap-1 ${isDarkMode ? 'text-[#CBD5E1]' : 'text-[#475569]'}`}>
-              <Table className="w-3.5 h-3.5 text-[#2563EB]" />
-              <span>Parsed &amp; mapped records</span>
-            </p>
-          </div>
-        </div>
-
-        {/* Metric 3: Validation Success Rate */}
-        <div className={`p-5 rounded-2xl border transition-all duration-200 text-left relative overflow-hidden ${
-          isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-[#E2E8F0] shadow-sm'
-        }`}>
-          <div className="flex justify-between items-start mb-3">
-            <span className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
-              Validation Success Rate
-            </span>
-            <div className="p-2 rounded-xl bg-[#ECFDF5] dark:bg-[#0F172A] text-[#16A34A] dark:text-[#34D399]">
-              <ShieldCheck className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <span className="text-3xl font-extrabold tracking-tight text-[#16A34A] dark:text-[#34D399]">
-              {validationSuccessRate}%
-            </span>
-            <p className={`text-xs flex items-center gap-1 ${isDarkMode ? 'text-[#CBD5E1]' : 'text-[#475569]'}`}>
-              <TrendingUp className="w-3.5 h-3.5 text-[#16A34A]" />
-              <span>Datasets meeting hygiene SLA</span>
-            </p>
-          </div>
-        </div>
-
-        {/* Metric 4: Errors Detected */}
-        <div className={`p-5 rounded-2xl border transition-all duration-200 text-left relative overflow-hidden ${
-          isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-[#E2E8F0] shadow-sm'
-        }`}>
-          <div className="flex justify-between items-start mb-3">
-            <span className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
-              Errors Detected
-            </span>
-            <div className="p-2 rounded-xl bg-[#FEF2F2] dark:bg-[#0F172A] text-[#DC2626] dark:text-[#F87171]">
-              <AlertTriangle className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <span className={`text-3xl font-extrabold tracking-tight ${
-              activeIssuesCount > 0 ? 'text-[#DC2626] dark:text-[#F87171]' : isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'
+            <span className={`text-xs font-semibold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Total Records Audited</span>
+            <div className={`p-2 rounded-xl transition-colors ${
+              activePanel === 'records' 
+                ? 'bg-blue-500 text-white' 
+                : isDarkMode ? 'bg-blue-500/10 text-blue-400 group-hover:bg-blue-500/20' : 'bg-blue-50 text-blue-600 group-hover:bg-blue-100'
             }`}>
-              {activeIssuesCount.toLocaleString()}
-            </span>
-            <p className={`text-xs flex items-center gap-1 ${isDarkMode ? 'text-[#CBD5E1]' : 'text-[#475569]'}`}>
-              <ShieldAlert className="w-3.5 h-3.5 text-[#DC2626]" />
-              <span>{criticalIssuesCount} critical threat{criticalIssuesCount === 1 ? '' : 's'}</span>
-            </p>
-          </div>
-        </div>
-
-        {/* Metric 5: Records Cleaned */}
-        <div className={`p-5 rounded-2xl border transition-all duration-200 text-left relative overflow-hidden ${
-          isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-[#E2E8F0] shadow-sm'
-        }`}>
-          <div className="flex justify-between items-start mb-3">
-            <span className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
-              Records Cleaned
-            </span>
-            <div className="p-2 rounded-xl bg-[#EFF6FF] dark:bg-[#0F172A] text-[#2563EB] dark:text-[#60A5FA]">
-              <Wand2 className="w-5 h-5" />
+              <Database className="w-4.5 h-4.5" />
             </div>
           </div>
           <div className="space-y-1">
-            <span className="text-3xl font-extrabold tracking-tight text-[#2563EB] dark:text-[#60A5FA]">
-              {resolvedIssuesCount.toLocaleString()}
-            </span>
-            <p className={`text-xs flex items-center gap-1 ${isDarkMode ? 'text-[#CBD5E1]' : 'text-[#475569]'}`}>
-              <CheckCircle2 className="w-3.5 h-3.5 text-[#16A34A]" />
-              <span>Auto-fixed &amp; sanitized</span>
-            </p>
-          </div>
-        </div>
-
-        {/* Metric 6: AI Suggestions Generated */}
-        <div className={`p-5 rounded-2xl border transition-all duration-200 text-left relative overflow-hidden ${
-          isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-[#E2E8F0] shadow-sm'
-        }`}>
-          <div className="flex justify-between items-start mb-3">
-            <span className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
-              AI Suggestions
-            </span>
-            <div className="p-2 rounded-xl bg-[#F3E8FF] dark:bg-[#0F172A] text-[#9333EA] dark:text-[#C084FC]">
-              <Sparkles className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <span className="text-3xl font-extrabold tracking-tight text-[#9333EA] dark:text-[#C084FC]">
-              {aiSuggestionsCount.toLocaleString()}
-            </span>
-            <p className={`text-xs flex items-center gap-1 ${isDarkMode ? 'text-[#CBD5E1]' : 'text-[#475569]'}`}>
-              <Clock className="w-3.5 h-3.5 text-[#9333EA]" />
-              <span>Saved ~{hoursSaved} hrs manual work</span>
-            </p>
-          </div>
-        </div>
-
-        {/* Metric 7: Team Members */}
-        <div className={`p-5 rounded-2xl border transition-all duration-200 text-left relative overflow-hidden ${
-          isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-[#E2E8F0] shadow-sm'
-        }`}>
-          <div className="flex justify-between items-start mb-3">
-            <span className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
-              Team Members
-            </span>
-            <div className="p-2 rounded-xl bg-[#EFF6FF] dark:bg-[#0F172A] text-[#2563EB] dark:text-[#60A5FA]">
-              <Users className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <span className={`text-3xl font-extrabold tracking-tight ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
-              {teamMembersCount}
-            </span>
-            <p className={`text-xs flex items-center gap-1 ${isDarkMode ? 'text-[#CBD5E1]' : 'text-[#475569]'}`}>
-              <Activity className="w-3.5 h-3.5 text-[#16A34A]" />
-              <span>Active in workspace</span>
-            </p>
-          </div>
-        </div>
-
-        {/* Metric 8: Storage Used */}
-        <div className={`p-5 rounded-2xl border transition-all duration-200 text-left relative overflow-hidden ${
-          isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-[#E2E8F0] shadow-sm'
-        }`}>
-          <div className="flex justify-between items-start mb-3">
-            <span className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
-              Storage Used
-            </span>
-            <div className="p-2 rounded-xl bg-[#EFF6FF] dark:bg-[#0F172A] text-[#2563EB] dark:text-[#60A5FA]">
-              <HardDrive className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <span className={`text-3xl font-extrabold tracking-tight ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
-              {storageUsedFormatted}
-            </span>
-            <p className={`text-xs flex items-center gap-1 ${isDarkMode ? 'text-[#CBD5E1]' : 'text-[#475569]'}`}>
-              <Cloud className="w-3.5 h-3.5 text-[#2563EB]" />
-              <span>Encrypted Firebase storage</span>
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Quick Action Navigation Bar */}
-      <div className={`p-6 rounded-2xl border text-left transition-all duration-200 ${
-        isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-[#E2E8F0] shadow-sm'
-      }`}>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
-          <div>
-            <h3 className={`text-base font-bold tracking-tight ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
-              Quick Action Center
-            </h3>
-            <p className={`text-xs ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
-              Launch core auditing workflows and specialized spreadsheet operations in one click
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {/* Action 1: Upload CSV */}
-          <button
-            onClick={() => onNavigate('upload')}
-            className={`p-4 rounded-xl border flex flex-col items-center justify-center gap-2 text-center transition-all duration-200 cursor-pointer ${
-              isDarkMode 
-                ? 'bg-[#0F172A] border-[#334155] hover:bg-[#334155] text-[#F8FAFC]' 
-                : 'bg-[#F8FAFC] border-[#E2E8F0] hover:bg-[#EFF6FF] text-[#0F172A]'
-            }`}
-          >
-            <div className="p-2.5 rounded-lg bg-[#2563EB] text-white">
-              <Upload className="w-5 h-5" />
-            </div>
-            <span className="text-xs font-bold">Upload CSV</span>
-            <span className={`text-[10px] ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>Add new spreadsheet</span>
-          </button>
-
-          {/* Action 2: Start Validation */}
-          <button
-            onClick={() => onNavigate('audit')}
-            className={`p-4 rounded-xl border flex flex-col items-center justify-center gap-2 text-center transition-all duration-200 cursor-pointer ${
-              isDarkMode 
-                ? 'bg-[#0F172A] border-[#334155] hover:bg-[#334155] text-[#F8FAFC]' 
-                : 'bg-[#F8FAFC] border-[#E2E8F0] hover:bg-[#EFF6FF] text-[#0F172A]'
-            }`}
-          >
-            <div className="p-2.5 rounded-lg bg-[#16A34A] text-white">
-              <Play className="w-5 h-5" />
-            </div>
-            <span className="text-xs font-bold">Start Validation</span>
-            <span className={`text-[10px] ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>Run hygiene scan</span>
-          </button>
-
-          {/* Action 3: Clean Dataset */}
-          <button
-            onClick={() => onNavigate('cleaning')}
-            className={`p-4 rounded-xl border flex flex-col items-center justify-center gap-2 text-center transition-all duration-200 cursor-pointer ${
-              isDarkMode 
-                ? 'bg-[#0F172A] border-[#334155] hover:bg-[#334155] text-[#F8FAFC]' 
-                : 'bg-[#F8FAFC] border-[#E2E8F0] hover:bg-[#EFF6FF] text-[#0F172A]'
-            }`}
-          >
-            <div className="p-2.5 rounded-lg bg-[#2563EB] text-white">
-              <Wand2 className="w-5 h-5" />
-            </div>
-            <span className="text-xs font-bold">Clean Dataset</span>
-            <span className={`text-[10px] ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>Sanitize anomalies</span>
-          </button>
-
-          {/* Action 4: Open Analytics */}
-          <button
-            onClick={() => onNavigate('insights')}
-            className={`p-4 rounded-xl border flex flex-col items-center justify-center gap-2 text-center transition-all duration-200 cursor-pointer ${
-              isDarkMode 
-                ? 'bg-[#0F172A] border-[#334155] hover:bg-[#334155] text-[#F8FAFC]' 
-                : 'bg-[#F8FAFC] border-[#E2E8F0] hover:bg-[#EFF6FF] text-[#0F172A]'
-            }`}
-          >
-            <div className="p-2.5 rounded-lg bg-[#D97706] text-white">
-              <BarChart3 className="w-5 h-5" />
-            </div>
-            <span className="text-xs font-bold">Open Analytics</span>
-            <span className={`text-[10px] ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>Explore data quality</span>
-          </button>
-
-          {/* Action 5: AI Assistant */}
-          <button
-            onClick={() => onNavigate('report')}
-            className={`p-4 rounded-xl border flex flex-col items-center justify-center gap-2 text-center transition-all duration-200 cursor-pointer ${
-              isDarkMode 
-                ? 'bg-[#0F172A] border-[#334155] hover:bg-[#334155] text-[#F8FAFC]' 
-                : 'bg-[#F8FAFC] border-[#E2E8F0] hover:bg-[#EFF6FF] text-[#0F172A]'
-            }`}
-          >
-            <div className="p-2.5 rounded-lg bg-[#9333EA] text-white">
-              <Sparkles className="w-5 h-5" />
-            </div>
-            <span className="text-xs font-bold">AI Assistant</span>
-            <span className={`text-[10px] ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>Get audit insights</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Main Grid: Workspace Status Panel & Analytics Chart */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Workspace Status Panel */}
-        <div className={`lg:col-span-5 p-6 rounded-2xl border text-left flex flex-col justify-between transition-all duration-200 ${
-          isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-[#E2E8F0] shadow-sm'
-        }`}>
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-[#ECFDF5] dark:bg-[#0F172A] text-[#16A34A] dark:text-[#34D399]">
-                  <Server className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className={`font-bold text-base ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
-                    Workspace Status
-                  </h3>
-                  <p className={`text-xs ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
-                    Infrastructure &amp; service engine health
-                  </p>
-                </div>
-              </div>
-              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold font-mono uppercase bg-[#ECFDF5] dark:bg-[#0F172A] text-[#16A34A] dark:text-[#34D399] border border-[#A7F3D0] dark:border-[#334155] flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-[#16A34A] animate-pulse" />
-                All Operational
+            <div className="flex items-baseline gap-2">
+              <span className={`text-3xl font-black tracking-tight ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
+                {totalRecords.toLocaleString()}
               </span>
             </div>
+            <div className="flex justify-between items-center text-[11px] mt-2">
+              <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>
+                Across {files.length} dataset{files.length === 1 ? '' : 's'}
+              </span>
+              <span className="text-blue-500 font-bold flex items-center gap-0.5 group-hover:underline">
+                {activePanel === 'records' ? 'Collapse' : 'Breakdown'} &rarr;
+              </span>
+            </div>
+          </div>
+          {/* Bottom highlight bar */}
+          <div className={`absolute bottom-0 left-0 right-0 h-1 transition-all ${activePanel === 'records' ? 'bg-blue-500' : 'bg-transparent group-hover:bg-blue-500/30'}`} />
+        </div>
 
-            <div className="space-y-3 mt-5">
-              {/* Status 1: AI Engine */}
-              <div className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 ${
-                isDarkMode ? 'bg-[#0F172A] border-[#334155]' : 'bg-[#F8FAFC] border-[#E2E8F0]'
+        {/* Card 2: Active Hygiene Issues */}
+        <div 
+          onClick={() => setActivePanel(activePanel === 'issues' ? null : 'issues')}
+          className={`p-5 rounded-xl border cursor-pointer select-none transition-all duration-300 relative overflow-hidden group ${
+            activePanel === 'issues' 
+              ? isDarkMode 
+                ? 'bg-rose-950/30 border-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.15)] ring-1 ring-rose-500/30' 
+                : 'bg-rose-50/60 border-rose-500 shadow-sm ring-1 ring-rose-500/20'
+              : isDarkMode 
+                ? 'bg-[#131b2e] border-slate-800 hover:border-rose-500/50 hover:bg-slate-900/40' 
+                : 'bg-white border-slate-200 shadow-sm hover:border-rose-300 hover:shadow-md'
+          }`}
+          id="kpi-issues-card"
+        >
+          <div className="flex justify-between items-start mb-3">
+            <span className={`text-xs font-semibold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Active Hygiene Issues</span>
+            <div className={`p-2 rounded-xl transition-colors ${
+              activePanel === 'issues' 
+                ? 'bg-rose-500 text-white' 
+                : isDarkMode ? 'bg-rose-500/10 text-rose-400 group-hover:bg-rose-500/20' : 'bg-rose-50 text-rose-600 group-hover:bg-rose-100'
+            }`}>
+              <AlertTriangle className="w-4.5 h-4.5" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-baseline gap-2">
+              <span className={`text-3xl font-black tracking-tight ${activeIssuesCount > 0 ? 'text-rose-500' : isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
+                {activeIssuesCount.toLocaleString()}
+              </span>
+            </div>
+            <div className="flex justify-between items-center text-[11px] mt-2">
+              <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>
+                {criticalIssuesCount} critical threats
+              </span>
+              <span className="text-rose-500 font-bold flex items-center gap-0.5 group-hover:underline">
+                {activePanel === 'issues' ? 'Collapse' : 'Severity Matrix'} &rarr;
+              </span>
+            </div>
+          </div>
+          <div className={`absolute bottom-0 left-0 right-0 h-1 transition-all ${activePanel === 'issues' ? 'bg-rose-500' : 'bg-transparent group-hover:bg-rose-500/30'}`} />
+        </div>
+
+        {/* Card 3: Time Saved with AI */}
+        <div 
+          onClick={() => setActivePanel(activePanel === 'savings' ? null : 'savings')}
+          className={`p-5 rounded-xl border cursor-pointer select-none transition-all duration-300 relative overflow-hidden group ${
+            activePanel === 'savings' 
+              ? isDarkMode 
+                ? 'bg-violet-950/30 border-violet-500 shadow-[0_0_15px_rgba(139,92,246,0.15)] ring-1 ring-violet-500/30' 
+                : 'bg-violet-50/60 border-violet-500 shadow-sm ring-1 ring-violet-500/20'
+              : isDarkMode 
+                ? 'bg-[#131b2e] border-slate-800 hover:border-violet-500/50 hover:bg-slate-900/40' 
+                : 'bg-white border-slate-200 shadow-sm hover:border-violet-300 hover:shadow-md'
+          }`}
+          id="kpi-savings-card"
+        >
+          <div className="flex justify-between items-start mb-3">
+            <span className={`text-xs font-semibold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Time Saved with AI</span>
+            <div className={`p-2 rounded-xl transition-colors ${
+              activePanel === 'savings' 
+                ? 'bg-violet-500 text-white' 
+                : isDarkMode ? 'bg-violet-500/10 text-violet-400 group-hover:bg-violet-500/20' : 'bg-violet-50 text-violet-600 group-hover:bg-violet-100'
+            }`}>
+              <Clock className="w-4.5 h-4.5" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-black tracking-tight text-violet-500">
+                {hoursSaved} hrs
+              </span>
+            </div>
+            <div className="flex justify-between items-center text-[11px] mt-2">
+              <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>
+                Auto-rules &amp; cleanups
+              </span>
+              <span className="text-violet-500 font-bold flex items-center gap-0.5 group-hover:underline">
+                {activePanel === 'savings' ? 'Collapse ROI' : 'Calculate ROI'} &rarr;
+              </span>
+            </div>
+          </div>
+          <div className={`absolute bottom-0 left-0 right-0 h-1 transition-all ${activePanel === 'savings' ? 'bg-violet-500' : 'bg-transparent group-hover:bg-violet-500/30'}`} />
+        </div>
+
+        {/* Card 4: Average Data Quality Score */}
+        <div className={`p-5 rounded-xl border relative overflow-hidden group ${
+          isDarkMode ? 'bg-[#131b2e] border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+        }`} id="kpi-score-card">
+          <div className="flex justify-between items-start mb-3">
+            <span className={`text-xs font-semibold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Data Quality Score</span>
+            <div className={`p-2 rounded-xl ${
+              isDarkMode ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600'
+            }`}>
+              <TrendingUp className="w-4.5 h-4.5" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-black tracking-tight text-emerald-500">{avgScore}%</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-[11px] mt-2">
+              <span className={`font-bold px-1.5 py-0.25 rounded ${
+                avgScore > 80 
+                  ? isDarkMode ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-700'
+                  : isDarkMode ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-50 text-amber-700'
               }`}>
-                <div className="flex items-center gap-3">
-                  <Cpu className="w-4 h-4 text-[#2563EB] dark:text-[#60A5FA] shrink-0" />
-                  <div>
-                    <span className={`font-bold text-xs block ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
-                      AI Engine
+                {avgScore > 80 ? 'Excellent' : 'Needs Action'}
+              </span>
+              <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>Compliance</span>
+            </div>
+          </div>
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-emerald-500/30" />
+        </div>
+      </div>
+
+      {/* Drill-down Interactive Panels */}
+      {activePanel === 'records' && (
+        <div className={`p-6 rounded-xl border animate-fadeIn transition-all ${
+          isDarkMode ? 'bg-[#0f172a] border-blue-500/30' : 'bg-blue-50/30 border-blue-200 shadow-sm'
+        }`} id="drilldown-records">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h3 className="font-extrabold text-sm md:text-base flex items-center gap-2">
+                <Database className="w-5 h-5 text-blue-500" /> Total Records Audited Breakdown
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Parsed row volume, column dimensions, and contribution weights per active dataset.
+              </p>
+            </div>
+            <button 
+              onClick={() => setActivePanel(null)}
+              className="text-xs font-bold text-slate-400 hover:text-slate-500 px-2 py-1 rounded hover:bg-slate-500/10"
+            >
+              Close Panel &times;
+            </button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs min-w-[600px]">
+              <thead>
+                <tr className={`border-b ${isDarkMode ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-500'} font-bold`}>
+                  <th className="pb-3 pl-2">SPREADSHEET NAME</th>
+                  <th className="pb-3">FILE SIZE</th>
+                  <th className="pb-3">COLUMNS (HEADERS)</th>
+                  <th className="pb-3 text-right pr-4">ROWS PARSED</th>
+                  <th className="pb-3 text-center">VOLUME CONTRIBUTION</th>
+                  <th className="pb-3 text-right pr-2">ACTION</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/20">
+                {files.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-slate-500 font-medium">
+                      No spreadsheets uploaded. Upload your first dataset to start parsing records!
+                    </td>
+                  </tr>
+                ) : (
+                  files.map((file) => {
+                    const rowCount = file.rows ? file.rows.length : 0;
+                    const contributionPct = totalRecords > 0 ? (rowCount / totalRecords) * 100 : 0;
+                    const formattedSize = file.size > 1024 * 1024 
+                      ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 
+                      : `${(file.size / 1024).toFixed(1)} KB`;
+                    
+                    return (
+                      <tr 
+                        key={file.id} 
+                        className={`group hover:bg-slate-500/5 transition-colors`}
+                      >
+                        <td className="py-3 pl-2 font-bold truncate max-w-[200px]">{file.name}</td>
+                        <td className="py-3 font-mono text-slate-400">{formattedSize}</td>
+                        <td className="py-3 font-mono">
+                          <span className="font-bold">{file.headers?.length || 0}</span> columns
+                        </td>
+                        <td className="py-3 text-right pr-4 font-black text-blue-500 font-mono">
+                          {rowCount.toLocaleString()}
+                        </td>
+                        <td className="py-3">
+                          <div className="flex items-center gap-2 justify-center max-w-[150px] mx-auto">
+                            <div className="w-full bg-slate-700/20 h-1.5 rounded-full overflow-hidden">
+                              <div 
+                                className="bg-blue-500 h-1.5 rounded-full" 
+                                style={{ width: `${contributionPct}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] font-mono font-bold text-slate-400 min-w-[30px] text-right">
+                              {contributionPct.toFixed(0)}%
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-3 text-right pr-2">
+                          <button
+                            onClick={() => {
+                              if (onSelectFile) onSelectFile(file);
+                              onNavigate('clean');
+                            }}
+                            className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-all cursor-pointer ${
+                              isDarkMode 
+                                ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white' 
+                                : 'bg-blue-100 text-blue-700 hover:bg-blue-600 hover:text-white'
+                            }`}
+                          >
+                            Hygiene Controls &rarr;
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activePanel === 'issues' && (
+        <div className={`p-6 rounded-xl border animate-fadeIn transition-all ${
+          isDarkMode ? 'bg-[#0f172a] border-rose-500/30' : 'bg-rose-50/30 border-rose-200 shadow-sm'
+        }`} id="drilldown-issues">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h3 className="font-extrabold text-sm md:text-base flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-rose-500" /> Active Hygiene Anomaly Matrix
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Real-time severity classification and categorization of open errors across current workspace datasets.
+              </p>
+            </div>
+            <button 
+              onClick={() => setActivePanel(null)}
+              className="text-xs font-bold text-slate-400 hover:text-slate-500 px-2 py-1 rounded hover:bg-slate-500/10"
+            >
+              Close Panel &times;
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Severity Distribution */}
+            <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3.5">Severity Distribution</h4>
+              <div className="space-y-3">
+                {/* Critical */}
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="font-bold flex items-center gap-1.5 text-rose-500">
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" />
+                      Critical Threats
                     </span>
-                    <span className={`text-[11px] block ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
-                      Google Gemini API • 99.9% Uptime
-                    </span>
+                    <span className="font-mono font-bold">{criticalIssuesCount}</span>
+                  </div>
+                  <div className="w-full bg-slate-700/20 h-2 rounded-full overflow-hidden">
+                    <div 
+                      className="bg-rose-500 h-2 rounded-full" 
+                      style={{ width: `${activeIssuesCount > 0 ? (criticalIssuesCount / activeIssuesCount) * 100 : 0}%` }}
+                    />
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="w-2 h-2 rounded-full bg-[#16A34A]" />
-                  <span className="text-xs font-bold text-[#16A34A]">Active</span>
+
+                {/* Warning */}
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="font-bold flex items-center gap-1.5 text-amber-500">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" />
+                      Warnings
+                    </span>
+                    <span className="font-mono font-bold">{warningIssuesCount}</span>
+                  </div>
+                  <div className="w-full bg-slate-700/20 h-2 rounded-full overflow-hidden">
+                    <div 
+                      className="bg-amber-500 h-2 rounded-full" 
+                      style={{ width: `${activeIssuesCount > 0 ? (warningIssuesCount / activeIssuesCount) * 100 : 0}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Info */}
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="font-bold flex items-center gap-1.5 text-blue-400">
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-400 inline-block" />
+                      Informational
+                    </span>
+                    <span className="font-mono font-bold">{infoIssuesCount}</span>
+                  </div>
+                  <div className="w-full bg-slate-700/20 h-2 rounded-full overflow-hidden">
+                    <div 
+                      className="bg-blue-400 h-2 rounded-full" 
+                      style={{ width: `${activeIssuesCount > 0 ? (infoIssuesCount / activeIssuesCount) * 100 : 0}%` }}
+                    />
+                  </div>
                 </div>
               </div>
+            </div>
 
-              {/* Status 2: Validation Engine */}
-              <div className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 ${
-                isDarkMode ? 'bg-[#0F172A] border-[#334155]' : 'bg-[#F8FAFC] border-[#E2E8F0]'
-              }`}>
-                <div className="flex items-center gap-3">
-                  <ShieldCheck className="w-4 h-4 text-[#16A34A] shrink-0" />
-                  <div>
-                    <span className={`font-bold text-xs block ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
-                      Validation Engine
-                    </span>
-                    <span className={`text-[11px] block ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
-                      High Throughput • Real-time Scan
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="w-2 h-2 rounded-full bg-[#16A34A]" />
-                  <span className="text-xs font-bold text-[#16A34A]">Ready</span>
-                </div>
+            {/* Anomaly Type Categorization */}
+            <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'} md:col-span-2`}>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Category Prevalence</h4>
+              <div className="grid grid-cols-2 gap-3">
+                {/* We compute counts of each issue type across all files */}
+                {(() => {
+                  const typeCounts: Record<string, number> = {
+                    duplicate: 0,
+                    missing_value: 0,
+                    invalid_format: 0,
+                    outlier: 0,
+                    column_inconsistency: 0
+                  };
+                  files.forEach(f => {
+                    if (f.issues) {
+                      f.issues.forEach(i => {
+                        if (i.status === 'open') {
+                          typeCounts[i.type] = (typeCounts[i.type] || 0) + 1;
+                        }
+                      });
+                    }
+                  });
+
+                  const typesMeta = [
+                    { key: 'duplicate', label: 'Duplicate Rows', color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' },
+                    { key: 'missing_value', label: 'Missing Values', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
+                    { key: 'invalid_format', label: 'Invalid Formats', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+                    { key: 'outlier', label: 'Outlier Anomalies', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
+                    { key: 'column_inconsistency', label: 'Inconsistencies', color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' },
+                  ];
+
+                  return typesMeta.map(t => (
+                    <div 
+                      key={t.key}
+                      className={`p-3 rounded-lg border flex justify-between items-center ${t.color}`}
+                    >
+                      <span className="text-xs font-semibold">{t.label}</span>
+                      <span className="text-sm font-black font-mono">{typeCounts[t.key] || 0}</span>
+                    </div>
+                  ));
+                })()}
               </div>
 
-              {/* Status 3: Cleaning Center */}
-              <div className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 ${
-                isDarkMode ? 'bg-[#0F172A] border-[#334155]' : 'bg-[#F8FAFC] border-[#E2E8F0]'
-              }`}>
-                <div className="flex items-center gap-3">
-                  <Wand2 className="w-4 h-4 text-[#9333EA] dark:text-[#C084FC] shrink-0" />
-                  <div>
-                    <span className={`font-bold text-xs block ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
-                      Cleaning Center
-                    </span>
-                    <span className={`text-[11px] block ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
-                      Auto-Sanitization • Regex &amp; Trim
-                    </span>
-                  </div>
+              {/* Quick file audit link list */}
+              <div className="mt-4 pt-3 border-t border-slate-800/30 flex justify-between items-center text-xs">
+                <span className="text-[10px] text-slate-400">Select any spreadsheet to inspect and fix immediately.</span>
+                <button 
+                  onClick={() => onNavigate('results')} 
+                  className="text-xs text-rose-500 font-bold hover:underline cursor-pointer"
+                >
+                  View full anomaly reports &rarr;
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activePanel === 'savings' && (
+        <div className={`p-6 rounded-xl border animate-fadeIn transition-all ${
+          isDarkMode ? 'bg-[#0f172a] border-violet-500/30' : 'bg-violet-50/30 border-violet-200 shadow-sm'
+        }`} id="drilldown-savings">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h3 className="font-extrabold text-sm md:text-base flex items-center gap-2">
+                <Clock className="w-5 h-5 text-violet-500" /> AI Productivity &amp; ROI Calculator
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Calculate the real-world operational cost and labor-hours saved using Automated CSV Auditor hygiene loops.
+              </p>
+            </div>
+            <button 
+              onClick={() => setActivePanel(null)}
+              className="text-xs font-bold text-slate-400 hover:text-slate-500 px-2 py-1 rounded hover:bg-slate-500/10"
+            >
+              Close Panel &times;
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+            {/* Slider Controls */}
+            <div className={`md:col-span-7 p-4 rounded-xl border ${
+              isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'
+            } space-y-4`}>
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs">
+                  <span className="font-bold text-slate-400 uppercase tracking-wider">Hourly Labor Rate (USD)</span>
+                  <span className="font-mono font-black text-violet-500 text-sm">${hourlyRate} / hour</span>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="w-2 h-2 rounded-full bg-[#16A34A]" />
-                  <span className="text-xs font-bold text-[#16A34A]">Active</span>
-                </div>
+                <input 
+                  type="range" 
+                  min="20" 
+                  max="200" 
+                  step="5"
+                  value={hourlyRate} 
+                  onChange={(e) => setHourlyRate(Number(e.target.value))} 
+                  className="w-full h-1.5 bg-violet-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-violet-500" 
+                  id="roi-rate-slider"
+                />
+                <p className="text-[10px] text-slate-500">
+                  Adjust slider to estimate blended analyst, auditor, or engineer rates for manual verification workflows.
+                </p>
               </div>
 
-              {/* Status 4: Cloud Sync */}
-              <div className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 ${
-                isDarkMode ? 'bg-[#0F172A] border-[#334155]' : 'bg-[#F8FAFC] border-[#E2E8F0]'
-              }`}>
-                <div className="flex items-center gap-3">
-                  <Cloud className="w-4 h-4 text-[#2563EB] dark:text-[#60A5FA] shrink-0" />
-                  <div>
-                    <span className={`font-bold text-xs block ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
-                      Cloud Sync
-                    </span>
-                    <span className={`text-[11px] block ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
-                      Firebase Firestore • Multi-Region
-                    </span>
+              {/* Labor Saving Breakdown factors */}
+              <div className="space-y-2 border-t border-slate-800/20 pt-3.5">
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Time-Saving Formula Details</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[10px] text-slate-400">
+                  <div className="p-2 rounded bg-slate-500/5">
+                    <p className="text-violet-500 font-bold mb-0.5">15m / file</p>
+                    <span>Parsing structure &amp; column schemas</span>
                   </div>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="w-2 h-2 rounded-full bg-[#16A34A]" />
-                  <span className="text-xs font-bold text-[#16A34A]">Synced</span>
+                  <div className="p-2 rounded bg-slate-500/5">
+                    <p className="text-violet-500 font-bold mb-0.5">2m / issue</p>
+                    <span>Automated scanning &amp; recommendations</span>
+                  </div>
+                  <div className="p-2 rounded bg-slate-500/5">
+                    <p className="text-violet-500 font-bold mb-0.5">5m / resolution</p>
+                    <span>Instant regex/trim bulk fixes</span>
+                  </div>
                 </div>
               </div>
+            </div>
 
-              {/* Status 5: Team Workspace */}
-              <div className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 ${
-                isDarkMode ? 'bg-[#0F172A] border-[#334155]' : 'bg-[#F8FAFC] border-[#E2E8F0]'
-              }`}>
-                <div className="flex items-center gap-3">
-                  <Users className="w-4 h-4 text-[#2563EB] dark:text-[#60A5FA] shrink-0" />
-                  <div>
-                    <span className={`font-bold text-xs block ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
-                      Team Workspace
-                    </span>
-                    <span className={`text-[11px] block ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
-                      Connected • {teamMembersCount} Members
-                    </span>
-                  </div>
+            {/* Incurred ROI Banner */}
+            <div className="md:col-span-5 bg-blue-600 p-5 rounded-xl text-white shadow-md space-y-4">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-violet-100">Estimated Reclaimed Value</p>
+                <h4 className="text-3xl font-black tracking-tight mt-1">
+                  ${Math.round((timeSavedMinutes / 60) * hourlyRate).toLocaleString()}
+                </h4>
+                <p className="text-xs text-violet-200 mt-1">
+                  Saved {hoursSaved} operational hours through automated compliance.
+                </p>
+              </div>
+
+              <div className="bg-white/10 p-3 rounded-lg space-y-1">
+                <div className="flex justify-between text-[11px] font-mono">
+                  <span>Manual Time Spent:</span>
+                  <span className="line-through text-red-300">{(timeSavedMinutes / 60 * 4.5).toFixed(1)} hrs</span>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="w-2 h-2 rounded-full bg-[#16A34A]" />
-                  <span className="text-xs font-bold text-[#16A34A]">Connected</span>
+                <div className="flex justify-between text-[11px] font-mono font-bold">
+                  <span>AI Audit Cycle:</span>
+                  <span className="text-emerald-300">Under 1 minute</span>
                 </div>
               </div>
             </div>
           </div>
-
-          <div className="mt-6 pt-4 border-t border-[#E2E8F0] dark:border-[#334155] flex justify-between items-center text-xs">
-            <span className={isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}>
-              System latency: &lt;12ms
-            </span>
-            <button 
-              onClick={() => onNavigate('settings')}
-              className="font-bold text-[#2563EB] dark:text-[#60A5FA] hover:underline cursor-pointer flex items-center gap-1"
-            >
-              Workspace Settings &rarr;
-            </button>
-          </div>
         </div>
+      )}
 
-        {/* 30-Day Hygiene Trend Chart */}
-        <div className={`lg:col-span-7 p-6 rounded-2xl border text-left flex flex-col justify-between transition-all duration-200 ${
-          isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-[#E2E8F0] shadow-sm'
-        }`}>
+      {/* Visual Analytics and Critical Files Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* Analytics Box */}
+        <div className={`lg:col-span-8 p-4 rounded-xl border flex flex-col justify-between ${isDarkMode ? 'bg-[#131b2e] border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
           <div>
             <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 mb-4">
               <div>
-                <h3 className={`font-bold text-base ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
-                  30-Day Data Hygiene Trend
-                </h3>
-                <p className={`text-xs ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
-                  Historical data quality score vs anomaly detection counts
-                </p>
+                <h3 className={`font-bold text-sm ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>30-Day Audit Trend</h3>
+                <p className="text-xs text-slate-400 mt-0.5">Average data hygiene scores vs error trends per file audit.</p>
               </div>
               
               <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-wider">
-                <div className="flex items-center gap-1.5 text-[#2563EB]">
-                  <span className="w-2 h-2 rounded-full bg-[#2563EB]"></span>
+                <div className="flex items-center gap-1.5 text-blue-500">
+                  <span className="w-2 h-2 rounded-full bg-blue-500"></span>
                   Score (%)
                 </div>
-                <div className="flex items-center gap-1.5 text-[#DC2626]">
-                  <span className="w-2 h-2 rounded-full bg-[#DC2626]"></span>
-                  Errors
+                <div className="flex items-center gap-1.5 text-rose-500">
+                  <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                  Anomalies
                 </div>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'}`}>Last 30 Days</span>
               </div>
             </div>
 
-            <div className="h-64 relative w-full mt-2 select-none">
+            {/* Recharts Area and Line Dual Axis Chart */}
+            <div className="h-56 relative w-full mt-2 select-none">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={trendData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                   <CartesianGrid 
                     strokeDasharray="3 3" 
                     vertical={false} 
-                    stroke={isDarkMode ? "#334155" : "#E2E8F0"} 
+                    stroke={isDarkMode ? "rgba(51, 65, 85, 0.5)" : "rgba(226, 232, 240, 0.8)"} 
                   />
                   <XAxis 
                     dataKey="date" 
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fill: isDarkMode ? '#94A3B8' : '#64748B', fontSize: 10, fontFamily: 'monospace' }}
+                    tick={{ fill: isDarkMode ? '#64748b' : '#94a3b8', fontSize: 10, fontFamily: 'monospace' }}
                   />
                   <YAxis 
                     yAxisId="left"
                     domain={[0, 100]}
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fill: isDarkMode ? '#94A3B8' : '#64748B', fontSize: 10, fontFamily: 'monospace' }}
+                    tick={{ fill: isDarkMode ? '#64748b' : '#94a3b8', fontSize: 10, fontFamily: 'monospace' }}
                   />
                   <YAxis 
                     yAxisId="right"
@@ -1037,7 +996,7 @@ export default function DashboardHome({
                     domain={[0, 'auto']}
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fill: isDarkMode ? '#94A3B8' : '#64748B', fontSize: 10, fontFamily: 'monospace' }}
+                    tick={{ fill: isDarkMode ? '#64748b' : '#94a3b8', fontSize: 10, fontFamily: 'monospace' }}
                   />
                   <Tooltip content={<CustomTooltip />} />
                   <Area 
@@ -1066,134 +1025,114 @@ export default function DashboardHome({
             </div>
           </div>
           
-          <div className={`mt-4 pt-3 border-t flex flex-wrap gap-4 items-center justify-between text-[11px] ${
-            isDarkMode ? 'border-[#334155] text-[#94A3B8]' : 'border-[#E2E8F0] text-[#64748B]'
-          }`}>
-            <span className="flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-[#2563EB] dark:text-[#60A5FA]" />
-              Compliance scoring calibrated automatically after every file import.
-            </span>
-            <button 
-              onClick={() => onNavigate('history')} 
-              className="text-[#2563EB] dark:text-[#60A5FA] font-bold hover:underline flex items-center gap-1 cursor-pointer"
-            >
+          <div className={`mt-4 pt-3 border-t flex flex-wrap gap-4 items-center justify-between text-[11px] text-slate-400 ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
+            <span className="flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5 text-blue-400" /> Compliance scoring is calibrated daily.</span>
+            <button onClick={() => onNavigate('history')} className="text-blue-500 font-bold hover:underline flex items-center gap-1">
               View History logs <ArrowRight className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+
+        {/* Files Requiring Attention / Quick Actions list */}
+        <div className={`lg:col-span-4 p-4 rounded-xl border flex flex-col justify-between ${isDarkMode ? 'bg-[#1E293B] border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+          <div>
+            <h3 className={`font-bold text-sm mb-3.5 ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Audited Datasets</h3>
+            <div className="space-y-3">
+              {files.length === 0 ? (
+                <div className="p-6 text-center text-xs text-slate-400 border border-dashed rounded-lg border-slate-700/50">
+                  No CSV files uploaded yet. Upload your first CSV to begin.
+                </div>
+              ) : (
+                files.map((file) => (
+                  <div 
+                    key={file.id}
+                    onClick={() => {
+                      if (onSelectFile) {
+                        onSelectFile(file);
+                      }
+                      onNavigate('clean');
+                    }}
+                    className={`p-3 rounded-lg border transition-all cursor-pointer hover:scale-[1.01] ${activeFile?.id === file.id ? isDarkMode ? 'bg-blue-500/10 border-blue-500/40' : 'bg-blue-50 border-blue-200' : isDarkMode ? 'bg-[#1e293b]/30 border-slate-800/80 hover:bg-[#1e293b]/50' : 'bg-slate-50 border-slate-100 hover:bg-slate-100/50'}`}
+                  >
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="text-xs font-bold truncate max-w-[130px]">{file.name}</span>
+                      {file.status === 'completed' ? (
+                        <span className={`text-[9px] px-1.5 py-0.25 rounded font-bold ${file.score > 80 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                          Score {file.score}
+                        </span>
+                      ) : (
+                        <span className="text-[9px] px-1.5 py-0.25 rounded bg-rose-500/10 text-rose-400 font-bold">Failed</span>
+                      )}
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono">
+                      <span>
+                        {file.size > 1024 * 1024 
+                          ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 
+                          : `${(file.size / 1024).toFixed(1)} KB`}
+                      </span>
+                      <span>{file.uploadedAt.split(' ')[0]}</span>
+                    </div>
+
+                    {file.retentionPolicy && (
+                      <div className="mt-1.5 pt-1.5 border-t border-slate-800/20 flex justify-between items-center text-[9px] font-mono">
+                        <span className="text-slate-400">Auto-purge:</span>
+                        <span className={file.retentionPolicy.originalFileDeleted ? 'text-slate-500 line-through' : 'text-amber-400 font-bold'}>
+                          {formatTimeRemaining(file.retentionPolicy.expiresAt, file.retentionPolicy.originalFileDeleted).label}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <button 
+              onClick={() => onNavigate('upload')}
+              className={`w-full py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 border hover:opacity-90 transition-all cursor-pointer ${isDarkMode ? 'bg-[#0f172a] border-slate-800 text-slate-200 hover:bg-[#1e293b]' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+            >
+              <Upload className="w-3.5 h-3.5" /> Upload spreadsheet
             </button>
           </div>
         </div>
       </div>
 
-      {/* Recent Activity Timeline Section */}
-      <div className={`p-6 rounded-2xl border text-left transition-all duration-200 ${
-        isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-[#E2E8F0] shadow-sm'
-      }`}>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-[#EFF6FF] dark:bg-[#0F172A] text-[#2563EB] dark:text-[#60A5FA]">
-              <Activity className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className={`font-bold text-base ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
-                Recent Activity Timeline
-              </h3>
-              <p className={`text-xs ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
-                Real-time log of file uploads, validations, exports, and automated cleaning jobs
-              </p>
-            </div>
+      {/* Collaboration Timeline Feed (Screen 10 Component) */}
+      <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#1E293B] border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+        <div className="flex justify-between items-center mb-4">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-purple-500/10 text-purple-500 rounded-lg"><Activity className="w-4 h-4" /></div>
+            <h3 className={`font-bold text-sm ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Workspace Activity Timeline</h3>
           </div>
-
-          <button 
-            onClick={() => onNavigate('history')}
-            className="text-xs font-bold text-[#2563EB] dark:text-[#60A5FA] hover:underline flex items-center gap-1 cursor-pointer"
-          >
-            View Full Audit Logs &rarr;
+          <button onClick={() => onNavigate('team')} className="text-xs text-blue-500 font-bold hover:underline">
+            Manage Team
           </button>
         </div>
 
         <div className="space-y-4">
           {activities.length === 0 ? (
-            <div className="p-8 text-center text-xs text-[#94A3B8] border border-dashed rounded-xl border-[#334155]/50">
-              No activity recorded yet. Upload a CSV or start a validation scan to record events.
+            <div className="p-6 text-center text-xs text-slate-400 border border-dashed rounded-lg border-slate-700/50">
+              No activity recorded yet. Your validation history will appear here.
             </div>
           ) : (
-            activities.slice(0, 5).map((act) => {
-              let iconBg = 'bg-[#EFF6FF] text-[#2563EB] dark:bg-[#0F172A] dark:text-[#60A5FA]';
-              let ActionIcon = FileCheck;
-
-              const actType = (act as any).type || '';
-              if (actType === 'upload' || act.action.toLowerCase().includes('upload')) {
-                ActionIcon = Upload;
-                iconBg = 'bg-[#EFF6FF] text-[#2563EB] dark:bg-[#0F172A] dark:text-[#60A5FA]';
-              } else if (actType === 'clean' || act.action.toLowerCase().includes('clean')) {
-                ActionIcon = Wand2;
-                iconBg = 'bg-[#F3E8FF] text-[#9333EA] dark:bg-[#0F172A] dark:text-[#C084FC]';
-              } else if (actType === 'export' || act.action.toLowerCase().includes('export')) {
-                ActionIcon = Download;
-                iconBg = 'bg-[#ECFDF5] text-[#16A34A] dark:bg-[#0F172A] dark:text-[#34D399]';
-              } else if (actType === 'audit' || act.action.toLowerCase().includes('audit')) {
-                ActionIcon = ShieldCheck;
-                iconBg = 'bg-[#EFF6FF] text-[#2563EB] dark:bg-[#0F172A] dark:text-[#60A5FA]';
-              }
-
-              return (
-                <div 
-                  key={act.id} 
-                  className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${
-                    isDarkMode ? 'bg-[#0F172A] border-[#334155]' : 'bg-[#F8FAFC] border-[#E2E8F0]'
-                  }`}
-                >
-                  <div className="flex items-start gap-3.5 min-w-0">
-                    <div className={`p-2.5 rounded-xl shrink-0 ${iconBg}`}>
-                      <ActionIcon className="w-4 h-4" />
-                    </div>
-
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`font-bold text-xs ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
-                          {act.userName}
-                        </span>
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded font-bold uppercase bg-white dark:bg-[#1E293B] border border-[#E2E8F0] dark:border-[#334155] text-[#475569] dark:text-[#CBD5E1]">
-                          {actType || 'Activity'}
-                        </span>
-                        {act.fileName && (
-                          <span className="text-xs font-bold text-[#2563EB] dark:text-[#60A5FA] truncate max-w-[200px]">
-                            {act.fileName}
-                          </span>
-                        )}
-                      </div>
-
-                      <p className={`text-xs ${isDarkMode ? 'text-[#CBD5E1]' : 'text-[#475569]'}`}>
-                        {act.action}
-                      </p>
-
-                      <div className="flex items-center gap-3 text-[10px] font-mono text-[#94A3B8]">
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-[#94A3B8]" />
-                          {act.timestamp}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                    <button
-                      onClick={() => {
-                        const file = files.find(f => f.name === act.fileName);
-                        if (file && onSelectFile) onSelectFile(file);
-                        onNavigate('cleaning');
-                      }}
-                      className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
-                        isDarkMode 
-                          ? 'bg-[#1E293B] border-[#334155] text-[#60A5FA] hover:bg-[#334155]' 
-                          : 'bg-white border-[#E2E8F0] text-[#2563EB] hover:bg-[#EFF6FF]'
-                      }`}
-                    >
-                      View Report &rarr;
-                    </button>
-                  </div>
+            activities.slice(0, 3).map((act) => (
+              <div key={act.id} className="flex gap-3 text-xs items-start">
+                <div className="w-7 h-7 rounded-full bg-slate-800 shrink-0 font-bold text-[9px] flex items-center justify-center text-white border border-slate-700/50">
+                  {act.userName.split(' ').map(n => n[0]).join('')}
                 </div>
-              );
-            })
+                <div className="flex-1 space-y-0.5">
+                  <div className="flex flex-wrap justify-between gap-1 items-baseline">
+                    <span className="font-bold">{act.userName}</span>
+                    <span className="text-[9px] text-slate-400 font-mono flex items-center gap-1"><Clock className="w-3 h-3" /> {act.timestamp}</span>
+                  </div>
+                  <p className={isDarkMode ? 'text-slate-300' : 'text-slate-600'}>
+                    {act.action}
+                    {act.fileName && <span className="font-bold text-blue-500 ml-1">({act.fileName})</span>}
+                  </p>
+                </div>
+              </div>
+            ))
           )}
         </div>
       </div>
@@ -1207,41 +1146,42 @@ export default function DashboardHome({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
               className={`relative w-full max-w-5xl rounded-2xl border shadow-2xl overflow-hidden flex flex-col max-h-[90vh] ${
-                isDarkMode ? 'bg-[#0F172A] border-[#334155] text-[#F8FAFC]' : 'bg-white border-[#E2E8F0] text-[#0F172A]'
+                isDarkMode ? 'bg-[#0f172a] border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
               }`}
             >
               {/* Modal Header */}
               <div className={`p-5 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
-                isDarkMode ? 'border-[#334155] bg-[#1E293B]' : 'border-[#E2E8F0] bg-[#F8FAFC]'
+                isDarkMode ? 'border-slate-800/80 bg-slate-950/50' : 'border-slate-200 bg-slate-50'
               }`}>
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#ECFDF5] dark:bg-[#0F172A] border border-[#A7F3D0] dark:border-[#334155] flex items-center justify-center text-[#16A34A] dark:text-[#34D399] shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 shrink-0">
                     <FileBarChart className="w-5 h-5" />
                   </div>
                   <div>
                     <h2 className="font-extrabold text-base md:text-lg flex items-center gap-2">
                       <span>Data Profile Analysis Report</span>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded font-bold bg-[#ECFDF5] dark:bg-[#0F172A] text-[#16A34A] dark:text-[#34D399] uppercase tracking-wider border border-[#A7F3D0] dark:border-[#334155]">
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded font-bold bg-emerald-500/10 text-emerald-500 uppercase tracking-wider">
                         Quick Audit
                       </span>
                     </h2>
-                    <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
+                    <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                       Column data types, min/max range analysis, distinct counts, and null distribution
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 self-end sm:self-center min-w-0 max-w-full">
+                  {/* File Selector Dropdown if multiple files exist */}
                   {files.length > 0 && (
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="text-xs font-bold text-[#94A3B8] hidden md:inline shrink-0">Dataset:</span>
+                      <span className="text-xs font-bold text-slate-400 hidden md:inline shrink-0">Dataset:</span>
                       <select
                         value={targetProfileFile?.id || ''}
                         onChange={(e) => setSelectedProfileFileId(e.target.value)}
                         className={`text-xs font-semibold px-3 py-2 rounded-xl border focus:outline-none cursor-pointer max-w-[150px] sm:max-w-[220px] md:max-w-[280px] truncate ${
                           isDarkMode 
-                            ? 'bg-[#0F172A] border-[#334155] text-[#F8FAFC]' 
-                            : 'bg-white border-[#E2E8F0] text-[#0F172A]'
+                            ? 'bg-slate-900 border-slate-700 text-slate-200' 
+                            : 'bg-white border-slate-200 text-slate-800'
                         }`}
                       >
                         {files.map(f => (
@@ -1255,7 +1195,7 @@ export default function DashboardHome({
 
                   <button
                     onClick={() => setIsProfileModalOpen(false)}
-                    className="p-2 rounded-xl text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-[#334155] transition-colors cursor-pointer shrink-0"
+                    className="p-2 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -1263,13 +1203,13 @@ export default function DashboardHome({
               </div>
 
               {!targetProfileFile ? (
-                /* No File Selected View */
+                /* No File Selected / Uploaded View */
                 <div className="p-12 text-center space-y-4">
-                  <div className="w-16 h-16 rounded-full bg-[#1E293B] border border-[#334155] flex items-center justify-center mx-auto text-[#94A3B8]">
+                  <div className="w-16 h-16 rounded-full bg-slate-800/50 border border-slate-700 flex items-center justify-center mx-auto text-slate-400">
                     <Database className="w-8 h-8" />
                   </div>
                   <h3 className="font-extrabold text-base">No Dataset Available for Profiling</h3>
-                  <p className="text-xs text-[#94A3B8] max-w-md mx-auto">
+                  <p className="text-xs text-slate-400 max-w-md mx-auto">
                     Please upload or select a CSV spreadsheet to perform instant column data profiling, min/max value calculation, and null counts.
                   </p>
                   <button
@@ -1277,40 +1217,41 @@ export default function DashboardHome({
                       setIsProfileModalOpen(false);
                       onNavigate('upload');
                     }}
-                    className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[#2563EB] hover:bg-[#1D4ED8] text-white inline-flex items-center gap-2 cursor-pointer shadow-md"
+                    className={`px-4 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white inline-flex items-center gap-2 cursor-pointer shadow-md`}
                   >
                     <Upload className="w-4 h-4" /> Upload Spreadsheet
                   </button>
                 </div>
               ) : (
                 /* Main Profile Analysis View */
-                <div className="p-6 overflow-y-auto space-y-6 flex-1 text-left">
+                <div className="p-6 overflow-y-auto space-y-6 flex-1">
+                  {/* Summary Metric Strip */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-[#F8FAFC] border-[#E2E8F0]'}`}>
-                      <span className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider block mb-1">Total Columns</span>
-                      <span className="text-2xl font-black text-[#2563EB] dark:text-[#60A5FA]">{profileSummaryStats.totalCols}</span>
-                      <span className="text-[10px] text-[#94A3B8] block mt-1 font-mono">Parsed headers</span>
+                    <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Total Columns</span>
+                      <span className="text-2xl font-black text-blue-500">{profileSummaryStats.totalCols}</span>
+                      <span className="text-[10px] text-slate-400 block mt-1 font-mono">Parsed headers</span>
                     </div>
 
-                    <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-[#F8FAFC] border-[#E2E8F0]'}`}>
-                      <span className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider block mb-1">Total Rows</span>
-                      <span className="text-2xl font-black text-[#16A34A] dark:text-[#34D399]">{profileSummaryStats.totalRows.toLocaleString()}</span>
-                      <span className="text-[10px] text-[#94A3B8] block mt-1 font-mono">Evaluated records</span>
+                    <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Total Rows</span>
+                      <span className="text-2xl font-black text-emerald-500">{profileSummaryStats.totalRows.toLocaleString()}</span>
+                      <span className="text-[10px] text-slate-400 block mt-1 font-mono">Evaluated records</span>
                     </div>
 
-                    <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-[#F8FAFC] border-[#E2E8F0]'}`}>
-                      <span className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider block mb-1">Missing Cell Ratio</span>
-                      <span className={`text-2xl font-black ${profileSummaryStats.overallNullRatio > 10 ? 'text-[#D97706]' : 'text-[#2563EB]'}`}>
+                    <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Missing Cell Ratio</span>
+                      <span className={`text-2xl font-black ${profileSummaryStats.overallNullRatio > 10 ? 'text-amber-500' : 'text-slate-200'}`}>
                         {profileSummaryStats.overallNullRatio}%
                       </span>
-                      <span className="text-[10px] text-[#94A3B8] block mt-1 font-mono">{profileSummaryStats.totalNulls.toLocaleString()} empty values</span>
+                      <span className="text-[10px] text-slate-400 block mt-1 font-mono">{profileSummaryStats.totalNulls.toLocaleString()} empty values</span>
                     </div>
 
-                    <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-[#F8FAFC] border-[#E2E8F0]'}`}>
-                      <span className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider block mb-1">Detected Types</span>
+                    <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Detected Types</span>
                       <div className="flex flex-wrap gap-1 mt-1">
                         {Object.entries(profileSummaryStats.typeCounts).map(([type, count]) => (
-                          <span key={type} className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-[#0F172A] text-[#F8FAFC] border border-[#334155]">
+                          <span key={type} className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
                             {type}: {count}
                           </span>
                         ))}
@@ -1318,22 +1259,23 @@ export default function DashboardHome({
                     </div>
                   </div>
 
+                  {/* Filter and Export Bar */}
                   <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
                     <div className="relative flex-1 max-w-md">
-                      <Search className="w-4 h-4 text-[#94A3B8] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                       <input
                         type="text"
                         value={profileSearchQuery}
                         onChange={(e) => setProfileSearchQuery(e.target.value)}
                         placeholder="Search column header or data type..."
                         className={`w-full pl-9 pr-3.5 py-2 rounded-xl text-xs border focus:outline-none focus:ring-1 ${
-                          isDarkMode ? 'bg-[#1E293B] border-[#334155] text-[#F8FAFC] focus:border-[#2563EB]' : 'bg-[#F8FAFC] border-[#E2E8F0] text-[#0F172A]'
+                          isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-100 focus:border-emerald-500' : 'bg-slate-50 border-slate-200 text-slate-900'
                         }`}
                       />
                       {profileSearchQuery && (
                         <button
                           onClick={() => setProfileSearchQuery('')}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#94A3B8] hover:text-[#F8FAFC]"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-200"
                         >
                           &times;
                         </button>
@@ -1343,17 +1285,18 @@ export default function DashboardHome({
                     <button
                       onClick={handleExportProfileCSV}
                       disabled={columnProfiles.length === 0}
-                      className="px-4 py-2 rounded-xl text-xs font-bold bg-[#16A34A] hover:bg-[#15803D] text-white flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer disabled:opacity-50"
+                      className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer disabled:opacity-50"
                     >
                       <Download className="w-4 h-4 text-white" />
                       <span>Export Profile CSV</span>
                     </button>
                   </div>
 
-                  <div className={`border rounded-xl overflow-hidden ${isDarkMode ? 'border-[#334155]' : 'border-[#E2E8F0]'}`}>
+                  {/* Column Analysis Table */}
+                  <div className={`border rounded-xl overflow-hidden ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
                     <div className="overflow-x-auto max-h-[400px]">
                       <table className="w-full text-left text-xs min-w-[700px]">
-                        <thead className={`sticky top-0 z-10 ${isDarkMode ? 'bg-[#1E293B] border-b border-[#334155] text-[#94A3B8]' : 'bg-[#F8FAFC] border-b border-[#E2E8F0] text-[#64748B]'} font-bold`}>
+                        <thead className={`sticky top-0 z-10 ${isDarkMode ? 'bg-slate-950 border-b border-slate-800 text-slate-400' : 'bg-slate-100 border-b border-slate-200 text-slate-600'} font-bold`}>
                           <tr>
                             <th className="py-3 px-4">COLUMN HEADER</th>
                             <th className="py-3 px-3">DATA TYPE</th>
@@ -1364,23 +1307,23 @@ export default function DashboardHome({
                             <th className="py-3 px-4">SAMPLE VALUES</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-[#E2E8F0] dark:divide-[#334155] font-mono">
+                        <tbody className="divide-y divide-slate-800/30 font-mono">
                           {filteredColumnProfiles.length === 0 ? (
                             <tr>
-                              <td colSpan={7} className="py-8 text-center text-[#94A3B8] font-sans">
+                              <td colSpan={7} className="py-8 text-center text-slate-400 font-sans">
                                 No columns matching "{profileSearchQuery}" found in this dataset.
                               </td>
                             </tr>
                           ) : (
                             filteredColumnProfiles.map((col) => {
-                              let typeBg = 'bg-[#FEF3C7] text-[#D97706] border-[#F59E0B]/30';
-                              if (col.type === 'Numeric') typeBg = 'bg-[#EFF6FF] text-[#2563EB] border-[#DBEAFE]';
-                              else if (col.type === 'Date') typeBg = 'bg-[#ECFDF5] text-[#16A34A] border-[#A7F3D0]';
-                              else if (col.type === 'Boolean') typeBg = 'bg-[#F3E8FF] text-[#9333EA] border-[#E9D5FF]';
+                              let typeBg = 'bg-amber-500/10 text-amber-400 border-amber-500/30';
+                              if (col.type === 'Numeric') typeBg = 'bg-blue-500/10 text-blue-400 border-blue-500/30';
+                              else if (col.type === 'Date') typeBg = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+                              else if (col.type === 'Boolean') typeBg = 'bg-purple-500/10 text-purple-400 border-purple-500/30';
 
                               return (
-                                <tr key={col.name} className="hover:bg-[#EFF6FF]/40 dark:hover:bg-[#334155]/40 transition-colors">
-                                  <td className={`py-3 px-4 font-bold font-sans truncate max-w-[180px] ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
+                                <tr key={col.name} className={`hover:bg-slate-500/5 transition-colors`}>
+                                  <td className={`py-3 px-4 font-bold font-sans truncate max-w-[180px] ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
                                     {col.name}
                                   </td>
                                   <td className="py-3 px-3">
@@ -1390,21 +1333,29 @@ export default function DashboardHome({
                                   </td>
                                   <td className="py-3 px-3">
                                     <div className="flex items-center gap-2">
-                                      <span className={col.nullCount > 0 ? (isDarkMode ? 'text-[#FBBF24] font-bold' : 'text-[#D97706] font-bold') : (isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]')}>
+                                      <span className={col.nullCount > 0 ? (isDarkMode ? 'text-amber-400 font-bold' : 'text-amber-600 font-bold') : (isDarkMode ? 'text-slate-400' : 'text-slate-600')}>
                                         {col.nullCount} ({col.nullPercentage}%)
                                       </span>
+                                      {col.nullPercentage > 0 && (
+                                        <div className={`w-12 h-1.5 rounded-full overflow-hidden ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`}>
+                                          <div
+                                            className={`h-full ${col.nullPercentage > 20 ? 'bg-rose-500' : 'bg-amber-500'}`}
+                                            style={{ width: `${col.nullPercentage}%` }}
+                                          />
+                                        </div>
+                                      )}
                                     </div>
                                   </td>
-                                  <td className={`py-3 px-3 truncate max-w-[120px] ${isDarkMode ? 'text-[#CBD5E1]' : 'text-[#475569]'}`} title={col.min}>
+                                  <td className={`py-3 px-3 truncate max-w-[120px] ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`} title={col.min}>
                                     {col.min}
                                   </td>
-                                  <td className={`py-3 px-3 truncate max-w-[120px] ${isDarkMode ? 'text-[#CBD5E1]' : 'text-[#475569]'}`} title={col.max}>
+                                  <td className={`py-3 px-3 truncate max-w-[120px] ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`} title={col.max}>
                                     {col.max}
                                   </td>
-                                  <td className={`py-3 px-3 font-bold ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
+                                  <td className={`py-3 px-3 font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
                                     {col.distinctCount.toLocaleString()}
                                   </td>
-                                  <td className={`py-3 px-4 text-[10px] truncate max-w-[200px] ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`} title={col.sampleValues.join(', ')}>
+                                  <td className={`py-3 px-4 text-[10px] truncate max-w-[200px] ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} title={col.sampleValues.join(', ')}>
                                     {col.sampleValues.length > 0 ? col.sampleValues.join(', ') : '—'}
                                   </td>
                                 </tr>
@@ -1420,16 +1371,16 @@ export default function DashboardHome({
 
               {/* Modal Footer */}
               <div className={`p-4 border-t flex justify-between items-center text-xs ${
-                isDarkMode ? 'border-[#334155] bg-[#1E293B] text-[#94A3B8]' : 'border-[#E2E8F0] bg-[#F8FAFC] text-[#64748B]'
+                isDarkMode ? 'border-slate-800/80 bg-slate-950/60 text-slate-400' : 'border-slate-200 bg-slate-50 text-slate-600'
               }`}>
                 <div className="flex items-center gap-2 font-mono text-[10px]">
-                  <CheckCircle2 className="w-4 h-4 text-[#16A34A]" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                   <span>Profile generated dynamically from active dataset memory.</span>
                 </div>
                 <button
                   onClick={() => setIsProfileModalOpen(false)}
                   className={`px-4 py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
-                    isDarkMode ? 'border-[#334155] text-[#CBD5E1] hover:bg-[#334155]' : 'border-[#E2E8F0] text-[#475569] hover:bg-[#E2E8F0]'
+                    isDarkMode ? 'border-slate-800 text-slate-300 hover:bg-slate-800' : 'border-slate-200 text-slate-700 hover:bg-slate-100'
                   }`}
                 >
                   Close Report
