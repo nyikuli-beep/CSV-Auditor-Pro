@@ -283,6 +283,17 @@ export const ACCENT_COLORS: Record<AccentColor, AccentColorDetails> = {
 };
 
 /**
+ * Helper to get active preset details based on mode and customization
+ */
+export function getActivePreset(customization: ThemeCustomization, isDarkMode: boolean): ThemePresetDetails {
+  let activePresetKey: ThemePreset = customization.preset || (isDarkMode ? 'default-dark' : 'light-corporate');
+  if (!isDarkMode && activePresetKey !== 'light-corporate') {
+    activePresetKey = 'light-corporate';
+  }
+  return THEME_PRESETS[activePresetKey] || THEME_PRESETS['default-dark'];
+}
+
+/**
  * Apply design tokens and theme rules directly to document element.
  */
 export function applyThemeToDocument(customization: ThemeCustomization, isDarkMode: boolean) {
@@ -291,12 +302,8 @@ export function applyThemeToDocument(customization: ThemeCustomization, isDarkMo
   const root = document.documentElement;
 
   // Determine active preset
-  let activePresetKey: ThemePreset = customization.preset || (isDarkMode ? 'default-dark' : 'light-corporate');
-  if (!isDarkMode && activePresetKey !== 'light-corporate') {
-    activePresetKey = 'light-corporate';
-  }
-
-  const preset = THEME_PRESETS[activePresetKey] || THEME_PRESETS['default-dark'];
+  const preset = getActivePreset(customization, isDarkMode);
+  const activePresetKey = preset.id;
   const accent = ACCENT_COLORS[customization.accentColor] || ACCENT_COLORS.blue;
 
   // Set CSS Variables
@@ -309,10 +316,21 @@ export function applyThemeToDocument(customization: ThemeCustomization, isDarkMo
   root.style.setProperty('--app-text-muted', preset.textMuted);
   root.style.setProperty('--app-border', preset.borders);
 
+  // Sync to legacy theme variables for backward compatibility
+  root.style.setProperty('--bg-app', preset.bgMain);
+  root.style.setProperty('--bg-card', preset.bgCard);
+  root.style.setProperty('--bg-secondary', preset.bgPanel);
+  root.style.setProperty('--border-color', preset.borders);
+  root.style.setProperty('--text-primary', preset.textPrimary);
+  root.style.setProperty('--text-secondary', preset.textSecondary);
+  root.style.setProperty('--text-muted', preset.textMuted);
+
   // Accent color override
   root.style.setProperty('--app-accent', accent.hex);
   root.style.setProperty('--app-accent-hover', accent.hoverHex);
   root.style.setProperty('--app-accent-bg-light', accent.bgLight);
+  root.style.setProperty('--primary-blue', accent.hex);
+  root.style.setProperty('--link-color', accent.hex);
 
   // Font size scale
   const fontSizeMap: Record<string, string> = {
@@ -372,6 +390,17 @@ export function applyThemeToDocument(customization: ThemeCustomization, isDarkMo
   root.setAttribute('data-density', customization.density);
   root.setAttribute('data-card-style', customization.cardStyle);
   root.setAttribute('data-animations', customization.animations || 'normal');
+  root.setAttribute('data-sidebar-width', customization.sidebarWidth);
+  root.setAttribute('data-corner-radius', customization.cornerRadius);
+  root.setAttribute('data-font-size', customization.fontSize);
+
+  // Table Preferences
+  root.setAttribute('data-table-striped', String(customization.tablePrefs.stripedRows));
+  root.setAttribute('data-table-hover', String(customization.tablePrefs.hoverHighlight));
+  root.setAttribute('data-table-grid', String(customization.tablePrefs.gridLines));
+
+  // Touch Target Preferences
+  root.setAttribute('data-touch-targets', customization.accessibility?.largerClickTargets ? 'large' : 'normal');
 
   if (customization.accessibility?.highContrast) {
     root.classList.add('high-contrast');

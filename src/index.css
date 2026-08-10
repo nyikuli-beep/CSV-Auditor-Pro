@@ -58,17 +58,18 @@ html, body, #root {
   overflow-x: hidden;
   margin: 0;
   padding: 0;
+  font-size: var(--app-font-base, 14px);
 }
 
 body {
-  background-color: var(--bg-app);
-  color: var(--text-primary);
+  background-color: var(--app-bg-main, var(--bg-app));
+  color: var(--app-text-primary, var(--text-primary));
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition: background-color var(--app-animation-speed, 0.25s) ease, color var(--app-animation-speed, 0.25s) ease;
 }
 
 label {
-  color: var(--text-primary);
+  color: var(--app-text-primary, var(--text-primary));
 }
 
 html.dark,
@@ -76,8 +77,92 @@ body.dark,
 .dark body,
 html.dark #root,
 body.dark #root {
-  background-color: var(--bg-app) !important;
-  color: var(--text-primary);
+  background-color: var(--app-bg-main, var(--bg-app)) !important;
+  color: var(--app-text-primary, var(--text-primary));
+}
+
+/* Global Corner Radius Rule */
+button, input, select, textarea, .hd-card, [data-card] {
+  border-radius: var(--app-radius, 12px);
+}
+
+/* Card Style Overrides */
+[data-card-style="flat"] .hd-card,
+[data-card-style="flat"] [data-card] {
+  box-shadow: none !important;
+  border-color: var(--app-border, var(--border-color)) !important;
+}
+
+[data-card-style="elevated"] .hd-card,
+[data-card-style="elevated"] [data-card] {
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.35) !important;
+}
+
+[data-card-style="outlined"] .hd-card,
+[data-card-style="outlined"] [data-card] {
+  box-shadow: none !important;
+  border: 1.5px solid var(--app-border, var(--border-color)) !important;
+}
+
+[data-card-style="glass"] .hd-card,
+[data-card-style="glass"] [data-card] {
+  backdrop-filter: blur(12px) !important;
+  background-color: rgba(15, 23, 42, 0.82) !important;
+}
+
+/* Contrast Level Overrides */
+[data-contrast="low"] {
+  --border-color: rgba(255, 255, 255, 0.08);
+  --app-border: rgba(255, 255, 255, 0.08);
+}
+
+[data-contrast="high"],
+.high-contrast {
+  --border-color: #64748b !important;
+  --app-border: #64748b !important;
+  --text-secondary: #f1f5f9 !important;
+  --text-muted: #cbd5e1 !important;
+}
+
+/* UI Density Spacing Overrides */
+[data-density="compact"] .hd-card,
+[data-density="compact"] [data-card] {
+  padding: var(--app-density-padding, 0.5rem);
+}
+
+[data-density="comfortable"] .hd-card,
+[data-density="comfortable"] [data-card] {
+  padding: var(--app-density-padding, 0.75rem);
+}
+
+[data-density="spacious"] .hd-card,
+[data-density="spacious"] [data-card] {
+  padding: var(--app-density-padding, 1.125rem);
+}
+
+/* Data Table Preferences */
+table th, table td {
+  padding: var(--app-table-cell-padding, 0.6rem 0.85rem) !important;
+}
+
+[data-table-striped="true"] table tbody tr:nth-child(even) {
+  background-color: rgba(255, 255, 255, 0.035);
+}
+
+[data-table-hover="true"] table tbody tr:hover {
+  background-color: rgba(37, 99, 235, 0.08) !important;
+}
+
+[data-table-grid="true"] table th,
+[data-table-grid="true"] table td {
+  border: 1px solid var(--app-border, var(--border-color)) !important;
+}
+
+/* Touch Targets Accessibility */
+[data-touch-targets="large"] button,
+[data-touch-targets="large"] input,
+[data-touch-targets="large"] select {
+  min-height: 44px;
 }
 
 /* Centralized Theme Token Utility Classes */

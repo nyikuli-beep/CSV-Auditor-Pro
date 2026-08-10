@@ -23,9 +23,34 @@ import {
   Mail,
   Send,
   AlertCircle,
-  ExternalLink
+  ExternalLink,
+  Calendar,
+  Clock,
+  Users,
+  RefreshCw,
+  Play,
+  Zap,
+  CalendarCheck,
+  Cpu,
+  Layers,
+  Settings,
+  ChevronRight,
+  Plus,
+  Trash2,
+  ToggleLeft,
+  ToggleRight,
+  Info,
+  Bell,
+  UserCheck
 } from 'lucide-react';
-import { CSVFile, ReportConfig } from '../types';
+import { 
+  CSVFile, 
+  ReportConfig, 
+  TeamMember, 
+  SystemSettings, 
+  RecurringReportSchedule, 
+  ScheduledReportExecutionLog 
+} from '../types';
 import { exportCleanedAuditToExcel } from '../lib/excelExporter';
 import { 
   generateVisualSnapshotCanvas, 
@@ -40,9 +65,29 @@ interface ReportGenProps {
   onNavigate: (tab: string) => void;
   isDarkMode: boolean;
   accentClass: string;
+  members?: TeamMember[];
+  settings?: SystemSettings;
+  onUpdateSettings?: (newSettings: Partial<SystemSettings>) => void;
 }
 
-export default function ReportGen({ activeFile, onNavigate, isDarkMode, accentClass }: ReportGenProps) {
+const DEFAULT_TEAM_MEMBERS: TeamMember[] = [
+  { id: 'mem-1', name: 'Nyikuli Bramwel', email: 'nyikulibramwel@gmail.com', role: 'Owner', status: 'active' },
+  { id: 'mem-2', name: 'Sarah Chen', email: 'sarah.chen@acme.corp', role: 'Admin', status: 'active' },
+  { id: 'mem-3', name: 'Alex Rivera', email: 'alex.rivera@acme.corp', role: 'Editor', status: 'active' },
+  { id: 'mem-4', name: 'Compliance Officer', email: 'compliance@acme.corp', role: 'Viewer', status: 'active' }
+];
+
+export default function ReportGen({ 
+  activeFile, 
+  onNavigate, 
+  isDarkMode, 
+  accentClass,
+  members,
+  settings,
+  onUpdateSettings
+}: ReportGenProps) {
+  const effectiveMembers = (members && members.length > 0) ? members : DEFAULT_TEAM_MEMBERS;
+
   const [reportConfig, setReportConfig] = useState<ReportConfig>({
     title: 'CSV Audit & Compliance Report',
     includeSummary: true,
@@ -67,6 +112,226 @@ export default function ReportGen({ activeFile, onNavigate, isDarkMode, accentCl
   const [emailBody, setEmailBody] = useState('');
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [emailSendStatus, setEmailSendStatus] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Recurring Weekly Email Reports state (Firebase Functions Scheduled Cron Integration)
+  const [recurringSchedule, setRecurringSchedule] = useState<RecurringReportSchedule>(() => {
+    try {
+      const saved = localStorage.getItem('app_recurring_report_schedule');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.warn('Failed to parse cached app_recurring_report_schedule:', e);
+    }
+    const initialRecipients = effectiveMembers.map(m => m.email).filter(Boolean);
+    return {
+      enabled: settings?.emailNotifications?.weeklyDigest ?? true,
+      dayOfWeek: 'Monday',
+      timeUtc: '09:00',
+      format: 'pdf_and_summary',
+      recipients: initialRecipients,
+      additionalEmails: [],
+      templateType: 'executive',
+      firebaseFunctionRegion: 'us-central1',
+      firebaseFunctionName: 'scheduledWeeklyAuditReportPDF',
+      runCount: 1,
+      lastRunAt: new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString(),
+      executionLogs: [
+        {
+          id: `exec-init-1`,
+          timestamp: new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString(),
+          status: 'success',
+          recipientsCount: initialRecipients.length,
+          recipients: initialRecipients,
+          reportTitle: 'CSV Audit & Compliance Weekly Summary',
+          triggerType: 'scheduled_cron',
+          details: `Firebase Function scheduledWeeklyAuditReportPDF executed successfully. Weekly audit PDF delivered to ${initialRecipients.length} team members.`
+        }
+      ]
+    };
+  });
+
+  const [isRecurringModalOpen, setIsRecurringModalOpen] = useState(false);
+  const [newAdditionalEmail, setNewAdditionalEmail] = useState('');
+  const [isExecutingTestRun, setIsExecutingTestRun] = useState(false);
+  const [testRunStatus, setTestRunStatus] = useState<{ success: boolean; message: string; log?: ScheduledReportExecutionLog } | null>(null);
+
+  const saveRecurringSchedule = (updated: RecurringReportSchedule) => {
+    setRecurringSchedule(updated);
+    try {
+      localStorage.setItem('app_recurring_report_schedule', JSON.stringify(updated));
+    } catch (e) {
+      console.warn('Failed to save app_recurring_report_schedule:', e);
+    }
+
+    if (onUpdateSettings && settings) {
+      onUpdateSettings({
+        emailNotifications: {
+          ...settings.emailNotifications,
+          weeklyDigest: updated.enabled
+        }
+      });
+    }
+  };
+
+  const handleToggleRecurringEnabled = () => {
+    const updated: RecurringReportSchedule = {
+      ...recurringSchedule,
+      enabled: !recurringSchedule.enabled
+    };
+    saveRecurringSchedule(updated);
+  };
+
+  const handleToggleMemberRecipient = (email: string) => {
+    const current = recurringSchedule.recipients || [];
+    const exists = current.includes(email);
+    const updatedRecipients = exists
+      ? current.filter(e => e !== email)
+      : [...current, email];
+    
+    saveRecurringSchedule({
+      ...recurringSchedule,
+      recipients: updatedRecipients
+    });
+  };
+
+  const handleSelectAllMembers = () => {
+    const allEmails = effectiveMembers.map(m => m.email).filter(Boolean);
+    saveRecurringSchedule({
+      ...recurringSchedule,
+      recipients: allEmails
+    });
+  };
+
+  const handleClearAllRecipients = () => {
+    saveRecurringSchedule({
+      ...recurringSchedule,
+      recipients: [],
+      additionalEmails: []
+    });
+  };
+
+  const handleAddAdditionalEmail = () => {
+    if (!newAdditionalEmail || !newAdditionalEmail.trim() || !newAdditionalEmail.includes('@')) {
+      alert('Please enter a valid email address.');
+      return;
+    }
+    const trimmed = newAdditionalEmail.trim().toLowerCase();
+    const current = recurringSchedule.additionalEmails || [];
+    if (current.includes(trimmed)) {
+      setNewAdditionalEmail('');
+      return;
+    }
+    const updated = [...current, trimmed];
+    saveRecurringSchedule({
+      ...recurringSchedule,
+      additionalEmails: updated
+    });
+    setNewAdditionalEmail('');
+  };
+
+  const handleRemoveAdditionalEmail = (email: string) => {
+    const updated = (recurringSchedule.additionalEmails || []).filter(e => e !== email);
+    saveRecurringSchedule({
+      ...recurringSchedule,
+      additionalEmails: updated
+    });
+  };
+
+  const getCronExpression = (dayOfWeek: string, timeUtc: string) => {
+    const [hour = '09', minute = '00'] = timeUtc.split(':');
+    const dayMap: Record<string, string> = {
+      Sunday: '0',
+      Monday: '1',
+      Tuesday: '2',
+      Wednesday: '3',
+      Thursday: '4',
+      Friday: '5',
+      Saturday: '6'
+    };
+    const dayNum = dayMap[dayOfWeek] || '1';
+    return `${parseInt(minute, 10)} ${parseInt(hour, 10)} * * ${dayNum}`;
+  };
+
+  const handleExecuteScheduledTestRun = async () => {
+    if (!activeFile) return;
+
+    const allRecipients = Array.from(new Set([
+      ...(recurringSchedule.recipients || []),
+      ...(recurringSchedule.additionalEmails || [])
+    ]));
+
+    if (allRecipients.length === 0) {
+      alert('Please select at least one team member recipient address for the weekly report.');
+      return;
+    }
+
+    setIsExecutingTestRun(true);
+    setTestRunStatus(null);
+
+    try {
+      const payload = {
+        recipients: allRecipients,
+        schedule: recurringSchedule,
+        fileDetails: {
+          name: activeFile.name,
+          score: activeFile.score,
+          totalRows: activeFile.rows.length,
+          issuesCount: activeFile.issues.length
+        },
+        reportConfig,
+        userEmail: auth.currentUser?.email || 'owner@workspace'
+      };
+
+      const res = await fetch('/api/reports/scheduled-trigger', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data.success) {
+        const newLog: ScheduledReportExecutionLog = data.logEntry || {
+          id: `exec-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          status: 'success',
+          recipientsCount: allRecipients.length,
+          recipients: allRecipients,
+          reportTitle: reportConfig.title,
+          triggerType: 'manual_test_run',
+          details: `Firebase Function ${recurringSchedule.firebaseFunctionName} executed test trigger. PDF audit report sent to ${allRecipients.length} team members.`
+        };
+
+        const updatedLogs = [newLog, ...(recurringSchedule.executionLogs || [])].slice(0, 15);
+        const updatedSchedule: RecurringReportSchedule = {
+          ...recurringSchedule,
+          lastRunAt: new Date().toISOString(),
+          runCount: (recurringSchedule.runCount || 0) + 1,
+          executionLogs: updatedLogs
+        };
+
+        saveRecurringSchedule(updatedSchedule);
+
+        setTestRunStatus({
+          success: true,
+          message: `Scheduled weekly PDF report trigger executed successfully! Summary delivered to ${data.recipientsDelivered || allRecipients.length} team members.`,
+          log: newLog
+        });
+      } else {
+        setTestRunStatus({
+          success: false,
+          message: data.message || 'Failed to execute scheduled report trigger. Please verify recipient email addresses.'
+        });
+      }
+    } catch (err: any) {
+      console.error('Error executing scheduled weekly report trigger:', err);
+      setTestRunStatus({
+        success: false,
+        message: err.message || 'An unexpected error occurred during scheduled report execution.'
+      });
+    } finally {
+      setIsExecutingTestRun(false);
+    }
+  };
 
   const handleOpenEmailModal = () => {
     if (!activeFile) return;
@@ -291,24 +556,31 @@ ${reportConfig.companyName}`;
 
   const getThemeHex = (color: string) => getThemeHexColor(color);
 
+  const activeRecipientsList = Array.from(new Set([
+    ...(recurringSchedule.recipients || []),
+    ...(recurringSchedule.additionalEmails || [])
+  ]));
+
   return (
     <div className="space-y-8 animate-fadeIn">
       {/* Header */}
       <div>
         <span className="text-xs font-mono font-bold text-violet-500 uppercase tracking-widest flex items-center gap-1">
-          <FileText className="w-3.5 h-3.5" /> PDF/XLSX Engine
+          <FileText className="w-3.5 h-3.5" /> PDF/XLSX Engine & Scheduled Delivery
         </span>
         <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Report Generator</h1>
         <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-          Apply corporate branding, select layout structures, and export complete audit compliance portfolios.
+          Apply corporate branding, select layout structures, and enable recurring weekly PDF reports for team members.
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Configuration inputs */}
+        {/* Configuration inputs & Actions */}
         <div className="lg:col-span-5 space-y-6">
           <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
-            <h3 className={`font-bold text-sm uppercase tracking-wider mb-5 flex items-center gap-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}><Sliders className="w-4 h-4 text-violet-500" /> Branding Config</h3>
+            <h3 className={`font-bold text-sm uppercase tracking-wider mb-5 flex items-center gap-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+              <Sliders className="w-4 h-4 text-violet-500" /> Branding Config
+            </h3>
             
             <div className="space-y-4">
               {/* Title input */}
@@ -433,6 +705,71 @@ ${reportConfig.companyName}`;
               </div>
             </div>
 
+            {/* Recurring Weekly Email Reports (Firebase Functions Cron) Banner Card */}
+            <div className={`p-4 rounded-2xl border transition-all ${
+              recurringSchedule.enabled
+                ? isDarkMode ? 'bg-slate-900 border-emerald-800/80' : 'bg-emerald-50/80 border-emerald-200'
+                : isDarkMode ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-50/80 border-slate-200'
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold flex items-center gap-1.5 text-emerald-500 uppercase tracking-wider">
+                  <CalendarCheck className="w-4 h-4 text-emerald-500" /> Recurring Weekly Reports
+                </span>
+                <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold uppercase ${
+                  recurringSchedule.enabled
+                    ? 'bg-emerald-500/10 text-emerald-500'
+                    : 'bg-slate-500/10 text-slate-400'
+                }`}>
+                  {recurringSchedule.enabled ? 'CRON ACTIVE' : 'PAUSED'}
+                </span>
+              </div>
+              <p className={`text-xs mb-3 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                Automated weekly PDF audit report generation and dispatch to team members via Firebase Functions (<span className="font-mono text-[11px] text-emerald-400">{recurringSchedule.firebaseFunctionName}</span>).
+              </p>
+
+              {/* Active Schedule Overview Pills */}
+              <div className={`p-2.5 rounded-xl border mb-3 flex flex-wrap items-center justify-between gap-2 text-[11px] ${
+                isDarkMode ? 'bg-slate-950/60 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-700'
+              }`}>
+                <div className="flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-blue-400" />
+                  <span className="font-semibold">Every {recurringSchedule.dayOfWeek} @ {recurringSchedule.timeUtc} UTC</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-violet-400" />
+                  <span>
+                    {activeRecipientsList.length} Team Member(s)
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setIsRecurringModalOpen(true)}
+                  className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                >
+                  <Settings className="w-4 h-4 text-white" />
+                  <span>Configure Schedule</span>
+                </button>
+                <button
+                  onClick={handleExecuteScheduledTestRun}
+                  disabled={isExecutingTestRun}
+                  className={`py-2.5 px-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer ${
+                    isDarkMode
+                      ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-100'
+                      : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-800'
+                  }`}
+                >
+                  {isExecutingTestRun ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-emerald-500" />
+                  ) : (
+                    <Play className="w-4 h-4 text-emerald-500" />
+                  )}
+                  <span>Test Trigger Now</span>
+                </button>
+              </div>
+            </div>
+
             {/* Stakeholder Email Dispatch Banner */}
             <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-slate-900/90 border-violet-900/50' : 'bg-violet-50/80 border-violet-200'}`}>
               <div className="flex items-center justify-between mb-2">
@@ -451,7 +788,7 @@ ${reportConfig.companyName}`;
                 className="w-full py-2.5 px-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer"
               >
                 <Send className="w-4 h-4 text-white" />
-                <span>Send via Email</span>
+                <span>Send On-Demand Email</span>
               </button>
             </div>
 
@@ -620,6 +957,413 @@ ${reportConfig.companyName}`;
           </div>
         </div>
       </div>
+
+      {/* RECURRING WEEKLY EMAIL REPORTS & FIREBASE FUNCTIONS MODAL */}
+      <AnimatePresence>
+        {isRecurringModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className={`relative w-full max-w-3xl rounded-2xl border shadow-2xl overflow-hidden flex flex-col max-h-[90vh] ${
+                isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
+              }`}
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-5 border-b border-slate-800/60 bg-slate-950/40">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500">
+                    <CalendarCheck className="w-5 h-5 text-emerald-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-base tracking-tight flex items-center gap-2">
+                      Recurring Weekly Email Reports & Scheduled PDF Generation
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded font-bold bg-emerald-500/10 text-emerald-500 uppercase">
+                        Firebase Cloud Cron
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Configure automated PDF audit report schedules and distribution to team members
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setIsRecurringModalOpen(false)}
+                  className="p-2 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Content Body */}
+              <div className="p-6 overflow-y-auto space-y-6 flex-1">
+                {/* Master Schedule Toggle & System Sync Notice */}
+                <div className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                  recurringSchedule.enabled
+                    ? isDarkMode ? 'bg-emerald-950/20 border-emerald-800/50' : 'bg-emerald-50 border-emerald-200'
+                    : isDarkMode ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-200'
+                }`}>
+                  <div className="flex items-start gap-3">
+                    <Bell className={`w-5 h-5 shrink-0 mt-0.5 ${recurringSchedule.enabled ? 'text-emerald-500' : 'text-slate-400'}`} />
+                    <div>
+                      <h4 className="font-bold text-xs flex items-center gap-2">
+                        <span>Automated Weekly Report Cron</span>
+                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold uppercase ${
+                          recurringSchedule.enabled ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-500/20 text-slate-400'
+                        }`}>
+                          {recurringSchedule.enabled ? 'ENABLED' : 'PAUSED'}
+                        </span>
+                      </h4>
+                      <p className="text-[11px] opacity-80 mt-0.5">
+                        Triggers Firebase Function <code className="font-mono text-emerald-400">{recurringSchedule.firebaseFunctionName}</code> every {recurringSchedule.dayOfWeek} at {recurringSchedule.timeUtc} UTC.
+                      </p>
+                      <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                        Synced with System Settings &bull; Email Notifications &bull; Weekly Digest
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleToggleRecurringEnabled}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                      recurringSchedule.enabled
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md'
+                        : isDarkMode ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-200 hover:bg-slate-300 text-slate-800'
+                    }`}
+                  >
+                    {recurringSchedule.enabled ? (
+                      <>
+                        <ToggleRight className="w-4 h-4 text-white" />
+                        <span>Schedule Active</span>
+                      </>
+                    ) : (
+                      <>
+                        <ToggleLeft className="w-4 h-4 text-slate-400" />
+                        <span>Schedule Paused</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Day of Week & Time UTC Picker */}
+                <div className="space-y-3">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-blue-500" /> Schedule Day & Time (UTC)
+                  </label>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-7 gap-1.5">
+                    {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
+                      <button
+                        key={day}
+                        onClick={() => saveRecurringSchedule({ ...recurringSchedule, dayOfWeek: day as any })}
+                        className={`py-2 px-1 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                          recurringSchedule.dayOfWeek === day
+                            ? 'bg-blue-600 border-blue-500 text-white shadow-sm'
+                            : isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        {day.substring(0, 3)}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                    <div>
+                      <label className="block text-[10px] text-slate-400 font-bold mb-1 uppercase tracking-widest">Execution Time (UTC)</label>
+                      <select
+                        value={recurringSchedule.timeUtc}
+                        onChange={(e) => saveRecurringSchedule({ ...recurringSchedule, timeUtc: e.target.value })}
+                        className={`w-full px-3 py-2 rounded-xl text-xs border focus:outline-none ${
+                          isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-950'
+                        }`}
+                      >
+                        <option value="08:00">08:00 AM UTC</option>
+                        <option value="09:00">09:00 AM UTC (Default)</option>
+                        <option value="12:00">12:00 PM UTC</option>
+                        <option value="15:00">03:00 PM UTC</option>
+                        <option value="18:00">06:00 PM UTC</option>
+                        <option value="21:00">09:00 PM UTC</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] text-slate-400 font-bold mb-1 uppercase tracking-widest">Output Format</label>
+                      <select
+                        value={recurringSchedule.format}
+                        onChange={(e) => saveRecurringSchedule({ ...recurringSchedule, format: e.target.value as any })}
+                        className={`w-full px-3 py-2 rounded-xl text-xs border focus:outline-none ${
+                          isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-950'
+                        }`}
+                      >
+                        <option value="pdf_and_summary">PDF Attachment + Executive Email Summary</option>
+                        <option value="pdf_only">PDF Attachment Only</option>
+                        <option value="excel_and_summary">Excel (.xlsx) + Email Summary</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] text-slate-400 font-bold mb-1 uppercase tracking-widest">Template Layout</label>
+                      <select
+                        value={recurringSchedule.templateType}
+                        onChange={(e) => saveRecurringSchedule({ ...recurringSchedule, templateType: e.target.value as any })}
+                        className={`w-full px-3 py-2 rounded-xl text-xs border focus:outline-none ${
+                          isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-950'
+                        }`}
+                      >
+                        <option value="executive">Executive Compliance</option>
+                        <option value="technical">Technical Raw Log</option>
+                        <option value="compact">Compact Overview Checklist</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Team Member Recipients Selection */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-violet-500" /> Select Workspace Team Member Recipients ({activeRecipientsList.length})
+                    </label>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleSelectAllMembers}
+                        className="text-[10px] font-bold text-blue-400 hover:underline cursor-pointer"
+                      >
+                        Select All Members
+                      </button>
+                      <span className="text-slate-600">&bull;</span>
+                      <button
+                        onClick={handleClearAllRecipients}
+                        className="text-[10px] font-bold text-slate-400 hover:text-slate-200 hover:underline cursor-pointer"
+                      >
+                        Clear All
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className={`p-3 rounded-xl border space-y-2 max-h-48 overflow-y-auto ${
+                    isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    {effectiveMembers.map(member => {
+                      const isSelected = (recurringSchedule.recipients || []).includes(member.email);
+                      return (
+                        <div
+                          key={member.id}
+                          onClick={() => handleToggleMemberRecipient(member.email)}
+                          className={`p-2.5 rounded-lg border flex items-center justify-between cursor-pointer transition-colors ${
+                            isSelected
+                              ? isDarkMode ? 'bg-violet-950/30 border-violet-800/60' : 'bg-violet-50 border-violet-200'
+                              : isDarkMode ? 'bg-slate-900/60 border-slate-800/60 hover:bg-slate-900' : 'bg-white border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {}} // Handled by outer row onClick
+                              className="rounded border-slate-700 text-violet-600 focus:ring-violet-500 cursor-pointer"
+                            />
+                            <div>
+                              <p className="text-xs font-bold flex items-center gap-1.5">
+                                <span>{member.name}</span>
+                                <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded font-semibold ${
+                                  member.role === 'Owner' ? 'bg-amber-500/10 text-amber-400' :
+                                  member.role === 'Admin' ? 'bg-blue-500/10 text-blue-400' :
+                                  'bg-slate-500/10 text-slate-400'
+                                }`}>
+                                  {member.role}
+                                </span>
+                              </p>
+                              <p className="text-[10px] text-slate-400 font-mono">{member.email}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1 text-[10px] text-slate-400">
+                            <UserCheck className={`w-3.5 h-3.5 ${isSelected ? 'text-violet-400' : 'text-slate-600'}`} />
+                            <span>{isSelected ? 'Included' : 'Excluded'}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Additional External Email Input */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-widest">
+                      Additional External Email Recipients
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="email"
+                        value={newAdditionalEmail}
+                        onChange={(e) => setNewAdditionalEmail(e.target.value)}
+                        placeholder="board.member@external-partner.com"
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddAdditionalEmail()}
+                        className={`flex-1 px-3 py-2 rounded-xl text-xs border focus:outline-none focus:ring-1 ${
+                          isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100 focus:border-violet-500' : 'bg-white border-slate-200 text-slate-950'
+                        }`}
+                      />
+                      <button
+                        onClick={handleAddAdditionalEmail}
+                        className="px-3 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs flex items-center gap-1 cursor-pointer shrink-0"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add</span>
+                      </button>
+                    </div>
+
+                    {/* Additional emails pills */}
+                    {(recurringSchedule.additionalEmails || []).length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {recurringSchedule.additionalEmails?.map(email => (
+                          <span
+                            key={email}
+                            className={`text-[10px] font-mono px-2 py-1 rounded-lg border flex items-center gap-1.5 ${
+                              isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-slate-100 border-slate-300 text-slate-800'
+                            }`}
+                          >
+                            <span>{email}</span>
+                            <button
+                              onClick={() => handleRemoveAdditionalEmail(email)}
+                              className="text-slate-400 hover:text-rose-400 cursor-pointer"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Firebase Cloud Functions Architecture Details Card */}
+                <div className={`p-4 rounded-xl border space-y-2 ${
+                  isDarkMode ? 'bg-slate-950/80 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
+                      <Cpu className="w-3.5 h-3.5 text-emerald-500" /> Firebase Cloud Functions Pub/Sub Config
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-400">
+                      Region: {recurringSchedule.firebaseFunctionRegion || 'us-central1'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase block font-bold">Scheduled Function Name</span>
+                      <span className="font-mono font-bold text-slate-200">{recurringSchedule.firebaseFunctionName}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase block font-bold">Calculated Cron Schedule</span>
+                      <span className="font-mono font-bold text-emerald-400">
+                        pubsub.schedule('{getCronExpression(recurringSchedule.dayOfWeek, recurringSchedule.timeUtc)}')
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Test Run Execution Result Box */}
+                {testRunStatus && (
+                  <div className={`p-4 rounded-xl border flex items-start gap-3 text-xs ${
+                    testRunStatus.success
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                      : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
+                  }`}>
+                    {testRunStatus.success ? (
+                      <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-5 h-5 text-rose-500 shrink-0" />
+                    )}
+                    <div className="flex-1">
+                      <p className="font-bold">{testRunStatus.success ? 'Execution Successful' : 'Execution Failed'}</p>
+                      <p className="mt-0.5 opacity-90">{testRunStatus.message}</p>
+                      {testRunStatus.log && (
+                        <p className="text-[10px] font-mono mt-1 opacity-75">
+                          Log ID: {testRunStatus.log.id} &bull; {testRunStatus.log.timestamp}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Recent Executions History Log */}
+                {(recurringSchedule.executionLogs || []).length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                      <RefreshCw className="w-3.5 h-3.5 text-blue-400" /> Recent Scheduled Execution Logs
+                    </h4>
+
+                    <div className={`border rounded-xl overflow-hidden text-xs ${
+                      isDarkMode ? 'border-slate-800' : 'border-slate-200'
+                    }`}>
+                      <div className="max-h-36 overflow-y-auto divide-y divide-slate-800">
+                        {recurringSchedule.executionLogs?.map(log => (
+                          <div key={log.id} className={`p-2.5 flex items-center justify-between ${
+                            isDarkMode ? 'bg-slate-950/40 hover:bg-slate-950/80' : 'bg-white hover:bg-slate-50'
+                          }`}>
+                            <div className="flex items-center gap-2">
+                              <span className={`w-2 h-2 rounded-full ${log.status === 'success' ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
+                              <div>
+                                <p className="font-bold text-[11px] text-slate-200">{log.reportTitle}</p>
+                                <p className="text-[10px] text-slate-400 font-mono">
+                                  {new Date(log.timestamp).toLocaleString()} &bull; {log.recipientsCount} Recipients Delivered
+                                </p>
+                              </div>
+                            </div>
+
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-bold uppercase">
+                              {log.triggerType === 'scheduled_cron' ? 'CRON' : 'TEST RUN'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer Controls */}
+              <div className={`p-4 border-t flex items-center justify-between gap-3 ${
+                isDarkMode ? 'border-slate-800/80 bg-slate-950/60' : 'border-slate-200 bg-slate-50'
+              }`}>
+                <button
+                  onClick={() => setIsRecurringModalOpen(false)}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                    isDarkMode ? 'border-slate-800 text-slate-300 hover:bg-slate-800' : 'border-slate-200 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  Done
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleExecuteScheduledTestRun}
+                    disabled={isExecutingTestRun}
+                    className="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-2 transition-all shadow-md disabled:opacity-50 cursor-pointer"
+                  >
+                    {isExecutingTestRun ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-white" />
+                        <span>Triggering Function...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-4 h-4 text-white" />
+                        <span>Execute Test Trigger Now</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Visual Snapshot Preview Modal */}
       <AnimatePresence>

@@ -124,6 +124,34 @@ export interface ReportConfig {
   templateType: 'executive' | 'technical' | 'compact';
   companyName: string;
   companyLogoUrl?: string;
+  recurringSchedule?: RecurringReportSchedule;
+}
+
+export interface ScheduledReportExecutionLog {
+  id: string;
+  timestamp: string;
+  status: 'success' | 'failed' | 'pending';
+  recipientsCount: number;
+  recipients: string[];
+  reportTitle: string;
+  triggerType: 'scheduled_cron' | 'manual_test_run';
+  details: string;
+}
+
+export interface RecurringReportSchedule {
+  enabled: boolean;
+  dayOfWeek: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
+  timeUtc: string; // e.g. "09:00"
+  format: 'pdf_and_summary' | 'pdf_only' | 'excel_and_summary';
+  recipients: string[]; // List of team member emails
+  additionalEmails?: string[];
+  templateType: 'executive' | 'technical' | 'compact';
+  lastRunAt?: string;
+  nextRunAt?: string;
+  runCount?: number;
+  firebaseFunctionRegion?: string;
+  firebaseFunctionName?: string;
+  executionLogs?: ScheduledReportExecutionLog[];
 }
 
 export type ThemePreset = 'default-dark' | 'black-oled' | 'midnight-blue' | 'graphite-purple' | 'emerald-dark' | 'light-corporate';

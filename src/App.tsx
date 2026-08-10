@@ -52,7 +52,7 @@ import {
 
 import { ThemeInspector } from './components/ThemeInspector';
 import { WorkspaceHeader } from './components/WorkspaceHeader';
-import { applyThemeToDocument, DEFAULT_THEME_CUSTOMIZATION } from './lib/themeEngine';
+import { applyThemeToDocument, getActivePreset, DEFAULT_THEME_CUSTOMIZATION } from './lib/themeEngine';
 
 // Import Types
 import { CSVFile, TeamMember, AuditActivity, ChatMessage, SystemSettings, SlotRequest } from './types';
@@ -666,23 +666,22 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     }
   }, [user?.avatar, user?.name]);
 
-  // Document class & background sync for dark mode to prevent white spaces on scroll/overscroll
+  // Document class & background sync for dark mode
   useEffect(() => {
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
       document.body.classList.add('dark');
-      document.documentElement.style.backgroundColor = '#0b0f19';
-      document.body.style.backgroundColor = '#0b0f19';
     } else {
       document.documentElement.classList.remove('dark');
       document.body.classList.remove('dark');
-      document.documentElement.style.backgroundColor = '#f8fafc';
-      document.body.style.backgroundColor = '#f8fafc';
     }
 
-    // Apply enterprise custom theme design tokens
+    // Apply enterprise custom theme design tokens & active preset background
     const tc = settings.themeCustomization || DEFAULT_THEME_CUSTOMIZATION;
     applyThemeToDocument(tc, isDarkMode);
+    const activePreset = getActivePreset(tc, isDarkMode);
+    document.documentElement.style.backgroundColor = activePreset.bgMain;
+    document.body.style.backgroundColor = activePreset.bgMain;
   }, [isDarkMode, settings.themeCustomization]);
 
   // Automated background scheduler for CSV retention policies
@@ -2565,7 +2564,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
             animate={{ 
               opacity: 1, 
               x: 0,
-              width: isSidebarCollapsed ? 72 : 256
+              width: isSidebarCollapsed ? 72 : (settings.themeCustomization?.sidebarWidth === 'compact' ? 208 : settings.themeCustomization?.sidebarWidth === 'expanded' ? 288 : 256)
             }}
             transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
             className={`border-r hidden md:flex flex-col justify-between shrink-0 transition-colors duration-200 overflow-x-hidden ${
@@ -2935,6 +2934,15 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                         onNavigate={handleNavigateTab}
                         isDarkMode={isDarkMode}
                         accentClass={accentClass}
+                        members={members}
+                        settings={settings}
+                        onUpdateSettings={(newSettings) => {
+                          setSettings(prev => {
+                            const updated = { ...prev, ...newSettings };
+                            localStorage.setItem('app_system_settings', JSON.stringify(updated));
+                            return updated;
+                          });
+                        }}
                       />
                     )}
 
