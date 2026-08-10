@@ -126,9 +126,68 @@ export interface ReportConfig {
   companyLogoUrl?: string;
 }
 
+export type ThemePreset = 'default-dark' | 'black-oled' | 'midnight-blue' | 'graphite-purple' | 'emerald-dark' | 'light-corporate';
+export type AccentColor = 'blue' | 'emerald' | 'purple' | 'orange' | 'red' | 'cyan' | 'indigo' | 'violet' | 'amber';
+export type ContrastLevel = 'low' | 'medium' | 'high';
+export type FontSize = 'small' | 'default' | 'large' | 'extra-large';
+export type UIThicknessDensity = 'compact' | 'comfortable' | 'spacious';
+export type CornerRadius = 'sharp' | 'small' | 'medium' | 'large';
+export type SidebarWidthOption = 'default' | 'compact' | 'expanded';
+export type AnimationSpeed = 'minimal' | 'normal' | 'enhanced' | 'disabled';
+export type DashboardCardStyle = 'flat' | 'elevated' | 'outlined' | 'glass';
+
+export interface DataTablePreferences {
+  stripedRows: boolean;
+  hoverHighlight: boolean;
+  gridLines: boolean;
+  rowDensity: 'compact' | 'comfortable' | 'spacious';
+  stickyHeader: boolean;
+}
+
+export interface AccessibilitySettings {
+  highContrast: boolean;
+  keyboardFocusIndicators: boolean;
+  reducedMotion: boolean;
+  largerClickTargets: boolean;
+}
+
+export interface ThemeCustomization {
+  preset: ThemePreset;
+  accentColor: AccentColor;
+  contrast: ContrastLevel;
+  fontSize: FontSize;
+  density: UIThicknessDensity;
+  cornerRadius: CornerRadius;
+  sidebarWidth: SidebarWidthOption;
+  sidebarIconOnly: boolean;
+  animations: AnimationSpeed;
+  tablePrefs: DataTablePreferences;
+  cardStyle: DashboardCardStyle;
+  followSystemTheme: boolean;
+  accessibility: AccessibilitySettings;
+  customColors?: {
+    bgMain?: string;
+    bgSidebar?: string;
+    bgCard?: string;
+    bgPanel?: string;
+    textPrimary?: string;
+    textSecondary?: string;
+    textMuted?: string;
+    borders?: string;
+    primaryBtn?: string;
+    hoverBtn?: string;
+    success?: string;
+    warning?: string;
+    error?: string;
+    info?: string;
+    inputBg?: string;
+    inputBorder?: string;
+  };
+}
+
 export interface SystemSettings {
   theme: 'light' | 'dark';
-  accentColor: 'blue' | 'emerald' | 'violet' | 'amber';
+  accentColor: AccentColor;
   language: string;
   timezone: string;
   emailNotifications: {
@@ -137,6 +196,7 @@ export interface SystemSettings {
     weeklyDigest: boolean;
   };
   apiKey: string;
+  themeCustomization?: ThemeCustomization;
 }
 
 export interface CustomValidationRule {

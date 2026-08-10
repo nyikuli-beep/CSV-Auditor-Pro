@@ -52,6 +52,7 @@ import {
 
 import { ThemeInspector } from './components/ThemeInspector';
 import { WorkspaceHeader } from './components/WorkspaceHeader';
+import { applyThemeToDocument, DEFAULT_THEME_CUSTOMIZATION } from './lib/themeEngine';
 
 // Import Types
 import { CSVFile, TeamMember, AuditActivity, ChatMessage, SystemSettings, SlotRequest } from './types';
@@ -678,7 +679,11 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       document.documentElement.style.backgroundColor = '#f8fafc';
       document.body.style.backgroundColor = '#f8fafc';
     }
-  }, [isDarkMode]);
+
+    // Apply enterprise custom theme design tokens
+    const tc = settings.themeCustomization || DEFAULT_THEME_CUSTOMIZATION;
+    applyThemeToDocument(tc, isDarkMode);
+  }, [isDarkMode, settings.themeCustomization]);
 
   // Automated background scheduler for CSV retention policies
   useEffect(() => {

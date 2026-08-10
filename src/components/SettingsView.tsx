@@ -43,6 +43,7 @@ import { SystemSettings, CSVFile, AuditActivity, ChatMessage } from '../types';
 import { auth } from '../firebase/firebase';
 import BillingDashboard from './BillingDashboard';
 import AdminBillingDashboard from './AdminBillingDashboard';
+import ThemeCustomizationPanel from './ThemeCustomizationPanel';
 
 
 interface SettingsViewProps {
@@ -595,63 +596,14 @@ export default function SettingsView({
             </div>
           </div>
 
-          {/* Accent Color Section (Requirement) */}
-          <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
-            <h3 className={`font-bold text-sm uppercase tracking-wider mb-4 flex items-center gap-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}><Palette className="w-4 h-4 text-emerald-500" /> Brand Customization</h3>
-            
-            <div className="space-y-4">
-              <div>
-                <label className={`block text-[10px] font-bold mb-2 uppercase tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Accent Theme Selection</label>
-                <div className="grid grid-cols-4 gap-2.5">
-                  {[
-                    { key: 'blue', label: 'Deep Blue', hex: '#2563EB' },
-                    { key: 'emerald', label: 'Emerald', hex: '#10B981' },
-                    { key: 'violet', label: 'Violet', hex: '#8B5CF6' },
-                    { key: 'amber', label: 'Amber', hex: '#F59E0B' }
-                  ].map((colorObj) => (
-                    <button
-                      key={colorObj.key}
-                      type="button"
-                      onClick={() => handleAccentChange(colorObj.key as any)}
-                      className={`p-3 rounded-xl border-2 text-xs font-bold text-center flex flex-col items-center gap-1.5 transition-all hover:scale-102 ${settings.accentColor === colorObj.key ? 'border-blue-500 dark:border-blue-400 bg-blue-500/5' : isDarkMode ? 'border-slate-800 bg-slate-950/40 hover:opacity-85' : 'border-slate-200 bg-slate-50 hover:bg-slate-100'}`}
-                    >
-                      <span className="w-4 h-4 rounded-full shadow-xs" style={{ backgroundColor: colorObj.hex }}></span>
-                      <span className={`text-[9px] uppercase tracking-widest block ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>{colorObj.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Theme toggle checkbox */}
-              <div className={`flex justify-between items-center pt-2.5 border-t ${isDarkMode ? 'border-slate-800/40' : 'border-slate-200'}`}>
-                <div>
-                  <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>Light / Dark Toggle</h4>
-                  <p className={`text-[10px] mt-0.5 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Instantly switch between white and charcoal dark backgrounds.</p>
-                </div>
-                <motion.button
-                  type="button"
-                  onClick={toggleTheme}
-                  whileTap={{ scale: 0.94 }}
-                  whileHover={{ scale: 1.02 }}
-                  className={`px-4 py-2 text-xs font-bold rounded-xl border cursor-pointer transition-colors duration-300 relative overflow-hidden flex items-center gap-2 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-amber-300 hover:bg-slate-900' : 'bg-slate-50 border-slate-300 text-indigo-700 hover:bg-slate-100'}`}
-                >
-                  <AnimatePresence mode="wait" initial={false}>
-                    <motion.div
-                      key={isDarkMode ? 'dark' : 'light'}
-                      initial={{ opacity: 0, rotate: -90, scale: 0.6 }}
-                      animate={{ opacity: 1, rotate: 0, scale: 1 }}
-                      exit={{ opacity: 0, rotate: 90, scale: 0.6 }}
-                      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                      className="flex items-center gap-1.5"
-                    >
-                      {isDarkMode ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-indigo-600" />}
-                      <span>{isDarkMode ? 'Dark Mode Active' : 'Light Mode Active'}</span>
-                    </motion.div>
-                  </AnimatePresence>
-                </motion.button>
-              </div>
-            </div>
-          </div>
+          {/* Enterprise Appearance & Theme Customization System */}
+          <ThemeCustomizationPanel
+            settings={settings}
+            onUpdateSettings={onUpdateSettings}
+            isDarkMode={isDarkMode}
+            toggleTheme={toggleTheme}
+            accentClass={accentClass}
+          />
 
           {/* Locale & Language settings */}
           <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>

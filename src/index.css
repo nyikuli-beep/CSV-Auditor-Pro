@@ -130,8 +130,22 @@ body.dark #root {
 }
 
 /* Transitions for cards, sidebars, borders */
-header, aside, main, footer, nav, .hd-card, .hd-border, .hd-bg-sidebar, .hd-bg-app {
-  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+:root {
+  --app-animation-speed: 0.25s;
+}
+
+header, aside, main, footer, nav, button, input, select, .hd-card, .hd-border, .hd-bg-sidebar, .hd-bg-app {
+  transition-duration: var(--app-animation-speed, 0.25s);
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Reduced motion override when animations are disabled */
+html.reduced-motion *,
+.reduced-motion *,
+[data-animations="disabled"] * {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
 }
 
 /* Thin modern scrollbars */
