@@ -20,7 +20,8 @@ import {
   Info,
   ShieldAlert,
   Loader2,
-  GitMerge
+  GitMerge,
+  Search
 } from 'lucide-react';
 import { CSVFile, AuditIssue, Severity, IssueType, CustomValidationRule } from '../types';
 import { detectCSVFormats } from '../lib/formatDetector';
@@ -68,6 +69,20 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
       }
     };
   }, []);
+
+  // States for Quick Search & Filter by Filename
+  const [uploadSearchQuery, setUploadSearchQuery] = useState('');
+  const [mergeSearchQuery, setMergeSearchQuery] = useState('');
+
+  // Search filtered workspace CSV files
+  const filteredWorkspaceFiles = (files || []).filter(f => 
+    f.name.toLowerCase().includes(uploadSearchQuery.toLowerCase())
+  );
+
+  // Search filtered files for Merge Datasets
+  const filteredMergeFiles = (files || []).filter(f => 
+    f.name.toLowerCase().includes(mergeSearchQuery.toLowerCase())
+  );
 
   // States for Merge Datasets feature
   const [selectedFileIdsForMerge, setSelectedFileIdsForMerge] = useState<string[]>([]);
@@ -2668,6 +2683,102 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
             userRole={userRole}
           />
 
+          {/* Uploaded Workspace CSV Files Quick Search & Filter Panel */}
+          <div className={`p-6 rounded-xl border ${isDarkMode ? 'bg-[#131b2e] border-slate-800' : 'bg-white border-slate-200 shadow-sm'} space-y-4`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3 border-slate-500/10">
+              <div className="flex items-center gap-2">
+                <Search className="w-5 h-5 text-blue-500" />
+                <div>
+                  <h3 className="font-bold text-sm">Quick Search Uploaded CSV Files</h3>
+                  <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                    Filter workspace spreadsheets quickly by filename.
+                  </p>
+                </div>
+              </div>
+              <span className={`text-[11px] font-mono font-bold px-2.5 py-1 rounded-lg border w-fit ${
+                isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-700'
+              }`}>
+                {filteredWorkspaceFiles.length} of {files?.length || 0} Datasets
+              </span>
+            </div>
+
+            {/* Search Input Field */}
+            <div className="relative">
+              <Search className={`w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} />
+              <input
+                type="text"
+                placeholder="Search uploaded CSV files by filename..."
+                value={uploadSearchQuery}
+                onChange={(e) => setUploadSearchQuery(e.target.value)}
+                className={`w-full pl-9 ${uploadSearchQuery ? 'pr-9' : 'pr-4'} py-2.5 rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-blue-500 border ${
+                  isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100 placeholder-slate-500' : 'bg-white border-slate-200 text-slate-900 placeholder-slate-400'
+                }`}
+              />
+              {uploadSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setUploadSearchQuery('')}
+                  className={`absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded-full transition-colors cursor-pointer ${
+                    isDarkMode ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+                  }`}
+                  title="Clear search filter"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* List of Filtered Workspace CSV Files */}
+            {!files || files.length === 0 ? (
+              <div className={`p-4 text-center rounded-lg border border-dashed ${isDarkMode ? 'border-slate-800 text-slate-500' : 'border-slate-200 text-slate-400'}`}>
+                <FileSpreadsheet className="w-8 h-8 mx-auto mb-1.5 opacity-50 text-slate-400" />
+                <p className="text-xs font-semibold">No uploaded CSV files in workspace yet.</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">Drop files into the drag & drop zone above to start auditing.</p>
+              </div>
+            ) : filteredWorkspaceFiles.length === 0 ? (
+              <div className={`p-6 text-center rounded-lg border ${isDarkMode ? 'bg-slate-950/40 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                <Search className="w-6 h-6 mx-auto mb-2 text-slate-400" />
+                <p className="text-xs font-bold text-slate-200">No CSV files found matching "{uploadSearchQuery}"</p>
+                <p className="text-[10px] text-slate-400 mt-1">Check filename spelling or clear the search input.</p>
+                <button
+                  type="button"
+                  onClick={() => setUploadSearchQuery('')}
+                  className="mt-3 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-colors cursor-pointer"
+                >
+                  Clear Search Filter
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
+                {filteredWorkspaceFiles.map((file) => (
+                  <div
+                    key={file.id}
+                    className={`p-3 rounded-lg border flex items-center justify-between transition-all ${
+                      isDarkMode ? 'bg-[#0f172a] border-slate-800' : 'bg-slate-50/50 border-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                      <FileSpreadsheet className="w-4 h-4 text-blue-500 shrink-0" />
+                      <div className="min-w-0">
+                        <span className={`text-xs font-bold block truncate ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                          {file.name}
+                        </span>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">
+                          {file.headers.length} columns • {(file.rows?.length || 0).toLocaleString()} rows • {file.score}% Score
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                      {file.size > 1024 * 1024
+                        ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+                        : `${(file.size / 1024).toFixed(1)} KB`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Merge Datasets Segment */}
           <div className={`p-6 rounded-xl border ${isDarkMode ? 'bg-[#131b2e] border-slate-800' : 'bg-white border-slate-200 shadow-sm'} space-y-4`}>
             <div className="flex items-center gap-2 border-b pb-3 border-slate-500/10">
@@ -2707,54 +2818,92 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
             ) : (
               <div className="space-y-4">
                 <div className="space-y-2.5">
-                  <span className={`text-[10px] font-bold uppercase tracking-wider block ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                    Select datasets to concatenate ({selectedFileIdsForMerge.length} selected):
-                  </span>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <span className={`text-[10px] font-bold uppercase tracking-wider block ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                      Select datasets to concatenate ({selectedFileIdsForMerge.length} selected):
+                    </span>
+                    {mergeSearchQuery && (
+                      <span className="text-[10px] text-blue-400 font-mono">
+                        {filteredMergeFiles.length} of {files.length} matching filename
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Filter Search Field for Merge Datasets */}
+                  <div className="relative">
+                    <Search className={`w-3.5 h-3.5 absolute left-3 top-2.5 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} />
+                    <input
+                      type="text"
+                      placeholder="Filter datasets by filename..."
+                      value={mergeSearchQuery}
+                      onChange={(e) => setMergeSearchQuery(e.target.value)}
+                      className={`w-full pl-8 ${mergeSearchQuery ? 'pr-8' : 'pr-3'} py-1.5 rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-blue-500 border ${
+                        isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200 placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-400'
+                      }`}
+                    />
+                    {mergeSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setMergeSearchQuery('')}
+                        className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-200 p-0.5 rounded cursor-pointer"
+                        title="Clear filter"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
                   <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-1">
-                    {files.map((file) => {
-                      const isChecked = selectedFileIdsForMerge.includes(file.id);
-                      return (
-                        <div
-                          key={file.id}
-                          onClick={() => {
-                            if (isChecked) {
-                              setSelectedFileIdsForMerge(prev => prev.filter(id => id !== file.id));
-                            } else {
-                              setSelectedFileIdsForMerge(prev => [...prev, file.id]);
-                            }
-                          }}
-                          className={`p-3 rounded-lg border flex items-center justify-between cursor-pointer transition-all ${
-                            isChecked
-                              ? 'border-blue-500/50 bg-blue-500/10'
-                              : isDarkMode
-                              ? 'border-slate-800 bg-[#0f172a] hover:bg-slate-900'
-                              : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3 min-w-0">
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => {}} // Controlled by outer click
-                              className="rounded text-blue-600 bg-slate-950 border-slate-800 cursor-pointer w-4 h-4 focus:ring-0 focus:ring-offset-0"
-                            />
-                            <div className="min-w-0">
-                              <span className={`text-xs font-bold block truncate ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                                {file.name}
-                              </span>
-                              <span className="text-[10px] text-slate-400 block mt-0.5">
-                                {file.headers.length} columns • {file.rows.length} rows • {file.score}% Quality Score
-                              </span>
+                    {filteredMergeFiles.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-slate-400 italic">
+                        No datasets matching "{mergeSearchQuery}"
+                      </div>
+                    ) : (
+                      filteredMergeFiles.map((file) => {
+                        const isChecked = selectedFileIdsForMerge.includes(file.id);
+                        return (
+                          <div
+                            key={file.id}
+                            onClick={() => {
+                              if (isChecked) {
+                                setSelectedFileIdsForMerge(prev => prev.filter(id => id !== file.id));
+                              } else {
+                                setSelectedFileIdsForMerge(prev => [...prev, file.id]);
+                              }
+                            }}
+                            className={`p-3 rounded-lg border flex items-center justify-between cursor-pointer transition-all ${
+                              isChecked
+                                ? 'border-blue-500/50 bg-blue-500/10'
+                                : isDarkMode
+                                ? 'border-slate-800 bg-[#0f172a] hover:bg-slate-900'
+                                : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => {}} // Controlled by outer click
+                                className="rounded text-blue-600 bg-slate-950 border-slate-800 cursor-pointer w-4 h-4 focus:ring-0 focus:ring-offset-0"
+                              />
+                              <div className="min-w-0">
+                                <span className={`text-xs font-bold block truncate ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                                  {file.name}
+                                </span>
+                                <span className="text-[10px] text-slate-400 block mt-0.5">
+                                  {file.headers.length} columns • {file.rows.length} rows • {file.score}% Quality Score
+                                </span>
+                              </div>
                             </div>
+                            <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                              {file.size > 1024 * 1024
+                                ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+                                : `${(file.size / 1024).toFixed(1)} KB`}
+                            </span>
                           </div>
-                          <span className="text-[10px] font-mono text-slate-400 shrink-0">
-                            {file.size > 1024 * 1024
-                              ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
-                              : `${(file.size / 1024).toFixed(1)} KB`}
-                          </span>
-                        </div>
-                      );
-                    })}
+                        );
+                      })
+                    )}
                   </div>
                 </div>
 

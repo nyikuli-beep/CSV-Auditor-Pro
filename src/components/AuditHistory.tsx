@@ -267,15 +267,35 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
           <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} />
           <input 
             type="text" 
-            placeholder="Search files by name..." 
+            placeholder="Search files by filename..." 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className={`w-full pl-9 pr-4 py-2.5 rounded-xl text-xs border focus:outline-none focus:ring-1 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500' : 'bg-white border-slate-200 text-slate-900 focus:border-blue-600'}`}
+            className={`w-full pl-9 ${searchQuery ? 'pr-9' : 'pr-4'} py-2.5 rounded-xl text-xs border focus:outline-none focus:ring-1 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500' : 'bg-white border-slate-200 text-slate-900 focus:border-blue-600'}`}
           />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className={`absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded-full transition-colors cursor-pointer ${
+                isDarkMode ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+              }`}
+              title="Clear filename search"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
 
         {/* Filters and Sort triggers */}
-        <div className="flex gap-2 w-full md:w-auto text-xs">
+        <div className="flex gap-2 w-full md:w-auto items-center text-xs flex-wrap">
+          {searchQuery && (
+            <span className={`text-[11px] font-mono font-medium px-2.5 py-1 rounded-lg border ${
+              isDarkMode ? 'bg-blue-950/40 border-blue-800/60 text-blue-300' : 'bg-blue-50 border-blue-200 text-blue-700'
+            }`}>
+              Showing {sortedFiles.length} of {files.length} files
+            </span>
+          )}
+
           {/* Status filter */}
           <select 
             value={statusFilter}
@@ -340,9 +360,22 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
                 <tr>
                   <td colSpan={8} className="p-12 text-center">
                     <div className="flex flex-col items-center justify-center gap-2">
-                      <Archive className={`w-8 h-8 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} />
-                      <p className={`font-bold text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>No spreadsheet records found</p>
-                      <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Try adjusting your search query or status filter.</p>
+                      <Search className={`w-8 h-8 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} />
+                      <p className={`font-bold text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
+                        {searchQuery ? `No CSV files matching "${searchQuery}"` : 'No spreadsheet records found'}
+                      </p>
+                      <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                        {searchQuery ? 'Check for typos or clear your search query.' : 'Try adjusting your status filter or upload a CSV file.'}
+                      </p>
+                      {searchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchQuery('')}
+                          className="mt-2 px-3 py-1.5 rounded-xl bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 transition-colors cursor-pointer"
+                        >
+                          Clear Filename Search
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
