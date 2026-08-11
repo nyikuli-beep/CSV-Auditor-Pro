@@ -253,26 +253,23 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children, pageType }) =>
       }`}>
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-4">
+            <Link to="/privacy" className="hover:text-[#2563EB] transition-colors font-medium">Privacy Policy</Link>
+            <span>•</span>
+            <Link to="/terms" className="hover:text-[#2563EB] transition-colors font-medium">Terms of Service</Link>
+            <span>•</span>
+            <Link to="/refund-policy" className="hover:text-[#2563EB] transition-colors font-medium">Refund Policy</Link>
+            <span>•</span>
+            <Link to="/about" className="hover:text-[#2563EB] transition-colors font-medium">About</Link>
+            <span>•</span>
+            <Link to="/contact" className="hover:text-[#2563EB] transition-colors font-medium">Contact</Link>
+            <span>•</span>
             <button
+              type="button"
               onClick={() => setActiveModal('privacy')}
-              className="hover:text-[#2563EB] transition-colors cursor-pointer"
+              className="hover:text-[#2563EB] transition-colors cursor-pointer text-[#94A3B8]"
             >
-              Privacy Policy
-            </button>
-            <span>•</span>
-            <button
-              onClick={() => setActiveModal('terms')}
-              className="hover:text-[#2563EB] transition-colors cursor-pointer"
-            >
-              Terms of Service
-            </button>
-            <span>•</span>
-            <button
-              onClick={() => setActiveModal('support')}
-              className="hover:text-[#2563EB] transition-colors cursor-pointer"
-            >
-              Contact Support
+              Privacy Summary
             </button>
           </div>
 
@@ -401,6 +398,19 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children, pageType }) =>
                       </div>
                     ))}
                   </div>
+
+                  {activeModal === 'privacy' && (
+                    <div className="pt-4 border-t border-slate-700/50 flex justify-end">
+                      <Link
+                        to="/privacy"
+                        onClick={() => setActiveModal(null)}
+                        className="px-4 py-2 text-xs font-bold text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-xl transition-all shadow-sm flex items-center gap-1.5"
+                      >
+                        <span>Read Full Privacy Policy</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </Link>
+                    </div>
+                  )}
                 </div>
               )}
             </motion.div>

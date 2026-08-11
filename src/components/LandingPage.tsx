@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   FileSpreadsheet, 
@@ -63,6 +64,7 @@ export default function LandingPage({
   onSelectPlan 
 }: LandingPageProps) {
 
+  const navigate = useNavigate();
   const [activeFaq, setActiveFaq] = useState<number | null>(null);
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [newsletterStatus, setNewsletterStatus] = useState<'idle' | 'loading' | 'success'>('idle');
@@ -565,12 +567,14 @@ export default function LandingPage({
           </div>
 
           <div>
-            <h4 className={`font-bold mb-4 ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>Legal</h4>
+            <h4 className={`font-bold mb-4 ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>Legal & Company</h4>
             <ul className="space-y-2.5 text-xs flex flex-col items-start">
-              <li><button onClick={() => setActiveModalKey('privacy')} className="hover:text-[#2563EB] transition-colors text-left cursor-pointer bg-transparent border-none p-0 outline-none">Privacy Policy</button></li>
-              <li><button onClick={() => setActiveModalKey('terms')} className="hover:text-[#2563EB] transition-colors text-left cursor-pointer bg-transparent border-none p-0 outline-none">Terms of Service</button></li>
-              <li><button onClick={() => setActiveModalKey('compliance')} className="hover:text-[#2563EB] transition-colors text-left cursor-pointer bg-transparent border-none p-0 outline-none">GDPR & HIPAA Compliance</button></li>
-              <li><button onClick={() => setActiveModalKey('security')} className="hover:text-[#2563EB] transition-colors text-left cursor-pointer bg-transparent border-none p-0 outline-none">Security Overview</button></li>
+              <li><Link to="/privacy" className="hover:text-[#2563EB] transition-colors">Privacy Policy</Link></li>
+              <li><Link to="/terms" className="hover:text-[#2563EB] transition-colors">Terms of Service</Link></li>
+              <li><Link to="/refund-policy" className="hover:text-[#2563EB] transition-colors">Refund Policy</Link></li>
+              <li><Link to="/about" className="hover:text-[#2563EB] transition-colors">About Us</Link></li>
+              <li><Link to="/contact" className="hover:text-[#2563EB] transition-colors">Contact Support</Link></li>
+              <li><button onClick={() => setActiveModalKey('privacy')} className="hover:text-[#2563EB] transition-colors text-left cursor-pointer bg-transparent border-none p-0 outline-none text-[11px] text-[#94A3B8]">Privacy Summary</button></li>
             </ul>
           </div>
 
@@ -704,30 +708,46 @@ export default function LandingPage({
             </div>
 
             {/* Footer */}
-            <div className={`p-4 border-t flex justify-end gap-3 ${
+            <div className={`p-4 border-t flex flex-wrap items-center justify-between gap-3 ${
               isDarkMode ? 'border-[#334155] bg-[#1E293B]' : 'border-[#E2E8F0] bg-[#F8FAFC]'
             }`}>
-              <button
-                type="button"
-                onClick={() => setActiveModalKey(null)}
-                className={`px-4 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
-                  isDarkMode 
-                    ? 'bg-[#0F172A] border-[#334155] hover:bg-[#334155] text-[#CBD5E1]' 
-                    : 'bg-white border-[#E2E8F0] hover:bg-[#F8FAFC] text-[#0F172A] shadow-sm'
-                }`}
-              >
-                Close Document
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveModalKey(null);
-                  onStartTrial();
-                }}
-                className="px-4 py-2 text-xs font-bold text-white bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#1E40AF] rounded-xl transition-colors duration-200 shadow-sm cursor-pointer"
-              >
-                Start Auditing Now
-              </button>
+              {activeModalKey === 'privacy' ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveModalKey(null);
+                    navigate('/privacy');
+                  }}
+                  className="px-4 py-2 text-xs font-bold text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-xl transition-all shadow-sm cursor-pointer flex items-center gap-1.5"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Read Full Privacy Policy</span>
+                </button>
+              ) : <div />}
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveModalKey(null)}
+                  className={`px-4 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                    isDarkMode 
+                      ? 'bg-[#0F172A] border-[#334155] hover:bg-[#334155] text-[#CBD5E1]' 
+                      : 'bg-white border-[#E2E8F0] hover:bg-[#F8FAFC] text-[#0F172A] shadow-sm'
+                  }`}
+                >
+                  Close Document
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveModalKey(null);
+                    onStartTrial();
+                  }}
+                  className="px-4 py-2 text-xs font-bold text-white bg-[#16A34A] hover:bg-[#15803D] rounded-xl transition-colors duration-200 shadow-sm cursor-pointer"
+                >
+                  Start Auditing Now
+                </button>
+              </div>
             </div>
           </motion.div>
         </div>

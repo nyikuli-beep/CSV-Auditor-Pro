@@ -12,8 +12,8 @@ export interface FooterDoc {
 
 export const FOOTER_DOCS: Record<string, FooterDoc> = {
   privacy: {
-    title: "Privacy Policy",
-    subtitle: "Absolute data custody is our foundational promise. We process, but we never store, unless you tell us to.",
+    title: "Privacy Summary",
+    subtitle: "A quick summary of our local-first data custody and privacy principles.",
     lastUpdated: "Last updated: July 10, 2026",
     sections: [
       {
