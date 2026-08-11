@@ -350,7 +350,7 @@ export default function ContactPage() {
                     value={formData.name}
                     onChange={(e) => handleInputChange('name', e.target.value)}
                     onBlur={() => handleBlur('name')}
-                    placeholder="Jane Doe"
+                    placeholder="Ahmed Ali"
                     className={`w-full px-3.5 py-2.5 rounded-xl border text-xs focus:outline-none transition-all ${
                       errors.name 
                         ? 'border-[#DC2626] bg-[#DC2626]/5' 
@@ -382,7 +382,7 @@ export default function ContactPage() {
                     value={formData.email}
                     onChange={(e) => handleInputChange('email', e.target.value)}
                     onBlur={() => handleBlur('email')}
-                    placeholder="jane@company.com"
+                    placeholder="ahmed@company.com"
                     className={`w-full px-3.5 py-2.5 rounded-xl border text-xs focus:outline-none transition-all ${
                       errors.email 
                         ? 'border-[#DC2626] bg-[#DC2626]/5' 

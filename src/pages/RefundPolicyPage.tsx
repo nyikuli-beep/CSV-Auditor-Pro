@@ -184,9 +184,9 @@ export default function RefundPolicyPage() {
 
         {/* Highlight Guarantee Box */}
         <div className={`p-6 rounded-2xl border space-y-3 ${
-          isDarkMode ? 'bg-[#1E293B]/80 border-[#334155]' : 'bg-[#EFF6FF] border-[#BFDBFE]'
+          isDarkMode ? 'bg-[#1E293B]/80 border-[#334155] text-[#CBD5E1]' : 'bg-[#EFF6FF] border-[#BFDBFE] text-[#1E3A8A]'
         }`}>
-          <div className="flex items-center gap-2 font-extrabold text-sm text-[#2563EB] dark:text-[#60A5FA]">
+          <div className={`flex items-center gap-2 font-extrabold text-sm ${isDarkMode ? 'text-[#60A5FA]' : 'text-[#2563EB]'}`}>
             <ShieldCheck className="w-5 h-5 text-[#16A34A]" />
             <span>14-Day 100% Money-Back Guarantee</span>
           </div>
@@ -199,12 +199,12 @@ export default function RefundPolicyPage() {
         <section className={`p-6 rounded-2xl border text-sm leading-relaxed space-y-3 ${
           isDarkMode ? 'bg-[#1E293B] border-[#334155] text-[#CBD5E1]' : 'bg-white border-[#E2E8F0] text-[#475569]'
         }`}>
-          <div className="flex items-center gap-2 font-bold text-base text-[#0F172A] dark:text-[#F8FAFC]">
+          <div className={`flex items-center gap-2 font-bold text-base ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
             <CreditCard className="w-5 h-5 text-[#2563EB] dark:text-[#60A5FA]" />
             <h2>1. Subscription Billing Overview</h2>
           </div>
           <p>
-            CSV Auditor Pro uses <strong>Paddle</strong> as our Merchant of Record for all online checkout processing and recurring subscription management. Paddle handles payments, invoice generation, VAT/sales tax compliance, and automated receipts. Paid subscriptions renew automatically on a monthly or annual cadence according to your selected billing plan.
+            CSV Auditor Pro uses <strong className={isDarkMode ? 'text-white' : 'text-[#0F172A]'}>Paddle</strong> as our Merchant of Record for all online checkout processing and recurring subscription management. Paddle handles payments, invoice generation, VAT/sales tax compliance, and automated receipts. Paid subscriptions renew automatically on a monthly or annual cadence according to your selected billing plan.
           </p>
         </section>
 
@@ -212,7 +212,7 @@ export default function RefundPolicyPage() {
         <section className={`p-6 rounded-2xl border text-sm leading-relaxed space-y-3 ${
           isDarkMode ? 'bg-[#1E293B] border-[#334155] text-[#CBD5E1]' : 'bg-white border-[#E2E8F0] text-[#475569]'
         }`}>
-          <div className="flex items-center gap-2 font-bold text-base text-[#0F172A] dark:text-[#F8FAFC]">
+          <div className={`flex items-center gap-2 font-bold text-base ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
             <CheckCircle2 className="w-5 h-5 text-[#16A34A]" />
             <h2>2. Refund Eligibility Criteria</h2>
           </div>
@@ -220,10 +220,10 @@ export default function RefundPolicyPage() {
             Refunds will be granted under the following eligible conditions:
           </p>
           <ul className="list-disc pl-5 space-y-2 text-xs">
-            <li><strong>First 14 Days:</strong> Request submitted within 14 calendar days of your initial subscription payment.</li>
-            <li><strong>Accidental Duplicate Payment:</strong> You were charged twice due to a payment gateway processing delay.</li>
-            <li><strong>Billing System Error:</strong> You were billed an incorrect amount or charged after a confirmed cancellation.</li>
-            <li><strong>Technical Access Prevention:</strong> Prolonged platform outage or technical issue preventing access to core services that support could not resolve within 48 hours.</li>
+            <li><strong className={isDarkMode ? 'text-white' : 'text-[#0F172A]'}>First 14 Days:</strong> Request submitted within 14 calendar days of your initial subscription payment.</li>
+            <li><strong className={isDarkMode ? 'text-white' : 'text-[#0F172A]'}>Accidental Duplicate Payment:</strong> You were charged twice due to a payment gateway processing delay.</li>
+            <li><strong className={isDarkMode ? 'text-white' : 'text-[#0F172A]'}>Billing System Error:</strong> You were billed an incorrect amount or charged after a confirmed cancellation.</li>
+            <li><strong className={isDarkMode ? 'text-white' : 'text-[#0F172A]'}>Technical Access Prevention:</strong> Prolonged platform outage or technical issue preventing access to core services that support could not resolve within 48 hours.</li>
           </ul>
         </section>
 
@@ -231,7 +231,7 @@ export default function RefundPolicyPage() {
         <section className={`p-6 rounded-2xl border text-sm leading-relaxed space-y-3 ${
           isDarkMode ? 'bg-[#1E293B] border-[#334155] text-[#CBD5E1]' : 'bg-white border-[#E2E8F0] text-[#475569]'
         }`}>
-          <div className="flex items-center gap-2 font-bold text-base text-[#0F172A] dark:text-[#F8FAFC]">
+          <div className={`flex items-center gap-2 font-bold text-base ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
             <XCircle className="w-5 h-5 text-[#DC2626]" />
             <h2>3. Non-Refundable Situations</h2>
           </div>
@@ -251,7 +251,7 @@ export default function RefundPolicyPage() {
         <section className={`p-6 rounded-2xl border text-sm leading-relaxed space-y-3 ${
           isDarkMode ? 'bg-[#1E293B] border-[#334155] text-[#CBD5E1]' : 'bg-white border-[#E2E8F0] text-[#475569]'
         }`}>
-          <div className="flex items-center gap-2 font-bold text-base text-[#0F172A] dark:text-[#F8FAFC]">
+          <div className={`flex items-center gap-2 font-bold text-base ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
             <Clock className="w-5 h-5 text-[#2563EB] dark:text-[#60A5FA]" />
             <h2>4. Subscription Cancellation</h2>
           </div>
@@ -259,7 +259,7 @@ export default function RefundPolicyPage() {
             You can cancel your subscription at any time with zero hassle:
           </p>
           <ul className="list-disc pl-5 space-y-2 text-xs">
-            <li>Navigate to <strong>Settings &gt; Plan & Billing</strong> in your CSV Auditor Pro dashboard and click "Cancel Subscription".</li>
+            <li>Navigate to <strong className={isDarkMode ? 'text-white' : 'text-[#0F172A]'}>Settings &gt; Plan & Billing</strong> in your CSV Auditor Pro dashboard and click "Cancel Subscription".</li>
             <li>Or click the management link contained in any email receipt sent by Paddle.</li>
           </ul>
           <p className="text-xs pt-1">
@@ -271,7 +271,7 @@ export default function RefundPolicyPage() {
         <section className={`p-6 rounded-2xl border text-sm leading-relaxed space-y-3 ${
           isDarkMode ? 'bg-[#1E293B] border-[#334155] text-[#CBD5E1]' : 'bg-white border-[#E2E8F0] text-[#475569]'
         }`}>
-          <div className="flex items-center gap-2 font-bold text-base text-[#0F172A] dark:text-[#F8FAFC]">
+          <div className={`flex items-center gap-2 font-bold text-base ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
             <Mail className="w-5 h-5 text-[#2563EB] dark:text-[#60A5FA]" />
             <h2>5. How to Request a Refund</h2>
           </div>
@@ -280,11 +280,11 @@ export default function RefundPolicyPage() {
           </p>
           <ol className="list-decimal pl-5 space-y-2 text-xs">
             <li>Email our support desk at <a href={`mailto:${SUPPORT_EMAIL}`} className="text-[#2563EB] dark:text-[#60A5FA] font-bold hover:underline">{SUPPORT_EMAIL}</a>.</li>
-            <li>Use the subject line: <strong>Refund Request - [Your Order ID]</strong>.</li>
+            <li>Use the subject line: <strong className={isDarkMode ? 'text-white' : 'text-[#0F172A]'}>Refund Request - [Your Order ID]</strong>.</li>
             <li>Provide your registered account email and a brief explanation of the request.</li>
           </ol>
           <p className="text-xs pt-2">
-            Approved refunds are credited directly back to your original payment method via Paddle within <strong>3 to 5 business days</strong>.
+            Approved refunds are credited directly back to your original payment method via Paddle within <strong className={isDarkMode ? 'text-white' : 'text-[#0F172A]'}>3 to 5 business days</strong>.
           </p>
         </section>
 
