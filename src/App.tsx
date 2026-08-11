@@ -1197,6 +1197,12 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       case 'emerald': return 'bg-emerald-600 hover:bg-emerald-700 text-emerald-500';
       case 'violet': return 'bg-violet-600 hover:bg-violet-700 text-violet-500';
       case 'amber': return 'bg-amber-600 hover:bg-amber-700 text-amber-500';
+      case 'purple': return 'bg-purple-600 hover:bg-purple-700 text-purple-500';
+      case 'orange': return 'bg-orange-600 hover:bg-orange-700 text-orange-500';
+      case 'red': return 'bg-red-600 hover:bg-red-700 text-red-500';
+      case 'cyan': return 'bg-cyan-600 hover:bg-cyan-700 text-cyan-500';
+      case 'indigo': return 'bg-indigo-600 hover:bg-indigo-700 text-indigo-500';
+      case 'blue':
       default: return 'bg-blue-600 hover:bg-blue-700 text-blue-500';
     }
   };
