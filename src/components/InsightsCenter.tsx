@@ -39,7 +39,8 @@ interface InsightsCenterProps {
     persona?: string, 
     image?: { data: string; mimeType: string } | null, 
     thinkingMode?: boolean,
-    enableSearchGrounding?: boolean
+    enableSearchGrounding?: boolean,
+    knowledgeBaseId?: string
   ) => void;
   isDarkMode: boolean;
   accentClass: string;
@@ -131,8 +132,22 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
   };
 
   // Trigger quick query suggestion
-  const handleSuggestionClick = (suggestion: string) => {
-    setUserInput(suggestion);
+  const handleSuggestionClick = (sug: { label: string; text: string; knowledgeBaseId?: string }) => {
+    setUserInput(sug.text);
+    if (sug.knowledgeBaseId) {
+      setLoading(true);
+      onSendMessage(
+        sug.text,
+        selectedModel,
+        selectedPersona,
+        attachedImage,
+        thinkingMode,
+        enableSearchGrounding,
+        sug.knowledgeBaseId
+      );
+      setLoading(false);
+      setUserInput('');
+    }
   };
 
   const removeAttachedImage = () => {
@@ -302,10 +317,10 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
         ];
       default: // auditor
         return [
-          { label: 'Non-Technical Staff Guide', text: 'Explain how the application works to non technical staff in simple, clear, non-technical terms.' },
+          { label: 'Non-Technical Staff Guide', text: 'Explain how the application works to non technical staff in simple, clear, non-technical terms.', knowledgeBaseId: 'non_technical_guide' },
           { label: 'Summarize Active CSV Dataset', text: 'Summarize my uploaded CSV dataset, key column statistics, data types, sample values, and quality issues.' },
-          { label: 'Data Cleaning & Dedupe', text: 'How do duplicate row detection and missing value imputation routines work?' },
-          { label: 'Security & Data Privacy', text: 'How does CSV Auditor Pro protect my data privacy and prevent third-party AI model training?' }
+          { label: 'Data Cleaning & Dedupe', text: 'How do duplicate row detection and missing value imputation routines work?', knowledgeBaseId: 'data_cleaning_dedupe' },
+          { label: 'Security & Data Privacy', text: 'How does CSV Auditor Pro protect my data privacy and prevent third-party AI model training?', knowledgeBaseId: 'security_privacy_ai_training' }
         ];
     }
   };
@@ -616,7 +631,7 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
                 <button
                   key={i}
                   type="button"
-                  onClick={() => handleSuggestionClick(sug.text)}
+                  onClick={() => handleSuggestionClick(sug)}
                   className={`p-3 rounded-xl border text-left text-xs transition-all duration-150 hover:scale-[1.01] active:scale-[0.99] cursor-pointer flex items-center justify-between gap-3 group ${isDarkMode ? 'bg-slate-900/40 border-slate-800 text-slate-300 hover:bg-slate-800/40 hover:text-white' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-2xs'}`}
                 >
                   <div>

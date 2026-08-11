@@ -1,5 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
-import { detectUserIntent, AIIntentCategory, IntentAnalysisResult } from './intentDetectionEngine';
+import { detectUserIntent, classifyDetailedIntent, AIIntentCategory, FineGrainedIntentCategory, IntentAnalysisResult } from './intentDetectionEngine';
 import { executeToolByName, ToolResult } from './aiToolRegistry';
 import { buildStructuredCSVContext, StructuredCSVContext } from './csvContextEngine';
 
@@ -7,7 +7,7 @@ export interface KnowledgeChunk {
   id: string;
   sourceFile: string;
   title: string;
-  category: string;
+  category: FineGrainedIntentCategory | string;
   content: string;
   keywords: string[];
 }
@@ -177,6 +177,8 @@ export interface RagRequestOptions {
   thinkingMode?: boolean;
   enableSearchGrounding?: boolean;
   image?: { data: string; mimeType: string } | null;
+  knowledgeBaseId?: string;
+  intentCategory?: FineGrainedIntentCategory;
 }
 
 export interface RagResponse {

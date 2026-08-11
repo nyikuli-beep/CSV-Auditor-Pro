@@ -2184,7 +2184,8 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     persona: string = 'auditor',
     image: { data: string; mimeType: string } | null = null,
     thinkingMode: boolean = false,
-    enableSearchGrounding: boolean = false
+    enableSearchGrounding: boolean = false,
+    knowledgeBaseId?: string
   ) => {
     const userMsg: ChatMessage = {
       id: `msg-usr-${Date.now()}`,
@@ -2231,6 +2232,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
           image: image,
           thinkingMode: thinkingMode,
           enableSearchGrounding: enableSearchGrounding,
+          knowledgeBaseId: knowledgeBaseId,
           userContext: {
             uid: user?.uid,
             email: user?.email,

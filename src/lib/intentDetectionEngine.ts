@@ -1,12 +1,31 @@
 /**
  * CSV Auditor Pro - Intent Detection Engine
- * Accurately routes prompts into CSV_ANALYSIS, GENERAL_AI, MIXED_REQUEST, or UNKNOWN.
+ * Accurately routes prompts into CSV_ANALYSIS, GENERAL_AI, MIXED_REQUEST, APP_EXPLANATION, or UNKNOWN,
+ * and classifies fine-grained knowledge categories for strict RAG retrieval.
  */
 
 export type AIIntentCategory = 'CSV_ANALYSIS' | 'GENERAL_AI' | 'MIXED_REQUEST' | 'APP_EXPLANATION' | 'UNKNOWN';
 
+export type FineGrainedIntentCategory =
+  | 'SECURITY_PRIVACY'
+  | 'DATA_CLEANING'
+  | 'CSV_AUDITING'
+  | 'SCHEMA_ANALYSIS'
+  | 'AI_ANALYSIS'
+  | 'FILE_RETENTION'
+  | 'AUTHENTICATION'
+  | 'TEAM_COLLABORATION'
+  | 'EMAIL'
+  | 'PAYMENTS'
+  | 'SUBSCRIPTIONS'
+  | 'ACCOUNT_SETTINGS'
+  | 'GENERAL_PRODUCT_INFORMATION'
+  | 'GENERAL_AI'
+  | 'UNKNOWN';
+
 export interface IntentAnalysisResult {
   category: AIIntentCategory;
+  fineCategory: FineGrainedIntentCategory;
   confidenceScore: number;
   reasoning: string;
   suggestedTools: string[];
@@ -41,18 +60,120 @@ const GENERAL_AI_KEYWORDS = [
 ];
 
 /**
+ * Classifies fine-grained knowledge category for strict retrieval logic
+ */
+export function classifyDetailedIntent(
+  prompt: string,
+  hintCategory?: string
+): { fineCategory: FineGrainedIntentCategory; confidence: number; matchedKeywords: string[] } {
+  const p = prompt.trim().toLowerCase();
+
+  const validFineCategories: FineGrainedIntentCategory[] = [
+    'SECURITY_PRIVACY', 'DATA_CLEANING', 'CSV_AUDITING', 'SCHEMA_ANALYSIS',
+    'AI_ANALYSIS', 'FILE_RETENTION', 'AUTHENTICATION', 'TEAM_COLLABORATION',
+    'EMAIL', 'PAYMENTS', 'SUBSCRIPTIONS', 'ACCOUNT_SETTINGS',
+    'GENERAL_PRODUCT_INFORMATION', 'GENERAL_AI', 'UNKNOWN'
+  ];
+
+  if (hintCategory && validFineCategories.includes(hintCategory as FineGrainedIntentCategory)) {
+    return {
+      fineCategory: hintCategory as FineGrainedIntentCategory,
+      confidence: 1.0,
+      matchedKeywords: ['provided_hint']
+    };
+  }
+
+  // 1. SECURITY_PRIVACY
+  const privacyKw = ['privacy', 'protect', 'data privacy', 'ai model training', 'training', 'third-party', 'third party', 'gdpr', 'soc2', 'hipaa', 'encrypt', 'encryption', 'tls', 'security', 'confidential', 'zero retention'];
+  if (privacyKw.some(kw => p.includes(kw))) {
+    return { fineCategory: 'SECURITY_PRIVACY', confidence: 0.96, matchedKeywords: privacyKw.filter(kw => p.includes(kw)) };
+  }
+
+  // 2. FILE_RETENTION
+  const retentionKw = ['retention', 'retained', 'how long', 'retain', 'delete file', 'purge', 'storage limit', 'browser memory', 'expire', 'file duration', 'lifespan'];
+  if (retentionKw.some(kw => p.includes(kw))) {
+    return { fineCategory: 'FILE_RETENTION', confidence: 0.95, matchedKeywords: retentionKw.filter(kw => p.includes(kw)) };
+  }
+
+  // 3. AUTHENTICATION
+  const authKw = ['login', 'sign in', 'sso', 'jwt', 'auth', 'password', 'oauth', 'google sign in', 'credentials', 'bearer token'];
+  if (authKw.some(kw => p.includes(kw))) {
+    return { fineCategory: 'AUTHENTICATION', confidence: 0.93, matchedKeywords: authKw.filter(kw => p.includes(kw)) };
+  }
+
+  // 4. PAYMENTS & SUBSCRIPTIONS
+  const subKw = ['pricing', 'subscription', 'plan', 'plans', 'cost', 'tier', 'tiers', 'free plan', 'pro plan', 'enterprise plan', 'upgrade', 'downgrade', 'per month'];
+  if (subKw.some(kw => p.includes(kw))) {
+    return { fineCategory: 'SUBSCRIPTIONS', confidence: 0.95, matchedKeywords: subKw.filter(kw => p.includes(kw)) };
+  }
+
+  const payKw = ['payment', 'invoice', 'receipt', 'paddle', 'charge', 'refund', 'credit card', 'billing'];
+  if (payKw.some(kw => p.includes(kw))) {
+    return { fineCategory: 'PAYMENTS', confidence: 0.95, matchedKeywords: payKw.filter(kw => p.includes(kw)) };
+  }
+
+  // 5. TEAM_COLLABORATION
+  const teamKw = ['team', 'workspace', 'collaborate', 'collaboration', 'rbac', 'owner', 'admin', 'editor', 'viewer', 'member', 'invite', 'cell annotation', 'comment'];
+  if (teamKw.some(kw => p.includes(kw))) {
+    return { fineCategory: 'TEAM_COLLABORATION', confidence: 0.92, matchedKeywords: teamKw.filter(kw => p.includes(kw)) };
+  }
+
+  // 6. EMAIL
+  const emailKw = ['email', 'gmail', 'dispatch', 'send report', 'notification', 'smtp', 'mail report'];
+  if (emailKw.some(kw => p.includes(kw))) {
+    return { fineCategory: 'EMAIL', confidence: 0.92, matchedKeywords: emailKw.filter(kw => p.includes(kw)) };
+  }
+
+  // 7. ACCOUNT_SETTINGS
+  const accountKw = ['account settings', 'profile', 'change password', 'timezone', 'theme', 'user profile'];
+  if (accountKw.some(kw => p.includes(kw))) {
+    return { fineCategory: 'ACCOUNT_SETTINGS', confidence: 0.90, matchedKeywords: accountKw.filter(kw => p.includes(kw)) };
+  }
+
+  // 8. DATA_CLEANING
+  const cleaningKw = ['duplicate', 'deduplicate', 'dedupe', 'missing value', 'imputation', 'impute', 'blank cell', 'trim whitespace', 'casing', 'uppercase', 'lowercase', 'date format', 'iso date', 'autofix', 'normalize', 'clean data'];
+  if (cleaningKw.some(kw => p.includes(kw))) {
+    return { fineCategory: 'DATA_CLEANING', confidence: 0.94, matchedKeywords: cleaningKw.filter(kw => p.includes(kw)) };
+  }
+
+  // 9. SCHEMA_ANALYSIS
+  const schemaKw = ['schema', 'drift', 'schema drift', 'column type', 'ddl', 'create table', 'header alignment', 'type mismatch', 'structural anomaly'];
+  if (schemaKw.some(kw => p.includes(kw))) {
+    return { fineCategory: 'SCHEMA_ANALYSIS', confidence: 0.94, matchedKeywords: schemaKw.filter(kw => p.includes(kw)) };
+  }
+
+  // 10. CSV_AUDITING
+  const auditKw = ['quality score', 'audit score', 'audit engine', 'anomaly detection', 'outlier', '3 sd', 'standard deviation', 'data health', 'violations', 'audit file'];
+  if (auditKw.some(kw => p.includes(kw))) {
+    return { fineCategory: 'CSV_AUDITING', confidence: 0.92, matchedKeywords: auditKw.filter(kw => p.includes(kw)) };
+  }
+
+  // 11. GENERAL_PRODUCT_INFORMATION
+  const productKw = ['how the application works', 'how the app works', 'what is csv auditor pro', 'tell me about csv auditor pro', 'overview of the app', 'non-technical', 'simple terms', 'layman', 'guide'];
+  if (productKw.some(kw => p.includes(kw))) {
+    return { fineCategory: 'GENERAL_PRODUCT_INFORMATION', confidence: 0.95, matchedKeywords: productKw.filter(kw => p.includes(kw)) };
+  }
+
+  return { fineCategory: 'GENERAL_AI', confidence: 0.70, matchedKeywords: [] };
+}
+
+/**
  * Classifies prompt intent using rule-based heuristics + semantic pattern matching
  */
 export function detectUserIntent(
   prompt: string,
   hasActiveDataset: boolean = false,
-  activeHeaders: string[] = []
+  activeHeaders: string[] = [],
+  hintCategory?: string
 ): IntentAnalysisResult {
   const p = prompt.trim().toLowerCase();
+
+  const { fineCategory } = classifyDetailedIntent(prompt, hintCategory);
 
   if (!p || p.length < 2) {
     return {
       category: 'UNKNOWN',
+      fineCategory: 'UNKNOWN',
       confidenceScore: 0.2,
       reasoning: 'Prompt is too short or ambiguous.',
       suggestedTools: [],
@@ -64,9 +185,10 @@ export function detectUserIntent(
   const isAppExplanation = APP_EXPLANATION_KEYWORDS.some(kw => p.includes(kw));
   const isNonTechnical = p.includes('non technical') || p.includes('non-technical') || p.includes('layman') || p.includes('simple terms') || p.includes('simple words');
 
-  if (isAppExplanation) {
+  if (isAppExplanation || fineCategory === 'GENERAL_PRODUCT_INFORMATION') {
     return {
       category: 'APP_EXPLANATION',
+      fineCategory: 'GENERAL_PRODUCT_INFORMATION',
       confidenceScore: 0.98,
       reasoning: 'User explicitly requested an overview or non-technical explanation of how CSV Auditor Pro operates.',
       suggestedTools: ['summarizeDataset'],
@@ -108,7 +230,11 @@ export function detectUserIntent(
   let reasoning = '';
   const suggestedTools: string[] = [];
 
-  if (csvScore > 0 && generalScore > 0 && hasActiveDataset) {
+  if (fineCategory === 'SECURITY_PRIVACY' || fineCategory === 'FILE_RETENTION' || fineCategory === 'SUBSCRIPTIONS' || fineCategory === 'PAYMENTS' || fineCategory === 'AUTHENTICATION') {
+    category = 'GENERAL_AI'; // Treat product policy questions cleanly without forcing CSV dataset tool execution
+    confidenceScore = 0.96;
+    reasoning = `Query matches specific product policy category [${fineCategory}].`;
+  } else if (csvScore > 0 && generalScore > 0 && hasActiveDataset) {
     category = 'MIXED_REQUEST';
     confidenceScore = 0.92;
     reasoning = `Detected a hybrid query combining CSV dataset questions (${matchedCsvKeywords.join(', ')}) with general AI topics (${matchedGeneralKeywords.join(', ')}).`;
@@ -129,18 +255,18 @@ export function detectUserIntent(
     if (p.includes('pii') || p.includes('ssn') || p.includes('credit')) suggestedTools.push('detectPII');
     if (p.includes('chart') || p.includes('plot')) suggestedTools.push('generateCharts');
   } else if (csvScore > 2.0 && !hasActiveDataset) {
-    // User asking CSV data questions but hasn't uploaded a CSV
     category = 'MIXED_REQUEST';
     confidenceScore = 0.75;
     reasoning = `Query mentions CSV data concepts (${matchedCsvKeywords.join(', ')}), but no active CSV file is currently loaded in memory.`;
   } else {
     category = 'GENERAL_AI';
     confidenceScore = Math.min(0.95, 0.85 + generalScore * 0.03);
-    reasoning = `Query is a general knowledge, coding, or informational prompt unrelated to specific dataset columns.`;
+    reasoning = `Query is a general knowledge, coding, or product policy prompt unrelated to specific dataset columns.`;
   }
 
   return {
     category,
+    fineCategory,
     confidenceScore: Math.round(confidenceScore * 100) / 100,
     reasoning,
     suggestedTools,
@@ -148,3 +274,4 @@ export function detectUserIntent(
     isNonTechnical
   };
 }
+

@@ -1030,7 +1030,7 @@ ${company}`;
 
 // 1. API: Custom Gemini Audit Consultation (Full-stack AI integration with Knowledge Base RAG & SSE Streaming)
 app.post('/api/gemini/chat', async (req, res) => {
-  const { prompt, history = [], model = 'gemini-2.5-flash', persona = 'auditor', fileContext, userContext, image, thinkingMode = false, enableSearchGrounding = false } = req.body;
+  const { prompt, history = [], model = 'gemini-2.5-flash', persona = 'auditor', fileContext, userContext, image, thinkingMode = false, enableSearchGrounding = false, knowledgeBaseId, intentCategory } = req.body;
 
   if (!prompt) {
     res.status(400).json({ error: 'Prompt is required' });
@@ -1057,7 +1057,9 @@ app.post('/api/gemini/chat', async (req, res) => {
         persona,
         thinkingMode,
         enableSearchGrounding,
-        image
+        image,
+        knowledgeBaseId,
+        intentCategory
       },
       (meta) => {
         res.write(`data: ${JSON.stringify({ type: 'meta', ...meta })}\n\n`);
