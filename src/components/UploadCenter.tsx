@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'motion/react';
+import { formatLocalTimestamp } from '../lib/timeService';
 import { 
   Upload, 
   FileSpreadsheet, 
@@ -1379,7 +1380,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
         id: `merged-file-${Date.now()}`,
         name: finalMergedFileName,
         size: totalSize,
-        uploadedAt: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        uploadedAt: formatLocalTimestamp(new Date(), { includeDate: true }),
         status: 'completed',
         score: score,
         headers: mergedHeaders,
@@ -1540,7 +1541,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
             id: `uploaded-file-${Date.now()}`,
             name: file.name,
             size: file.size,
-            uploadedAt: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            uploadedAt: formatLocalTimestamp(new Date(), { includeDate: true }),
             status: 'completed',
             score: score,
             headers: headers,
@@ -1653,7 +1654,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
                 id: `uploaded-file-${Date.now()}-${idx}-${Math.floor(Math.random() * 1000)}`,
                 name: file.name,
                 size: file.size,
-                uploadedAt: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                uploadedAt: formatLocalTimestamp(new Date(), { includeDate: true }),
                 status: 'completed',
                 score: score,
                 headers: headers,
@@ -2500,7 +2501,7 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
             <div>
               <h4 className="font-bold text-xs">Unfinished Schema Mapping Progress Detected</h4>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                You have an active, unsaved ingestion session for <span className="font-semibold text-blue-700 dark:text-blue-400">"{savedDraft.pendingFile.name}"</span> ({savedDraft.pendingFile.rows?.length || 0} rows) from {new Date(savedDraft.updatedAt).toLocaleDateString() + ' ' + new Date(savedDraft.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.
+                You have an active, unsaved ingestion session for <span className="font-semibold text-blue-700 dark:text-blue-400">"{savedDraft.pendingFile.name}"</span> ({savedDraft.pendingFile.rows?.length || 0} rows) from {formatLocalTimestamp(savedDraft.updatedAt, { includeDate: true })}.
               </p>
             </div>
           </div>

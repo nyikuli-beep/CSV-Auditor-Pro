@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from './hooks/useAuth';
+import { useTime } from './context/TimeContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -462,24 +463,21 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
         weeklyDigest: false
       },
       language: 'en',
-      timezone: 'UTC'
+      timezone: 'auto'
     };
   });
 
   const activeFile = files.find(f => f.id === activeFileId) || files[activeFileIndex] || files[0] || null;
 
-  // Real-time Clock UTC state
-  const [currentTime, setCurrentTime] = useState<string>('');
+  // Real-time Centralized Time & Timezone Sync
+  const { timeData, setConfiguredTimeZone, formatTime } = useTime();
+  const currentTime = timeData.timeString;
 
   useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      setCurrentTime(now.toUTCString().replace('GMT', 'UTC'));
-    };
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
-  }, []);
+    if (settings.timezone) {
+      setConfiguredTimeZone(settings.timezone);
+    }
+  }, [settings.timezone, setConfiguredTimeZone]);
 
   // Load state preferences from cookies if allowed on initial mount
   useEffect(() => {
@@ -2185,24 +2183,31 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     model: string = 'gemini-3.6-flash', 
     persona: string = 'auditor',
     image: { data: string; mimeType: string } | null = null,
-    thinkingMode: boolean = false
+    thinkingMode: boolean = false,
+    enableSearchGrounding: boolean = false
   ) => {
     const userMsg: ChatMessage = {
       id: `msg-usr-${Date.now()}`,
       role: 'user',
       content: msgContent,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      timestamp: formatTime(new Date())
     };
+
+    const initialCitations = [
+      { type: 'product', label: 'Product Knowledge' },
+      { type: 'doc', label: 'Searching Docs...' }
+    ];
+
+    if (enableSearchGrounding) {
+      initialCitations.push({ type: 'web', label: 'Google Search Fact-Checking' });
+    }
 
     const aiThinkingMsg: ChatMessage = {
       id: `msg-ai-think-${Date.now()}`,
       role: 'assistant',
-      content: 'Searching documentation & analyzing dataset...',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      citations: [
-        { type: 'product', label: 'Product Knowledge' },
-        { type: 'doc', label: 'Searching Docs...' }
-      ]
+      content: enableSearchGrounding ? 'Performing Google Search fact-checking & analyzing dataset...' : 'Searching documentation & analyzing dataset...',
+      timestamp: formatTime(new Date()),
+      citations: initialCitations
     };
 
     // Capture current message history before state updates
@@ -2225,6 +2230,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
           persona: persona,
           image: image,
           thinkingMode: thinkingMode,
+          enableSearchGrounding: enableSearchGrounding,
           userContext: {
             uid: user?.uid,
             email: user?.email,

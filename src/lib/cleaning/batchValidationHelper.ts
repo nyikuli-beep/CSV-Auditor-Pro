@@ -1,4 +1,5 @@
 import { CSVFile, AuditIssue, CustomValidationRule, Severity } from '../../types';
+import { formatLocalTimestamp } from '../timeService';
 import { runSecurityAndStructureScan, parseCSVContentRFC4180 } from '../csvSecurityValidator';
 import { detectCSVFormats } from '../formatDetector';
 
@@ -276,7 +277,7 @@ export function validateRawCSVContent(
     id: `uploaded-file-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
     name: fileName,
     size: fileSize,
-    uploadedAt: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    uploadedAt: formatLocalTimestamp(new Date(), { includeDate: true }),
     status: 'completed',
     score: score,
     headers: headers,

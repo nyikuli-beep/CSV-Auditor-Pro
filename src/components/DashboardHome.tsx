@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useTime } from '../context/TimeContext';
 import { CSVFile, AuditActivity, SlotRequest } from '../types';
 import { formatTimeRemaining } from '../lib/retentionService';
 import { useAuth } from '../hooks/useAuth';
@@ -524,29 +525,31 @@ export default function DashboardHome({
     return '';
   }, [authUser, currentUserEmail]);
 
-  // Determine time-based greeting prefix and icon
+  const { timeData } = useTime();
+
+  // Determine time-based greeting prefix and icon based on user's local timezone
   const greetingData = useMemo(() => {
-    const hour = new Date().getHours();
-    if (hour >= 5 && hour < 12) {
+    const prefix = timeData.greeting;
+    if (prefix === 'Good Morning') {
       return {
-        prefix: 'Good Morning',
+        prefix,
         Icon: Sunrise,
         iconColor: 'text-amber-500'
       };
-    } else if (hour >= 12 && hour < 18) {
+    } else if (prefix === 'Good Afternoon') {
       return {
-        prefix: 'Good Afternoon',
+        prefix,
         Icon: Sun,
         iconColor: 'text-amber-500'
       };
     } else {
       return {
-        prefix: 'Good Evening',
+        prefix,
         Icon: Moon,
         iconColor: 'text-indigo-400'
       };
     }
-  }, []);
+  }, [timeData.greeting]);
 
   // Construct full greeting title
   const greetingTitle = useMemo(() => {
@@ -582,9 +585,17 @@ export default function DashboardHome({
         className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
       >
         <div className="space-y-1.5">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-[#2563EB] dark:text-[#60A5FA] border border-blue-500/20">
-            <Building2 className="w-3.5 h-3.5 text-[#2563EB] dark:text-[#60A5FA]" />
-            <span>Audit Workspace</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-[#2563EB] dark:text-[#60A5FA] border border-blue-500/20">
+              <Building2 className="w-3.5 h-3.5 text-[#2563EB] dark:text-[#60A5FA]" />
+              <span>Audit Workspace</span>
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-xs" title={`Local System Time (${timeData.timeZone})`}>
+              <Clock className="w-3 h-3 text-blue-500" />
+              <span>{timeData.dayName}, {timeData.dateString}</span>
+              <span className="text-blue-600 dark:text-blue-400 font-extrabold">{timeData.timeString}</span>
+              <span className="px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-500 text-[9px] uppercase font-bold">{timeData.timeZoneShort || timeData.timeZone}</span>
+            </div>
           </div>
           <h1 className={`text-2xl sm:text-3xl font-extrabold tracking-tight flex items-center gap-2 flex-wrap ${
             isDarkMode ? 'text-white' : 'text-slate-900'

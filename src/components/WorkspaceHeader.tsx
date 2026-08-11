@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useTime } from '../context/TimeContext';
 import {
   Menu,
   Clock,
@@ -66,6 +67,9 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
+
+  const { timeData } = useTime();
+  const displayClock = timeData.timeString || currentTime;
 
   const notificationsRef = useRef<HTMLDivElement>(null);
   const overflowRef = useRef<HTMLDivElement>(null);
@@ -166,9 +170,15 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
       <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
         
         {/* Desktop-Only: System Clock */}
-        <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 font-mono text-[11px] text-slate-500 dark:text-slate-400">
+        <div 
+          className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 font-mono text-[11px] text-slate-500 dark:text-slate-400"
+          title={`${timeData.dayName}, ${timeData.dateString} (${timeData.timeZone})`}
+        >
           <Clock className="w-3.5 h-3.5 text-blue-500" />
-          <span className="font-bold">{currentTime}</span>
+          <span className="font-bold">{displayClock}</span>
+          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 uppercase">
+            {timeData.timeZoneShort || timeData.timeZone}
+          </span>
         </div>
 
         {/* Desktop & Tablet: Interactive Tour Button */}
@@ -483,11 +493,16 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
                   </button>
                 )}
 
-                <div className="pt-1 mt-1 border-t border-slate-200 dark:border-slate-800 text-[10px] text-slate-400 px-3 py-1 font-mono flex items-center justify-between">
-                  <span className="flex items-center gap-1">
-                    <Clock className="w-3 h-3 text-blue-500" /> System Time:
-                  </span>
-                  <span className="font-bold text-slate-700 dark:text-slate-300">{currentTime}</span>
+                <div className="pt-1.5 mt-1 border-t border-slate-200 dark:border-slate-800 text-[10px] text-slate-400 px-3 py-1 font-mono flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-blue-500" /> System Time:
+                    </span>
+                    <span className="font-bold text-slate-700 dark:text-slate-300">{displayClock}</span>
+                  </div>
+                  <div className="text-[9px] text-right text-blue-500 dark:text-blue-400 font-semibold truncate">
+                    {timeData.dayName}, {timeData.dateString} ({timeData.timeZone})
+                  </div>
                 </div>
               </motion.div>
             )}

@@ -25,7 +25,8 @@ import {
   Bot,
   ShieldCheck,
   Zap,
-  Search
+  Search,
+  Globe
 } from 'lucide-react';
 import { CSVFile, ChatMessage } from '../types';
 
@@ -37,7 +38,8 @@ interface InsightsCenterProps {
     model?: string, 
     persona?: string, 
     image?: { data: string; mimeType: string } | null, 
-    thinkingMode?: boolean
+    thinkingMode?: boolean,
+    enableSearchGrounding?: boolean
   ) => void;
   isDarkMode: boolean;
   accentClass: string;
@@ -52,6 +54,7 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
   const [selectedModel, setSelectedModel] = useState<string>('gemini-3.5-flash');
   const [selectedPersona, setSelectedPersona] = useState<string>('auditor');
   const [thinkingMode, setThinkingMode] = useState<boolean>(false);
+  const [enableSearchGrounding, setEnableSearchGrounding] = useState<boolean>(false);
 
   // Multimodal (Image) State
   const [attachedImage, setAttachedImage] = useState<{ data: string; mimeType: string } | null>(null);
@@ -121,7 +124,8 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
       selectedModel,
       selectedPersona,
       currentImg,
-      currentThinking
+      currentThinking,
+      enableSearchGrounding
     );
     setLoading(false);
   };
@@ -368,7 +372,8 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
       selectedModel,
       selectedPersona,
       attachedImage,
-      thinkingMode
+      thinkingMode,
+      enableSearchGrounding
     );
     setLoading(false);
   };
@@ -415,6 +420,22 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
             <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (Complex/SQL)</option>
             <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Fast)</option>
           </select>
+
+          {/* Google Search Grounding Toggle */}
+          <div className={`flex items-center gap-2 border-l pl-3 ${isDarkMode ? 'border-slate-800/60' : 'border-slate-200'}`}>
+            <Globe className={`w-3.5 h-3.5 ${enableSearchGrounding ? 'text-cyan-400' : isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} />
+            <span className={`font-medium ${enableSearchGrounding ? 'text-cyan-400 font-bold' : isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+              Search Grounding
+            </span>
+            <button 
+              type="button"
+              onClick={() => setEnableSearchGrounding(!enableSearchGrounding)}
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${enableSearchGrounding ? 'bg-cyan-600' : 'bg-slate-700'}`}
+              title="Enable or disable web-based fact-checking for data analysis queries"
+            >
+              <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${enableSearchGrounding ? 'translate-x-4' : 'translate-x-0'}`} />
+            </button>
+          </div>
 
           {/* High Thinking Mode Toggle */}
           <div className={`flex items-center gap-2 border-l pl-3 ${isDarkMode ? 'border-slate-800/60' : 'border-slate-200'}`}>
@@ -624,12 +645,18 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
                   <p className={`text-[10px] mt-0.5 flex items-center gap-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-600'}`}>
                     <span>Engine:</span> 
                     <span className="font-mono font-bold text-blue-500 uppercase">
-                      {selectedModel} {thinkingMode && "(High Thinking)"}
+                      {selectedModel} {thinkingMode && "(High Thinking)"} {enableSearchGrounding && "(Search Grounded)"}
                     </span>
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {enableSearchGrounding && (
+                  <span className="px-2 py-0.5 text-[8px] font-bold uppercase rounded-md bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center gap-1">
+                    <Globe className="w-2.5 h-2.5 shrink-0" />
+                    Grounding ON
+                  </span>
+                )}
                 {thinkingMode && (
                   <span className="px-2 py-0.5 text-[8px] font-bold uppercase rounded-md bg-purple-500/10 text-purple-400 border border-purple-500/20 animate-pulse">
                     Thinking ON
@@ -695,12 +722,14 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
                                 c.type === 'doc' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
                                 c.type === 'dataset' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
                                 c.type === 'memory' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                                c.type === 'web' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' :
                                 'bg-purple-500/10 text-purple-400 border-purple-500/20'
                               }`}
                             >
                               {c.type === 'doc' && <FileSpreadsheet className="w-2.5 h-2.5 text-blue-400 shrink-0" />}
                               {c.type === 'dataset' && <Database className="w-2.5 h-2.5 text-emerald-400 shrink-0" />}
                               {c.type === 'memory' && <MessageSquare className="w-2.5 h-2.5 text-amber-400 shrink-0" />}
+                              {c.type === 'web' && <Globe className="w-2.5 h-2.5 text-cyan-400 shrink-0" />}
                               {c.type === 'product' && <Zap className="w-2.5 h-2.5 text-purple-400 shrink-0" />}
                               <span>{cleanLabel}</span>
                             </span>

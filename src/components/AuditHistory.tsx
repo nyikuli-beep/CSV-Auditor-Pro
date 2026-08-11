@@ -25,6 +25,7 @@ import {
 import JSZip from 'jszip';
 import { CSVFile } from '../types';
 import { formatTimeRemaining, getRetentionOptionDetail } from '../lib/retentionService';
+import { formatLocalTimestamp } from '../lib/timeService';
 
 interface AuditHistoryProps {
   files: CSVFile[];
@@ -407,7 +408,7 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
                         <FileSpreadsheet className={`w-4 h-4 shrink-0 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
                         <span className="truncate">{file.name}</span>
                       </td>
-                      <td className={`p-4 font-mono text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{file.uploadedAt}</td>
+                      <td className={`p-4 font-mono text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{formatLocalTimestamp(file.uploadedAt, { includeDate: true })}</td>
                       <td className={`p-4 font-mono text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                         {file.size > 1024 * 1024 
                           ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 

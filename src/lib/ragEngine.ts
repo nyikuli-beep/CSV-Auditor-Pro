@@ -175,6 +175,7 @@ export interface RagRequestOptions {
   model?: string;
   persona?: string;
   thinkingMode?: boolean;
+  enableSearchGrounding?: boolean;
   image?: { data: string; mimeType: string } | null;
 }
 
@@ -182,7 +183,7 @@ export interface RagResponse {
   text: string;
   intent: string;
   plainLanguageMode: boolean;
-  citations: Array<{ type: 'doc' | 'dataset' | 'memory' | 'product'; label: string }>;
+  citations: Array<{ type: 'doc' | 'dataset' | 'memory' | 'product' | 'web' | string; label: string }>;
   retrievedDocs: string[];
 }
 
@@ -471,7 +472,7 @@ export function buildDynamicRAGPrompt(
 ): {
   systemInstruction: string;
   fullPrompt: string;
-  citations: Array<{ type: 'doc' | 'dataset' | 'memory' | 'product'; label: string }>;
+  citations: Array<{ type: 'doc' | 'dataset' | 'memory' | 'product' | 'web' | string; label: string }>;
   intentAnalysis: IntentAnalysisResult;
   executedToolsResults: ToolResult[];
 } {
@@ -481,7 +482,7 @@ export function buildDynamicRAGPrompt(
 
   const intentAnalysis = detectUserIntent(prompt, hasActiveDataset, activeHeaders);
 
-  const citations: Array<{ type: 'doc' | 'dataset' | 'memory' | 'product'; label: string }> = [
+  const citations: Array<{ type: 'doc' | 'dataset' | 'memory' | 'product' | 'web' | string; label: string }> = [
     { type: 'product', label: 'Product Knowledge' }
   ];
 
@@ -525,6 +526,11 @@ export function buildDynamicRAGPrompt(
     systemInstruction += `\nRole Persona: PostgreSQL Database Architect. Focus on relational schemas, SQL DDLs, and database normalization.`;
   } else if (persona === 'analyst') {
     systemInstruction += `\nRole Persona: Business Intelligence Analyst. Focus on dataset trends, executive summaries, and business growth.`;
+  }
+
+  if (options.enableSearchGrounding) {
+    systemInstruction += `\nGoogle Search Grounding: ENABLED. You have active web search grounding enabled. Cross-reference real-world web data, current regulatory compliance standards, industry benchmarks, and factual information to verify your analysis.`;
+    citations.push({ type: 'web', label: 'Google Search Grounding' });
   }
 
   // Execute suggested backend tools deterministically if rows are available in datasetContext
@@ -743,15 +749,21 @@ export async function generateRAGResponseStream(
           };
         }
 
+        const config: any = {
+          systemInstruction,
+          temperature: 0.3,
+          responseMimeType: 'application/json',
+          responseSchema: STRUCTURED_RESPONSE_SCHEMA
+        };
+
+        if (options.enableSearchGrounding) {
+          config.tools = [{ googleSearch: {} }];
+        }
+
         const responseStream = await ai.models.generateContentStream({
           model: selectedModel,
           contents: contentsPayload,
-          config: {
-            systemInstruction,
-            temperature: 0.3,
-            responseMimeType: 'application/json',
-            responseSchema: STRUCTURED_RESPONSE_SCHEMA
-          }
+          config
         });
 
         let accumulatedJsonText = '';
@@ -919,15 +931,21 @@ export async function generateRAGResponse(
           };
         }
 
+        const config: any = {
+          systemInstruction,
+          temperature: 0.3,
+          responseMimeType: 'application/json',
+          responseSchema: STRUCTURED_RESPONSE_SCHEMA
+        };
+
+        if (options.enableSearchGrounding) {
+          config.tools = [{ googleSearch: {} }];
+        }
+
         const response = await ai.models.generateContent({
           model: selectedModel,
           contents: contentsPayload,
-          config: {
-            systemInstruction,
-            temperature: 0.3,
-            responseMimeType: 'application/json',
-            responseSchema: STRUCTURED_RESPONSE_SCHEMA
-          }
+          config
         });
 
         const rawText = response.text || '';

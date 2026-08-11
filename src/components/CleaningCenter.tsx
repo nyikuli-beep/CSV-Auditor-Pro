@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
+import { formatLocalTimestamp } from '../lib/timeService';
 import { 
   PieChart, 
   Pie, 
@@ -2051,7 +2052,7 @@ export default function CleaningCenter({
       targetCol: finalTargetCol,
       dataType: type1,
       delimiterLabel: mergeDelimiter === 'custom' ? customMergeDelimiter : mergeDelimiter,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      timestamp: formatLocalTimestamp(new Date(), { includeSeconds: true }),
       keepOriginalCols,
       preMergeRows,
       preMergeHeaders

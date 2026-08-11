@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useTime } from '../context/TimeContext';
 import { 
   Settings, 
   Palette, 
   Key, 
   Bell, 
   Globe, 
+  Clock,
   Lock, 
   User, 
   CheckCircle2, 
@@ -84,6 +86,7 @@ export default function SettingsView({
   currentUser,
   onOpenProfileModal
 }: SettingsViewProps) {
+  const { timeData, use24Hour, setUse24Hour } = useTime();
   const [tempApiKey, setTempApiKey] = useState(settings.apiKey || '••••••••••••••••••••••••••••••••');
   const [showKey, setShowKey] = useState(false);
   const [apiKeyTesting, setApiKeyTesting] = useState(false);
@@ -607,8 +610,43 @@ export default function SettingsView({
 
           {/* Locale & Language settings */}
           <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
-            <h3 className={`font-bold text-sm uppercase tracking-wider mb-4 flex items-center gap-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}><Globe className="w-4 h-4 text-blue-500" /> Locale Preferences</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <h3 className={`font-bold text-sm uppercase tracking-wider mb-4 flex items-center justify-between gap-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
+              <span className="flex items-center gap-2">
+                <Globe className="w-4 h-4 text-blue-500" /> Locale & Timezone Preferences
+              </span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500 font-bold">
+                Auto-Synced
+              </span>
+            </h3>
+
+            {/* Live System Time Preview Banner */}
+            <div className={`p-4 rounded-xl border mb-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
+              isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-slate-50 border-slate-200 text-slate-800'
+            }`}>
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-500 shrink-0">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-slate-500 dark:text-slate-400 font-mono">
+                    {timeData.dayName}, {timeData.dateString}
+                  </div>
+                  <div className="text-lg font-extrabold font-mono text-blue-600 dark:text-blue-400">
+                    {timeData.timeString}
+                  </div>
+                </div>
+              </div>
+              <div className="text-left sm:text-right font-mono text-[11px]">
+                <div className="font-bold text-slate-700 dark:text-slate-300">
+                  {timeData.timeZone}
+                </div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                  Detected Local Time Zone
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className={`block text-[10px] font-bold mb-1.5 uppercase tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Language</label>
                 <select
@@ -622,19 +660,51 @@ export default function SettingsView({
                   <option value="ja">日本語 (Japanese)</option>
                 </select>
               </div>
+
               <div>
                 <label className={`block text-[10px] font-bold mb-1.5 uppercase tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Time Zone</label>
                 <select
-                  value={settings.timezone}
+                  value={settings.timezone || 'auto'}
                   onChange={(e) => onUpdateSettings({ ...settings, timezone: e.target.value })}
                   className={`w-full px-3.5 py-2.5 rounded-xl text-xs border focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-950'}`}
                 >
-                  <option value="UTC-8">Pacific Time (PT)</option>
-                  <option value="UTC">Coordinated Universal (UTC)</option>
-                  <option value="UTC+1">Central European (CET)</option>
-                  <option value="UTC+9">Japan Standard (JST)</option>
+                  <option value="auto">Auto-detect Local Timezone ({timeData.timeZone})</option>
+                  <option value="Africa/Nairobi">Africa/Nairobi (East Africa Time - EAT)</option>
+                  <option value="Europe/London">Europe/London (GMT / BST)</option>
+                  <option value="America/New_York">America/New_York (Eastern Time - EST/EDT)</option>
+                  <option value="America/Los_Angeles">America/Los_Angeles (Pacific Time - PST/PDT)</option>
+                  <option value="Europe/Paris">Europe/Paris (Central European Time - CET)</option>
+                  <option value="Asia/Tokyo">Asia/Tokyo (Japan Standard Time - JST)</option>
+                  <option value="Asia/Dubai">Asia/Dubai (Gulf Standard Time - GST)</option>
+                  <option value="Australia/Sydney">Australia/Sydney (Australian Eastern Time - AEST)</option>
+                  <option value="UTC">UTC (Coordinated Universal Time)</option>
                 </select>
               </div>
+            </div>
+
+            {/* Time Format Toggle */}
+            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <div>
+                <div className={`text-xs font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                  24-Hour Clock Format
+                </div>
+                <div className={`text-[11px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                  Display time as {use24Hour ? '14:30:00' : '02:30:00 PM'} across all audit reports and activity logs
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setUse24Hour(!use24Hour)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold border cursor-pointer transition-all ${
+                  use24Hour 
+                    ? 'bg-blue-600 border-blue-500 text-white shadow-sm' 
+                    : isDarkMode 
+                      ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' 
+                      : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                {use24Hour ? '24h Enabled' : '12h AM/PM'}
+              </button>
             </div>
           </div>
 
