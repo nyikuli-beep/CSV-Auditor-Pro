@@ -39,6 +39,8 @@ interface AuditHistoryProps {
 export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavigate, isDarkMode, accentClass }: AuditHistoryProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'failed'>('all');
+  const [datePreset, setDatePreset] = useState<'all' | 'today' | '7days' | '30days'>('all');
+  const [selectedDate, setSelectedDate] = useState('');
   const [sortBy, setSortBy] = useState<'date' | 'name' | 'score'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -49,11 +51,77 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
   const [isBatchProcessing, setIsBatchProcessing] = useState(false);
   const [batchActionToast, setBatchActionToast] = useState<string | null>(null);
 
-  // Handle Search & Filter
+  // Handle Search & Filter by Name OR Upload Date
   const filteredFiles = files.filter(file => {
-    const matchesSearch = file.name.toLowerCase().includes(searchQuery.toLowerCase());
+    // 1. Text Search Query (checks filename AND upload date formats)
+    const q = searchQuery.trim().toLowerCase();
+    let matchesSearch = true;
+
+    if (q) {
+      // Check file name match
+      const nameMatch = file.name.toLowerCase().includes(q);
+
+      // Check upload date matches
+      const rawUploadedAt = String(file.uploadedAt || '').toLowerCase();
+      const rawDateMatch = rawUploadedAt.includes(q);
+
+      const formattedDate = formatLocalTimestamp(file.uploadedAt, { includeDate: true }).toLowerCase();
+      const formattedDateMatch = formattedDate.includes(q);
+
+      const d = new Date(file.uploadedAt);
+      let dateMatches = false;
+      if (!isNaN(d.getTime())) {
+        const isoString = d.toISOString().toLowerCase();
+        const isoDatePart = isoString.split('T')[0]; // e.g. 2026-08-11
+        const localeString = d.toLocaleDateString().toLowerCase();
+        const monthLong = d.toLocaleDateString('en-US', { month: 'long' }).toLowerCase();
+        const monthShort = d.toLocaleDateString('en-US', { month: 'short' }).toLowerCase();
+        const yearStr = d.getFullYear().toString();
+
+        dateMatches = isoString.includes(q) ||
+          isoDatePart.includes(q) ||
+          localeString.includes(q) ||
+          monthLong.includes(q) ||
+          monthShort.includes(q) ||
+          (q.length >= 4 && yearStr.includes(q));
+      }
+
+      matchesSearch = nameMatch || rawDateMatch || formattedDateMatch || dateMatches;
+    }
+
+    // 2. Exact Date Picker Filter (YYYY-MM-DD)
+    let matchesSelectedDate = true;
+    if (selectedDate) {
+      const fileDate = new Date(file.uploadedAt);
+      if (!isNaN(fileDate.getTime())) {
+        const fileIsoDate = fileDate.toISOString().split('T')[0];
+        matchesSelectedDate = fileIsoDate === selectedDate;
+      } else {
+        matchesSelectedDate = false;
+      }
+    }
+
+    // 3. Quick Date Range Preset Filter
+    let matchesDatePreset = true;
+    if (datePreset !== 'all') {
+      const fileTime = new Date(file.uploadedAt).getTime();
+      const now = Date.now();
+      if (datePreset === 'today') {
+        const todayStart = new Date().setHours(0, 0, 0, 0);
+        matchesDatePreset = fileTime >= todayStart;
+      } else if (datePreset === '7days') {
+        const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+        matchesDatePreset = fileTime >= sevenDaysAgo;
+      } else if (datePreset === '30days') {
+        const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+        matchesDatePreset = fileTime >= thirtyDaysAgo;
+      }
+    }
+
+    // 4. Status Filter
     const matchesStatus = statusFilter === 'all' || file.status === statusFilter;
-    return matchesSearch && matchesStatus;
+
+    return matchesSearch && matchesSelectedDate && matchesDatePreset && matchesStatus;
   });
 
   // Handle Sort
@@ -262,13 +330,13 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
       </AnimatePresence>
 
       {/* Toolbar controls */}
-      <div className={`p-4 rounded-2xl border flex flex-col md:flex-row gap-4 items-center justify-between ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
-        {/* Search bar */}
-        <div className="relative w-full md:w-80">
+      <div className={`p-4 rounded-2xl border flex flex-col lg:flex-row gap-4 items-stretch lg:items-center justify-between ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
+        {/* Search bar for File Name OR Upload Date */}
+        <div className="relative flex-1 min-w-[260px]">
           <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} />
           <input 
             type="text" 
-            placeholder="Search files by filename..." 
+            placeholder="Search files by name or upload date (e.g. sales, 2026-08-11, Aug)..." 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className={`w-full pl-9 ${searchQuery ? 'pr-9' : 'pr-4'} py-2.5 rounded-xl text-xs border focus:outline-none focus:ring-1 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500' : 'bg-white border-slate-200 text-slate-900 focus:border-blue-600'}`}
@@ -280,7 +348,7 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
               className={`absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded-full transition-colors cursor-pointer ${
                 isDarkMode ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
               }`}
-              title="Clear filename search"
+              title="Clear search query"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -288,14 +356,42 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
         </div>
 
         {/* Filters and Sort triggers */}
-        <div className="flex gap-2 w-full md:w-auto items-center text-xs flex-wrap">
-          {searchQuery && (
-            <span className={`text-[11px] font-mono font-medium px-2.5 py-1 rounded-lg border ${
-              isDarkMode ? 'bg-blue-950/40 border-blue-800/60 text-blue-300' : 'bg-blue-50 border-blue-200 text-blue-700'
-            }`}>
-              Showing {sortedFiles.length} of {files.length} files
-            </span>
-          )}
+        <div className="flex gap-2 w-full lg:w-auto items-center text-xs flex-wrap">
+          {/* Specific Upload Date Picker Filter */}
+          <div className="relative flex items-center">
+            <Calendar className={`absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} />
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              title="Filter by exact upload date"
+              className={`pl-8 pr-7 py-2 rounded-xl border focus:outline-none text-xs font-medium cursor-pointer ${
+                isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'
+              }`}
+            />
+            {selectedDate && (
+              <button
+                type="button"
+                onClick={() => setSelectedDate('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 cursor-pointer"
+                title="Clear date filter"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+
+          {/* Upload Date Range Preset */}
+          <select 
+            value={datePreset}
+            onChange={(e) => setDatePreset(e.target.value as any)}
+            className={`px-3 py-2 rounded-xl border focus:outline-none font-semibold cursor-pointer ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'}`}
+          >
+            <option value="all" className={isDarkMode ? 'bg-slate-950 text-slate-200' : 'bg-white text-slate-800'}>All Upload Dates</option>
+            <option value="today" className={isDarkMode ? 'bg-slate-950 text-slate-200' : 'bg-white text-slate-800'}>Uploaded Today</option>
+            <option value="7days" className={isDarkMode ? 'bg-slate-950 text-slate-200' : 'bg-white text-slate-800'}>Last 7 Days</option>
+            <option value="30days" className={isDarkMode ? 'bg-slate-950 text-slate-200' : 'bg-white text-slate-800'}>Last 30 Days</option>
+          </select>
 
           {/* Status filter */}
           <select 
@@ -308,7 +404,7 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
             <option value="failed" className={isDarkMode ? 'bg-slate-950 text-slate-200' : 'bg-white text-slate-800'}>Failed</option>
           </select>
 
-          {/* Sort Button */}
+          {/* Sort Buttons */}
           <button 
             onClick={() => toggleSort('score')}
             className={`px-3 py-2 rounded-xl border flex items-center gap-1.5 font-semibold transition-all cursor-pointer ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200 hover:bg-slate-800/40' : 'bg-white border-slate-200 text-slate-800 hover:bg-slate-100'}`}
@@ -322,8 +418,36 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
           >
             <ArrowUpDown className={`w-3.5 h-3.5 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} /> Sort Date
           </button>
+
+          {(searchQuery || selectedDate || datePreset !== 'all' || statusFilter !== 'all') && (
+            <button
+              onClick={() => {
+                setSearchQuery('');
+                setSelectedDate('');
+                setDatePreset('all');
+                setStatusFilter('all');
+              }}
+              className="px-2.5 py-2 rounded-xl text-xs font-semibold text-rose-600 dark:text-rose-400 hover:underline cursor-pointer flex items-center gap-1"
+            >
+              <X className="w-3.5 h-3.5" /> Reset Filters
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Active Filter Indicator Tag */}
+      {(searchQuery || selectedDate || datePreset !== 'all' || statusFilter !== 'all') && (
+        <div className="flex items-center gap-2 text-xs font-mono">
+          <span className={`px-3 py-1 rounded-lg border font-semibold flex items-center gap-1.5 ${
+            isDarkMode ? 'bg-blue-950/40 border-blue-800/60 text-blue-300' : 'bg-blue-50 border-blue-200 text-blue-700'
+          }`}>
+            <span>Showing {sortedFiles.length} of {files.length} archived files</span>
+            {searchQuery && <span className="opacity-80">| Search: "{searchQuery}"</span>}
+            {selectedDate && <span className="opacity-80">| Date: {selectedDate}</span>}
+            {datePreset !== 'all' && <span className="opacity-80">| Preset: {datePreset}</span>}
+          </span>
+        </div>
+      )}
 
       {/* History log list table */}
       <div className={`p-6 rounded-3xl border overflow-hidden relative ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80 shadow-2xl shadow-blue-500/5' : 'bg-white border-slate-200 shadow-sm'}`}>
@@ -363,18 +487,27 @@ export default function AuditHistory({ files, onSelectFile, onDeleteFile, onNavi
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Search className={`w-8 h-8 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} />
                       <p className={`font-bold text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
-                        {searchQuery ? `No CSV files matching "${searchQuery}"` : 'No spreadsheet records found'}
+                        {searchQuery || selectedDate || datePreset !== 'all' || statusFilter !== 'all' 
+                          ? `No CSV files matching filter criteria` 
+                          : 'No spreadsheet records found'}
                       </p>
                       <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                        {searchQuery ? 'Check for typos or clear your search query.' : 'Try adjusting your status filter or upload a CSV file.'}
+                        {searchQuery || selectedDate || datePreset !== 'all' || statusFilter !== 'all' 
+                          ? 'Try searching by a different name or upload date, or reset your active filters.' 
+                          : 'Try uploading a new CSV file to view audit history.'}
                       </p>
-                      {searchQuery && (
+                      {(searchQuery || selectedDate || datePreset !== 'all' || statusFilter !== 'all') && (
                         <button
                           type="button"
-                          onClick={() => setSearchQuery('')}
+                          onClick={() => {
+                            setSearchQuery('');
+                            setSelectedDate('');
+                            setDatePreset('all');
+                            setStatusFilter('all');
+                          }}
                           className="mt-2 px-3 py-1.5 rounded-xl bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 transition-colors cursor-pointer"
                         >
-                          Clear Filename Search
+                          Reset Search & Filters
                         </button>
                       )}
                     </div>

@@ -191,6 +191,40 @@ export interface RagResponse {
 
 // Full knowledge base documents compiled into structured chunks for RAG search
 export const KNOWLEDGE_BASE_CHUNKS: KnowledgeChunk[] = [
+  // Deterministic FAQ Chunks
+  {
+    id: 'security_privacy_ai_training',
+    sourceFile: 'security.md',
+    title: 'Data Privacy & AI Model Training Protection',
+    category: 'Security & Privacy',
+    content: 'CSV Auditor Pro protects customer data privacy through a strict local-first architecture. Key privacy principles:\n1. No Third-Party AI Model Training: Customer spreadsheet rows and uploaded CSV datasets are NEVER used to train third-party or Google AI models.\n2. Local Client-Side Processing: Spreadsheet parsing, deduplication, and cleaning occur locally inside browser memory—sensitive data rows are not stored on public servers or shared databases unless explicitly exported by you.\n3. Secure Server API Proxies: AI prompts and metadata are proxied via secure server-side API routes using environment variables, keeping API keys hidden from client web pages.\n4. Role-Based Access Controls: Enterprise workspace security is enforced through Role-Based Access Control (Owner, Admin, Editor, Viewer) and TLS 1.3 encrypted data transmission.',
+    keywords: ['privacy', 'protect', 'data privacy', 'ai model training', 'third-party', 'security_privacy_ai_training', 'training', 'model training', 'gdpr', 'security', 'prevent third-party']
+  },
+  {
+    id: 'data_cleaning_dedupe',
+    sourceFile: 'csv-cleaning.md',
+    title: 'Data Cleaning & Deduplication Routines',
+    category: 'CSV Cleaning',
+    content: 'Data cleaning routines in CSV Auditor Pro include:\n1. Deduplication: Detect exact row duplicates or match key columns (e.g., transaction_id) to retain the first occurrence, latest record, or flag for manual team review.\n2. Missing Value Imputation: Replace blank cells and null values with custom strings, statistical Mean (for normal numbers), Median (for skewed numbers), Mode (for categorical headers), or purge incomplete records.\n3. Text & ISO Normalization: Trim whitespace, convert text casing (UPPER/lower/Title), and format dates to YYYY-MM-DD ISO standard.',
+    keywords: ['clean', 'cleaning', 'deduplication', 'imputation', 'blank cells', 'trim', 'casing', 'uppercase', 'date format', 'data_cleaning_dedupe']
+  },
+  {
+    id: 'non_technical_guide',
+    sourceFile: 'about.md',
+    title: 'Non-Technical Staff Guide to CSV Auditor Pro',
+    category: 'Product Guide',
+    content: 'CSV Auditor Pro is an automated spreadsheet spell-checker and quality auditor designed for non-technical staff. How it works:\n1. Safe Ingestion: Upload CSV, TSV, or XLSX files up to 50MB. Files are processed privately in browser memory.\n2. Automated Quality Score (0-100): Scans for duplicate entries, missing boxes, malformed dates, and unusual numbers.\n3. 1-Click Smart Cleaning: Single-click buttons automatically remove duplicates, fill empty boxes with defaults, and format dates.\n4. Structure Guard: Ensures spreadsheet columns match company standards.\n5. Exporting & Email Reports: Download clean files or send PDF compliance reports via email.',
+    keywords: ['non-technical', 'non technical', 'guide', 'non_technical_guide', 'explain how the app works']
+  },
+  {
+    id: 'schema_anomaly_detection',
+    sourceFile: 'schema-validation.md',
+    title: 'Schema Anomaly Detection & Drift',
+    category: 'Schema Validation',
+    content: 'Schema anomaly detection identifies header mismatches, missing required columns, data type drift (e.g., text in numeric fields), and structural irregularities. Schema Manager allows setting rules for String, Number, Date, and Regex patterns, generating PostgreSQL CREATE TABLE DDLs for clean integration.',
+    keywords: ['schema', 'anomaly', 'drift', 'schema_anomaly_detection']
+  },
+
   // about.md
   {
     id: 'about-overview',
@@ -427,9 +461,34 @@ export function detectLegacyUserIntent(prompt: string): { intent: string; plainL
 }
 
 /**
- * Keyword and semantic similarity scoring to retrieve top knowledge base chunks
+ * Keyword and semantic similarity scoring or deterministic ID lookup to retrieve top knowledge base chunks
  */
-export function retrieveKnowledgeChunks(prompt: string, limit: number = 4): KnowledgeChunk[] {
+export function retrieveKnowledgeChunks(
+  prompt: string,
+  options?: number | { knowledgeBaseId?: string; faqId?: string; intentCategory?: string; limit?: number },
+  limitArg: number = 4
+): KnowledgeChunk[] {
+  let knowledgeBaseId: string | undefined;
+  let limit = limitArg;
+
+  if (typeof options === 'number') {
+    limit = options;
+  } else if (options && typeof options === 'object') {
+    knowledgeBaseId = options.knowledgeBaseId || options.faqId;
+    if (options.limit) limit = options.limit;
+  }
+
+  // 1. Deterministic FAQ / KnowledgeBase ID lookup (Highest Priority)
+  if (knowledgeBaseId) {
+    const exactMatch = KNOWLEDGE_BASE_CHUNKS.find(
+      chunk => chunk.id === knowledgeBaseId || chunk.id.toLowerCase() === knowledgeBaseId.toLowerCase()
+    );
+    if (exactMatch) {
+      return [exactMatch];
+    }
+  }
+
+  // 2. Keyword & Semantic scoring
   const pWords = prompt.toLowerCase().split(/\W+/).filter(w => w.length > 2);
 
   const scored = KNOWLEDGE_BASE_CHUNKS.map(chunk => {
@@ -456,10 +515,17 @@ export function retrieveKnowledgeChunks(prompt: string, limit: number = 4): Know
   // Sort descending by score
   scored.sort((a, b) => b.score - a.score);
 
-  // Return top matches with positive score, or top 2 default if none matched strongly
+  // Return top matches with positive score
   const filtered = scored.filter(s => s.score > 0).map(s => s.chunk);
   if (filtered.length > 0) {
     return filtered.slice(0, limit);
+  }
+
+  // Fallback: If prompt explicitly asks about privacy or security, return the privacy chunk
+  const pLower = prompt.toLowerCase();
+  if (pLower.includes('privacy') || pLower.includes('security') || pLower.includes('model training') || pLower.includes('protect')) {
+    const secMatch = KNOWLEDGE_BASE_CHUNKS.find(c => c.id === 'security_privacy_ai_training');
+    if (secMatch) return [secMatch];
   }
 
   return [KNOWLEDGE_BASE_CHUNKS[0], KNOWLEDGE_BASE_CHUNKS[1]];
@@ -697,8 +763,20 @@ export async function generateRAGResponseStream(
   const selectedModel = selectGeminiModel(options);
   const { prompt } = options;
 
-  // Retrieve top relevant knowledge docs
-  const relevantDocs = retrieveKnowledgeChunks(prompt, 4);
+  const faqId = options.knowledgeBaseId;
+
+  // Retrieve top relevant knowledge docs (deterministic for FAQ ID)
+  const relevantDocs = retrieveKnowledgeChunks(prompt, { knowledgeBaseId: faqId, intentCategory: options.intentCategory, limit: 4 });
+  const selectedKnowledgeBaseEntry = relevantDocs[0];
+
+  // Debugging requirement: Log FAQ routing details
+  console.log({
+    faqId,
+    question: prompt,
+    selectedKnowledgeBaseEntry: selectedKnowledgeBaseEntry ? { id: selectedKnowledgeBaseEntry.id, title: selectedKnowledgeBaseEntry.title } : null,
+    responseSource: faqId ? 'deterministic_faq_id' : 'semantic_rag_search'
+  });
+
   const { systemInstruction, fullPrompt, citations, intentAnalysis, executedToolsResults } = buildDynamicRAGPrompt(options, relevantDocs);
   const docNames = relevantDocs.map(d => d.sourceFile);
 
@@ -716,8 +794,10 @@ export async function generateRAGResponseStream(
     executedTools: executedToolsResults.map(r => r.toolName)
   });
 
-  // Check In-Memory Cache first
-  const cacheKey = `stream_${selectedModel}_${prompt.trim().toLowerCase()}_${options.datasetContext?.fileName || 'nofile'}_${options.persona || 'auditor'}`;
+  // Check In-Memory Cache first (include faqId if present to avoid cross-contamination)
+  const cacheKey = faqId
+    ? `faq_${faqId}_${options.datasetContext?.fileName || 'nofile'}`
+    : `stream_${selectedModel}_${prompt.trim().toLowerCase()}_${options.datasetContext?.fileName || 'nofile'}_${options.persona || 'auditor'}`;
   const cachedData = getCachedResponse(cacheKey);
   if (cachedData) {
     logAIEngineEvent({
@@ -839,7 +919,12 @@ export async function generateRAGResponseStream(
   const docSummary = relevantDocs.map(d => `**${d.title}**: ${d.content}`).join('\n\n');
   let fallbackAnswer = '';
 
-  if (intentAnalysis.category === 'APP_EXPLANATION') {
+  if (faqId && selectedKnowledgeBaseEntry) {
+    fallbackAnswer = `### ${selectedKnowledgeBaseEntry.title}\n\n${selectedKnowledgeBaseEntry.content}`;
+  } else if (prompt.toLowerCase().includes('privacy') || prompt.toLowerCase().includes('third-party') || prompt.toLowerCase().includes('model training')) {
+    const secChunk = KNOWLEDGE_BASE_CHUNKS.find(c => c.id === 'security_privacy_ai_training');
+    fallbackAnswer = `### ${secChunk?.title || 'Data Privacy Protection'}\n\n${secChunk?.content}`;
+  } else if (intentAnalysis.category === 'APP_EXPLANATION') {
     fallbackAnswer = `### How CSV Auditor Pro Works (Simple Non-Technical Guide)\n\nThink of **CSV Auditor Pro** as an automated spell-checker and quality auditor for your company's spreadsheets!\n\nHere is how the application operates in simple, step-by-step terms:\n\n1. **Safe Private Upload**: You drag and drop or upload your CSV, TSV, or Excel files (up to 50MB). The file is processed directly inside your web browser—your sensitive company rows are never saved on public servers.\n\n2. **Automated Health Check**: The engine instantly scans every row and column for 15+ data health errors (like duplicate records, blank cells, invalid date formats, and strange numerical outliers) and calculates an overall **0-100 Quality Score**.\n\n3. **1-Click Smart Cleaning**: Instead of manually editing thousands of spreadsheet cells, you click simple buttons to automatically remove duplicates, fill empty boxes with defaults, clean up messy text, and format dates consistently.\n\n4. **Schema & Structure Guard**: Verify that incoming spreadsheets match your team's required field names and data types before importing them into company databases.\n\n5. **Sharing & Compliance Reports**: Export clean spreadsheets or generate executive PDF compliance reports to send to managers and teammates.\n\n**Key Takeaway**: Non-technical staff can clean and audit complex spreadsheets in minutes without writing Excel formulas or programming code!`;
   } else if (intentAnalysis.category === 'CSV_ANALYSIS' && options.datasetContext?.fileName) {
     const ds = options.datasetContext;
@@ -891,11 +976,24 @@ export async function generateRAGResponse(
   const intent = intentAnalysis.category;
   const plainLanguageMode = false;
 
-  const relevantDocs = retrieveKnowledgeChunks(prompt, 4);
+  const faqId = options.knowledgeBaseId;
+  const relevantDocs = retrieveKnowledgeChunks(prompt, { knowledgeBaseId: faqId, intentCategory: options.intentCategory, limit: 4 });
+  const selectedKnowledgeBaseEntry = relevantDocs[0];
+
+  // Debugging requirement: Log FAQ routing details
+  console.log({
+    faqId,
+    question: prompt,
+    selectedKnowledgeBaseEntry: selectedKnowledgeBaseEntry ? { id: selectedKnowledgeBaseEntry.id, title: selectedKnowledgeBaseEntry.title } : null,
+    responseSource: faqId ? 'deterministic_faq_id' : 'semantic_rag_search'
+  });
+
   const { systemInstruction, fullPrompt, citations } = buildDynamicRAGPrompt(options, relevantDocs);
   const docNames = relevantDocs.map(d => d.sourceFile);
 
-  const cacheKey = `sync_${selectedModel}_${prompt.trim().toLowerCase()}_${options.datasetContext?.fileName || 'nofile'}_${options.persona || 'auditor'}`;
+  const cacheKey = faqId
+    ? `faq_sync_${faqId}_${options.datasetContext?.fileName || 'nofile'}`
+    : `sync_${selectedModel}_${prompt.trim().toLowerCase()}_${options.datasetContext?.fileName || 'nofile'}_${options.persona || 'auditor'}`;
   const cachedData = getCachedResponse(cacheKey);
   if (cachedData) {
     logAIEngineEvent({
@@ -1018,7 +1116,12 @@ export async function generateRAGResponse(
   const docSummary = relevantDocs.map(d => `**${d.title}**: ${d.content}`).join('\n\n');
   let fallbackAnswer = `Based on CSV Auditor Pro product documentation and your workspace context:\n\n${docSummary}`;
 
-  if (intent === 'APP_EXPLANATION') {
+  if (faqId && selectedKnowledgeBaseEntry) {
+    fallbackAnswer = `### ${selectedKnowledgeBaseEntry.title}\n\n${selectedKnowledgeBaseEntry.content}`;
+  } else if (prompt.toLowerCase().includes('privacy') || prompt.toLowerCase().includes('third-party') || prompt.toLowerCase().includes('model training')) {
+    const secChunk = KNOWLEDGE_BASE_CHUNKS.find(c => c.id === 'security_privacy_ai_training');
+    fallbackAnswer = `### ${secChunk?.title || 'Data Privacy Protection'}\n\n${secChunk?.content}`;
+  } else if (intent === 'APP_EXPLANATION') {
     fallbackAnswer = `### How CSV Auditor Pro Works (Simple Non-Technical Guide)\n\nThink of **CSV Auditor Pro** as an automated spell-checker and quality auditor for your company's spreadsheets!\n\nHere is how the application operates in simple, step-by-step terms:\n\n1. **Safe Private Upload**: You drag and drop or upload your CSV, TSV, or Excel files (up to 50MB). The file is processed directly inside your web browser—your sensitive company rows are never saved on public servers.\n\n2. **Automated Health Check**: The engine instantly scans every row and column for 15+ data health errors (like duplicate records, blank cells, invalid date formats, and strange numerical outliers) and calculates an overall **0-100 Quality Score**.\n\n3. **1-Click Smart Cleaning**: Instead of manually editing thousands of spreadsheet cells, you click simple buttons to automatically remove duplicates, fill empty boxes with defaults, clean up messy text, and format dates consistently.\n\n4. **Schema & Structure Guard**: Verify that incoming spreadsheets match your team's required field names and data types before importing them into company databases.\n\n5. **Sharing & Compliance Reports**: Export clean spreadsheets or generate executive PDF compliance reports to send to managers and teammates.\n\n**Key Takeaway**: Non-technical staff can clean and audit complex spreadsheets in minutes without writing Excel formulas or programming code!`;
   } else if (intent === 'CSV_ANALYSIS') {
     fallbackAnswer = `CSV Auditor Pro is an enterprise spreadsheet audit and data compliance platform providing automated anomaly detection, real-time data cleaning, schema validation, and team collaboration.`;

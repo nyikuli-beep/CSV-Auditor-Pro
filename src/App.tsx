@@ -2338,13 +2338,24 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
         }
       }
     } catch (err) {
-      // Product-grounded offline fallback
+      // Product-grounded offline fallback aware of knowledgeBaseId
+      let fallbackText = `CSV Auditor Pro Knowledge Base Response:\n\n`;
+      if (knowledgeBaseId === 'security_privacy_ai_training' || msgContent.toLowerCase().includes('privacy') || msgContent.toLowerCase().includes('third-party') || msgContent.toLowerCase().includes('model training')) {
+        fallbackText += `### Data Privacy & AI Model Training Protection\n\nCSV Auditor Pro protects customer data privacy through a strict local-first architecture.\n1. **No Third-Party AI Model Training**: Customer spreadsheet rows and uploaded CSV datasets are **NEVER** used to train third-party or Google AI models.\n2. **Local Client-Side Processing**: Spreadsheet parsing, deduplication, and cleaning occur locally inside browser memory—sensitive data rows are not stored on public servers or shared databases unless explicitly exported by you.\n3. **Secure Server API Proxies**: AI prompts and metadata are proxied via secure server-side API routes using environment variables, keeping API keys hidden from client web pages.`;
+      } else if (knowledgeBaseId === 'data_cleaning_dedupe') {
+        fallbackText += `### Data Cleaning & Deduplication Routines\n\n1. **Deduplication**: Detect exact row duplicates or match key columns to retain the first occurrence, latest record, or flag for manual review.\n2. **Missing Value Imputation**: Fill blank cells with Mean, Median, Mode, or custom defaults.\n3. **Normalization**: Trim whitespace, fix text casing, and convert dates to YYYY-MM-DD ISO standard.`;
+      } else if (knowledgeBaseId === 'non_technical_guide') {
+        fallbackText += `### Non-Technical Staff Guide to CSV Auditor Pro\n\nCSV Auditor Pro is an automated spreadsheet spell-checker and health auditor. It provides 1-click cleaning, duplicate removal, schema validation, and PDF compliance reporting.`;
+      } else {
+        fallbackText += `Regarding "${msgContent}": CSV Auditor Pro provides automated dataset auditing, deduplication, missing value imputation, ISO date formatting, and schema validation. You can run automated cleaning routines directly in the Cleaning Center tab or generate a PDF report!`;
+      }
+
       setTimeout(() => {
         setChatMessages(prev => prev.map(m => 
           m.id === aiThinkingMsg.id 
             ? { 
                 ...m, 
-                content: `CSV Auditor Pro Knowledge Base Response:\n\nRegarding "${msgContent}": CSV Auditor Pro provides automated dataset auditing, deduplication, missing value imputation, ISO date formatting, and schema validation. You can run automated cleaning routines directly in the Cleaning Center tab or generate a PDF report!`, 
+                content: fallbackText, 
                 citations: [
                   { type: 'product', label: 'Product Knowledge' },
                   { type: 'doc', label: 'Grounded Docs' }
@@ -2353,7 +2364,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
               }
             : m
         ));
-      }, 800);
+      }, 500);
     }
   };
 
