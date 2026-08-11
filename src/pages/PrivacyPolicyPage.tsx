@@ -27,11 +27,8 @@ import {
   ArrowUpRight
 } from 'lucide-react';
 
-// Configurable Constants (Easy domain swap for future custom domain)
-export const SITE_DOMAIN = "csv-auditor-pro.vercel.app";
-export const SITE_URL = "https://csv-auditor-pro.vercel.app";
-export const SUPPORT_EMAIL = "support@csvauditorpro.com";
-export const LAST_UPDATED_DATE = "August 11, 2026";
+import { SITE_DOMAIN, SITE_URL, SUPPORT_EMAIL, LAST_UPDATED_DATE } from '../constants/siteConfig';
+export { SITE_DOMAIN, SITE_URL, SUPPORT_EMAIL, LAST_UPDATED_DATE };
 
 interface SectionItem {
   id: string;

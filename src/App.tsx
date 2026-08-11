@@ -96,6 +96,26 @@ import { fetchWithRetry } from './lib/apiClient';
 // Import Mock Initial Data
 import { SAMPLE_MESSY_FILE, TEAM_MEMBERS, AUDIT_ACTIVITIES } from './sampleData';
 
+import CookieBanner, { getCookie, setCookie } from './components/CookieBanner';
+
+// Import Firebase integration
+import { auth, db, rtdb, OperationType, handleFirestoreError, setGmailAccessToken } from './firebase';
+import { ref, onValue, off, set } from 'firebase/database';
+import { onAuthStateChanged, signOut, getRedirectResult, GoogleAuthProvider } from 'firebase/auth';
+import { 
+  collection, 
+  doc, 
+  setDoc, 
+  getDoc,
+  getDocs,
+  deleteDoc,
+  onSnapshot, 
+  query, 
+  where, 
+  orderBy, 
+  limit 
+} from 'firebase/firestore';
+
 // Safe lazy import wrapper that auto-reloads if dynamic module fetch fails after long idle/deployment
 function safeLazy<T extends React.ComponentType<any>>(
   factory: () => Promise<{ default: T }>
@@ -127,7 +147,13 @@ const SettingsView = safeLazy(() => import('./components/SettingsView'));
 const AdminPanel = safeLazy(() => import('./components/AdminPanel'));
 const GmailCenter = safeLazy(() => import('./components/GmailCenter'));
 const SchemaManager = safeLazy(() => import('./components/SchemaManager'));
-import CookieBanner, { getCookie, setCookie } from './components/CookieBanner';
+
+// Public Legal & Information Pages (Lazy Loaded)
+const PrivacyPolicyPage = safeLazy(() => import('./pages/PrivacyPolicyPage'));
+const TermsOfServicePage = safeLazy(() => import('./pages/TermsOfServicePage'));
+const RefundPolicyPage = safeLazy(() => import('./pages/RefundPolicyPage'));
+const AboutPage = safeLazy(() => import('./pages/AboutPage'));
+const ContactPage = safeLazy(() => import('./pages/ContactPage'));
 
 // Loading spinner fallback optimized for instant render on 2GB RAM devices
 function LoadingSpinner({ message }: { message: string }) {
@@ -138,24 +164,6 @@ function LoadingSpinner({ message }: { message: string }) {
     </div>
   );
 }
-
-// Import Firebase integration
-import { auth, db, rtdb, OperationType, handleFirestoreError, setGmailAccessToken } from './firebase';
-import { ref, onValue, off, set } from 'firebase/database';
-import { onAuthStateChanged, signOut, getRedirectResult, GoogleAuthProvider } from 'firebase/auth';
-import { 
-  collection, 
-  doc, 
-  setDoc, 
-  getDoc,
-  getDocs,
-  deleteDoc,
-  onSnapshot, 
-  query, 
-  where, 
-  orderBy, 
-  limit 
-} from 'firebase/firestore';
 
 export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: string }) {
   const { user: authUser, logout } = useAuth();
@@ -3230,6 +3238,13 @@ export default function App() {
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/about-founder" element={<AboutFounderPage />} />
         <Route path="/founder" element={<AboutFounderPage />} />
+
+        {/* Public Legal & Informational Pages */}
+        <Route path="/privacy" element={<Suspense fallback={<LoadingSpinner message="Loading Privacy Policy..." />}><PrivacyPolicyPage /></Suspense>} />
+        <Route path="/terms" element={<Suspense fallback={<LoadingSpinner message="Loading Terms of Service..." />}><TermsOfServicePage /></Suspense>} />
+        <Route path="/refund-policy" element={<Suspense fallback={<LoadingSpinner message="Loading Refund Policy..." />}><RefundPolicyPage /></Suspense>} />
+        <Route path="/about" element={<Suspense fallback={<LoadingSpinner message="Loading About Us..." />}><AboutPage /></Suspense>} />
+        <Route path="/contact" element={<Suspense fallback={<LoadingSpinner message="Loading Contact Support..." />}><ContactPage /></Suspense>} />
 
         {/* Protected Workspace Routes */}
         <Route path="/dashboard" element={<ProtectedRoute><WorkspaceContent initialTab="dashboard" /></ProtectedRoute>} />
