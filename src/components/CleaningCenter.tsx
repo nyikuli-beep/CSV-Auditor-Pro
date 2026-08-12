@@ -66,6 +66,7 @@ import FuzzyDuplicateModal from './cleaning/FuzzyDuplicateModal';
 import AiCopilotDrawer from './cleaning/AiCopilotDrawer';
 import WorkflowManagerModal from './cleaning/WorkflowManagerModal';
 import AuditReportModal from './cleaning/AuditReportModal';
+import UnlockPremiumModal from './UnlockPremiumModal';
 
 import { profileDataset, FullDatasetProfile } from '../lib/cleaning/dataProfiler';
 import { scanSmartCorrections, predictMissingValues, CorrectionItem, PredictionItem } from '../lib/cleaning/aiCorrectionEngine';
@@ -111,6 +112,17 @@ export default function CleaningCenter({
 }: CleaningCenterProps) {
   const { plan, entitlements, openProCheckout, openEnterpriseModal } = useBilling();
   const isViewer = userRole === 'Viewer';
+
+  // Unlock Premium Modal State
+  const [isUnlockModalOpen, setIsUnlockModalOpen] = useState(false);
+  const [unlockFeatureName, setUnlockFeatureName] = useState('Pro Automated Actions');
+  const [unlockFeatureTier, setUnlockFeatureTier] = useState<'pro' | 'enterprise'>('pro');
+
+  const triggerUnlockModal = (featureName: string, tier: 'pro' | 'enterprise' = 'pro') => {
+    setUnlockFeatureName(featureName);
+    setUnlockFeatureTier(tier);
+    setIsUnlockModalOpen(true);
+  };
   
   // Batch processing state
   const [cleaningMode, setCleaningMode] = useState<'single' | 'batch'>(activeFile ? 'single' : 'batch');
@@ -1329,7 +1341,7 @@ export default function CleaningCenter({
   const handleRunProfiler = () => {
     if (!activeFile) return;
     if (plan === 'free') {
-      openProCheckout();
+      triggerUnlockModal('Data Profiler & Quality Scan', 'pro');
       return;
     }
     const profile = profileDataset(currentHeaders, currentRows);
@@ -1340,7 +1352,7 @@ export default function CleaningCenter({
   const handleRunAiCorrectionScan = () => {
     if (!activeFile) return;
     if (plan === 'free') {
-      openProCheckout();
+      triggerUnlockModal('AI Smart Data Correction', 'pro');
       return;
     }
     const items = scanSmartCorrections(currentHeaders, currentRows);
@@ -1367,7 +1379,7 @@ export default function CleaningCenter({
   const handleRunMissingPredictionScan = () => {
     if (!activeFile) return;
     if (plan === 'free') {
-      openProCheckout();
+      triggerUnlockModal('AI Missing Value Imputation', 'pro');
       return;
     }
     const preds = predictMissingValues(currentHeaders, currentRows);
@@ -1394,7 +1406,7 @@ export default function CleaningCenter({
   const handleRunFuzzyDuplicateScan = () => {
     if (!activeFile) return;
     if (plan === 'free') {
-      openProCheckout();
+      triggerUnlockModal('Fuzzy Duplicate Resolution', 'pro');
       return;
     }
     const pairs = findFuzzyDuplicates(currentHeaders, currentRows);
@@ -1430,41 +1442,73 @@ export default function CleaningCenter({
   };
 
   const handleRunInvisibleCharCleaner = () => {
+    if (plan === 'free') {
+      triggerUnlockModal('Invisible Character Cleaner', 'pro');
+      return;
+    }
     const res = cleanInvisibleCharacters(currentHeaders, currentRows);
     pushState(res.updatedRows, res.summary);
   };
 
   const handleRunUnicodeRepair = () => {
+    if (plan === 'free') {
+      triggerUnlockModal('Unicode Encoding Repair', 'pro');
+      return;
+    }
     const res = repairUnicodeEncoding(currentHeaders, currentRows);
     pushState(res.updatedRows, res.summary);
   };
 
   const handleRunHtmlClean = () => {
+    if (plan === 'free') {
+      triggerUnlockModal('HTML & Markdown Cleaner', 'pro');
+      return;
+    }
     const res = cleanHtmlAndMarkdown(currentHeaders, currentRows);
     pushState(res.updatedRows, res.summary);
   };
 
   const handleRunContactNormalize = () => {
+    if (plan === 'free') {
+      triggerUnlockModal('Contact Normalization', 'pro');
+      return;
+    }
     const res = normalizeContactInformation(currentHeaders, currentRows);
     pushState(res.updatedRows, res.summary);
   };
 
   const handleRunAddressStandardize = () => {
+    if (plan === 'free') {
+      triggerUnlockModal('Address Standardization', 'pro');
+      return;
+    }
     const res = standardizeAddresses(currentHeaders, currentRows);
     pushState(res.updatedRows, res.summary);
   };
 
   const handleRunNullNormalize = () => {
+    if (plan === 'free') {
+      triggerUnlockModal('Null Value Normalizer', 'pro');
+      return;
+    }
     const res = normalizeNulls(currentHeaders, currentRows);
     pushState(res.updatedRows, res.summary);
   };
 
   const handleRunHeaderStandardize = (style: 'database' | 'snake_case' | 'camelCase' | 'PascalCase') => {
+    if (plan === 'free') {
+      triggerUnlockModal('Header Naming Standardization', 'pro');
+      return;
+    }
     const res = standardizeHeaders(currentHeaders, currentRows, style);
     pushState(res.updatedRows, res.summary, res.updatedHeaders);
   };
 
   const handleRunFormulaProtect = () => {
+    if (plan === 'free') {
+      triggerUnlockModal('CSV Formula Injection Shield', 'pro');
+      return;
+    }
     const res = protectFormulaInjection(currentHeaders, currentRows);
     pushState(res.updatedRows, res.summary);
   };
@@ -1868,6 +1912,10 @@ export default function CleaningCenter({
   };
 
   const runColumnSplitter = () => {
+    if (plan === 'free') {
+      triggerUnlockModal('Conditional Column Splitter', 'pro');
+      return;
+    }
     if (!splitColumn) return;
     
     // Determine delimiter character
@@ -1992,6 +2040,10 @@ export default function CleaningCenter({
   };
 
   const runColumnMerger = () => {
+    if (plan === 'free') {
+      triggerUnlockModal('Column Merger', 'pro');
+      return;
+    }
     if (!mergeCol1 || !mergeCol2 || !targetMergedColName.trim()) return;
     if (mergeCol1 === mergeCol2) return;
 
@@ -2104,6 +2156,10 @@ export default function CleaningCenter({
   };
 
   const runValidationRule = () => {
+    if (plan === 'free') {
+      triggerUnlockModal('Smart Validation Engine', 'pro');
+      return;
+    }
     if (!validateColumn) return;
 
     let flagCount = 0;
@@ -2219,6 +2275,10 @@ export default function CleaningCenter({
   };
 
   const runPatternSanitization = () => {
+    if (plan === 'free') {
+      triggerUnlockModal('Pattern Sanitization Engine', 'pro');
+      return;
+    }
     if (!patternColumn) return;
 
     let regex: RegExp;
@@ -2726,7 +2786,7 @@ export default function CleaningCenter({
 
             {plan === 'free' && (
               <button
-                onClick={openProCheckout}
+                onClick={() => triggerUnlockModal('Pro Automated Workspace', 'pro')}
                 className="px-3 py-2.5 rounded-xl text-xs font-bold text-[#FFFFFF] bg-[#2563EB] hover:bg-[#1D4ED8] flex items-center gap-1.5 shadow-sm transition-all cursor-pointer shrink-0"
                 title="Upgrade plan to unlock AI data corrections, ML deduplication, and custom regex rules"
               >
@@ -2782,7 +2842,7 @@ export default function CleaningCenter({
 
           {plan === 'free' && (
             <button
-              onClick={openProCheckout}
+              onClick={() => triggerUnlockModal('Pro Automated Workspace', 'pro')}
               className="px-3.5 py-2 rounded-xl bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold flex items-center gap-1.5 shadow cursor-pointer transition-all whitespace-nowrap shrink-0"
               title="Upgrade to Pro to unlock AI corrections, ML deduplication, and custom regex rules"
             >
@@ -3038,10 +3098,20 @@ export default function CleaningCenter({
                 className={`w-full p-4 rounded-xl border text-left transition-all hover:scale-[1.01] flex gap-3.5 items-start cursor-pointer hover:bg-blue-500/5 hover:border-blue-500/30 group disabled:opacity-50 ${isDarkMode ? 'bg-slate-950/80 border-blue-500/30' : 'bg-blue-50/50 border-blue-200'}`}
               >
                 <div className="p-2 bg-blue-600 text-white rounded-lg shadow shrink-0"><Sparkles className="w-4 h-4" /></div>
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <h4 className="font-bold text-xs text-blue-500">AI Smart Data Correction</h4>
-                    <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">AI</span>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="font-bold text-xs text-blue-500">AI Smart Data Correction</h4>
+                      <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">AI Pro</span>
+                    </div>
+                    {plan === 'free' && (
+                      <span 
+                        onClick={(e) => { e.stopPropagation(); triggerUnlockModal('AI Smart Data Correction', 'pro'); }}
+                        className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1 shadow-xs cursor-pointer shrink-0"
+                      >
+                        <Zap className="w-3 h-3" /> Upgrade
+                      </span>
+                    )}
                   </div>
                   <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Spelling fixes, city/country standardizations, and abbreviation expansions.</p>
                 </div>
@@ -3054,10 +3124,20 @@ export default function CleaningCenter({
                 className={`w-full p-4 rounded-xl border text-left transition-all hover:scale-[1.01] flex gap-3.5 items-start cursor-pointer hover:bg-indigo-500/5 hover:border-indigo-500/30 group disabled:opacity-50 ${isDarkMode ? 'bg-slate-950/80 border-indigo-500/30' : 'bg-indigo-50/50 border-indigo-200'}`}
               >
                 <div className="p-2 bg-indigo-600 text-white rounded-lg shadow shrink-0"><Zap className="w-4 h-4" /></div>
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <h4 className="font-bold text-xs text-indigo-400">AI Missing Value Imputation</h4>
-                    <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">AI</span>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="font-bold text-xs text-indigo-400">AI Missing Value Imputation</h4>
+                      <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">AI Pro</span>
+                    </div>
+                    {plan === 'free' && (
+                      <span 
+                        onClick={(e) => { e.stopPropagation(); triggerUnlockModal('AI Missing Value Imputation', 'pro'); }}
+                        className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1 shadow-xs cursor-pointer shrink-0"
+                      >
+                        <Zap className="w-3 h-3" /> Upgrade
+                      </span>
+                    )}
                   </div>
                   <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Predicts missing metrics & categories from cross-column relational patterns.</p>
                 </div>
@@ -3070,10 +3150,20 @@ export default function CleaningCenter({
                 className={`w-full p-4 rounded-xl border text-left transition-all hover:scale-[1.01] flex gap-3.5 items-start cursor-pointer hover:bg-purple-500/5 hover:border-purple-500/30 group disabled:opacity-50 ${isDarkMode ? 'bg-slate-950/80 border-purple-500/30' : 'bg-purple-50/50 border-purple-200'}`}
               >
                 <div className="p-2 bg-purple-600 text-white rounded-lg shadow shrink-0"><GitMerge className="w-4 h-4" /></div>
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <h4 className="font-bold text-xs text-purple-400">Fuzzy Duplicate Resolution</h4>
-                    <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">ML</span>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="font-bold text-xs text-purple-400">Fuzzy Duplicate Resolution</h4>
+                      <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">ML Pro</span>
+                    </div>
+                    {plan === 'free' && (
+                      <span 
+                        onClick={(e) => { e.stopPropagation(); triggerUnlockModal('Fuzzy Duplicate Resolution', 'pro'); }}
+                        className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-1 shadow-xs cursor-pointer shrink-0"
+                      >
+                        <Zap className="w-3 h-3" /> Upgrade
+                      </span>
+                    )}
                   </div>
                   <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Similarity matching using Levenshtein distance & side-by-side merging.</p>
                 </div>
@@ -3086,8 +3176,21 @@ export default function CleaningCenter({
                 className={`w-full p-4 rounded-xl border text-left transition-all hover:scale-[1.01] flex gap-3.5 items-start cursor-pointer hover:bg-emerald-500/5 hover:border-emerald-500/30 group disabled:opacity-50 ${isDarkMode ? 'bg-slate-950/60 border-slate-800/80' : 'bg-slate-50 border-slate-100'}`}
               >
                 <div className="p-2 bg-emerald-500/10 text-emerald-500 rounded-lg group-hover:bg-emerald-500/20"><Code className="w-4 h-4" /></div>
-                <div>
-                  <h4 className="font-bold text-xs">Invisible Character Cleaner</h4>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="font-bold text-xs">Invisible Character Cleaner</h4>
+                      <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Pro</span>
+                    </div>
+                    {plan === 'free' && (
+                      <span 
+                        onClick={(e) => { e.stopPropagation(); triggerUnlockModal('Invisible Character Cleaner', 'pro'); }}
+                        className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 shadow-xs cursor-pointer shrink-0"
+                      >
+                        <Zap className="w-3 h-3" /> Upgrade
+                      </span>
+                    )}
+                  </div>
                   <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Strips zero-width spaces (\u200B), non-breaking spaces, and ASCII control codes.</p>
                 </div>
               </button>
@@ -3096,7 +3199,7 @@ export default function CleaningCenter({
               <button
                 onClick={() => {
                   if (plan !== 'enterprise') {
-                    openEnterpriseModal();
+                    triggerUnlockModal('PII Masking & Encryption', 'enterprise');
                     return;
                   }
                   const firstCol = currentHeaders[0] || '';
@@ -3107,8 +3210,21 @@ export default function CleaningCenter({
                 className={`w-full p-4 rounded-xl border text-left transition-all hover:scale-[1.01] flex gap-3.5 items-start cursor-pointer hover:bg-amber-500/5 hover:border-amber-500/30 group disabled:opacity-50 ${isDarkMode ? 'bg-slate-950/60 border-slate-800/80' : 'bg-slate-50 border-slate-100'}`}
               >
                 <div className="p-2 bg-amber-500/10 text-amber-500 rounded-lg group-hover:bg-amber-500/20"><Shield className="w-4 h-4" /></div>
-                <div>
-                  <h4 className="font-bold text-xs">PII Masking & Encryption</h4>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="font-bold text-xs">PII Masking & Encryption</h4>
+                      <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-amber-500/10 text-amber-500 border border-amber-500/20">Enterprise</span>
+                    </div>
+                    {plan !== 'enterprise' && (
+                      <span 
+                        onClick={(e) => { e.stopPropagation(); triggerUnlockModal('PII Masking & Encryption', 'enterprise'); }}
+                        className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-1 shadow-xs cursor-pointer shrink-0"
+                      >
+                        <Shield className="w-3 h-3" /> Upgrade
+                      </span>
+                    )}
+                  </div>
                   <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Protects emails, phone numbers, and SSNs for GDPR / HIPAA compliance.</p>
                 </div>
               </button>
@@ -3120,8 +3236,21 @@ export default function CleaningCenter({
                 className={`w-full p-4 rounded-xl border text-left transition-all hover:scale-[1.01] flex gap-3.5 items-start cursor-pointer hover:bg-rose-500/5 hover:border-rose-500/30 group disabled:opacity-50 ${isDarkMode ? 'bg-slate-950/60 border-slate-800/80' : 'bg-slate-50 border-slate-100'}`}
               >
                 <div className="p-2 bg-rose-500/10 text-rose-500 rounded-lg group-hover:bg-rose-500/20"><Lock className="w-4 h-4" /></div>
-                <div>
-                  <h4 className="font-bold text-xs">CSV Injection Shield</h4>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="font-bold text-xs">CSV Injection Shield</h4>
+                      <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-rose-500/10 text-rose-500 border border-rose-500/20">Pro</span>
+                    </div>
+                    {plan === 'free' && (
+                      <span 
+                        onClick={(e) => { e.stopPropagation(); triggerUnlockModal('CSV Injection Shield', 'pro'); }}
+                        className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1 shadow-xs cursor-pointer shrink-0"
+                      >
+                        <Zap className="w-3 h-3" /> Upgrade
+                      </span>
+                    )}
+                  </div>
                   <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Escapes executable cells starting with =, +, -, @ to block Excel exploit macros.</p>
                 </div>
               </button>
@@ -3133,8 +3262,11 @@ export default function CleaningCenter({
                 className={`w-full p-4 rounded-xl border text-left transition-all hover:scale-[1.01] flex gap-3.5 items-start cursor-pointer hover:bg-rose-500/5 hover:border-rose-500/30 group disabled:opacity-50 disabled:pointer-events-none ${isDarkMode ? 'bg-slate-950/60 border-slate-800/80' : 'bg-slate-50 border-slate-100'}`}
               >
                 <div className="p-2 bg-rose-500/10 text-rose-500 rounded-lg group-hover:bg-rose-500/20"><Trash2 className="w-4 h-4" /></div>
-                <div>
-                  <h4 className="font-bold text-xs">Remove Duplicate Records</h4>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <h4 className="font-bold text-xs">Remove Duplicate Records</h4>
+                    <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Free</span>
+                  </div>
                   <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Isolate unique rows by purging identical records in primary column sets.</p>
                 </div>
               </button>
@@ -3146,8 +3278,11 @@ export default function CleaningCenter({
                 className={`w-full p-4 rounded-xl border text-left transition-all hover:scale-[1.01] flex gap-3.5 items-start cursor-pointer hover:bg-blue-500/5 hover:border-blue-500/30 group disabled:opacity-50 disabled:pointer-events-none ${isDarkMode ? 'bg-slate-950/60 border-slate-800/80' : 'bg-slate-50 border-slate-100'}`}
               >
                 <div className="p-2 bg-blue-500/10 text-blue-500 rounded-lg group-hover:bg-blue-500/20"><Calendar className="w-4 h-4" /></div>
-                <div>
-                  <h4 className="font-bold text-xs">Standardize Date Formats</h4>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <h4 className="font-bold text-xs">Standardize Date Formats</h4>
+                    <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Free</span>
+                  </div>
                   <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Normalize messy dates (e.g. slashes/raw keys) into standard YYYY-MM-DD.</p>
                 </div>
               </button>
@@ -3159,8 +3294,11 @@ export default function CleaningCenter({
                 className={`w-full p-4 rounded-xl border text-left transition-all hover:scale-[1.01] flex gap-3.5 items-start cursor-pointer hover:bg-amber-500/5 hover:border-amber-500/30 group disabled:opacity-50 disabled:pointer-events-none ${isDarkMode ? 'bg-slate-950/60 border-slate-800/80' : 'bg-slate-50 border-slate-100'}`}
               >
                 <div className="p-2 bg-amber-500/10 text-amber-500 rounded-lg group-hover:bg-amber-500/20"><PenTool className="w-4 h-4" /></div>
-                <div>
-                  <h4 className="font-bold text-xs">Fill Missing Blank Cells</h4>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <h4 className="font-bold text-xs">Fill Missing Blank Cells</h4>
+                    <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Free</span>
+                  </div>
                   <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Impute empty metrics and categories with default placeholders securely.</p>
                 </div>
               </button>
@@ -3172,8 +3310,11 @@ export default function CleaningCenter({
                 className={`w-full p-4 rounded-xl border text-left transition-all hover:scale-[1.01] flex gap-3.5 items-start cursor-pointer hover:bg-emerald-500/5 hover:border-emerald-500/30 group disabled:opacity-50 disabled:pointer-events-none ${isDarkMode ? 'bg-slate-950/60 border-slate-800/80' : 'bg-slate-50 border-slate-100'}`}
               >
                 <div className="p-2 bg-emerald-500/10 text-emerald-500 rounded-lg group-hover:bg-emerald-500/20"><CheckCircle2 className="w-4 h-4" /></div>
-                <div>
-                  <h4 className="font-bold text-xs">Standardize Text Case</h4>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <h4 className="font-bold text-xs">Standardize Text Case</h4>
+                    <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Free</span>
+                  </div>
                   <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Enforce uniform casing matching Sentence Case or uppercase country codes.</p>
                 </div>
               </button>
@@ -3198,8 +3339,21 @@ export default function CleaningCenter({
                   </div>
                   <div className="flex-1">
                     <div className="flex justify-between items-center">
-                      <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Conditional Column Splitter</h4>
-                      <ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isSplitterOpen ? 'rotate-90 text-blue-400' : ''}`} />
+                      <div className="flex items-center gap-1.5">
+                        <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Conditional Column Splitter</h4>
+                        <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">Pro</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {plan === 'free' && (
+                          <span 
+                            onClick={(e) => { e.stopPropagation(); triggerUnlockModal('Conditional Column Splitter', 'pro'); }}
+                            className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1 shadow-xs cursor-pointer"
+                          >
+                            <Zap className="w-3 h-3" /> Upgrade
+                          </span>
+                        )}
+                        <ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isSplitterOpen ? 'rotate-90 text-blue-400' : ''}`} />
+                      </div>
                     </div>
                     <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Divide a column into multiple sub-columns using delimiter rules conditionally.</p>
                   </div>
@@ -3320,8 +3474,21 @@ export default function CleaningCenter({
                   </div>
                   <div className="flex-1">
                     <div className="flex justify-between items-center">
-                      <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Merge Columns (Same Data Type)</h4>
-                      <ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isMergerOpen ? 'rotate-90 text-indigo-400' : ''}`} />
+                      <div className="flex items-center gap-1.5">
+                        <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Merge Columns (Same Data Type)</h4>
+                        <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Pro</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {plan === 'free' && (
+                          <span 
+                            onClick={(e) => { e.stopPropagation(); triggerUnlockModal('Column Merger', 'pro'); }}
+                            className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1 shadow-xs cursor-pointer"
+                          >
+                            <Zap className="w-3 h-3" /> Upgrade
+                          </span>
+                        )}
+                        <ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isMergerOpen ? 'rotate-90 text-indigo-400' : ''}`} />
+                      </div>
                     </div>
                     <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Combine two columns sharing identical data types into a single merged column.</p>
                   </div>
@@ -3565,8 +3732,21 @@ export default function CleaningCenter({
                   </div>
                   <div className="flex-1">
                     <div className="flex justify-between items-center">
-                      <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Smart Validation Engine</h4>
-                      <ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isValidationOpen ? 'rotate-90 text-emerald-400' : ''}`} />
+                      <div className="flex items-center gap-1.5">
+                        <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Smart Validation Engine</h4>
+                        <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Pro</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {plan === 'free' && (
+                          <span 
+                            onClick={(e) => { e.stopPropagation(); triggerUnlockModal('Smart Validation Engine', 'pro'); }}
+                            className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 shadow-xs cursor-pointer"
+                          >
+                            <Zap className="w-3 h-3" /> Upgrade
+                          </span>
+                        )}
+                        <ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isValidationOpen ? 'rotate-90 text-emerald-400' : ''}`} />
+                      </div>
                     </div>
                     <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Establish field assertions, flag formatting violations, or auto-coerce raw anomalies.</p>
                   </div>
@@ -3794,8 +3974,21 @@ export default function CleaningCenter({
                   </div>
                   <div className="flex-1">
                     <div className="flex justify-between items-center">
-                      <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Pattern Sanitization Engine</h4>
-                      <ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isPatternOpen ? 'rotate-90 text-indigo-400' : ''}`} />
+                      <div className="flex items-center gap-1.5">
+                        <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Pattern Sanitization Engine</h4>
+                        <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Pro</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {plan === 'free' && (
+                          <span 
+                            onClick={(e) => { e.stopPropagation(); triggerUnlockModal('Pattern Sanitization Engine', 'pro'); }}
+                            className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1 shadow-xs cursor-pointer"
+                          >
+                            <Zap className="w-3 h-3" /> Upgrade
+                          </span>
+                        )}
+                        <ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isPatternOpen ? 'rotate-90 text-indigo-400' : ''}`} />
+                      </div>
                     </div>
                     <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Recognize nested patterns (Emails, Phones, Custom Regex) and isolate or split them into clean streams.</p>
                   </div>
@@ -4976,6 +5169,16 @@ export default function CleaningCenter({
         isOpen={isAuditReportOpen}
         onClose={() => setIsAuditReportOpen(false)}
         reportData={auditReportData}
+        isDarkMode={isDarkMode}
+      />
+
+      <UnlockPremiumModal
+        isOpen={isUnlockModalOpen}
+        onClose={() => setIsUnlockModalOpen(false)}
+        featureName={unlockFeatureName}
+        featureTier={unlockFeatureTier}
+        onUpgradePro={openProCheckout}
+        onUpgradeEnterprise={openEnterpriseModal}
         isDarkMode={isDarkMode}
       />
     </div>
