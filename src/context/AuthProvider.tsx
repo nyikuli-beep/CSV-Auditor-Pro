@@ -1,4 +1,4 @@
-import React, { createContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase/firebase';
 import {
@@ -153,4 +153,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       {children}
     </AuthContext.Provider>
   );
+};
+
+export const useAuth = (): AuthContextType => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    return {
+      user: auth.currentUser,
+      loading: false,
+      isEmailVerified: auth.currentUser?.emailVerified ?? false,
+      login: async () => { throw new Error('AuthContext not found'); },
+      register: async () => { throw new Error('AuthContext not found'); },
+      loginWithGoogle: async () => { throw new Error('AuthContext not found'); },
+      logout: async () => {},
+      forgotPassword: async () => {},
+      resendVerification: async () => {},
+      resendVerificationEmail: async () => {},
+      checkVerification: async () => false,
+      checkEmailVerified: async () => false,
+    };
+  }
+  return context;
 };

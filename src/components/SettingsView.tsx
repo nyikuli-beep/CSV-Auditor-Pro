@@ -42,6 +42,8 @@ import {
   Moon
 } from 'lucide-react';
 import { SystemSettings, CSVFile, AuditActivity, ChatMessage } from '../types';
+import { useBilling } from '../context/BillingContext';
+import PlanFeatureLock from './PlanFeatureLock';
 import { auth } from '../firebase/firebase';
 import BillingDashboard from './BillingDashboard';
 import AdminBillingDashboard from './AdminBillingDashboard';
@@ -86,6 +88,7 @@ export default function SettingsView({
   currentUser,
   onOpenProfileModal
 }: SettingsViewProps) {
+  const { plan, entitlements, openProCheckout, openEnterpriseModal } = useBilling();
   const { timeData, use24Hour, setUse24Hour } = useTime();
   const [tempApiKey, setTempApiKey] = useState(settings.apiKey || '••••••••••••••••••••••••••••••••');
   const [showKey, setShowKey] = useState(false);
@@ -1632,29 +1635,41 @@ export default function SettingsView({
       <div className="space-y-6 pt-6 border-t border-slate-800/20">
         
         {/* Interactive API Documentation Panel */}
-        <div className={`p-6 rounded-2xl border transition-all duration-300 ${isDarkMode ? 'bg-slate-900/40 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
-          <button
-            type="button"
-            onClick={() => setApiDocOpen(!apiDocOpen)}
-            className="w-full flex items-center justify-between text-left cursor-pointer focus:outline-none"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-blue-500/10 text-blue-500">
-                <Code2 className="w-5 h-5" />
+        {!entitlements.allowDeveloperApi ? (
+          <PlanFeatureLock
+            featureName="Developer REST API & Webhooks Access"
+            featureDescription="Connect automated audit pipelines, query spreadsheet records, and receive real-time webhook notifications via REST endpoints."
+            requiredPlan="enterprise"
+            currentPlan={plan}
+            isDarkMode={isDarkMode}
+            compact={true}
+            onUpgradePro={openProCheckout}
+            onUpgradeEnterprise={openEnterpriseModal}
+          />
+        ) : (
+          <div className={`p-6 rounded-2xl border transition-all duration-300 ${isDarkMode ? 'bg-slate-900/40 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
+            <button
+              type="button"
+              onClick={() => setApiDocOpen(!apiDocOpen)}
+              className="w-full flex items-center justify-between text-left cursor-pointer focus:outline-none"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-blue-500/10 text-blue-500">
+                  <Code2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className={`font-extrabold text-sm ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
+                    API Developer Documentation
+                  </h3>
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    Integrate your internal workflows directly with Auditor Pro's PostgreSQL backend.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className={`font-extrabold text-sm ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
-                  API Developer Documentation
-                </h3>
-                <p className="text-[10px] text-slate-400 mt-0.5">
-                  Integrate your internal workflows directly with Auditor Pro's PostgreSQL backend.
-                </p>
+              <div className={`p-1 rounded-lg ${isDarkMode ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-600'}`}>
+                {apiDocOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </div>
-            </div>
-            <div className={`p-1 rounded-lg ${isDarkMode ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-600'}`}>
-              {apiDocOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </div>
-          </button>
+            </button>
 
           {apiDocOpen && (
             <motion.div
@@ -1770,6 +1785,7 @@ export default function SettingsView({
             </motion.div>
           )}
         </div>
+        )}
 
         {/* Cookie Privacy & Live Consent Management */}
         <div className={`p-6 rounded-2xl border transition-all duration-300 ${isDarkMode ? 'bg-slate-900/40 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>

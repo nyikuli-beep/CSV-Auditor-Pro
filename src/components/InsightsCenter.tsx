@@ -29,6 +29,8 @@ import {
   Globe
 } from 'lucide-react';
 import { CSVFile, ChatMessage } from '../types';
+import { useBilling } from '../context/BillingContext';
+import PlanFeatureLock from './PlanFeatureLock';
 
 interface InsightsCenterProps {
   activeFile: CSVFile | null;
@@ -47,9 +49,24 @@ interface InsightsCenterProps {
 }
 
 export default function InsightsCenter({ activeFile, chatMessages, onSendMessage, isDarkMode, accentClass }: InsightsCenterProps) {
+  const { plan, entitlements, openProCheckout, openEnterpriseModal } = useBilling();
   const [userInput, setUserInput] = useState('');
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  if (!entitlements.allowAiInsights) {
+    return (
+      <PlanFeatureLock
+        featureName="AI Intelligence & Conversational Assistant"
+        featureDescription="Interact with Google Gemini AI models to perform conversational audits, query dataset anomalies, and get automated hygiene recommendations."
+        requiredPlan="pro"
+        currentPlan={plan}
+        isDarkMode={isDarkMode}
+        onUpgradePro={openProCheckout}
+        onUpgradeEnterprise={openEnterpriseModal}
+      />
+    );
+  }
 
   // Model & Persona Configuration States
   const [selectedModel, setSelectedModel] = useState<string>('gemini-3.5-flash');

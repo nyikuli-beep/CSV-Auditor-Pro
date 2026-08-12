@@ -29,6 +29,8 @@ import {
   Bell
 } from 'lucide-react';
 import { TeamMember, AuditActivity, SlotRequest } from '../types';
+import { useBilling } from '../context/BillingContext';
+import PlanFeatureLock from './PlanFeatureLock';
 import { db, auth } from '../firebase';
 import { collection, doc, setDoc, onSnapshot, query, limit } from 'firebase/firestore';
 import CollaborationChat from './CollaborationChat';
@@ -81,6 +83,22 @@ export default function TeamCollaboration({
   activeFileId,
   activeFileName
 }: TeamCollaborationProps) {
+  const { plan, entitlements, openProCheckout, openEnterpriseModal } = useBilling();
+
+  if (!entitlements.allowTeamCollab) {
+    return (
+      <PlanFeatureLock
+        featureName="Multi-User Team Tenancy & Role Management"
+        featureDescription="Collaborate seamlessly with team members, assign granular workspace roles, monitor live audit activities, and manage capacity slots."
+        requiredPlan="enterprise"
+        currentPlan={plan}
+        isDarkMode={isDarkMode}
+        onUpgradePro={openProCheckout}
+        onUpgradeEnterprise={openEnterpriseModal}
+      />
+    );
+  }
+
   const AUTHORIZED_EMAILS = ['nyikulibramwel@gmail.com'];
   const isAuthorizedUser = (currentUserRole === 'Owner' || currentUserRole === 'Admin') || AUTHORIZED_EMAILS.some(e => e.toLowerCase() === (currentUserEmail || '').toLowerCase().trim());
   const pendingRequests = slotRequests.filter(r => r.status === 'pending');

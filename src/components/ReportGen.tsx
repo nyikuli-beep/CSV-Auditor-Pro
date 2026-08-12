@@ -51,6 +51,8 @@ import {
   RecurringReportSchedule, 
   ScheduledReportExecutionLog 
 } from '../types';
+import { useBilling } from '../context/BillingContext';
+import PlanFeatureLock from './PlanFeatureLock';
 import { exportCleanedAuditToExcel } from '../lib/excelExporter';
 import { 
   generateVisualSnapshotCanvas, 
@@ -86,7 +88,22 @@ export default function ReportGen({
   settings,
   onUpdateSettings
 }: ReportGenProps) {
+  const { plan, entitlements, openProCheckout, openEnterpriseModal } = useBilling();
   const effectiveMembers = (members && members.length > 0) ? members : DEFAULT_TEAM_MEMBERS;
+
+  if (!entitlements.allowPdfReports) {
+    return (
+      <PlanFeatureLock
+        featureName="Branded Compliance PDF Reports & Custom Logos"
+        featureDescription="Generate white-label executive PDF reports with custom corporate headers, team sign-off attestations, and scheduled recurring email dispatches."
+        requiredPlan="pro"
+        currentPlan={plan}
+        isDarkMode={isDarkMode}
+        onUpgradePro={openProCheckout}
+        onUpgradeEnterprise={openEnterpriseModal}
+      />
+    );
+  }
 
   const [reportConfig, setReportConfig] = useState<ReportConfig>({
     title: 'CSV Audit & Compliance Report',

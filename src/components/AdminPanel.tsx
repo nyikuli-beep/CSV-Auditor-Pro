@@ -30,6 +30,8 @@ import {
 import { collection, query, onSnapshot, limit } from 'firebase/firestore';
 import { db } from '../firebase';
 import { AuditActivity } from '../types';
+import { useBilling } from '../context/BillingContext';
+import PlanFeatureLock from './PlanFeatureLock';
 
 interface AdminPanelProps {
   isDarkMode: boolean;
@@ -40,6 +42,22 @@ interface AdminPanelProps {
 }
 
 export default function AdminPanel({ isDarkMode, accentClass, currentUserEmail, currentUserRole, activities = [] }: AdminPanelProps) {
+  const { plan, entitlements, openProCheckout, openEnterpriseModal } = useBilling();
+
+  if (!entitlements.allowTeamCollab) {
+    return (
+      <PlanFeatureLock
+        featureName="Admin Panel & System Telemetry Controls"
+        featureDescription="Manage global feature flags, review security audit logs, monitor Paddle billing stats, and configure infrastructure parameters."
+        requiredPlan="enterprise"
+        currentPlan={plan}
+        isDarkMode={isDarkMode}
+        onUpgradePro={openProCheckout}
+        onUpgradeEnterprise={openEnterpriseModal}
+      />
+    );
+  }
+
   const AUTHORIZED_ADMIN_EMAILS = ['nyikulibramwel@gmail.com'];
   const isAuthorizedAdmin = (currentUserRole === 'Owner' || currentUserRole === 'Admin') || (currentUserEmail
     ? AUTHORIZED_ADMIN_EMAILS.some(e => e.toLowerCase() === currentUserEmail.toLowerCase().trim())

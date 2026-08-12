@@ -43,6 +43,8 @@ import ColumnMappingPanel from './ColumnMappingPanel';
 import BatchValidationPanel from './BatchValidationPanel';
 import { RetentionUploadSelector } from './RetentionPolicySelector';
 import { createDefaultRetentionPolicy, RetentionPeriodOption } from '../lib/retentionService';
+import { useBilling } from '../context/BillingContext';
+import PlanFeatureLock from './PlanFeatureLock';
 
 
 interface UploadCenterProps {
@@ -54,6 +56,7 @@ interface UploadCenterProps {
 }
 
 export default function UploadCenter({ onFileUpload, files = [], isDarkMode, accentClass, userRole }: UploadCenterProps) {
+  const { plan, usage, checkAuditLimit, checkRowLimit, openProCheckout, openEnterpriseModal } = useBilling();
   const [selectedRetentionOption, setSelectedRetentionOption] = useState<RetentionPeriodOption>('24h');
   const [dragActive, setDragActive] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
@@ -199,6 +202,12 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     const authCheck = checkUserUploadPermission(auth?.currentUser);
     if (!authCheck.allowed) {
       setErrorMsg(authCheck.message || 'Please verify your email before uploading files.');
+      return;
+    }
+
+    // 1b. Check Billing Plan Monthly Audit Limit
+    if (!checkAuditLimit()) {
+      setErrorMsg(`Monthly audit limit reached for ${plan.toUpperCase()} tier (${usage.auditCount} audits completed this month). Please upgrade to Pro or Enterprise for additional capacity.`);
       return;
     }
 
