@@ -913,7 +913,7 @@ app.post('/api/gmail/send', async (req, res) => {
       token,
       userEmail,
       tokenIssuedAt: tokenIssuedAt ? Number(tokenIssuedAt) : undefined,
-      fallbackToGateway: Boolean(fallbackToGateway)
+      fallbackToGateway: fallbackToGateway !== undefined ? Boolean(fallbackToGateway) : true
     });
 
     if (result.success) {

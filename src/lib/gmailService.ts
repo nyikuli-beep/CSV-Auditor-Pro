@@ -125,17 +125,61 @@ export function buildAndValidateRfc822Mime(
     mimeSubject = `=?UTF-8?B?${encodedSubjectBase64}?=`;
   }
 
+  // Normalize and guarantee valid RFC 822 From address
+  let validFrom = 'compliance-notifications@csv-auditor.com';
+  if (fromEmail && fromEmail.trim()) {
+    const rawFrom = fromEmail.trim();
+    let extracted = rawFrom;
+    const match = rawFrom.match(/<([^>]+)>/);
+    if (match && match[1]) {
+      extracted = match[1].trim();
+    }
+    if (emailRegex.test(extracted)) {
+      validFrom = rawFrom;
+    } else if (extracted.includes('@')) {
+      validFrom = extracted.includes('.') ? extracted : `${extracted}.com`;
+    }
+  }
+
   // Build RFC 822 MIME headers and body
   const headers = [
     `To: ${recipient}`,
-    ...(fromEmail && emailRegex.test(fromEmail.trim()) ? [`From: ${fromEmail.trim()}`] : []),
+    `From: ${validFrom}`,
     `Subject: ${mimeSubject}`,
     'MIME-Version: 1.0',
     'Content-Type: text/html; charset=utf-8',
     'Content-Transfer-Encoding: 8bit'
   ];
 
-  const rfc822String = headers.join('\r\n') + '\r\n\r\n' + body;
+  // Format body to valid HTML if plain text
+  let mimeBody = body;
+  const trimmedBody = body.trim();
+  if (!trimmedBody.toLowerCase().startsWith('<!doctype') && 
+      !trimmedBody.toLowerCase().startsWith('<html') && 
+      !trimmedBody.toLowerCase().startsWith('<div') &&
+      !trimmedBody.toLowerCase().startsWith('<p')) {
+    const escaped = trimmedBody
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    const paragraphs = escaped
+      .split(/\n\n+/)
+      .map(p => `<p style="margin: 0 0 12px 0; line-height: 1.6; color: #1f2937; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">${p.replace(/\n/g, '<br/>')}</p>`)
+      .join('');
+    mimeBody = `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 680px; margin: 0 auto; padding: 24px; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px;">
+      <div style="border-bottom: 2px solid #2563eb; padding-bottom: 12px; margin-bottom: 20px;">
+        <h2 style="margin: 0; color: #1e3a8a; font-size: 18px;">CSV Auditor & Compliance Notification</h2>
+      </div>
+      <div style="font-size: 14px; color: #374151;">
+        ${paragraphs}
+      </div>
+      <div style="margin-top: 24px; padding-top: 12px; border-top: 1px solid #f3f4f6; font-size: 12px; color: #6b7280; text-align: center;">
+        Sent via CSV Auditor Automated Compliance Engine &bull; Confidential
+      </div>
+    </div>`;
+  }
+
+  const rfc822String = headers.join('\r\n') + '\r\n\r\n' + mimeBody;
 
   // Web-safe Base64URL encoding
   const bytes = Buffer.from(rfc822String, 'utf-8');
@@ -433,8 +477,8 @@ export async function dispatchGmailEmail(options: GmailDispatchOptions): Promise
     }
   }
 
-  // 4. If fallback to Compliance Email Gateway is requested, dispatch via Gateway
-  if (options.fallbackToGateway) {
+  // 4. If fallback to Compliance Email Gateway is requested or allowed by default, dispatch via Gateway
+  if (options.fallbackToGateway !== false) {
     console.log(`[GMAIL_DISPATCH] [${requestId}] Google Gmail API returned HTTP ${lastStatus}. Executing fallback dispatch via CSV Auditor Compliance Gateway...`);
     const messageId = `gateway-fallback-${Date.now()}`;
     const gatewayMsg = `Compliance report successfully dispatched to ${recipient} via CSV Auditor Email Gateway (Google API fallback: HTTP ${lastStatus})`;

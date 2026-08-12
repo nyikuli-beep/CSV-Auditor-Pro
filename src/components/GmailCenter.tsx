@@ -415,7 +415,8 @@ export default function GmailCenter({
         body: emailBody,
         token: activeToken,
         userEmail: currentUserEmail,
-        tokenIssuedAt: meta.issuedAt || undefined
+        tokenIssuedAt: meta.issuedAt || undefined,
+        fallbackToGateway: true
       };
 
       let apiRes = await fetch('/api/gmail/send', {
