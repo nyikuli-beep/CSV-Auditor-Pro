@@ -60,7 +60,7 @@ export async function syncUserProfileToFirestore(
         lastLogin: nowIso,
         emailVerified: user.emailVerified,
         provider: providerId,
-        plan: 'Free',
+        plan: isOwnerEmail ? 'Enterprise' : 'Free',
         role: assignedRole,
       };
 
@@ -76,7 +76,7 @@ export async function syncUserProfileToFirestore(
         displayName: displayName || existingData?.displayName || 'User',
         name: displayName || existingData?.name || 'User',
         role: currentRole,
-        plan: existingData?.plan || 'Free',
+        plan: isOwnerEmail ? 'Enterprise' : (existingData?.plan || 'Free'),
         ...(photoURL ? { photoURL, avatar: photoURL } : {}),
       });
     }

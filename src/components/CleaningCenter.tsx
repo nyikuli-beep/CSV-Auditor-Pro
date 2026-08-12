@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { formatLocalTimestamp } from '../lib/timeService';
+import { useBilling } from '../context/BillingContext';
+import PlanFeatureLock from './PlanFeatureLock';
 import { 
   PieChart, 
   Pie, 
@@ -107,6 +109,7 @@ export default function CleaningCenter({
   accentClass, 
   userRole 
 }: CleaningCenterProps) {
+  const { plan, entitlements, openProCheckout, openEnterpriseModal } = useBilling();
   const isViewer = userRole === 'Viewer';
   
   // Batch processing state
@@ -1325,6 +1328,10 @@ export default function CleaningCenter({
 
   const handleRunProfiler = () => {
     if (!activeFile) return;
+    if (plan === 'free') {
+      openProCheckout();
+      return;
+    }
     const profile = profileDataset(currentHeaders, currentRows);
     setDatasetProfile(profile);
     setIsProfilerOpen(true);
@@ -1332,6 +1339,10 @@ export default function CleaningCenter({
 
   const handleRunAiCorrectionScan = () => {
     if (!activeFile) return;
+    if (plan === 'free') {
+      openProCheckout();
+      return;
+    }
     const items = scanSmartCorrections(currentHeaders, currentRows);
     setCorrectionItems(items);
     setIsAiCorrectionOpen(true);
@@ -1355,6 +1366,10 @@ export default function CleaningCenter({
 
   const handleRunMissingPredictionScan = () => {
     if (!activeFile) return;
+    if (plan === 'free') {
+      openProCheckout();
+      return;
+    }
     const preds = predictMissingValues(currentHeaders, currentRows);
     setPredictionItems(preds);
     setIsMissingPredictionOpen(true);
@@ -1378,6 +1393,10 @@ export default function CleaningCenter({
 
   const handleRunFuzzyDuplicateScan = () => {
     if (!activeFile) return;
+    if (plan === 'free') {
+      openProCheckout();
+      return;
+    }
     const pairs = findFuzzyDuplicates(currentHeaders, currentRows);
     setFuzzyPairs(pairs);
     setIsFuzzyDupOpen(true);
@@ -2704,6 +2723,17 @@ export default function CleaningCenter({
             >
               <RotateCw className="w-4 h-4" /> Redo
             </button>
+
+            {plan === 'free' && (
+              <button
+                onClick={openProCheckout}
+                className="px-3 py-2.5 rounded-xl text-xs font-bold text-[#FFFFFF] bg-[#2563EB] hover:bg-[#1D4ED8] flex items-center gap-1.5 shadow-sm transition-all cursor-pointer shrink-0"
+                title="Upgrade plan to unlock AI data corrections, ML deduplication, and custom regex rules"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>Upgrade</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -2749,6 +2779,17 @@ export default function CleaningCenter({
             <FileText className="w-4 h-4 shrink-0" />
             <span>Audit & Compliance Report</span>
           </button>
+
+          {plan === 'free' && (
+            <button
+              onClick={openProCheckout}
+              className="px-3.5 py-2 rounded-xl bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold flex items-center gap-1.5 shadow cursor-pointer transition-all whitespace-nowrap shrink-0"
+              title="Upgrade to Pro to unlock AI corrections, ML deduplication, and custom regex rules"
+            >
+              <Zap className="w-4 h-4 shrink-0" />
+              <span>Upgrade Plan</span>
+            </button>
+          )}
         </div>
 
         {/* Search Input */}
@@ -3054,6 +3095,10 @@ export default function CleaningCenter({
               {/* PII Protection */}
               <button
                 onClick={() => {
+                  if (plan !== 'enterprise') {
+                    openEnterpriseModal();
+                    return;
+                  }
                   const firstCol = currentHeaders[0] || '';
                   const res = maskPiiData(currentHeaders, currentRows, firstCol, 'mask');
                   pushState(res.updatedRows, res.summary);

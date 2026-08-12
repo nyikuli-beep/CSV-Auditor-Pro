@@ -10,17 +10,16 @@ export const webhookLogsStore: any[] = [];
 
 // Initialize default billing state for a user
 export function getOrCreateUserBilling(userId: string, email?: string): UserBillingInfo {
+  const isOwner = (email || userId || '').toLowerCase().trim() === 'nyikulibramwel@gmail.com';
   let billing = userSubscriptionsStore.get(userId);
-  if (!billing) {
-    // Check if owner or demo user
-    const isOwner = email === 'nyikulibramwel@gmail.com';
+  if (!billing || isOwner) {
     billing = {
-      plan: isOwner ? 'pro' : 'free',
-      subscriptionStatus: isOwner ? 'active' : 'active',
-      subscriptionId: isOwner ? 'sub_paddle_owner_pro_01' : null,
+      plan: isOwner ? 'enterprise' : 'free',
+      subscriptionStatus: 'active',
+      subscriptionId: isOwner ? 'sub_paddle_owner_enterprise_01' : null,
       customerId: isOwner ? 'ctm_paddle_owner_01' : null,
       billingCycle: 'monthly',
-      renewalDate: isOwner ? new Date(Date.now() + 30 * 86400000).toISOString() : null,
+      renewalDate: isOwner ? new Date(Date.now() + 365 * 86400000).toISOString() : null,
       trialEndsAt: null
     };
     userSubscriptionsStore.set(userId, billing);
