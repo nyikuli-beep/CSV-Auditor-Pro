@@ -115,15 +115,38 @@ export function checkUserUploadPermission(currentUser: any): { allowed: boolean;
   return { allowed: true };
 }
 
+export function getMaxFileSizeForPlan(plan: string = 'free'): { bytes: number; mb: number } {
+  if (plan === 'enterprise') {
+    return { bytes: 50 * 1024 * 1024, mb: 50 };
+  }
+  if (plan === 'pro') {
+    return { bytes: 25 * 1024 * 1024, mb: 25 };
+  }
+  return { bytes: 5 * 1024 * 1024, mb: 5 };
+}
+
 // -------------------------------------------------------------
 // FILE PRE-FLIGHT VALIDATION (SIZE, TYPE, MIME, BINARY CHECK)
 // -------------------------------------------------------------
-export function validateFilePreFlight(file: File): ValidationResult {
-  // 1. Check Maximum File Size (25 MB limit)
-  if (file.size > MAX_FILE_SIZE_BYTES) {
+export function validateFilePreFlight(
+  file: File, 
+  plan: 'free' | 'pro' | 'enterprise' | string = 'free'
+): ValidationResult {
+  const { bytes: maxSizeBytes, mb: maxMB } = getMaxFileSizeForPlan(plan);
+
+  // 1. Check Maximum File Size limit based on tier (5MB free, 25MB pro, 50MB enterprise)
+  if (file.size > maxSizeBytes) {
+    const sizeInMB = (file.size / (1024 * 1024)).toFixed(1);
+    let upgradeSuggestion = '';
+    if (plan === 'free') {
+      upgradeSuggestion = ' Upgrade to Pro (up to 25 MB) or Enterprise (up to 50 MB) to upload larger spreadsheets.';
+    } else if (plan === 'pro') {
+      upgradeSuggestion = ' Upgrade to Enterprise (up to 50 MB) to upload larger spreadsheets.';
+    }
+
     return {
       valid: false,
-      errorMessage: 'The uploaded file exceeds the maximum allowed size of 25 MB.',
+      errorMessage: `File size limit exceeded: "${file.name}" is ${sizeInMB} MB, which exceeds the ${maxMB} MB limit for ${plan.toUpperCase()} tier users.${upgradeSuggestion}`,
       fileSize: file.size
     };
   }

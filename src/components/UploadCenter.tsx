@@ -45,7 +45,7 @@ import { RetentionUploadSelector } from './RetentionPolicySelector';
 import { createDefaultRetentionPolicy, RetentionPeriodOption } from '../lib/retentionService';
 import { useBilling } from '../context/BillingContext';
 import PlanFeatureLock from './PlanFeatureLock';
-
+import UnlockPremiumModal from './UnlockPremiumModal';
 
 interface UploadCenterProps {
   onFileUpload: (newFile: CSVFile) => void;
@@ -56,7 +56,18 @@ interface UploadCenterProps {
 }
 
 export default function UploadCenter({ onFileUpload, files = [], isDarkMode, accentClass, userRole }: UploadCenterProps) {
-  const { plan, usage, checkAuditLimit, checkRowLimit, openProCheckout, openEnterpriseModal } = useBilling();
+  const { plan, usage, checkAuditLimit, checkRowLimit, openProCheckout, openEnterpriseModal, refreshBilling } = useBilling();
+  
+  // Unlock Modal State for Plan Limits
+  const [isUnlockModalOpen, setIsUnlockModalOpen] = useState(false);
+  const [unlockFeatureName, setUnlockFeatureName] = useState('5 Monthly Uploads Limit');
+  const [unlockFeatureTier, setUnlockFeatureTier] = useState<'pro' | 'enterprise'>('pro');
+
+  const triggerUnlockModal = (featureName: string, tier: 'pro' | 'enterprise' = 'pro') => {
+    setUnlockFeatureName(featureName);
+    setUnlockFeatureTier(tier);
+    setIsUnlockModalOpen(true);
+  };
   const [selectedRetentionOption, setSelectedRetentionOption] = useState<RetentionPeriodOption>('24h');
   const [dragActive, setDragActive] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
@@ -205,9 +216,12 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
       return;
     }
 
-    // 1b. Check Billing Plan Monthly Audit Limit
-    if (!checkAuditLimit()) {
-      setErrorMsg(`Monthly audit limit reached for ${plan.toUpperCase()} tier (${usage.auditCount} audits completed this month). Please upgrade to Pro or Enterprise for additional capacity.`);
+    // 1b. Check Freemium 5 Uploads Per Month Limit
+    const currentUploadsCount = usage?.auditCount || 0;
+    if (plan === 'free' && (!checkAuditLimit() || currentUploadsCount >= 5)) {
+      const msg = `Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${currentUploadsCount}/5 used). Upgrade to Pro for unlimited uploads.`;
+      setErrorMsg(msg);
+      triggerUnlockModal('5 Monthly Uploads Limit', 'pro');
       return;
     }
 
@@ -219,10 +233,15 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
       return;
     }
 
-    // 3. Pre-flight File Validation (Max size 25MB, extension, MIME type, empty file)
-    const preFlight = validateFilePreFlight(file);
+    // 3. Pre-flight File Validation (5MB Freemium, 25MB Pro, 50MB Enterprise)
+    const preFlight = validateFilePreFlight(file, plan);
     if (!preFlight.valid) {
-      setErrorMsg(preFlight.errorMessage || 'The uploaded file exceeds the maximum allowed size of 25 MB.');
+      setErrorMsg(preFlight.errorMessage || `The uploaded file exceeds the maximum allowed size for ${plan.toUpperCase()} tier.`);
+      if (plan === 'free') {
+        triggerUnlockModal('5MB File Size Upload Limit', 'pro');
+      } else if (plan === 'pro') {
+        triggerUnlockModal('25MB File Size Upload Limit', 'enterprise');
+      }
       return;
     }
 
@@ -258,6 +277,23 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
       return;
     }
 
+    // 1b. Check Freemium 5 Uploads Per Month Limit
+    const currentUploadsCount = usage?.auditCount || 0;
+    if (plan === 'free') {
+      if (!checkAuditLimit() || currentUploadsCount >= 5) {
+        const msg = `Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${currentUploadsCount}/5 used). Upgrade to Pro for unlimited uploads.`;
+        setErrorMsg(msg);
+        triggerUnlockModal('5 Monthly Uploads Limit', 'pro');
+        return;
+      }
+      if (currentUploadsCount + filesList.length > 5) {
+        const msg = `Uploading ${filesList.length} files would exceed your 5 uploads per month limit on Freemium (${currentUploadsCount}/5 used). Please select fewer files or upgrade to Pro for unlimited uploads.`;
+        setErrorMsg(msg);
+        triggerUnlockModal('5 Monthly Uploads Limit', 'pro');
+        return;
+      }
+    }
+
     // 2. Check Rate Limit
     const userId = auth?.currentUser?.uid || 'anonymous';
     const rateCheck = checkUploadRateLimit(userId);
@@ -266,11 +302,16 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
       return;
     }
 
-    // 3. Pre-flight check on all queued files
+    // 3. Pre-flight check on all queued files (5MB Freemium, 25MB Pro, 50MB Enterprise)
     for (const f of filesList) {
-      const preFlight = validateFilePreFlight(f);
+      const preFlight = validateFilePreFlight(f, plan);
       if (!preFlight.valid) {
         setErrorMsg(`Skipped "${f.name}": ${preFlight.errorMessage}`);
+        if (plan === 'free') {
+          triggerUnlockModal('5MB File Size Upload Limit', 'pro');
+        } else if (plan === 'pro') {
+          triggerUnlockModal('25MB File Size Upload Limit', 'enterprise');
+        }
         return;
       }
     }
@@ -1438,6 +1479,15 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
       return;
     }
 
+    // 1b. Check Freemium 5 Uploads Per Month Limit
+    const currentUploadsCount = usage?.auditCount || 0;
+    if (plan === 'free' && (!checkAuditLimit() || currentUploadsCount >= 5)) {
+      const msg = `Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${currentUploadsCount}/5 used). Upgrade to Pro for unlimited uploads.`;
+      setErrorMsg(msg);
+      triggerUnlockModal('5 Monthly Uploads Limit', 'pro');
+      return;
+    }
+
     // 2. Upload Rate Limit Check (5/min, 50/hour)
     const userId = auth?.currentUser?.uid || 'anonymous';
     const rateCheck = checkUploadRateLimit(userId);
@@ -1446,10 +1496,15 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
       return;
     }
 
-    // 3. Pre-flight File Validation (Format, Extension, MIME, Size <= 25MB, Empty)
-    const preFlight = validateFilePreFlight(file);
+    // 3. Pre-flight File Validation (5MB Freemium, 25MB Pro, 50MB Enterprise)
+    const preFlight = validateFilePreFlight(file, plan);
     if (!preFlight.valid) {
-      setErrorMsg(preFlight.errorMessage || 'The uploaded file exceeds the maximum allowed size of 25 MB.');
+      setErrorMsg(preFlight.errorMessage || `The uploaded file exceeds the maximum allowed size for ${plan.toUpperCase()} tier.`);
+      if (plan === 'free') {
+        triggerUnlockModal('5MB File Size Upload Limit', 'pro');
+      } else if (plan === 'pro') {
+        triggerUnlockModal('25MB File Size Upload Limit', 'enterprise');
+      }
       return;
     }
 
@@ -1573,6 +1628,21 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
           setProcessingStageMessage('Completed successfully.');
           setUploadProgress(100);
 
+          // Track & increment usage in billing engine
+          const activeUserEmail = auth?.currentUser?.email || 'nyikulibramwel@gmail.com';
+          fetch('/api/billing/track-usage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: activeUserEmail,
+              auditAdd: 1,
+              rowsAdd: scanResult.sanitizedRows.length,
+              bytesAdd: file.size
+            })
+          }).then(() => {
+            if (refreshBilling) refreshBilling();
+          }).catch(err => console.warn('Usage tracking error:', err));
+
           setTimeout(() => {
             setPendingFiles([parsedFile]);
             setActivePendingIndex(0);
@@ -1604,6 +1674,17 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
       return;
     }
 
+    // Check Freemium 5 Uploads Per Month Limit
+    const currentUploadsCount = usage?.auditCount || 0;
+    if (plan === 'free') {
+      if (!checkAuditLimit() || currentUploadsCount >= 5) {
+        const msg = `Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${currentUploadsCount}/5 used). Upgrade to Pro for unlimited uploads.`;
+        setErrorMsg(msg);
+        triggerUnlockModal('5 Monthly Uploads Limit', 'pro');
+        return;
+      }
+    }
+
     // Check Rate Limit
     const userId = auth?.currentUser?.uid || 'anonymous';
     const rateCheck = checkUploadRateLimit(userId);
@@ -1612,10 +1693,10 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
       return;
     }
 
-    // Pre-flight check on each file
+    // Pre-flight check on each file using plan tier max size
     const validFiles: File[] = [];
     for (const file of filesList) {
-      const preFlight = validateFilePreFlight(file);
+      const preFlight = validateFilePreFlight(file, plan);
       if (!preFlight.valid) {
         setErrorMsg(`Skipped "${file.name}": ${preFlight.errorMessage}`);
       } else {
@@ -1702,6 +1783,20 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     setIsAnalyzing(false);
 
     if (parsedFiles.length > 0) {
+      const activeUserEmail = auth?.currentUser?.email || 'nyikulibramwel@gmail.com';
+      fetch('/api/billing/track-usage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: activeUserEmail,
+          auditAdd: parsedFiles.length,
+          rowsAdd: parsedFiles.reduce((acc, f) => acc + (f.totalRowsCount || 0), 0),
+          bytesAdd: parsedFiles.reduce((acc, f) => acc + (f.size || 0), 0)
+        })
+      }).then(() => {
+        if (refreshBilling) refreshBilling();
+      }).catch(err => console.warn('Batch usage tracking error:', err));
+
       setPendingFiles(parsedFiles);
       setActivePendingIndex(0);
       setPendingFile(parsedFiles[0]);
@@ -2536,6 +2631,46 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Upload Zone */}
         <div className="lg:col-span-8 space-y-4">
+          {/* Plan Tier Limits Status Banner */}
+          <div className={`p-3.5 rounded-xl border text-xs flex flex-wrap items-center justify-between gap-3 ${
+            isDarkMode ? 'bg-[#131b2e] border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-700 shadow-sm'
+          }`}>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${
+                plan === 'enterprise'
+                  ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20'
+                  : plan === 'pro'
+                  ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20'
+                  : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+              }`}>
+                {plan} Tier
+              </span>
+              <span className="font-semibold">
+                File Size Limit: <span className="font-bold text-blue-600 dark:text-blue-400">{plan === 'enterprise' ? '50 MB' : plan === 'pro' ? '25 MB' : '5 MB'}</span>
+              </span>
+              <span className="text-slate-300 dark:text-slate-700">&bull;</span>
+              <span className="font-semibold">
+                Monthly Uploads: <span className="font-bold text-blue-600 dark:text-blue-400">{plan === 'free' ? `${usage?.auditCount || 0} / 5 used` : 'Unlimited'}</span>
+              </span>
+            </div>
+            {plan === 'free' && (
+              <button
+                onClick={() => triggerUnlockModal('5MB File Size & 5 Uploads Limit', 'pro')}
+                className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:text-blue-500 hover:underline cursor-pointer flex items-center gap-1 shrink-0"
+              >
+                Upgrade to Pro (25MB) / Enterprise (50MB) &rarr;
+              </button>
+            )}
+            {plan === 'pro' && (
+              <button
+                onClick={() => triggerUnlockModal('50MB File Size Limit', 'enterprise')}
+                className="text-[11px] font-bold text-purple-600 dark:text-purple-400 hover:text-purple-500 hover:underline cursor-pointer flex items-center gap-1 shrink-0"
+              >
+                Upgrade to Enterprise (50MB) &rarr;
+              </button>
+            )}
+          </div>
+
           <div 
             onDragEnter={handleDrag}
             onDragOver={handleDrag}
@@ -2560,8 +2695,13 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
               <div>
                 <h3 className="font-bold text-sm mb-1">Drag and drop your spreadsheet</h3>
                 <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                  Supports standard comma-delimited <span className="font-bold text-blue-700 dark:text-blue-400">.CSV</span> files up to 25MB.
+                  Supports standard comma-delimited <span className="font-bold text-blue-700 dark:text-blue-400">.CSV</span> files up to <span className="font-bold text-blue-600 dark:text-blue-400">{plan === 'enterprise' ? '50MB' : plan === 'pro' ? '25MB' : '5MB'}</span>.
                 </p>
+                {plan === 'free' && (
+                  <p className="text-[11px] font-medium text-amber-600 dark:text-amber-400 mt-1">
+                    Freemium Tier: 5MB file size limit &bull; 5 uploads per month max ({usage?.auditCount || 0}/5 used)
+                  </p>
+                )}
               </div>
 
               <div className="pt-1">
@@ -2982,6 +3122,17 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
           </div>
         </div>
       </div>
+
+      {/* Unlock Premium Modal */}
+      <UnlockPremiumModal
+        isOpen={isUnlockModalOpen}
+        onClose={() => setIsUnlockModalOpen(false)}
+        featureName={unlockFeatureName}
+        featureTier={unlockFeatureTier}
+        onUpgradePro={openProCheckout}
+        onUpgradeEnterprise={openEnterpriseModal}
+        isDarkMode={isDarkMode}
+      />
     </div>
   );
 }

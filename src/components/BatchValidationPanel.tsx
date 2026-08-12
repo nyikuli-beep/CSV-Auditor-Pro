@@ -28,6 +28,7 @@ import {
   calculateScore 
 } from '../lib/cleaning/batchValidationHelper';
 import { validateFilePreFlight, checkUserUploadPermission, checkUploadRateLimit } from '../lib/csvSecurityValidator';
+import { useBilling } from '../context/BillingContext';
 import { auth } from '../firebase';
 
 export interface BatchFileStatusItem {
@@ -62,6 +63,7 @@ export default function BatchValidationPanel({
   accentClass,
   userRole
 }: BatchValidationPanelProps) {
+  const { plan } = useBilling();
   // Selection state for workspace files
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>(() => files.map(f => f.id));
   const [searchFilter, setSearchFilter] = useState('');
@@ -284,7 +286,7 @@ export default function BatchValidationPanel({
       await new Promise(r => setTimeout(r, 200));
 
       try {
-        const preFlight = validateFilePreFlight(rawFile);
+        const preFlight = validateFilePreFlight(rawFile, plan);
         if (!preFlight.valid) {
           throw new Error(preFlight.errorMessage || 'Invalid file format or size limit exceeded.');
         }
