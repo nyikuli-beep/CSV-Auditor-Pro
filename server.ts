@@ -864,6 +864,72 @@ app.post('/api/enterprise/contact-sales', async (req, res) => {
   }
 });
 
+// 11. Enterprise Team Tenancy Endpoints (Phase 1)
+const localEnterpriseOrgStore = {
+  id: 'org-enterprise-root',
+  name: 'Enterprise Data Workspace',
+  ownerId: 'usr-owner-root',
+  ownerEmail: 'nyikulibramwel@gmail.com',
+  subscriptionPlan: 'enterprise',
+  status: 'active',
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+  maxSeats: 15,
+  description: 'Corporate CSV Auditing, Data Governance & Automated Schema Validation'
+};
+
+const localEnterpriseOrgMembersStore = new Map<string, {
+  uid: string;
+  organizationId: string;
+  email: string;
+  displayName: string;
+  role: 'Owner' | 'Admin' | 'Member';
+  status: 'active' | 'invited' | 'suspended';
+  joinedAt: string;
+  lastActive: string;
+}>();
+
+// Seed initial Owner
+localEnterpriseOrgMembersStore.set('usr-owner-root', {
+  uid: 'usr-owner-root',
+  organizationId: 'org-enterprise-root',
+  email: 'nyikulibramwel@gmail.com',
+  displayName: 'Nyikuli Bramwel',
+  role: 'Owner',
+  status: 'active',
+  joinedAt: new Date().toISOString(),
+  lastActive: 'Active now'
+});
+
+app.get('/api/organization', (req, res) => {
+  try {
+    res.json({
+      success: true,
+      organization: localEnterpriseOrgStore,
+      members: Array.from(localEnterpriseOrgMembersStore.values())
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch('/api/organization', (req, res) => {
+  try {
+    const { name, description, actorRole } = req.body;
+    if (actorRole !== 'Owner' && actorRole !== 'Admin') {
+      res.status(403).json({ error: 'Permission denied: Requires Owner or Admin role' });
+      return;
+    }
+    if (name) localEnterpriseOrgStore.name = name.trim();
+    if (description !== undefined) localEnterpriseOrgStore.description = description.trim();
+    localEnterpriseOrgStore.updatedAt = new Date().toISOString();
+
+    res.json({ success: true, organization: localEnterpriseOrgStore });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 // Initialize Gemini client lazily to avoid crash if variable is omitted during boot
 let aiClient: GoogleGenAI | null = null;

@@ -77,6 +77,64 @@ service cloud.firestore {
       return data.userId is string && data.userId.size() <= 128;
     }
 
+    function isValidOrganization(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.name is string && data.name.size() <= 200
+        && data.ownerId is string && data.ownerId.size() <= 128
+        && data.subscriptionPlan is string
+        && data.status in ['active', 'suspended', 'trial', 'past_due', 'canceled']
+        && data.createdAt is string
+        && data.updatedAt is string
+        && data.keys().hasAll(['id', 'name', 'ownerId', 'subscriptionPlan', 'status', 'createdAt', 'updatedAt']);
+    }
+
+    function isValidOrgMember(data) {
+      return data.uid is string && data.uid.size() <= 128
+        && data.organizationId is string && data.organizationId.size() <= 128
+        && data.email is string && data.email.size() <= 200
+        && data.displayName is string && data.displayName.size() <= 200
+        && data.role in ['Owner', 'Admin', 'Member']
+        && (!('permissions' in data) || data.permissions is list)
+        && data.status in ['active', 'invited', 'suspended']
+        && data.joinedAt is string
+        && data.lastActive is string
+        && data.keys().hasAll(['uid', 'organizationId', 'email', 'displayName', 'role', 'status', 'joinedAt', 'lastActive']);
+    }
+
+    function isValidOrgAuditLog(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.organizationId is string && data.organizationId.size() <= 128
+        && data.action is string && data.action.size() <= 100
+        && data.actor is map
+        && data.timestamp is string
+        && data.keys().hasAll(['id', 'organizationId', 'action', 'actor', 'timestamp']);
+    }
+
+    function isValidOrgInvitation(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.organizationId is string && data.organizationId.size() <= 128
+        && data.email is string && data.email.size() <= 200
+        && data.role in ['Admin', 'Member']
+        && data.status in ['pending', 'accepted', 'cancelled', 'expired']
+        && data.invitedBy is string && data.invitedBy.size() <= 128
+        && data.invitedByEmail is string && data.invitedByEmail.size() <= 200
+        && data.token is string && data.token.size() <= 128
+        && data.createdAt is string
+        && data.expiresAt is string
+        && data.keys().hasAll(['id', 'organizationId', 'email', 'role', 'status', 'invitedBy', 'invitedByEmail', 'token', 'createdAt', 'expiresAt']);
+    }
+
+    function isOrgMember(orgId) {
+      return isSignedIn() && exists(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid));
+    }
+
+    function isOrgAdminOrOwner(orgId) {
+      return isSignedIn() && (
+        (exists(/databases/$(database)/documents/organizations/$(orgId)) && get(/databases/$(database)/documents/organizations/$(orgId)).data.ownerId == request.auth.uid) ||
+        (isOrgMember(orgId) && get(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data.role in ['Owner', 'Admin'])
+      );
+    }
+
     // --- COLLECTION MATCH BLOCKS ---
 
     // USERS COLLECTION
@@ -105,7 +163,49 @@ service cloud.firestore {
       allow update, delete: if false; // Timeline is immutable append-only ledger
     }
 
-    // MEMBERS COLLECTION
+    // ENTERPRISE ORGANIZATIONS COLLECTION & MEMBERS (Phase 1)
+    match /organizations/{orgId} {
+      allow get: if isSignedIn() && (isOwner(resource.data.ownerId) || isOrgMember(orgId) || request.auth.token.email == resource.data.ownerEmail);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(orgId) && isOwner(incoming().ownerId) && isValidOrganization(incoming());
+      // Prevent members from modifying organization ownership; only Owners/Admins may update org details
+      allow update: if isSignedIn() && isValidId(orgId) && isOrgAdminOrOwner(orgId)
+        && incoming().ownerId == existing().ownerId
+        && isValidOrganization(incoming());
+      allow delete: if isSignedIn() && isValidId(orgId) && isOwner(existing().ownerId);
+
+      // Subcollection: Organization Members (UID as primary key)
+      match /members/{memberUid} {
+        allow get, list: if isSignedIn() && (isOrgMember(orgId) || isOrgAdminOrOwner(orgId) || request.auth.uid == memberUid);
+        // Only Owners/Admins may create or update members, and cannot demote/tamper with the primary owner
+        allow create: if isSignedIn() && isValidId(memberUid) && isOrgAdminOrOwner(orgId) && isValidOrgMember(incoming());
+        allow update: if isSignedIn() && isValidId(memberUid) 
+          && (isOrgAdminOrOwner(orgId) || (request.auth.uid == memberUid && incoming().diff(existing()).affectedKeys().hasOnly(['lastActive', 'avatar', 'displayName'])))
+          && isValidOrgMember(incoming());
+        allow delete: if isSignedIn() && isValidId(memberUid) && isOrgAdminOrOwner(orgId);
+      }
+
+      // Subcollection: Organization Invitations (Phase 2)
+      match /invitations/{invitationId} {
+        allow get, list: if isSignedIn() && (isOrgMember(orgId) || isOrgAdminOrOwner(orgId) || request.auth.token.email == resource.data.email);
+        allow create: if isSignedIn() && isValidId(invitationId) && isOrgAdminOrOwner(orgId) && isValidOrgInvitation(incoming());
+        allow update: if isSignedIn() && isValidId(invitationId) 
+          && (isOrgAdminOrOwner(orgId) || (request.auth.token.email == resource.data.email && incoming().status == 'accepted'));
+        allow delete: if isSignedIn() && isValidId(invitationId) && isOrgAdminOrOwner(orgId);
+      }
+
+      // Subcollection: Organization Immutable Audit Logs (Phase 3)
+      match /audit_logs/{logId} {
+        // Only Owners and Admins may read/list organization audit logs
+        allow get, list: if isSignedIn() && isOrgAdminOrOwner(orgId);
+        // Any active organization member or admin may append new audit log records
+        allow create: if isSignedIn() && isValidId(logId) && (isOrgMember(orgId) || isOrgAdminOrOwner(orgId)) && isValidOrgAuditLog(incoming());
+        // Audit logs are strictly immutable: no updates or deletions allowed
+        allow update, delete: if false;
+      }
+    }
+
+    // MEMBERS COLLECTION (Legacy / top-level compatibility)
     match /members/{memberId} {
       allow read: if isSignedIn();
       allow create, update: if isSignedIn() && isValidId(memberId) && isValidTeamMember(incoming());

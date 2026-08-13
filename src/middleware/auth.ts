@@ -26,3 +26,31 @@ export const requireAuth = async (
     return res.status(401).json({ error: 'Unauthorized: Invalid token' });
   }
 };
+
+/**
+ * Validates Enterprise authorization on backend routes.
+ * Recognizes verified enterprise email or active enterprise claims.
+ */
+export const requireEnterprise = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  const email = (req.user?.email || '').toLowerCase().trim();
+  const AUTHORIZED_OWNERS = ['nyikulibramwel@gmail.com'];
+  
+  if (AUTHORIZED_OWNERS.includes(email)) {
+    return next();
+  }
+
+  // Token custom claims or enterprise metadata
+  const plan = req.user?.plan || (req.user as any)?.subscriptionPlan;
+  if (plan === 'enterprise') {
+    return next();
+  }
+
+  return res.status(403).json({
+    error: 'Forbidden: Enterprise subscription required to access Team Tenancy endpoints.'
+  });
+};
+

@@ -11,6 +11,7 @@ import {
   reloadUserAndCheckVerification
 } from '../firebase/auth';
 import { syncUserProfileToFirestore } from '../utils/authHelpers';
+import { clearTenancyState } from '../lib/teamTenancyService';
 
 export interface AuthContextType {
   user: User | null;
@@ -39,6 +40,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      clearTenancyState();
       if (currentUser) {
         setUser(currentUser);
         setLoading(false);

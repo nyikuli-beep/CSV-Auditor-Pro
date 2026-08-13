@@ -66,6 +66,111 @@ export interface CSVFile {
   };
 }
 
+// --- Enterprise Team Tenancy Foundation & Permissions (Phase 1, 2, 3) ---
+export type OrganizationRole = 'Owner' | 'Admin' | 'Member';
+
+export type OrganizationPermission = 
+  | 'upload_csv'
+  | 'clean_csv'
+  | 'audit_csv'
+  | 'export_reports'
+  | 'ai_analysis'
+  | 'team_chat'
+  | 'cell_annotations'
+  | 'view_reports'
+  | 'manage_members'
+  | 'manage_settings';
+
+export interface PermissionDefinition {
+  id: OrganizationPermission;
+  label: string;
+  category: 'data_processing' | 'collaboration' | 'administration';
+  description: string;
+}
+
+export interface Organization {
+  id: string;
+  name: string;
+  ownerId: string; // Firebase UID
+  ownerEmail?: string;
+  subscriptionPlan: 'enterprise' | 'pro' | 'free' | string;
+  status: 'active' | 'suspended' | 'trial' | 'past_due' | 'canceled';
+  createdAt: string;
+  updatedAt: string;
+  maxSeats?: number;
+  description?: string;
+}
+
+export interface OrganizationMember {
+  uid: string; // Firebase Auth UID (Primary Identity)
+  organizationId: string;
+  email: string;
+  displayName: string;
+  role: OrganizationRole;
+  permissions?: OrganizationPermission[];
+  status: 'active' | 'invited' | 'suspended';
+  joinedAt: string;
+  lastActive: string;
+  avatar?: string;
+}
+
+export type AuditLogAction =
+  | 'member.invited'
+  | 'member.accepted'
+  | 'member.cancelled'
+  | 'member.resent'
+  | 'member.removed'
+  | 'member.role_changed'
+  | 'member.permissions_updated'
+  | 'organization.updated'
+  | 'csv.uploaded'
+  | 'csv.audited'
+  | 'csv.cleaned'
+  | 'report.exported'
+  | 'owner.action';
+
+export interface OrganizationAuditLog {
+  id: string;
+  organizationId: string;
+  action: AuditLogAction | string;
+  actor: {
+    uid: string;
+    email: string;
+    displayName?: string;
+    role: OrganizationRole;
+  };
+  target?: {
+    id?: string;
+    uid?: string;
+    email?: string;
+    name?: string;
+    type?: string;
+  };
+  timestamp: string; // ISO string
+  metadata?: Record<string, any>;
+  ipAddress?: string;
+  userAgent?: string;
+}
+
+export type InvitationStatus = 'pending' | 'accepted' | 'cancelled' | 'expired';
+
+export interface OrganizationInvitation {
+  id: string; // Document ID / token ID
+  organizationId: string;
+  organizationName?: string;
+  email: string;
+  role: 'Admin' | 'Member';
+  status: InvitationStatus;
+  invitedBy: string; // Firebase UID
+  invitedByEmail: string;
+  invitedByName?: string;
+  token: string;
+  createdAt: string; // ISO string
+  expiresAt: string; // ISO string (e.g. 7 days from creation)
+  acceptedAt?: string;
+  acceptedByUid?: string;
+}
+
 export interface TeamMember {
   id: string;
   name: string;

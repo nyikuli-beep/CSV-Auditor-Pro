@@ -42,7 +42,34 @@ export const activities = pgTable('activities', {
   fileName: text('file_name'),
 });
 
-// 4. Team Members table
+// 4. Enterprise Organizations table (Phase 1)
+export const organizations = pgTable('organizations', {
+  id: text('id').primaryKey(), // Organization ID (e.g. 'org-enterprise-root')
+  name: text('name').notNull(),
+  ownerId: text('owner_id').notNull(), // Firebase UID of the owner
+  ownerEmail: text('owner_email'),
+  subscriptionPlan: text('subscription_plan').notNull().default('enterprise'),
+  status: text('status').notNull().default('active'), // 'active' | 'suspended' | 'trial' | 'past_due' | 'canceled'
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+  maxSeats: integer('max_seats').default(15),
+  description: text('description'),
+});
+
+// 4b. Enterprise Organization Members table (Phase 1)
+export const organizationMembers = pgTable('organization_members', {
+  uid: text('uid').notNull(), // Firebase Auth UID (Primary Identity)
+  organizationId: text('organization_id').notNull(),
+  email: text('email').notNull(),
+  displayName: text('display_name').notNull(),
+  role: text('role').notNull().default('Member'), // 'Owner' | 'Admin' | 'Member'
+  status: text('status').notNull().default('active'), // 'active' | 'invited' | 'suspended'
+  joinedAt: text('joined_at').notNull(),
+  lastActive: text('last_active').notNull(),
+  avatar: text('avatar'),
+});
+
+// 4c. Team Members table (Legacy compatibility)
 export const members = pgTable('members', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),

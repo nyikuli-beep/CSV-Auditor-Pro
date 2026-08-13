@@ -196,6 +196,75 @@
         "timestamp": { "type": "number" }
       },
       "required": ["userId", "userName", "timestamp"]
+    },
+    "Organization": {
+      "title": "Organization",
+      "description": "Enterprise organization workspace definition.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "ownerEmail": { "type": "string" },
+        "subscriptionPlan": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "maxSeats": { "type": "number" },
+        "description": { "type": "string" }
+      },
+      "required": ["id", "name", "ownerId", "subscriptionPlan", "status", "createdAt", "updatedAt"]
+    },
+    "OrganizationMember": {
+      "title": "OrganizationMember",
+      "description": "Enterprise workspace member with role and granular permissions.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string" },
+        "permissions": { "type": "array" },
+        "status": { "type": "string" },
+        "joinedAt": { "type": "string" },
+        "lastActive": { "type": "string" },
+        "avatar": { "type": "string" }
+      },
+      "required": ["uid", "organizationId", "email", "displayName", "role", "status", "joinedAt", "lastActive"]
+    },
+    "OrganizationInvitation": {
+      "title": "OrganizationInvitation",
+      "description": "Enterprise workspace member invitation token.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string" },
+        "status": { "type": "string" },
+        "invitedBy": { "type": "string" },
+        "invitedByEmail": { "type": "string" },
+        "token": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "expiresAt": { "type": "string" }
+      },
+      "required": ["id", "organizationId", "email", "role", "status", "invitedBy", "invitedByEmail", "token", "createdAt", "expiresAt"]
+    },
+    "OrganizationAuditLog": {
+      "title": "OrganizationAuditLog",
+      "description": "Immutable audit log entry of actions within the enterprise workspace.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "action": { "type": "string" },
+        "actor": { "type": "object" },
+        "target": { "type": "object" },
+        "timestamp": { "type": "string" },
+        "metadata": { "type": "object" }
+      },
+      "required": ["id", "organizationId", "action", "actor", "timestamp"]
     }
   },
   "firestore": {
@@ -218,6 +287,22 @@
     "/drafts/{userId}": {
       "schema": "DraftUploadState",
       "description": "Auto-saved in-progress upload state and mappings."
+    },
+    "/organizations/{orgId}": {
+      "schema": "Organization",
+      "description": "Root document for enterprise organization workspaces."
+    },
+    "/organizations/{orgId}/members/{memberUid}": {
+      "schema": "OrganizationMember",
+      "description": "Organization membership document indexed by user Firebase UID."
+    },
+    "/organizations/{orgId}/invitations/{invitationId}": {
+      "schema": "OrganizationInvitation",
+      "description": "Pending, accepted, or expired organization invitations."
+    },
+    "/organizations/{orgId}/audit_logs/{logId}": {
+      "schema": "OrganizationAuditLog",
+      "description": "Immutable organization audit log entries."
     },
     "/tenants/{tenantId}/workspaces/{workspaceId}/annotations/{annotationId}/messages/{messageId}": {
       "schema": "ChatMessage",
