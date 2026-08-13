@@ -733,10 +733,10 @@ export default function GmailCenter({
             <div className="p-1.5 bg-indigo-500/10 text-indigo-500 rounded-lg">
               <Mail className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
             </div>
-            <h3 className="font-bold text-sm tracking-tight">Gmail Compliance Hub</h3>
+            <h3 className="font-bold text-sm tracking-tight">Email Compliance & Delivery Hub</h3>
           </div>
           <p className="text-xs text-slate-400 leading-relaxed">
-            Dispatch audit findings, data hygiene status notifications, and corrective warnings securely. Your communications utilize secure, user-approved Gmail API scopes directly from your web workstation.
+            Dispatch audit findings, data hygiene notifications, and corrective warnings securely. Your communications utilize enterprise Resend API transactional infrastructure with automatic retry logic and Gmail fallback.
           </p>
         </div>
         

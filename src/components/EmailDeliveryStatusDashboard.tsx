@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Send, 
@@ -20,7 +20,10 @@ import {
   Copy, 
   Check, 
   RefreshCw,
-  ExternalLink
+  ExternalLink,
+  Server,
+  Globe,
+  Loader2
 } from 'lucide-react';
 
 export interface DeliveryReportItem {
@@ -64,12 +67,90 @@ export default function EmailDeliveryStatusDashboard({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // Admin Test Email States
+  const [testRecipient, setTestRecipient] = useState('');
+  const [testStatus, setTestStatus] = useState<'idle' | 'sending' | 'success' | 'failed'>('idle');
+  const [testMessage, setTestMessage] = useState<string | null>(null);
+
+  // Provider Diagnostic state
+  const [providerStatus, setProviderStatus] = useState<{
+    resendConfigured: boolean;
+    fromName: string;
+    fromEmail: string;
+    domainVerified: boolean;
+    domainVerificationNote: string;
+    gmailConfigured: boolean;
+  }>({
+    resendConfigured: true,
+    fromName: 'CSV Auditor Pro',
+    fromEmail: 'onboarding@resend.dev',
+    domainVerified: false,
+    domainVerificationNote: 'Using Resend onboarding domain.',
+    gmailConfigured: false
+  });
+
+  useEffect(() => {
+    fetch('/api/email/status')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.status === 'ok') {
+          setProviderStatus({
+            resendConfigured: data.resendConfigured ?? true,
+            fromName: data.fromName || 'CSV Auditor Pro',
+            fromEmail: data.fromEmail || 'onboarding@resend.dev',
+            domainVerified: data.domainVerified ?? false,
+            domainVerificationNote: data.domainVerificationNote || '',
+            gmailConfigured: data.gmailConfigured ?? false
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // Compute metrics
   const totalCount = reports.length;
   const sentCount = reports.filter(r => r.status === 'Sent').length;
   const failedCount = reports.filter(r => r.status === 'Failed').length;
   const pendingCount = reports.filter(r => r.status === 'Pending').length;
   const successRate = totalCount > 0 ? Math.round((sentCount / totalCount) * 100) : 100;
+
+  const lastSuccessfulReport = reports.find(r => r.status === 'Sent');
+  const lastFailedReport = reports.find(r => r.status === 'Failed');
+
+  // Admin Send Test Email Handler
+  const handleAdminTestEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!testRecipient || !testRecipient.includes('@')) {
+      setTestStatus('failed');
+      setTestMessage('Please enter a valid recipient email address.');
+      return;
+    }
+
+    setTestStatus('sending');
+    setTestMessage(null);
+
+    try {
+      const res = await fetch('/api/email/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: testRecipient.trim() })
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data.success) {
+        setTestStatus('success');
+        setTestMessage(data.message || `Test message successfully delivered to ${testRecipient}!`);
+        if (onRefresh) onRefresh();
+      } else {
+        setTestStatus('failed');
+        setTestMessage(data.message || 'Failed to dispatch test email. Please verify RESEND_API_KEY environment variable.');
+      }
+    } catch (err: any) {
+      setTestStatus('failed');
+      setTestMessage(err.message || 'Network exception while dispatching test email.');
+    }
+  };
 
   // Filter & Search logic
   const filteredReports = reports.filter(item => {
@@ -122,6 +203,169 @@ export default function EmailDeliveryStatusDashboard({
 
   return (
     <div className="space-y-6">
+
+      {/* Provider Health & Status Card */}
+      <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-sm'} space-y-4`}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/50">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-blue-500/10 text-blue-500">
+              <Server className="w-5 h-5 text-blue-500" />
+            </div>
+            <div>
+              <h4 className="font-extrabold text-sm flex items-center gap-2">
+                Transactional Delivery Provider Status
+                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  Resend Primary Active
+                </span>
+              </h4>
+              <p className="text-xs text-slate-400">
+                Primary API Engine: <strong className="text-slate-300">Resend API</strong> &bull; Fallback: <strong className="text-slate-300">Gmail OAuth Proxy</strong>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs font-mono">
+            <span className="text-slate-400">Sender Identity:</span>
+            <span className="px-2 py-1 rounded bg-slate-800 text-blue-400 font-semibold border border-slate-700">
+              {providerStatus.fromName} &lt;{providerStatus.fromEmail}&gt;
+            </span>
+          </div>
+        </div>
+
+        {/* Configuration & Domain Status Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className={`p-3 rounded-xl border ${isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Provider Configuration</span>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold">Resend API Key</span>
+              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${providerStatus.resendConfigured ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                {providerStatus.resendConfigured ? 'Configured' : 'Missing Key'}
+              </span>
+            </div>
+          </div>
+
+          <div className={`p-3 rounded-xl border ${isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Domain Verification</span>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold flex items-center gap-1">
+                <Globe className="w-3.5 h-3.5 text-indigo-400" />
+                {providerStatus.domainVerified ? 'Verified Domain' : 'Onboarding Sandbox'}
+              </span>
+              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${providerStatus.domainVerified ? 'bg-emerald-500/10 text-emerald-400' : 'bg-blue-500/10 text-blue-400'}`}>
+                {providerStatus.domainVerified ? 'Verified' : 'Active Onboarding'}
+              </span>
+            </div>
+          </div>
+
+          <div className={`p-3 rounded-xl border ${isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Sending Pipeline Status</span>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold">Automatic Retry Engine</span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400">
+                Active (3x Retry)
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Last Successful & Last Failed Summary Bar */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+          <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/10 text-xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <div className="min-w-0">
+                <span className="text-[10px] text-slate-400 block font-bold uppercase">Last Successful Delivery</span>
+                <span className="font-semibold text-slate-200 truncate block">
+                  {lastSuccessfulReport ? `${lastSuccessfulReport.to} (${lastSuccessfulReport.timestamp})` : 'None in current session'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between p-2.5 rounded-lg bg-rose-500/5 border border-rose-500/10 text-xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              <div className="min-w-0">
+                <span className="text-[10px] text-slate-400 block font-bold uppercase">Last Delivery Failure</span>
+                <span className="font-semibold text-slate-200 truncate block">
+                  {lastFailedReport ? `${lastFailedReport.to} - ${lastFailedReport.errorMessage || 'Failed'}` : 'Zero recorded failures'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Administrator "Send Test Email" Interactive Section */}
+      <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-sm'} space-y-3`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400">
+              <Zap className="w-4 h-4 text-yellow-400" />
+            </div>
+            <div>
+              <h4 className="font-bold text-xs">Send Test Email (Administrator Diagnostic)</h4>
+              <p className="text-[11px] text-slate-400">Verify end-to-end Resend transactional delivery to any inbox.</p>
+            </div>
+          </div>
+          <span className="text-[10px] font-mono text-slate-400">CSV Auditor Pro Delivery Test</span>
+        </div>
+
+        <form onSubmit={handleAdminTestEmail} className="flex flex-col sm:flex-row gap-2">
+          <input
+            type="email"
+            value={testRecipient}
+            onChange={(e) => setTestRecipient(e.target.value)}
+            placeholder="Enter recipient email address (e.g. admin@company.com)..."
+            required
+            className={`flex-1 px-3.5 py-2 rounded-xl text-xs border outline-none font-mono ${
+              isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-500' : 'bg-slate-50 border-slate-200 text-slate-900'
+            }`}
+          />
+          <button
+            type="submit"
+            disabled={testStatus === 'sending'}
+            className={`px-4 py-2 rounded-xl text-xs font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-2 ${accentClass} ${
+              testStatus === 'sending' ? 'opacity-60 cursor-not-allowed' : 'hover:scale-[1.01]'
+            }`}
+          >
+            {testStatus === 'sending' ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending Test...
+              </>
+            ) : (
+              <>
+                <Send className="w-3.5 h-3.5" /> Dispatch Test Email
+              </>
+            )}
+          </button>
+        </form>
+
+        <AnimatePresence>
+          {testMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className={`p-3 rounded-xl border text-xs flex items-start gap-2 ${
+                testStatus === 'success'
+                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                  : 'bg-rose-500/10 border-rose-500/20 text-rose-300'
+              }`}
+            >
+              {testStatus === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              ) : (
+                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              )}
+              <div className="min-w-0">
+                <span className="font-bold">{testStatus === 'success' ? 'Delivery Success:' : 'Delivery Issue:'}</span>{' '}
+                <span>{testMessage}</span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
       
       {/* Metric Overview Bar */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

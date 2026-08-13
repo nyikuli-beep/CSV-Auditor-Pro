@@ -1,5 +1,5 @@
 import { UserBillingInfo, BillingInvoice, BillingTransaction, UsageMetrics, PlanEntitlements } from '../types.ts';
-import { dispatchGmailEmail } from './gmailService.ts';
+import { sendEmail } from './emailService.ts';
 
 // Local fallbacks & active cache
 export const userSubscriptionsStore = new Map<string, UserBillingInfo>();
@@ -250,11 +250,11 @@ export async function sendBillingLifecycleNotification(
   }
 
   try {
-    await dispatchGmailEmail({
+    await sendEmail({
       to: toEmail,
       subject,
       body,
-      fallbackToGateway: true
+      emailType: 'billing'
     });
   } catch (e) {
     console.warn(`[Billing Notification] Failed to send email (${type}) to ${toEmail}:`, e);

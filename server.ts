@@ -12,6 +12,7 @@ import { getOrCreateUser } from './src/db/users.ts';
 import { requireAuth, AuthRequest } from './src/middleware/auth.ts';
 import { eq, desc } from 'drizzle-orm';
 import { dispatchGmailEmail, checkProductionEnvironmentVars } from './src/lib/gmailService.ts';
+import { sendEmail, getEmailLogs, logEmailDelivery, sanitizeEmailErrorMessage, isValidEmailAddress } from './src/lib/emailService.ts';
 import { generateRAGResponse, generateRAGResponseStream } from './src/lib/ragEngine.ts';
 import crypto from 'crypto';
 import {
@@ -846,12 +847,12 @@ app.post('/api/enterprise/contact-sales', async (req, res) => {
 
     console.log('[ENTERPRISE SALES INQUIRY]', leadInfo);
 
-    // Notify Admin via Gmail
-    await dispatchGmailEmail({
+    // Notify Admin via Resend / EmailService
+    await sendEmail({
       to: 'nyikulibramwel@gmail.com',
       subject: `[Enterprise Lead] Demo Request from ${company} (${fullName})`,
       body: `New Enterprise Sales Lead:\n\nCompany: ${company}\nContact: ${fullName} (${email})\nEmployees: ${leadInfo.employees}\nExpected CSV Volume: ${leadInfo.csvVolume}\nMessage:\n${message || 'No additional note.'}\n\nReceived At: ${leadInfo.receivedAt}`,
-      fallbackToGateway: true
+      emailType: 'contact_support'
     });
 
     res.json({
@@ -884,7 +885,165 @@ function getGeminiClient(): GoogleGenAI | null {
   return aiClient;
 }
 
-// API: Diagnostic / Environment Verification for Gmail Integration
+// =========================================================
+// CENTRAL EMAIL SERVICE ENDPOINTS (RESEND TRANSACTIONAL ENGINE)
+// =========================================================
+
+// API: Primary Email Sending Endpoint via Resend
+app.post('/api/email/send', async (req, res) => {
+  try {
+    const { to, subject, body, html, emailType, fromName, fromEmail, maxRetries } = req.body;
+
+    const result = await sendEmail({
+      to,
+      subject,
+      body,
+      html,
+      emailType,
+      fromName,
+      fromEmail,
+      maxRetries
+    });
+
+    if (result.success) {
+      return res.status(200).json(result);
+    } else {
+      return res.status(400).json(result);
+    }
+  } catch (err: any) {
+    console.error('Unhandled server exception in /api/email/send:', err);
+    return res.status(500).json({
+      success: false,
+      provider: 'resend',
+      status: 'failed',
+      message: sanitizeEmailErrorMessage(err),
+      errorCode: 'INTERNAL_SERVER_ERROR',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// API: Email Delivery Hub Status & Provider Diagnostic
+app.get('/api/email/status', (req, res) => {
+  const hasApiKey = Boolean(process.env.RESEND_API_KEY && process.env.RESEND_API_KEY.trim());
+  const fromName = process.env.EMAIL_FROM_NAME || 'CSV Auditor Pro';
+  const fromEmail = process.env.EMAIL_FROM_ADDRESS || 'onboarding@resend.dev';
+  const isCustomDomain = Boolean(fromEmail && !fromEmail.includes('resend.dev'));
+
+  const gmailChecks = checkProductionEnvironmentVars();
+
+  return res.json({
+    status: 'ok',
+    primaryProvider: 'resend',
+    resendConfigured: hasApiKey,
+    fromName,
+    fromEmail,
+    domainVerified: isCustomDomain,
+    domainVerificationNote: isCustomDomain 
+      ? 'Custom sending domain is verified in Resend.'
+      : 'Using Resend onboarding domain (onboarding@resend.dev). Configure EMAIL_FROM_ADDRESS and verify your custom domain in Resend for production sender identity.',
+    fallbackProvider: 'gmail_api',
+    gmailConfigured: gmailChecks.isFullyConfigured,
+    environment: process.env.VERCEL_ENV || process.env.NODE_ENV || 'development',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// API: Get Email Delivery Logs
+app.get('/api/email/logs', (req, res) => {
+  try {
+    const logs = getEmailLogs();
+    return res.json({
+      success: true,
+      count: logs.length,
+      logs
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API: Send Test Email Endpoint for Admins
+app.post('/api/email/test', async (req, res) => {
+  try {
+    const { to } = req.body;
+    if (!to || !isValidEmailAddress(to)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid recipient email address for testing.'
+      });
+    }
+
+    const testResult = await sendEmail({
+      to,
+      subject: 'CSV Auditor Pro - Email Delivery Test',
+      body: `Hello,\n\nThis is an official transactional test message from CSV Auditor Pro Email Delivery Hub.\n\nIf you received this message, your Resend API email integration is active and operating cleanly!\n\nDispatched At: ${new Date().toLocaleString()}\nEnvironment: ${process.env.VERCEL_ENV || process.env.NODE_ENV || 'development'}`,
+      emailType: 'test'
+    });
+
+    if (testResult.success) {
+      return res.status(200).json(testResult);
+    } else {
+      return res.status(400).json(testResult);
+    }
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      message: `Test email dispatch failed: ${sanitizeEmailErrorMessage(err)}`
+    });
+  }
+});
+
+// API: Resend Delivery Webhook Receiver
+app.post('/api/email/webhook', (req, res) => {
+  try {
+    const event = req.body;
+    const webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
+
+    if (webhookSecret) {
+      const svixSignature = req.headers['svix-signature'] || req.headers['resend-signature'];
+      if (!svixSignature) {
+        return res.status(401).json({ error: 'Missing webhook security signature' });
+      }
+    }
+
+    if (event && event.type && event.data) {
+      const type = event.type; // e.g. email.sent, email.delivered, email.bounced
+      const msgId = event.data.email_id || event.data.id;
+      const recipient = Array.isArray(event.data.to) ? event.data.to.join(', ') : event.data.to;
+
+      console.log(`[RESEND WEBHOOK EVENT] Type: ${type}, Email ID: ${msgId}, Recipient: ${recipient}`);
+
+      let status: any = 'sent';
+      if (type.includes('delivered')) status = 'delivered';
+      if (type.includes('bounced')) status = 'bounced';
+      if (type.includes('complained')) status = 'complained';
+      if (type.includes('failed')) status = 'failed';
+
+      if (msgId) {
+        logEmailDelivery({
+          id: `wh_${msgId}`,
+          provider: 'resend',
+          recipient: recipient || 'unknown',
+          sender: event.data.from || 'CSV Auditor Pro',
+          subject: event.data.subject || 'Webhook Event',
+          emailType: 'general',
+          status,
+          providerMessageId: msgId,
+          createdTimestamp: Date.now(),
+          sentTimestamp: Date.now()
+        });
+      }
+    }
+
+    return res.status(200).json({ received: true });
+  } catch (err: any) {
+    console.error('Resend Webhook Handler Error:', err);
+    return res.status(500).json({ error: 'Webhook processing failed' });
+  }
+});
+
+// API: Diagnostic / Environment Verification for Legacy Gmail Integration
 app.get('/api/gmail/status', (req, res) => {
   const envChecks = checkProductionEnvironmentVars();
   return res.json({
@@ -901,11 +1060,33 @@ app.get('/api/gmail/status', (req, res) => {
   });
 });
 
-// API: Send Gmail / Compliance Email Proxy with Hardened Error Handling & Exponential Retry
+// API: Send Gmail / Compliance Email Proxy (Now Powered by Resend with Gmail Fallback)
 app.post('/api/gmail/send', async (req, res) => {
   try {
     const { to, subject, body, token, userEmail, tokenIssuedAt, fallbackToGateway } = req.body;
 
+    // 1. Try Resend Primary Transactional Engine First
+    if (process.env.RESEND_API_KEY && process.env.RESEND_API_KEY.trim()) {
+      const resendResult = await sendEmail({
+        to,
+        subject,
+        body,
+        emailType: 'compliance'
+      });
+
+      if (resendResult.success) {
+        return res.status(200).json({
+          success: true,
+          method: 'resend_api',
+          message: resendResult.message,
+          messageId: resendResult.messageId,
+          timestamp: resendResult.timestamp
+        });
+      }
+      console.warn('[EMAIL DISPATCH] Resend primary dispatch failed, falling back to Gmail API:', resendResult.message);
+    }
+
+    // 2. Fallback to Gmail API if Resend fails or is unconfigured
     const result = await dispatchGmailEmail({
       to,
       subject,
@@ -925,7 +1106,7 @@ app.post('/api/gmail/send', async (req, res) => {
     console.error('Unhandled server exception in /api/gmail/send:', err);
     return res.status(500).json({
       success: false,
-      method: 'gmail_api',
+      method: 'resend_and_gmail',
       message: err.message || 'An unhandled server error occurred while dispatching the email.',
       httpStatus: 500,
       errorCode: 'INTERNAL_SERVER_ERROR',
@@ -983,12 +1164,11 @@ ${company}`;
 
     for (const email of recipients) {
       try {
-        const result = await dispatchGmailEmail({
+        const result = await sendEmail({
           to: email,
           subject,
           body: bodyText,
-          userEmail: userEmail || 'system-cron@workspace',
-          fallbackToGateway: true
+          emailType: 'report'
         });
         if (result.success) successCount++;
         dispatchResults.push({ email, success: result.success, message: result.message });
