@@ -1031,7 +1031,8 @@ app.post('/api/email/webhook', (req, res) => {
           status,
           providerMessageId: msgId,
           createdTimestamp: Date.now(),
-          sentTimestamp: Date.now()
+          sentTimestamp: Date.now(),
+          retryCount: 0
         });
       }
     }

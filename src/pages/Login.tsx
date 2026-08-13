@@ -14,7 +14,8 @@ import {
   ArrowRight,
   Eye,
   EyeOff,
-  Check
+  Check,
+  ChevronLeft
 } from 'lucide-react';
 
 export const Login: React.FC = () => {
@@ -145,6 +146,19 @@ export const Login: React.FC = () => {
         />
       ) : (
         <>
+          {/* Back to Home Button */}
+          <div className="flex items-center justify-start">
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              aria-label="Back to Home"
+              className="group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-[#0F172A] hover:bg-slate-200 dark:hover:bg-[#334155] border border-slate-200 dark:border-[#334155] transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2 dark:focus-visible:ring-offset-[#1E293B]"
+            >
+              <ChevronLeft className="w-4 h-4 text-slate-500 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white transition-transform duration-200 group-hover:-translate-x-0.5" />
+              <span>Back to Home</span>
+            </button>
+          </div>
+
           {/* Form Header */}
       <div className="space-y-1.5">
         <h2 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Welcome back</h2>
