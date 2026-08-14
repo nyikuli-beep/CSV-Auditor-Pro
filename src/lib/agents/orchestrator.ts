@@ -28,6 +28,12 @@ import {
 import { StructuredCSVContext } from '../csvContextEngine';
 import { retrieveKnowledgeChunks, KnowledgeChunk } from '../ragEngine';
 import { detectUserIntent, classifyDetailedIntent, AIIntentCategory, FineGrainedIntentCategory } from '../intentDetectionEngine';
+import { buildWorkspaceMemoryPromptBlock, recordConversationInsightInMemory } from '../workspaceMemoryEngine';
+import { evaluateResponseConfidence } from '../confidenceScoringEngine';
+import { evaluateEnterpriseRisks } from '../riskAssessmentEngine';
+import { generatePrioritizedRecommendations, scanProactiveInsights, generateFollowUpSuggestions } from '../recommendationEngine';
+import { buildExplainabilityPackage } from '../explainableEngine';
+import { generateExecutiveReport } from '../executiveReportEngine';
 
 export interface OrchestratorRequest {
   prompt: string;
@@ -397,12 +403,18 @@ Structure your findings into clear, authoritative sections:
     }
     dynamicContextPrompt += `- Routing Rationale: ${plan.routingRationale}\n`;
 
+    // 1. Inject Workspace Intelligence Memory
+    const workspaceId = request.userContext?.teamId || 'org-enterprise-root';
+    const workspaceMemoryBlock = buildWorkspaceMemoryPromptBlock(workspaceId);
+    dynamicContextPrompt += `\n${workspaceMemoryBlock}\n`;
+
     if (request.userContext) {
       dynamicContextPrompt += `- User Context: Tier=${request.userContext.tier || 'Enterprise'}, Org=${request.userContext.organizationName || 'Default Workspace'}, Role=${request.userContext.role || 'Data Lead'}\n`;
     }
 
     // Dataset Context
-    if (request.datasetContext && request.datasetContext.headers && request.datasetContext.headers.length > 0) {
+    const hasDataset = Boolean(request.datasetContext && request.datasetContext.headers && request.datasetContext.headers.length > 0);
+    if (hasDataset && request.datasetContext) {
       dynamicContextPrompt += `\n### DATASET CONTEXT\n`;
       dynamicContextPrompt += `- File: "${request.datasetContext.fileName || 'active_dataset.csv'}"\n`;
       dynamicContextPrompt += `- Total Rows: ${(request.datasetContext.rowCount || 0).toLocaleString()} | Total Columns: ${request.datasetContext.headers.length}\n`;
@@ -436,13 +448,79 @@ Structure your findings into clear, authoritative sections:
 
     dynamicContextPrompt += `\n### USER QUERY:\n"${request.prompt}"\n`;
 
+    // Phase 3 Intelligence Engines
+    // 1. Evidence-Driven Confidence Assessment
+    const confidenceAssessment = evaluateResponseConfidence({
+      datasetContext: request.datasetContext,
+      executedTools,
+      evidenceCollected: evidence,
+      requiresRag: plan.requiresRag,
+      ragMatchesCount: knowledgeChunks.length,
+      hasActiveDataset: hasDataset,
+      intentCategory: plan.intentCategory
+    });
+
+    // 2. Enterprise Risk Assessment
+    const riskAssessment = evaluateEnterpriseRisks(request.datasetContext, executedTools, evidence);
+
+    // 3. Prioritized Recommendations
+    const recommendations = generatePrioritizedRecommendations(request.datasetContext, riskAssessment, executedTools, evidence);
+
+    // 4. Proactive Insights
+    const proactiveInsights = scanProactiveInsights(request.datasetContext, executedTools, evidence);
+
+    // 5. Explainable AI Package
+    const explainability = buildExplainabilityPackage(request.datasetContext, executedTools, evidence);
+
+    // 6. Follow-up Suggestions
+    const followUpSuggestions = generateFollowUpSuggestions(
+      plan.intentCategory,
+      hasDataset,
+      riskAssessment.overallRisk,
+      plan.primaryAgent
+    );
+
+    // 7. Executive Report Generation if requested or if query asks for report
+    const promptLower = request.prompt.toLowerCase();
+    const isExecutiveReportRequested = 
+      promptLower.includes('executive report') || 
+      promptLower.includes('executive summary') || 
+      promptLower.includes('audit report') || 
+      promptLower.includes('generate report') || 
+      promptLower.includes('compliance report');
+
+    let executiveReport = undefined;
+    if (isExecutiveReportRequested && hasDataset && request.datasetContext) {
+      executiveReport = generateExecutiveReport({
+        dataset: request.datasetContext,
+        organizationName: request.userContext?.organizationName || 'CSV Auditor Pro Enterprise Workspace',
+        riskAssessment,
+        recommendations,
+        confidenceAssessment,
+        auditorName: primaryAgentDef.name
+      });
+    }
+
+    // Record key insight into workspace memory
+    if (hasDataset && request.datasetContext) {
+      const insightSummary = `${primaryAgentDef.name} analyzed "${request.datasetContext.fileName}": Health Score ${request.datasetContext.qualityScore || 95}%, Risk: ${riskAssessment.overallRisk.toUpperCase()}, Confidence: ${confidenceAssessment.percentage}%`;
+      recordConversationInsightInMemory(workspaceId, insightSummary);
+    }
+
     const meta: MultiAgentUnifiedResponseMeta = {
       orchestratorPlan: plan,
       activeAgents,
       evidenceCollected: evidence,
       executedTools: executedTools.map(t => t.toolName),
       retrievedDocs: knowledgeChunks.map(c => c.title),
-      confidenceScore: plan.confidence,
+      confidenceScore: confidenceAssessment.overallScore,
+      confidenceAssessment,
+      riskAssessment,
+      recommendations,
+      proactiveInsights,
+      explainability,
+      followUpSuggestions,
+      executiveReport,
       modelUsed: 'gemini-3.7-flash',
       latencyMs: 0
     };

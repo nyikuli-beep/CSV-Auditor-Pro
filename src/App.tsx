@@ -68,6 +68,7 @@ import {
   deleteFileFromStorage 
 } from './lib/fileStorage';
 import { executeScheduledRetentionCleanup } from './lib/retentionService';
+import { recordActiveDatasetInMemory } from './lib/workspaceMemoryEngine';
 
 // Import Profile Upload, Keyboard Shortcuts & Onboarding Tour Modals
 import ProfileUploadModal from './components/ProfileUploadModal';
@@ -336,10 +337,26 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     return () => { isMounted = false; };
   }, []);
 
-  // Auto-persist files whenever files state changes
+  // Auto-persist files whenever files state changes and record into workspace memory
   useEffect(() => {
     if (files && files.length > 0) {
       saveFilesToStorage(files);
+      files.forEach(f => {
+        if (f && f.name) {
+          recordActiveDatasetInMemory('org-enterprise-root', {
+            fileId: f.id,
+            fileName: f.name,
+            rowCount: f.rows?.length || 0,
+            headers: f.headers || [],
+            score: f.score || 95,
+            duplicatesCount: f.issues?.filter(i => i.type === 'duplicate').length || 0,
+            missingValuesCount: f.issues?.filter(i => i.type === 'missing_value').length || 0,
+            formatErrorsCount: f.issues?.filter(i => i.type === 'invalid_format').length || 0,
+            outliersCount: f.issues?.filter(i => i.type === 'outlier').length || 0,
+            formulaRisksCount: f.issues?.filter(i => i.type === 'formula_injection' || i.type === 'malicious_content').length || 0
+          });
+        }
+      });
     }
   }, [files]);
 
@@ -2282,6 +2299,13 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       let intent = '';
       let intentCategory: any = undefined;
       let confidenceScore: number | undefined = undefined;
+      let confidenceDetails: any = undefined;
+      let riskAssessment: any = undefined;
+      let recommendations: any[] | undefined = undefined;
+      let proactiveInsights: any[] | undefined = undefined;
+      let explainability: any = undefined;
+      let followUpSuggestions: any[] | undefined = undefined;
+      let executiveReport: any = undefined;
       let executedTools: string[] = [];
       let reasoning: string | undefined = undefined;
       let activeAgent: string | undefined = undefined;
@@ -2315,6 +2339,13 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
               if (parsed.intent) intent = parsed.intent;
               if (parsed.intentCategory) intentCategory = parsed.intentCategory;
               if (parsed.confidenceScore) confidenceScore = parsed.confidenceScore;
+              if (parsed.confidenceDetails) confidenceDetails = parsed.confidenceDetails;
+              if (parsed.riskAssessment) riskAssessment = parsed.riskAssessment;
+              if (parsed.recommendations) recommendations = parsed.recommendations;
+              if (parsed.proactiveInsights) proactiveInsights = parsed.proactiveInsights;
+              if (parsed.explainability) explainability = parsed.explainability;
+              if (parsed.followUpSuggestions) followUpSuggestions = parsed.followUpSuggestions;
+              if (parsed.executiveReport) executiveReport = parsed.executiveReport;
               if (parsed.executedTools) executedTools = parsed.executedTools;
               if (parsed.reasoning) reasoning = parsed.reasoning;
               if (parsed.activeAgent) activeAgent = parsed.activeAgent;
@@ -2340,6 +2371,13 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                     intent: intent,
                     intentCategory,
                     confidenceScore,
+                    confidenceDetails,
+                    riskAssessment,
+                    recommendations,
+                    proactiveInsights,
+                    explainability,
+                    followUpSuggestions,
+                    executiveReport,
                     executedTools,
                     reasoning,
                     activeAgent,

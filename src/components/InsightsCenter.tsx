@@ -36,6 +36,8 @@ import {
 import { CSVFile, ChatMessage } from '../types';
 import { useBilling } from '../context/BillingContext';
 import PlanFeatureLock from './PlanFeatureLock';
+import EnterpriseIntelligenceCard from './EnterpriseIntelligenceCard';
+import WorkspaceMemoryModal from './WorkspaceMemoryModal';
 
 interface InsightsCenterProps {
   activeFile: CSVFile | null;
@@ -80,6 +82,7 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
   const [selectedAgent, setSelectedAgent] = useState<string>('auto');
   const [thinkingMode, setThinkingMode] = useState<boolean>(false);
   const [enableSearchGrounding, setEnableSearchGrounding] = useState<boolean>(false);
+  const [isMemoryModalOpen, setIsMemoryModalOpen] = useState<boolean>(false);
 
   // Multimodal (Image) State
   const [attachedImage, setAttachedImage] = useState<{ data: string; mimeType: string } | null>(null);
@@ -556,9 +559,23 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setIsMemoryModalOpen(true)}
+                className={`px-2.5 py-1 rounded-lg border text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer transition-colors ${
+                  isDarkMode 
+                    ? 'bg-[#1E293B] border-[#334155] text-[#93C5FD] hover:bg-[#2563EB] hover:text-white' 
+                    : 'bg-[#EFF6FF] border-[#BFDBFE] text-[#1E40AF] hover:bg-[#DBEAFE]'
+                }`}
+                title="View persistent workspace intelligence memory"
+              >
+                <Database className="w-3.5 h-3.5 text-[#2563EB]" />
+                <span>Workspace Memory</span>
+              </button>
+
               <span className="text-xs font-mono font-bold text-[#1E40AF] bg-[#DBEAFE] px-2.5 py-1 rounded-lg border border-[#93C5FD] flex items-center gap-1.5">
                 <Users className="w-3.5 h-3.5 text-[#1E40AF]" />
-                7 Enterprise Specialist Agents Online
+                7 Specialist Agents Online
               </span>
             </div>
           </div>
@@ -842,6 +859,32 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
                       </div>
                     )}
 
+                    {/* Enterprise Intelligence Platform (Phase 3 Modules) */}
+                    {msg.role === 'assistant' && (
+                      <EnterpriseIntelligenceCard
+                        confidenceDetails={msg.confidenceDetails}
+                        riskAssessment={msg.riskAssessment}
+                        recommendations={msg.recommendations}
+                        proactiveInsights={msg.proactiveInsights}
+                        explainability={msg.explainability}
+                        followUpSuggestions={msg.followUpSuggestions}
+                        executiveReport={msg.executiveReport}
+                        isDarkMode={isDarkMode}
+                        onExecutePrompt={(promptText) => {
+                          onSendMessage(
+                            promptText, 
+                            selectedModel, 
+                            selectedPersona, 
+                            null, 
+                            thinkingMode, 
+                            enableSearchGrounding, 
+                            undefined, 
+                            selectedAgent !== 'auto' ? selectedAgent : undefined
+                          );
+                        }}
+                      />
+                    )}
+
                     <div className="mt-2 pt-1 flex items-center justify-between text-[8px] text-[#64748B] font-mono">
                       {msg.role === 'assistant' ? (
                         <button
@@ -1016,6 +1059,14 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
           </div>
         </div>
       </div>
+
+      {/* Workspace Intelligence Memory Manager Modal */}
+      <WorkspaceMemoryModal
+        workspaceId="org-enterprise-root"
+        isOpen={isMemoryModalOpen}
+        onClose={() => setIsMemoryModalOpen(false)}
+        isDarkMode={isDarkMode}
+      />
     </div>
   );
 }

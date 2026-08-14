@@ -132,6 +132,13 @@ export interface AIChatResponseMeta {
   intent: AIIntentCategory;
   fineCategory: FineGrainedIntentCategory;
   confidenceScore: number;
+  confidenceDetails?: any;
+  riskAssessment?: any;
+  recommendations?: any[];
+  proactiveInsights?: any[];
+  explainability?: any;
+  followUpSuggestions?: any[];
+  executiveReport?: any;
   reasoning: string;
   executedTools: string[];
   retrievedDocs: string[];
@@ -502,7 +509,14 @@ export class AIService {
     const meta: AIChatResponseMeta = {
       intent: plan.intentCategory,
       fineCategory: plan.fineCategory,
-      confidenceScore: plan.confidence,
+      confidenceScore: responseMeta.confidenceScore || plan.confidence,
+      confidenceDetails: responseMeta.confidenceAssessment,
+      riskAssessment: responseMeta.riskAssessment,
+      recommendations: responseMeta.recommendations,
+      proactiveInsights: responseMeta.proactiveInsights,
+      explainability: responseMeta.explainability,
+      followUpSuggestions: responseMeta.followUpSuggestions,
+      executiveReport: responseMeta.executiveReport,
       reasoning: plan.routingRationale,
       executedTools: executedTools.map(t => t.toolName),
       retrievedDocs: knowledgeChunks.map(k => k.title),

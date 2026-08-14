@@ -215,6 +215,13 @@ export interface ChatMessage {
   intent?: string;
   intentCategory?: 'CSV_ANALYSIS' | 'GENERAL_AI' | 'MIXED_REQUEST' | 'UNKNOWN' | string;
   confidenceScore?: number;
+  confidenceDetails?: any;
+  riskAssessment?: any;
+  recommendations?: any[];
+  proactiveInsights?: any[];
+  explainability?: any;
+  followUpSuggestions?: any[];
+  executiveReport?: any;
   executedTools?: string[];
   reasoning?: string;
   statusStep?: string;

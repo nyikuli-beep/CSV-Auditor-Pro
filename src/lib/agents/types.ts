@@ -7,6 +7,11 @@ import { ToolResult } from '../aiToolRegistry';
 import { StructuredCSVContext } from '../csvContextEngine';
 import { KnowledgeChunk } from '../ragEngine';
 import { AIIntentCategory, FineGrainedIntentCategory } from '../intentDetectionEngine';
+import { ConfidenceAssessment } from '../confidenceScoringEngine';
+import { EnterpriseRiskAssessment } from '../riskAssessmentEngine';
+import { ActionableRecommendation, ProactiveInsight, FollowUpSuggestion } from '../recommendationEngine';
+import { ExplainabilityPackage } from '../explainableEngine';
+import { ExecutiveReportData } from '../executiveReportEngine';
 
 export type SpecialistAgentType = 
   | 'data_quality_auditor'
@@ -74,6 +79,14 @@ export interface MultiAgentUnifiedResponseMeta {
   executedTools: string[];
   retrievedDocs: string[];
   confidenceScore: number;
+  confidenceAssessment?: ConfidenceAssessment;
+  riskAssessment?: EnterpriseRiskAssessment;
+  recommendations?: ActionableRecommendation[];
+  proactiveInsights?: ProactiveInsight[];
+  explainability?: ExplainabilityPackage;
+  followUpSuggestions?: FollowUpSuggestion[];
+  executiveReport?: ExecutiveReportData;
   modelUsed: string;
   latencyMs: number;
 }
+
