@@ -352,16 +352,16 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
         ];
       case 'product_support':
         return [
-          { label: 'Non-Technical Staff Guide', text: 'Explain how the application works to non technical staff in simple, clear, non-technical terms.', knowledgeBaseId: 'non_technical_guide', agentId: 'product_support' },
-          { label: 'Data Cleaning & Dedupe', text: 'How do duplicate row detection and missing value imputation routines work?', knowledgeBaseId: 'data_cleaning_dedupe', agentId: 'product_support' },
-          { label: 'Security & Data Privacy', text: 'How does CSV Auditor Pro protect my data privacy and prevent third-party AI model training?', knowledgeBaseId: 'security_privacy_ai_training', agentId: 'product_support' }
+          { label: 'Non-Technical Staff Guide', text: 'Explain how CSV Auditor Pro works to non-technical staff in simple, clear, and practical terms.', agentId: 'product_support' },
+          { label: 'Data Cleaning & Dedupe', text: 'How do duplicate row detection and missing value imputation routines work in CSV Auditor Pro?', agentId: 'product_support' },
+          { label: 'Security & Data Privacy', text: 'How does CSV Auditor Pro protect customer data privacy and prevent third-party AI model training?', agentId: 'product_support' }
         ];
       default: // auto / general
         return [
           { label: 'Complete Multi-Agent Audit', text: 'Run a collaborative multi-agent audit covering data quality issues, statistical outliers, and compliance risks.' },
-          { label: 'Non-Technical Staff Guide', text: 'Explain how the application works to non technical staff in simple, clear, non-technical terms.', knowledgeBaseId: 'non_technical_guide' },
+          { label: 'Non-Technical Staff Guide', text: 'Explain how CSV Auditor Pro works to non-technical staff in simple, clear, and practical terms.' },
           { label: 'Revenue & Outlier Investigation', text: 'Identify revenue trends and detect anomalous transaction outliers affecting financial accuracy.' },
-          { label: 'Security & Model Privacy', text: 'How does CSV Auditor Pro protect my data privacy and prevent third-party AI model training?', knowledgeBaseId: 'security_privacy_ai_training' }
+          { label: 'Security & Model Privacy', text: 'How does CSV Auditor Pro protect customer data privacy and prevent third-party AI model training?' }
         ];
     }
   };

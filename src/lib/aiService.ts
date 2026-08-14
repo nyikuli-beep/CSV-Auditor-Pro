@@ -1,7 +1,7 @@
 /**
  * CSV Auditor Pro - Centralized Enterprise AI Service
- * Unified AI Architecture powering all Conversational Audits, Automated Hygiene,
- * Anomaly Detection, Schema Governance, and RAG Intelligence via Google Gemini 3.7 Flash.
+ * Unified Dynamic AI Architecture powering Conversational Audits, Automated Hygiene,
+ * Anomaly Detection, Schema Governance, and Intelligence via Google Gemini 3.7 Flash.
  */
 
 import { GoogleGenAI } from '@google/genai';
@@ -26,7 +26,6 @@ import {
   StructuredCSVContext 
 } from './csvContextEngine';
 import { 
-  getRelevantKnowledgeChunks, 
   KnowledgeChunk 
 } from './ragEngine';
 import { 
@@ -48,41 +47,34 @@ export const DEFAULT_AI_MODEL = 'gemini-3.7-flash';
 // ENTERPRISE PERMANENT SYSTEM PROMPT
 // ==========================================
 export const ENTERPRISE_SYSTEM_PROMPT = `You are the Lead Enterprise Conversational Auditor for CSV Auditor Pro.
-Your mission is to provide rigorous, accurate, mathematically grounded, and actionable analysis of CSV datasets, data hygiene, schema integrity, and enterprise compliance.
+Your mission is to provide rigorous, accurate, mathematically grounded, and actionable analysis of CSV datasets, data hygiene, schema integrity, enterprise compliance, spreadsheet formulas, programming, and general knowledge.
 
 CONVERSATIONAL INTENT & GUARDRAILS:
-1. INTENT EVALUATION & GREETINGS:
-   - First evaluate if the user's input is a greeting, pleasantry, acknowledgment, or casual conversation (e.g., "Hi", "Hello", "Hey", "Thanks", "How are you?", "Who are you?").
-   - If the input is conversational, respond warmly, concisely, and helpfully as the Conversational Auditor.
-   - Summarize how you can assist (spreadsheet audits, statistical anomaly detection, data cleaning, schema validation, and compliance checks) WITHOUT force-feeding product documentation.
-   - NEVER begin your response with "Regarding 'Hello':" or similar awkward echoes.
-   - NEVER invoke knowledge base documentation retrieval for simple greetings or pleasantries.
+1. INTENT EVALUATION & NATURAL OPENINGS:
+   - Begin your responses directly with the answer itself.
+   - NEVER prepend responses with "Regarding...", "Based on the knowledge base...", "According to stored information...", or "CSV Auditor Pro Knowledge Base Response:".
+   - If the user provides a greeting or pleasantry (e.g., "Hi", "Hello", "Thanks", "How are you?"), respond warmly, directly, and concisely as the Conversational Auditor. State what you can assist with without dumping documentation pages.
 
-2. CONDITIONAL KNOWLEDGE RETRIEVAL & TOOL CALLING:
-   - Restrict knowledge base citations exclusively to queries asking about specific platform features, subscription tiers, security policies, team RBAC, or technical troubleshooting.
-   - Restrict dataset audit findings and metrics exclusively to queries with active dataset context.
+2. GENERAL KNOWLEDGE CAPABILITIES:
+   - You possess comprehensive knowledge in software engineering, database design, SQL, Python, JavaScript, statistical modeling, machine learning, cloud architecture, Excel formulas, and business analysis.
+   - Answer general queries directly and intelligently using your internal knowledge.
 
-CORE OPERATING DIRECTIVES:
-1. TRUTHFULNESS & ZERO HALLUCINATIONS:
-   - Ground all factual assertions strictly in the provided dataset metadata, deterministic tool outputs, or verified knowledge base documents.
-   - If a specific column, metric, or row is not present in the dataset, explicitly state that it is unavailable. Never fabricate numbers, column names, or statistical values.
+3. TRUTHFULNESS & GROUNDED FORENSICS:
+   - When a dataset is active, ground all factual findings in the provided dataset metadata, column statistical profiles, and deterministic tool outputs.
+   - If a specific column, metric, or parameter is not present in the dataset, explicitly state what is missing instead of fabricating data.
    - For numerical metrics (mean, median, standard deviation, duplicate counts, null percentages), rely strictly on the calculated values provided in the context.
 
-2. PROFESSIONAL ENTERPRISE TONE:
+4. PROFESSIONAL ENTERPRISE TONE:
    - Maintain an objective, authoritative, and analytical tone suitable for Chief Data Officers, Risk Analysts, and Enterprise Compliance Teams.
    - Do NOT use emojis, playful slang, promotional hype, or filler phrases.
    - Use clear, structured Markdown headers, bullet points, and code blocks for readability.
 
-3. STRUCTURED AUDIT REPORTING FORMAT:
+5. AUDIT REPORTING STRUCTURE (for detailed reviews):
    When providing comprehensive analyses or dataset evaluations, structure your response as follows:
    - **Executive Summary**: A concise 1-2 sentence overview of the finding or answer.
    - **Key Findings**: Clear, bulleted breakdown of anomalies, quality metrics, or structural evaluations.
    - **Data Quality & Risk Assessment**: Concrete metrics (e.g. data quality score, null rate, formula injection risks).
    - **Recommended Actions**: Prioritized, step-by-step guidance to resolve identified issues.
-
-4. COMPLIANCE & SECURITY GOVERNANCE:
-   - Protect data privacy: highlight formula injection risks (cells starting with =, +, -, @), PII exposure, and unencrypted sensitive identifiers.
-   - Enforce schema conformity and flag schema drift or type inconsistencies.
 `;
 
 // Persona-specific instructions to overlay on top of the Enterprise System Prompt
@@ -243,9 +235,14 @@ export class AIService {
   }
 
   /**
-   * Builds the complete Structured Prompt with Context Injection
+   * Builds the complete Structured Prompt with Dynamic Context Injection
    */
-  public buildStructuredPrompt(options: AIChatRequestOptions, intentResult: IntentAnalysisResult, executedToolResults: ToolResult[], knowledgeChunks: KnowledgeChunk[]): {
+  public buildStructuredPrompt(
+    options: AIChatRequestOptions, 
+    _intentResult: IntentAnalysisResult, 
+    executedToolResults: ToolResult[], 
+    _knowledgeChunks: KnowledgeChunk[] = []
+  ): {
     systemInstruction: string;
     userContent: string;
     modelToUse: string;
@@ -317,16 +314,8 @@ export class AIService {
       });
     }
 
-    // 5. Injected Knowledge Base Documents (RAG)
-    if (knowledgeChunks.length > 0) {
-      contextSection += `\n=== VERIFIED PLATFORM KNOWLEDGE BASE ARTICLES ===\n`;
-      knowledgeChunks.forEach(kc => {
-        contextSection += `[Article: ${kc.title} (${kc.category})]\n${kc.content}\n\n`;
-      });
-    }
-
-    // 6. User Prompt & Goal
-    const userContent = `${contextSection}\n=== USER INQUIRY ===\n${options.prompt}\n\nPlease analyze the above inquiry according to enterprise audit standards.`;
+    // 5. User Prompt & Goal
+    const userContent = `${contextSection}\n=== USER INQUIRY ===\n${options.prompt}\n\nPlease provide a direct, accurate, and actionable answer.`;
 
     return {
       systemInstruction,
@@ -347,17 +336,6 @@ export class AIService {
     const hasDataset = Boolean(options.datasetContext && options.datasetContext.headers && options.datasetContext.headers.length > 0);
     const headersList = options.datasetContext?.headers || [];
     const intentResult = detectUserIntent(options.prompt, hasDataset, headersList, options.intentCategory);
-    const fineClassification = classifyDetailedIntent(options.prompt, options.intentCategory);
-
-    // Retrieve RAG knowledge chunks
-    const knowledgeChunks = getRelevantKnowledgeChunks(
-      options.prompt, 
-      {
-        knowledgeBaseId: options.knowledgeBaseId,
-        intentCategory: fineClassification.fineCategory,
-        limit: 4
-      }
-    );
 
     // Run deterministic tools for grounded answers when dataset is loaded
     const executedToolResults: ToolResult[] = [];
@@ -384,7 +362,6 @@ export class AIService {
       // 3. Statistical calculations
       const lowerPrompt = options.prompt.toLowerCase();
       if (rows.length > 0 && (lowerPrompt.includes('average') || lowerPrompt.includes('mean') || lowerPrompt.includes('median') || lowerPrompt.includes('stats') || lowerPrompt.includes('standard deviation') || lowerPrompt.includes('distribution'))) {
-        // Find matching column name in prompt
         const matchedCol = headers.find(h => lowerPrompt.includes(h.toLowerCase()));
         if (matchedCol) {
           executedToolResults.push(calculateStatistics(rows, matchedCol));
@@ -399,12 +376,6 @@ export class AIService {
       }
     }
 
-    if (knowledgeChunks.length > 0) {
-      knowledgeChunks.forEach(k => {
-        citations.push({ type: 'doc', label: k.title });
-      });
-    }
-
     if (options.enableSearchGrounding) {
       citations.push({ type: 'web', label: 'Google Search Fact-Checking' });
     }
@@ -412,7 +383,7 @@ export class AIService {
     return {
       intentResult,
       executedToolResults,
-      knowledgeChunks,
+      knowledgeChunks: [],
       citations
     };
   }
@@ -465,17 +436,7 @@ export class AIService {
 
     const { executedTools, evidence } = agentOrchestrator.executeAgentTools(plan, structuredContext);
 
-    // 3. Retrieve Grounded RAG Knowledge if requested by plan
-    const knowledgeChunks = plan.requiresRag ? getRelevantKnowledgeChunks(
-      options.prompt,
-      {
-        knowledgeBaseId: options.knowledgeBaseId,
-        intentCategory: plan.fineCategory,
-        limit: 4
-      }
-    ) : [];
-
-    // 4. Construct Unified Multi-Agent Prompt
+    // 3. Construct Unified Multi-Agent Prompt
     const primaryAgentDef = SPECIALIST_AGENTS[plan.primaryAgent];
     const collaboratingDefs = plan.collaboratingAgents.map(id => SPECIALIST_AGENTS[id]).filter(Boolean);
 
@@ -489,10 +450,6 @@ export class AIService {
 
     executedTools.forEach(t => {
       citations.push({ type: 'tool', label: t.toolName });
-    });
-
-    knowledgeChunks.forEach(k => {
-      citations.push({ type: 'doc', label: k.title });
     });
 
     if (options.enableSearchGrounding) {
@@ -515,7 +472,7 @@ export class AIService {
       },
       executedTools,
       evidence,
-      knowledgeChunks
+      []
     );
 
     const meta: AIChatResponseMeta = {
@@ -531,7 +488,7 @@ export class AIService {
       executiveReport: responseMeta.executiveReport,
       reasoning: plan.routingRationale,
       executedTools: executedTools.map(t => t.toolName),
-      retrievedDocs: knowledgeChunks.map(k => k.title),
+      retrievedDocs: [],
       citations,
       modelUsed: DEFAULT_AI_MODEL,
       latencyMs: 0,
@@ -547,9 +504,9 @@ export class AIService {
     // Emit initial metadata event to client
     onMeta(meta);
 
-    // 5. Execute Streaming API call with Gemini or fallback gracefully
+    // 4. Execute Streaming API call with Gemini or fallback dynamically
     if (!ai) {
-      console.warn('[AIService] GEMINI_API_KEY omitted or offline. Emitting grounded programmatic audit response.');
+      console.warn('[AIService] GEMINI_API_KEY omitted or offline. Emitting dynamic audit response.');
       const fallbackResponse = this.generateOfflineFallbackResponse(options, {
         category: plan.intentCategory,
         fineCategory: plan.fineCategory,
@@ -632,12 +589,12 @@ export class AIService {
         suggestedTools: plan.requiredTools,
         hasActiveDataset: !!options.datasetContext
       }, executedTools);
-      onChunk(`\n\n*(Specialist Fallback Analysis)*\n\n${fallbackText}`);
+      onChunk(`\n\n*(Dynamic Assistant Fallback)*\n\n${fallbackText}`);
     }
   }
 
   /**
-   * Generates a grounded programmatic fallback response when API key is unavailable or during network failure
+   * Generates a dynamic fallback response when API key is unavailable or during network failure
    */
   private generateOfflineFallbackResponse(
     options: AIChatRequestOptions,
@@ -698,88 +655,59 @@ export class AIService {
              lower.includes('quantity') || lower.includes('rate') || lower.includes('value');
     });
 
-    const programmaticResult = detectOutliers(headers, rows, undefined, 2.5);
-    const programmaticAnomalies = (programmaticResult.data.outliers || []).map((a: any) => ({
-      id: `anom-${a.column}-${a.row}`,
-      type: 'outlier',
-      severity: a.severity?.toLowerCase() || 'warning',
-      column: a.column,
-      row: a.row,
-      value: String(a.value),
-      description: a.reason || `Statistical deviation: "${a.value}" is ${a.zScore} standard deviations from mean.`,
-      suggestion: `Verify transaction authenticity against ledger records.`,
-      explanation: `Identified by statistical distribution engine. Value sits beyond the standard IQR/Z-score variance threshold.`
-    }));
+    const anomalies: any[] = [];
+    numericColumns.forEach(col => {
+      const values = rows.map(r => parseFloat(String(r[col]))).filter(v => !isNaN(v));
+      if (values.length > 3) {
+        const mean = values.reduce((a, b) => a + b, 0) / values.length;
+        const variance = values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length;
+        const stdDev = Math.sqrt(variance);
 
-    const ai = this.initClient();
-    if (!ai || numericColumns.length === 0) {
-      return { anomalies: programmaticAnomalies, method: 'programmatic_z_score' };
-    }
-
-    try {
-      const samplePoints: Record<string, string[]> = {};
-      numericColumns.forEach(h => {
-        samplePoints[h] = rows.slice(0, 15).map((r, i) => `Row ${i + 2}: ${r[h]}`).filter(Boolean);
-      });
-
-      const prompt = `Analyze these numerical column values and detect extreme statistical outliers or payout anomalies:\n` +
-        JSON.stringify(samplePoints, null, 2) + `\n\nReturn findings matching the specified schema.`;
-
-      const response = await ai.models.generateContent({
-        model: DEFAULT_AI_MODEL,
-        contents: prompt,
-        config: {
-          systemInstruction: "You are an expert enterprise forensic auditor. Detect statistical anomalies, extreme payouts, and data entry outliers in numerical columns.",
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: 'OBJECT',
-            properties: {
-              anomalies: {
-                type: 'ARRAY',
-                items: {
-                  type: 'OBJECT',
-                  properties: {
-                    id: { type: 'STRING' },
-                    type: { type: 'STRING' },
-                    severity: { type: 'STRING' },
-                    column: { type: 'STRING' },
-                    row: { type: 'NUMBER' },
-                    value: { type: 'STRING' },
-                    description: { type: 'STRING' },
-                    suggestion: { type: 'STRING' },
-                    explanation: { type: 'STRING' }
-                  },
-                  required: ['id', 'type', 'severity', 'column', 'row', 'value', 'description', 'suggestion', 'explanation']
-                }
+        if (stdDev > 0) {
+          rows.forEach((r, idx) => {
+            const val = parseFloat(String(r[col]));
+            if (!isNaN(val)) {
+              const zScore = Math.abs((val - mean) / stdDev);
+              if (zScore > 2.8) {
+                anomalies.push({
+                  rowIndex: idx,
+                  column: col,
+                  value: val,
+                  mean: Math.round(mean * 100) / 100,
+                  stdDev: Math.round(stdDev * 100) / 100,
+                  zScore: Math.round(zScore * 100) / 100,
+                  severity: zScore > 3.5 ? 'critical' : 'warning',
+                  description: `Value ${val} in column "${col}" is ${zScore.toFixed(1)} standard deviations from mean (${mean.toFixed(1)}).`
+                });
               }
-            },
-            required: ['anomalies']
-          },
-          temperature: 0.1
+            }
+          });
         }
-      });
-
-      const parsed = JSON.parse(response.text || '{}');
-      if (parsed && Array.isArray(parsed.anomalies) && parsed.anomalies.length > 0) {
-        return { anomalies: parsed.anomalies, method: DEFAULT_AI_MODEL };
       }
-      return { anomalies: programmaticAnomalies, method: 'programmatic_fallback' };
-    } catch (e) {
-      console.warn('[AIService] Gemini anomaly detection fallback:', e);
-      return { anomalies: programmaticAnomalies, method: 'programmatic_fallback' };
-    }
+    });
+
+    return {
+      anomalies,
+      method: 'statistical_z_score_engine'
+    };
   }
 
   /**
-   * Header Canonical Mapping Recommendation
+   * Semantic Header Canonical Mapping AI Engine
    */
   public async analyzeHeaders(headers: string[], sampleRows: Record<string, any>[]): Promise<{
     mappings: Record<string, string>;
     explanations: Record<string, string>;
   }> {
-    const ai = this.initClient();
-    const ruleBased = this.generateRuleBasedMappings(headers, sampleRows);
+    return this.analyzeHeadersSemantically(headers, sampleRows);
+  }
 
+  public async analyzeHeadersSemantically(headers: string[], sampleRows: Record<string, any>[]): Promise<{
+    mappings: Record<string, string>;
+    explanations: Record<string, string>;
+  }> {
+    const ruleBased = this.generateRuleBasedMappings(headers, sampleRows);
+    const ai = this.initClient();
     if (!ai) {
       return ruleBased;
     }
@@ -787,15 +715,15 @@ export class AIService {
     try {
       const response = await ai.models.generateContent({
         model: DEFAULT_AI_MODEL,
-        contents: `Analyze these CSV column headers and sample data rows to map them to canonical fields ('Transaction ID', 'Transaction Date', 'Customer Name', 'Email / Contact', 'Amount', 'Category', 'Country', or 'None'):\nHeaders: ${JSON.stringify(headers)}\nSample Rows: ${JSON.stringify(sampleRows.slice(0, 3))}`,
+        contents: `Analyze these CSV column headers and sample data rows to map them to canonical enterprise schema types (e.g. 'Transaction ID', 'Transaction Date', 'Customer Name', 'Email / Contact', 'Amount', 'Category', 'Country', 'None'):\nHeaders: ${JSON.stringify(headers)}\nSample Rows: ${JSON.stringify(sampleRows.slice(0, 3))}`,
         config: {
-          systemInstruction: "You are a master database architect and CSV schema specialist. Map headers accurately based on names and sample record semantics.",
+          systemInstruction: "You are an expert data cataloger and schema architect. Return JSON with 'mappings' (header -> canonical name) and 'explanations' (header -> reasoning string).",
           responseMimeType: 'application/json',
           responseSchema: {
             type: 'OBJECT',
             properties: {
-              mappings: { type: 'OBJECT' },
-              explanations: { type: 'OBJECT' }
+              mappings: { type: 'OBJECT', description: 'Map of original header to canonical name' },
+              explanations: { type: 'OBJECT', description: 'Map of original header to explanation' }
             },
             required: ['mappings', 'explanations']
           },
@@ -814,7 +742,7 @@ export class AIService {
     }
   }
 
-  private generateRuleBasedMappings(headers: string[], samples: Record<string, any>[]): {
+  private generateRuleBasedMappings(headers: string[], _samples: Record<string, any>[]): {
     mappings: Record<string, string>;
     explanations: Record<string, string>;
   } {
@@ -899,7 +827,6 @@ export class AIService {
     rows: Record<string, any>[];
     method: string;
   }> {
-    // 1. First apply deterministic sanitization & format normalization
     const cleanedRows = rows.map(row => {
       const cleaned: Record<string, any> = {};
       headers.forEach(h => {
