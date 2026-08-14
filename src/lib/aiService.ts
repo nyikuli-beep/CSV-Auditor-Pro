@@ -47,8 +47,20 @@ export const DEFAULT_AI_MODEL = 'gemini-3.7-flash';
 // ==========================================
 // ENTERPRISE PERMANENT SYSTEM PROMPT
 // ==========================================
-export const ENTERPRISE_SYSTEM_PROMPT = `You are the Lead Enterprise Data Quality & Compliance Auditor for CSV Auditor Pro.
+export const ENTERPRISE_SYSTEM_PROMPT = `You are the Lead Enterprise Conversational Auditor for CSV Auditor Pro.
 Your mission is to provide rigorous, accurate, mathematically grounded, and actionable analysis of CSV datasets, data hygiene, schema integrity, and enterprise compliance.
+
+CONVERSATIONAL INTENT & GUARDRAILS:
+1. INTENT EVALUATION & GREETINGS:
+   - First evaluate if the user's input is a greeting, pleasantry, acknowledgment, or casual conversation (e.g., "Hi", "Hello", "Hey", "Thanks", "How are you?", "Who are you?").
+   - If the input is conversational, respond warmly, concisely, and helpfully as the Conversational Auditor.
+   - Summarize how you can assist (spreadsheet audits, statistical anomaly detection, data cleaning, schema validation, and compliance checks) WITHOUT force-feeding product documentation.
+   - NEVER begin your response with "Regarding 'Hello':" or similar awkward echoes.
+   - NEVER invoke knowledge base documentation retrieval for simple greetings or pleasantries.
+
+2. CONDITIONAL KNOWLEDGE RETRIEVAL & TOOL CALLING:
+   - Restrict knowledge base citations exclusively to queries asking about specific platform features, subscription tiers, security policies, team RBAC, or technical troubleshooting.
+   - Restrict dataset audit findings and metrics exclusively to queries with active dataset context.
 
 CORE OPERATING DIRECTIVES:
 1. TRUTHFULNESS & ZERO HALLUCINATIONS:
@@ -632,6 +644,10 @@ export class AIService {
     intentResult: IntentAnalysisResult,
     executedToolResults: ToolResult[]
   ): string {
+    if (intentResult.category === 'CONVERSATIONAL_GREETING' || intentResult.fineCategory === 'GREETING_SMALLTALK') {
+      return `Hello! I am your Enterprise Conversational Auditor for CSV Auditor Pro.\n\nI can assist you with automated spreadsheet auditing, detecting duplicate rows, calculating statistics, fixing data quality issues, and verifying compliance. How can I help you today?`;
+    }
+
     const d = options.datasetContext;
     if (d && d.fileName) {
       let response = `### Executive Summary\n` +

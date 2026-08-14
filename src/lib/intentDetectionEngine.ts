@@ -4,9 +4,10 @@
  * and classifies fine-grained knowledge categories for strict RAG retrieval.
  */
 
-export type AIIntentCategory = 'CSV_ANALYSIS' | 'GENERAL_AI' | 'MIXED_REQUEST' | 'APP_EXPLANATION' | 'UNKNOWN';
+export type AIIntentCategory = 'CSV_ANALYSIS' | 'GENERAL_AI' | 'MIXED_REQUEST' | 'APP_EXPLANATION' | 'CONVERSATIONAL_GREETING' | 'UNKNOWN';
 
 export type FineGrainedIntentCategory =
+  | 'GREETING_SMALLTALK'
   | 'SECURITY_PRIVACY'
   | 'DATA_CLEANING'
   | 'CSV_AUDITING'
@@ -31,6 +32,63 @@ export interface IntentAnalysisResult {
   suggestedTools: string[];
   hasActiveDataset: boolean;
   isNonTechnical?: boolean;
+  isGreeting?: boolean;
+}
+
+const GREETING_PATTERNS = [
+  /^hi\b/i,
+  /^hello\b/i,
+  /^hey\b/i,
+  /^howdy\b/i,
+  /^greetings\b/i,
+  /^good morning\b/i,
+  /^good afternoon\b/i,
+  /^good evening\b/i,
+  /^good day\b/i,
+  /^thanks\b/i,
+  /^thank you\b/i,
+  /^thx\b/i,
+  /^appreciate it\b/i,
+  /^how are you\b/i,
+  /^how's it going\b/i,
+  /^what's up\b/i,
+  /^who are you\b/i,
+  /^what are you\b/i,
+  /^nice to meet you\b/i,
+  /^bye\b/i,
+  /^goodbye\b/i,
+  /^cheers\b/i
+];
+
+/**
+ * Checks if prompt is a casual conversational greeting, pleasantry, or acknowledgment
+ */
+export function isConversationalGreeting(prompt: string): boolean {
+  const p = prompt.trim().toLowerCase().replace(/[!.,?]+$/, '');
+  if (!p) return false;
+
+  // Single word checks
+  const singleWordGreetings = ['hi', 'hello', 'hey', 'howdy', 'greetings', 'thanks', 'thankyou', 'thx', 'cheers', 'bye', 'goodbye', 'help'];
+  if (singleWordGreetings.includes(p)) return true;
+
+  // Exact phrase checks
+  const shortPhrases = [
+    'how are you', 'how are you doing', 'how is it going', 'hows it going',
+    'good morning', 'good afternoon', 'good evening', 'good day',
+    'thank you', 'thanks a lot', 'thanks so much', 'thank you very much',
+    'who are you', 'what are you', 'what can you do', 'nice to meet you',
+    'what is your name', 'tell me who you are'
+  ];
+  if (shortPhrases.includes(p)) return true;
+
+  // Regex pattern check
+  if (GREETING_PATTERNS.some(pat => pat.test(p)) && p.split(/\s+/).length <= 6) {
+    // Ensure no technical CSV or feature request words are embedded
+    const hasTechnicalKeywords = CSV_KEYWORDS.some(kw => p.includes(kw));
+    return !hasTechnicalKeywords;
+  }
+
+  return false;
 }
 
 const CSV_KEYWORDS = [
@@ -69,7 +127,7 @@ export function classifyDetailedIntent(
   const p = prompt.trim().toLowerCase();
 
   const validFineCategories: FineGrainedIntentCategory[] = [
-    'SECURITY_PRIVACY', 'DATA_CLEANING', 'CSV_AUDITING', 'SCHEMA_ANALYSIS',
+    'GREETING_SMALLTALK', 'SECURITY_PRIVACY', 'DATA_CLEANING', 'CSV_AUDITING', 'SCHEMA_ANALYSIS',
     'AI_ANALYSIS', 'FILE_RETENTION', 'AUTHENTICATION', 'TEAM_COLLABORATION',
     'EMAIL', 'PAYMENTS', 'SUBSCRIPTIONS', 'ACCOUNT_SETTINGS',
     'GENERAL_PRODUCT_INFORMATION', 'GENERAL_AI', 'UNKNOWN'
@@ -81,6 +139,11 @@ export function classifyDetailedIntent(
       confidence: 1.0,
       matchedKeywords: ['provided_hint']
     };
+  }
+
+  // 0. GREETINGS & SMALL TALK GUARD (Highest Pre-Filter Priority)
+  if (isConversationalGreeting(prompt)) {
+    return { fineCategory: 'GREETING_SMALLTALK', confidence: 0.99, matchedKeywords: ['greeting_pleasantry'] };
   }
 
   // 1. SECURITY_PRIVACY
@@ -178,6 +241,19 @@ export function detectUserIntent(
       reasoning: 'Prompt is too short or ambiguous.',
       suggestedTools: [],
       hasActiveDataset
+    };
+  }
+
+  // 1. Check for Conversational Greeting / Pleasantry (Bypasses RAG and tool calls)
+  if (isConversationalGreeting(prompt) || fineCategory === 'GREETING_SMALLTALK') {
+    return {
+      category: 'CONVERSATIONAL_GREETING',
+      fineCategory: 'GREETING_SMALLTALK',
+      confidenceScore: 0.99,
+      reasoning: 'User initiated a conversational greeting or pleasantry. Responding naturally without triggering document retrieval or audit tools.',
+      suggestedTools: [],
+      hasActiveDataset,
+      isGreeting: true
     };
   }
 

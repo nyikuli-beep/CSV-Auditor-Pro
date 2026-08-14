@@ -89,6 +89,21 @@ export class AgentOrchestrator {
     const intentResult = detectUserIntent(prompt, hasDataset, headers);
     const fineClassification = classifyDetailedIntent(prompt);
 
+    // Rule 0: Conversational Greetings & Small Talk (Hi, Hello, Thanks, How are you?)
+    if (intentResult.category === 'CONVERSATIONAL_GREETING' || fineClassification.fineCategory === 'GREETING_SMALLTALK') {
+      return {
+        primaryAgent: 'product_support_agent',
+        collaboratingAgents: [],
+        isCompoundQuery: false,
+        routingRationale: 'Conversational greeting or pleasantry. Providing a warm, direct conversational response without triggering documentation RAG or dataset audit tools.',
+        requiredTools: [],
+        requiresRag: false,
+        intentCategory: 'CONVERSATIONAL_GREETING',
+        fineCategory: 'GREETING_SMALLTALK',
+        confidence: 0.99
+      };
+    }
+
     // Rule 1: Product Support (Platform, Subscription, Team, Tenancy, Pricing, Quota)
     const isPlatformQuery = 
       lower.includes('how to use') || 
@@ -371,9 +386,29 @@ export class AgentOrchestrator {
     ];
 
     // Build System Instruction
-    let systemInstruction = `You are the Enterprise AI Specialist System for CSV Auditor Pro.
+    let systemInstruction = `You are the Enterprise Conversational Auditor & Specialist AI System for CSV Auditor Pro.
 PRIMARY SPECIALIST: ${primaryAgentDef.name} (${primaryAgentDef.title})
 ${primaryAgentDef.systemDirective}\n`;
+
+    // Strict Conversational Intent Guardrails
+    systemInstruction += `\nCONVERSATIONAL INTENT & GUARDRAIL DIRECTIVES:
+1. INTENT EVALUATION FIRST:
+   - First evaluate if the user's input is a greeting, pleasantry, acknowledgment, or casual conversational remark (e.g., "Hi", "Hello", "Hey", "Thanks", "Thank you", "How are you?", "Who are you?").
+   - If the input is conversational, respond directly, warmly, and helpfully as the Enterprise Conversational Auditor.
+   - Provide a clear, brief orientation of what you can assist with (e.g., auditing CSV datasets, detecting duplicates, calculating statistics, fixing data quality issues, and verifying compliance) WITHOUT citing documentation articles or quoting manual excerpts.
+   - NEVER prepend responses with "Regarding 'Hello':" or generic boilerplate.
+   - NEVER inject unrequested knowledge base articles for greetings or pleasantries.
+
+2. CONDITIONAL KNOWLEDGE BASE & TOOL CALLING:
+   - Restrict knowledge base citations exclusively to queries asking about specific platform features, subscription tiers, security policies, team RBAC, or technical troubleshooting.
+   - Restrict dataset audit findings and metrics exclusively to queries with active dataset context.
+
+3. ENTERPRISE COMMUNICATION STANDARDS:
+   - Tone: Professional, technical, concise, authoritative, and actionable.
+   - Formats: Use clean bullet points, markdown bolding for key terms, and exact numeric statistics.
+   - Icons: Never use emojis. Use clean semantic markdown layout.
+   - Anti-Slop: Strictly avoid generic filler, artificial marketing hype, or flowery adjectives.
+   - Evidence-Based: Every factual claim about dataset quality or metrics must be corroborated by injected tool results. Never hallucinate row counts or metrics.\n`;
 
     if (collaboratingDefs.length > 0) {
       systemInstruction += `\nCOLLABORATING SPECIALISTS:\n`;
@@ -387,13 +422,6 @@ Structure your findings into clear, authoritative sections:
 2. Forensic Evidence & Metrics (cite exact columns, rows, counts, and statistical parameters)
 3. Actionable Recommendations & Remediation Steps\n`;
     }
-
-    systemInstruction += `\nENTERPRISE COMMUNICATION STANDARDS:
-- Tone: Professional, technical, concise, authoritative, and actionable.
-- Formats: Use clean bullet points, markdown bolding for key terms, and exact numeric statistics.
-- Icons: Never use emojis. Use clean semantic markdown layout.
-- Anti-Slop: Strictly avoid generic filler, fake pleasantries, or flowery marketing adjectives.
-- Evidence-Based: Every factual claim about dataset quality or metrics must be corroborated by the injected tool results. Never hallucinate row counts or metrics.`;
 
     // Dynamic Context Builder
     let dynamicContextPrompt = `### ACTIVE ORCHESTRATION CONTEXT\n`;

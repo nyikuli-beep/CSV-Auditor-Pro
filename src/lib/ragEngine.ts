@@ -1,5 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
-import { detectUserIntent, classifyDetailedIntent, AIIntentCategory, FineGrainedIntentCategory, IntentAnalysisResult } from './intentDetectionEngine';
+import { detectUserIntent, classifyDetailedIntent, isConversationalGreeting, AIIntentCategory, FineGrainedIntentCategory, IntentAnalysisResult } from './intentDetectionEngine';
 import { executeToolByName, ToolResult } from './aiToolRegistry';
 import { buildStructuredCSVContext, StructuredCSVContext } from './csvContextEngine';
 
@@ -467,6 +467,11 @@ export function retrieveKnowledgeChunks(
   options?: number | { knowledgeBaseId?: string; faqId?: string; intentCategory?: string; limit?: number },
   limitArg: number = 4
 ): KnowledgeChunk[] {
+  // 0. Pre-filter: If prompt is a conversational greeting, pleasantry, or small talk, return empty array immediately
+  if (isConversationalGreeting(prompt)) {
+    return [];
+  }
+
   let knowledgeBaseId: string | undefined;
   let limit = limitArg;
 
@@ -559,7 +564,14 @@ export function buildDynamicRAGPrompt(
   // System Prompt Customization by Intent Category
   let systemInstruction = '';
 
-  if (intentAnalysis.category === 'APP_EXPLANATION') {
+  if (intentAnalysis.category === 'CONVERSATIONAL_GREETING') {
+    systemInstruction =
+      `You are the official Enterprise Conversational Auditor for CSV Auditor Pro.\n` +
+      `The user has sent a friendly greeting, pleasantry, acknowledgment, or casual conversational remark.\n` +
+      `Respond directly, warmly, concisely, and professionally without citing documentation chunks or quoting manual excerpts.\n` +
+      `Introduce yourself briefly as the Conversational Auditor and summarize what you can assist with (CSV auditing, anomaly detection, data cleaning, schema validation, and statistical analysis).\n` +
+      `NEVER begin your response with "Regarding 'Hello':" or awkward template echos.`;
+  } else if (intentAnalysis.category === 'APP_EXPLANATION') {
     systemInstruction =
       `You are the friendly, articulate Conversational Auditor and official guide for CSV Auditor Pro.\n` +
       `The user is asking how the application works, specifically requesting a clear, non-technical explanation suitable for non-technical staff, managers, or beginners.\n` +
@@ -923,6 +935,8 @@ export async function generateRAGResponseStream(
 
   if (faqId && selectedKnowledgeBaseEntry) {
     fallbackAnswer = `### ${selectedKnowledgeBaseEntry.title}\n\n${selectedKnowledgeBaseEntry.content}`;
+  } else if (intentAnalysis.category === 'CONVERSATIONAL_GREETING') {
+    fallbackAnswer = `Hello! I am your Enterprise Conversational Auditor for CSV Auditor Pro.\n\nI can help you audit spreadsheet health, detect anomalies and duplicate rows, clean messy data, validate schemas, or calculate statistical metrics. How can I assist you with your data today?`;
   } else if (prompt.toLowerCase().includes('privacy') || prompt.toLowerCase().includes('third-party') || prompt.toLowerCase().includes('model training')) {
     const secChunk = KNOWLEDGE_BASE_CHUNKS.find(c => c.id === 'security_privacy_ai_training');
     fallbackAnswer = `### ${secChunk?.title || 'Data Privacy Protection'}\n\n${secChunk?.content}`;
@@ -1121,6 +1135,8 @@ export async function generateRAGResponse(
 
   if (faqId && selectedKnowledgeBaseEntry) {
     fallbackAnswer = `### ${selectedKnowledgeBaseEntry.title}\n\n${selectedKnowledgeBaseEntry.content}`;
+  } else if (intent === 'CONVERSATIONAL_GREETING') {
+    fallbackAnswer = `Hello! I am your Enterprise Conversational Auditor for CSV Auditor Pro. How can I assist you with dataset auditing, anomaly detection, or data hygiene today?`;
   } else if (prompt.toLowerCase().includes('privacy') || prompt.toLowerCase().includes('third-party') || prompt.toLowerCase().includes('model training')) {
     const secChunk = KNOWLEDGE_BASE_CHUNKS.find(c => c.id === 'security_privacy_ai_training');
     fallbackAnswer = `### ${secChunk?.title || 'Data Privacy Protection'}\n\n${secChunk?.content}`;
