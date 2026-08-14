@@ -26,7 +26,12 @@ import {
   ShieldCheck,
   Zap,
   Search,
-  Globe
+  Globe,
+  Users,
+  Layers,
+  Check,
+  Activity,
+  Award
 } from 'lucide-react';
 import { CSVFile, ChatMessage } from '../types';
 import { useBilling } from '../context/BillingContext';
@@ -42,7 +47,8 @@ interface InsightsCenterProps {
     image?: { data: string; mimeType: string } | null, 
     thinkingMode?: boolean,
     enableSearchGrounding?: boolean,
-    knowledgeBaseId?: string
+    knowledgeBaseId?: string,
+    explicitAgent?: string
   ) => void;
   isDarkMode: boolean;
   accentClass: string;
@@ -68,9 +74,10 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
     );
   }
 
-  // Model & Persona Configuration States
-  const [selectedModel, setSelectedModel] = useState<string>('gemini-3.5-flash');
+  // Model & Agent Configuration States
+  const [selectedModel, setSelectedModel] = useState<string>('gemini-3.7-flash');
   const [selectedPersona, setSelectedPersona] = useState<string>('auditor');
+  const [selectedAgent, setSelectedAgent] = useState<string>('auto');
   const [thinkingMode, setThinkingMode] = useState<boolean>(false);
   const [enableSearchGrounding, setEnableSearchGrounding] = useState<boolean>(false);
 
@@ -111,11 +118,11 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
   if (!activeFile) {
     return (
       <div className={`text-center py-20 border-2 border-dashed rounded-3xl animate-fadeIn ${
-        isDarkMode ? 'border-slate-800 bg-slate-900/20' : 'border-slate-300 bg-slate-50/50'
+        isDarkMode ? 'border-[#334155] bg-[#0F172A]/20' : 'border-[#CBD5E1] bg-[#F8FAFC]'
       }`}>
-        <FileSpreadsheet className={`w-12 h-12 mx-auto mb-4 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} />
-        <h3 className={`font-bold text-lg mb-1 ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>No Active Audit Dataset Loaded</h3>
-        <p className={`text-sm max-w-sm mx-auto mb-6 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+        <FileSpreadsheet className={`w-12 h-12 mx-auto mb-4 ${isDarkMode ? 'text-[#64748B]' : 'text-[#94A3B8]'}`} />
+        <h3 className={`font-bold text-lg mb-1 ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>No Active Audit Dataset Loaded</h3>
+        <p className={`text-sm max-w-sm mx-auto mb-6 ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#475569]'}`}>
           Upload a local spreadsheet or load our messy company transaction data to generate compliance insights.
         </p>
       </div>
@@ -130,6 +137,7 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
     const currentInput = userInput;
     const currentImg = attachedImage;
     const currentThinking = thinkingMode;
+    const currentAgent = selectedAgent === 'auto' ? undefined : selectedAgent;
 
     setUserInput('');
     setAttachedImage(null);
@@ -143,15 +151,19 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
       selectedPersona,
       currentImg,
       currentThinking,
-      enableSearchGrounding
+      enableSearchGrounding,
+      undefined,
+      currentAgent
     );
     setLoading(false);
   };
 
   // Trigger quick query suggestion
-  const handleSuggestionClick = (sug: { label: string; text: string; knowledgeBaseId?: string }) => {
+  const handleSuggestionClick = (sug: { label: string; text: string; knowledgeBaseId?: string; agentId?: string }) => {
     setUserInput(sug.text);
-    if (sug.knowledgeBaseId) {
+    const chosenAgent = sug.agentId || (selectedAgent === 'auto' ? undefined : selectedAgent);
+    
+    if (sug.knowledgeBaseId || sug.agentId) {
       setLoading(true);
       onSendMessage(
         sug.text,
@@ -160,7 +172,8 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
         attachedImage,
         thinkingMode,
         enableSearchGrounding,
-        sug.knowledgeBaseId
+        sug.knowledgeBaseId,
+        chosenAgent
       );
       setLoading(false);
       setUserInput('');
@@ -193,11 +206,6 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
           mimeType: file.type
         });
         setImagePreview(base64String);
-        
-        // Force model upgrade for multimodal if basic is active
-        if (selectedModel === 'gemini-3.1-flash-lite') {
-          setSelectedModel('gemini-3.1-pro-preview');
-        }
       };
     }
   };
@@ -205,7 +213,6 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
   // Audio Recording (Microphone Input & Speech Dictation) Logic
   const startRecording = async () => {
     try {
-      // 1. Initialize Browser SpeechRecognition if supported
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       let recognitionInstance: any = null;
       let speechTranscribed = false;
@@ -219,35 +226,27 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
 
           let baseInput = userInput;
           recognitionInstance.onresult = (event: any) => {
-            speechTranscribed = true;
-            let currentInterim = '';
-            let newFinal = '';
+            let transcript = '';
             for (let i = event.resultIndex; i < event.results.length; ++i) {
-              if (event.results[i].isFinal) {
-                newFinal += event.results[i][0].transcript;
-              } else {
-                currentInterim += event.results[i][0].transcript;
-              }
+              transcript += event.results[i][0].transcript;
             }
-            if (newFinal) {
-              baseInput = (baseInput ? baseInput.trim() + ' ' : '') + newFinal.trim();
+            if (transcript.trim()) {
+              speechTranscribed = true;
+              setUserInput(baseInput ? `${baseInput.trim()} ${transcript.trim()}` : transcript.trim());
             }
-            const combined = (baseInput ? baseInput.trim() + ' ' : '') + currentInterim.trim();
-            setUserInput(combined);
           };
 
-          recognitionInstance.onerror = (event: any) => {
-            console.warn("Speech Recognition notice:", event.error);
+          recognitionInstance.onerror = (e: any) => {
+            console.warn("SpeechRecognition encountered non-fatal event:", e);
           };
 
           recognitionInstance.start();
           speechRecognitionRef.current = recognitionInstance;
         } catch (srErr) {
-          console.warn("SpeechRecognition initialization failed, relying on audio stream recorder:", srErr);
+          console.warn("Native SpeechRecognition start error, using MediaRecorder fallback:", srErr);
         }
       }
 
-      // 2. Request microphone stream for MediaRecorder audio capture
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
@@ -260,7 +259,6 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
       };
 
       mediaRecorder.onstop = async () => {
-        // If live SpeechRecognition didn't produce text, use backend Gemini transcription
         if (!speechTranscribed && audioChunksRef.current.length > 0) {
           const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
           
@@ -292,7 +290,6 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
           };
         }
 
-        // Stop all audio tracks
         stream.getTracks().forEach(track => track.stop());
       };
 
@@ -317,27 +314,51 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
     }
   };
 
-  // Tailored suggestions based on current Persona
+  // Specialist suggestions
   const getSuggestions = () => {
-    switch (selectedPersona) {
-      case 'architect':
+    switch (selectedAgent) {
+      case 'data_quality':
         return [
-          { label: 'Generate Table DDL', text: 'Generate an optimal PostgreSQL CREATE TABLE script for this dataset with index keys and numeric scales.' },
-          { label: 'Normalize Schema', text: 'Explain how to decompose this CSV into 3NF normalized PostgreSQL tables with foreign keys.' },
-          { label: 'Database Ingestion Plan', text: 'Outline key index strategies, null fields, and database constraints for high-performance query execution.' }
+          { label: 'Audit Anomaly Rates', text: 'Analyze row violation counts, column error rates, and quality score breakdown for this dataset.', agentId: 'data_quality' },
+          { label: 'Check Critical Issues', text: 'Identify all critical severity duplicate keys and invalid format anomalies in the dataset.', agentId: 'data_quality' },
+          { label: 'Verify Schema Health', text: 'Evaluate header integrity, column data type consistency, and null distribution.', agentId: 'data_quality' }
         ];
-      case 'analyst':
+      case 'data_cleaning':
         return [
-          { label: 'Executive BI Brief', text: 'Summarize the strategic quarterly insights, conversion rates, and monthly revenue performance from this sheet.' },
-          { label: 'Formulate Growth Plan', text: 'Based on geographic segments, identify underperforming markets and outline an actionable growth strategy.' },
-          { label: 'ROI & Cost Analysis', text: 'Locate cash leak anomalies, high-outlier payouts, and operational hygiene risks in these rows.' }
+          { label: 'Formulate Cleaning Pipeline', text: 'Generate an automated step-by-step transformation script to fix missing values, duplicate records, and casing.', agentId: 'data_cleaning' },
+          { label: 'Standardize Date Formats', text: 'Detect all inconsistent date representations and output the ISO 8601 normalization strategy.', agentId: 'data_cleaning' },
+          { label: 'Missing Value Imputation', text: 'What is the optimal imputation method (mean, median, mode, forward-fill) for each blank column?', agentId: 'data_cleaning' }
         ];
-      default: // auditor
+      case 'statistical':
         return [
+          { label: 'Outlier & Z-Score Analysis', text: 'Run mathematical IQR and Z-score outlier detection across all numerical columns and report boundaries.', agentId: 'statistical' },
+          { label: 'Distribution & Variance', text: 'Calculate the mean, median, standard deviation, skewness, and min/max ranges for revenue and numerical metrics.', agentId: 'statistical' },
+          { label: 'Correlation Matrix', text: 'Identify statistical relationships and dependencies between transaction amounts, quantities, and timestamps.', agentId: 'statistical' }
+        ];
+      case 'compliance':
+        return [
+          { label: 'PII & Privacy Audit', text: 'Scan all columns for sensitive PII (emails, phone numbers, SSNs, credit card patterns) and assess GDPR compliance.', agentId: 'compliance' },
+          { label: 'Formula Injection Scan', text: 'Check if any cells contain dangerous formula injection prefixes (=, +, -, @) or CSV injection vectors.', agentId: 'compliance' },
+          { label: 'Regulatory Audit Trail', text: 'Generate an enterprise compliance verification summary ready for ISO 27001 and SOX data governance audits.', agentId: 'compliance' }
+        ];
+      case 'business_intelligence':
+        return [
+          { label: 'Executive KPI Brief', text: 'Synthesize quarterly revenue trends, high-value transaction clusters, and operational volume KPIs.', agentId: 'business_intelligence' },
+          { label: 'Segment Variance Analysis', text: 'Analyze transaction performance and average deal sizes grouped by categories or geographic regions.', agentId: 'business_intelligence' },
+          { label: 'Revenue Leakage Detection', text: 'Detect potential revenue loss, negative balances, duplicate billing, or uncollected invoice anomalies.', agentId: 'business_intelligence' }
+        ];
+      case 'product_support':
+        return [
+          { label: 'Non-Technical Staff Guide', text: 'Explain how the application works to non technical staff in simple, clear, non-technical terms.', knowledgeBaseId: 'non_technical_guide', agentId: 'product_support' },
+          { label: 'Data Cleaning & Dedupe', text: 'How do duplicate row detection and missing value imputation routines work?', knowledgeBaseId: 'data_cleaning_dedupe', agentId: 'product_support' },
+          { label: 'Security & Data Privacy', text: 'How does CSV Auditor Pro protect my data privacy and prevent third-party AI model training?', knowledgeBaseId: 'security_privacy_ai_training', agentId: 'product_support' }
+        ];
+      default: // auto / general
+        return [
+          { label: 'Complete Multi-Agent Audit', text: 'Run a collaborative multi-agent audit covering data quality issues, statistical outliers, and compliance risks.' },
           { label: 'Non-Technical Staff Guide', text: 'Explain how the application works to non technical staff in simple, clear, non-technical terms.', knowledgeBaseId: 'non_technical_guide' },
-          { label: 'Summarize Active CSV Dataset', text: 'Summarize my uploaded CSV dataset, key column statistics, data types, sample values, and quality issues.' },
-          { label: 'Data Cleaning & Dedupe', text: 'How do duplicate row detection and missing value imputation routines work?', knowledgeBaseId: 'data_cleaning_dedupe' },
-          { label: 'Security & Data Privacy', text: 'How does CSV Auditor Pro protect my data privacy and prevent third-party AI model training?', knowledgeBaseId: 'security_privacy_ai_training' }
+          { label: 'Revenue & Outlier Investigation', text: 'Identify revenue trends and detect anomalous transaction outliers affecting financial accuracy.' },
+          { label: 'Security & Model Privacy', text: 'How does CSV Auditor Pro protect my data privacy and prevent third-party AI model training?', knowledgeBaseId: 'security_privacy_ai_training' }
         ];
     }
   };
@@ -346,53 +367,43 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
   const quickInsightPrompts = activeFile ? [
     {
       id: 'error-patterns',
-      title: 'Summarize Top 5 Errors',
-      category: 'Error Patterns',
+      title: 'Top 5 Error Patterns',
+      category: 'Data Quality',
       prompt: `Summarize top 5 error patterns and compliance risks detected in active dataset "${activeFile.name}". Identify affected row indices, key column headers, and root cause corrections.`,
-      description: 'Finds top 5 duplicate keys, date syntax errors, and missing fields.',
       icon: AlertTriangle,
-      badgeBg: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-      pillBg: 'bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 border-amber-500/30'
+      pillBg: 'bg-[#FEF3C7] text-[#92400E] border-[#FCD34D] hover:bg-[#FDE68A]'
     },
     {
-      id: 'schema-drift',
-      title: 'Check for Schema Drift',
-      category: 'Schema Quality',
-      prompt: `Check for schema drift and structural anomalies in "${activeFile.name}". Compare column headers, data type consistency across rows, missing fields, and SQL table compatibility.`,
-      description: 'Audits header alignment, column data types, and null patterns.',
-      icon: Sliders,
-      badgeBg: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-      pillBg: 'bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 border-blue-500/30'
-    },
-    {
-      id: 'outliers',
-      title: 'Spot High-Risk Outliers',
-      category: 'Anomalies',
-      prompt: `Detect high-risk data outliers, duplicate transactions, monetary anomalies, and policy non-compliant values in "${activeFile.name}".`,
-      description: 'Identifies transaction outliers and duplicate record clusters.',
+      id: 'stat-outliers',
+      title: 'Statistical Outliers',
+      category: 'Statistical',
+      prompt: `Perform a statistical outlier audit on numeric fields in "${activeFile.name}". Compute IQR and Z-scores to pinpoint anomalous transactions.`,
       icon: TrendingDown,
-      badgeBg: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
-      pillBg: 'bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 border-rose-500/30'
+      pillBg: 'bg-[#F3E8FF] text-[#6B21A8] border-[#D8B4FE] hover:bg-[#E9D5FF]'
+    },
+    {
+      id: 'compliance-scan',
+      title: 'PII & Security Scan',
+      category: 'Compliance',
+      prompt: `Perform a comprehensive PII and formula security compliance audit on "${activeFile.name}". Verify email formatting, phone numbers, and formula injection safety.`,
+      icon: ShieldCheck,
+      pillBg: 'bg-[#EEF2FF] text-[#3730A3] border-[#C7D2FE] hover:bg-[#E0E7FF]'
     },
     {
       id: 'cleaning-script',
       title: 'Generate Cleaning Plan',
       category: 'Transformation',
       prompt: `Generate an automated cleaning and data transformation action plan for active dataset "${activeFile.name}" to achieve 100% compliance quality score.`,
-      description: 'Outlines step-by-step cleaning operations and transformation logic.',
       icon: Sparkles,
-      badgeBg: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-      pillBg: 'bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 border-emerald-500/30'
+      pillBg: 'bg-[#D1FAE5] text-[#065F46] border-[#6EE7B7] hover:bg-[#A7F3D0]'
     },
     {
-      id: 'type-integrity',
-      title: 'Verify ISO & Types',
-      category: 'Format Audit',
-      prompt: `Verify ISO date formats, email syntax validity, phone formats, and column data-type integrity across all rows in "${activeFile.name}".`,
-      description: 'Checks date consistency, email addresses, and type safety.',
-      icon: ShieldCheck,
-      badgeBg: 'bg-violet-500/10 text-violet-400 border-violet-500/20',
-      pillBg: 'bg-violet-500/10 text-violet-300 hover:bg-violet-500/20 border-violet-500/30'
+      id: 'bi-kpis',
+      title: 'Executive BI Brief',
+      category: 'Business Intelligence',
+      prompt: `Generate an executive BI summary for "${activeFile.name}" highlighting total metrics, high-volume categories, and strategic operational takeaways.`,
+      icon: BarChart3,
+      pillBg: 'bg-[#DBEAFE] text-[#1E40AF] border-[#93C5FD] hover:bg-[#BFDBFE]'
     }
   ] : [];
 
@@ -405,9 +416,33 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
       selectedPersona,
       attachedImage,
       thinkingMode,
-      enableSearchGrounding
+      enableSearchGrounding,
+      undefined,
+      selectedAgent === 'auto' ? undefined : selectedAgent
     );
     setLoading(false);
+  };
+
+  // Helper to render agent icon
+  const renderAgentIcon = (agentType?: string, className = "w-3.5 h-3.5") => {
+    switch (agentType) {
+      case 'data_quality':
+        return <Bot className={className} />;
+      case 'data_cleaning':
+        return <Sparkles className={className} />;
+      case 'statistical':
+        return <Activity className={className} />;
+      case 'compliance':
+        return <ShieldCheck className={className} />;
+      case 'business_intelligence':
+        return <BarChart3 className={className} />;
+      case 'product_support':
+        return <HelpCircle className={className} />;
+      case 'general_knowledge':
+        return <BrainCircuit className={className} />;
+      default:
+        return <Layers className={className} />;
+    }
   };
 
   return (
@@ -415,30 +450,41 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <span className="text-xs font-mono font-bold text-blue-500 uppercase tracking-widest flex items-center gap-1">
-            <BrainCircuit className="w-3.5 h-3.5 animate-pulse" /> Advanced Core
-          </span>
-          <h1 className={`text-2xl md:text-3xl font-extrabold tracking-tight ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
-            AI Insights & Auditing
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs font-mono font-bold text-[#2563EB] uppercase tracking-wider flex items-center gap-1.5">
+              <BrainCircuit className="w-3.5 h-3.5 text-[#2563EB]" /> Enterprise Specialist AI Agents
+            </span>
+            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#DBEAFE] text-[#1E40AF] border border-[#BFDBFE]">
+              Phase 2 Orchestrated
+            </span>
+          </div>
+          <h1 className={`text-2xl md:text-3xl font-extrabold tracking-tight ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
+            AI Insights & Conversational Auditor
           </h1>
-          <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-            Configure your AI analyst settings, analyze physical receipts or screenshots, and run detailed multi-turn audits.
+          <p className={`text-sm mt-1 ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#475569]'}`}>
+            Autonomous multi-agent orchestration routing requests to dedicated Data Quality, Statistical, Compliance, Cleaning, and BI specialists.
           </p>
         </div>
 
         {/* Global Configuration Controls Panel */}
-        <div className={`p-3 rounded-xl border flex flex-wrap items-center gap-3 text-xs ${isDarkMode ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200 shadow-xs'}`}>
-          {/* Persona selector */}
+        <div className={`p-3 rounded-xl border flex flex-wrap items-center gap-3 text-xs ${isDarkMode ? 'bg-[#0F172A] border-[#334155]' : 'bg-[#FFFFFF] border-[#E2E8F0] shadow-xs'}`}>
+          
+          {/* Specialist Agent Routing Selector */}
           <div className="flex items-center gap-1.5">
-            <Sliders className={`w-3.5 h-3.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} />
+            <Layers className={`w-3.5 h-3.5 ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`} />
             <select 
-              value={selectedPersona} 
-              onChange={(e) => setSelectedPersona(e.target.value)}
-              className={`px-2 py-1 rounded-md border focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-800'}`}
+              value={selectedAgent} 
+              onChange={(e) => setSelectedAgent(e.target.value)}
+              className={`px-2 py-1 rounded-md border focus:outline-none focus:ring-1 focus:ring-[#2563EB] font-medium ${isDarkMode ? 'bg-[#020617] border-[#334155] text-[#F8FAFC]' : 'bg-[#F8FAFC] border-[#CBD5E1] text-[#0F172A]'}`}
             >
-              <option value="auditor">Compliance Auditor</option>
-              <option value="architect">PostgreSQL Architect</option>
-              <option value="analyst">Business BI Analyst</option>
+              <option value="auto">Auto Orchestrator (Multi-Agent)</option>
+              <option value="data_quality">Data Quality Auditor</option>
+              <option value="data_cleaning">Data Cleaning Specialist</option>
+              <option value="statistical">Statistical Analyst</option>
+              <option value="compliance">Compliance & Integrity Auditor</option>
+              <option value="business_intelligence">Business Intelligence Analyst</option>
+              <option value="product_support">Product & Technical Support</option>
+              <option value="general_knowledge">General Knowledge Assistant</option>
             </select>
           </div>
 
@@ -446,23 +492,23 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
           <select 
             value={selectedModel} 
             onChange={(e) => setSelectedModel(e.target.value)}
-            className={`px-2 py-1 rounded-md border focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-800'}`}
+            className={`px-2 py-1 rounded-md border focus:outline-none focus:ring-1 focus:ring-[#2563EB] font-medium ${isDarkMode ? 'bg-[#020617] border-[#334155] text-[#F8FAFC]' : 'bg-[#F8FAFC] border-[#CBD5E1] text-[#0F172A]'}`}
           >
-            <option value="gemini-3.5-flash">Gemini 3.5 Flash (General)</option>
-            <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (Complex/SQL)</option>
+            <option value="gemini-3.7-flash">Gemini 3.7 Flash (Default)</option>
+            <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (Deep Analysis)</option>
             <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Fast)</option>
           </select>
 
           {/* Google Search Grounding Toggle */}
-          <div className={`flex items-center gap-2 border-l pl-3 ${isDarkMode ? 'border-slate-800/60' : 'border-slate-200'}`}>
-            <Globe className={`w-3.5 h-3.5 ${enableSearchGrounding ? 'text-cyan-400' : isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} />
-            <span className={`font-medium ${enableSearchGrounding ? 'text-cyan-400 font-bold' : isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+          <div className={`flex items-center gap-2 border-l pl-3 ${isDarkMode ? 'border-[#334155]' : 'border-[#E2E8F0]'}`}>
+            <Globe className={`w-3.5 h-3.5 ${enableSearchGrounding ? 'text-[#0284C7]' : isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`} />
+            <span className={`font-medium ${enableSearchGrounding ? 'text-[#0284C7] font-bold' : isDarkMode ? 'text-[#94A3B8]' : 'text-[#475569]'}`}>
               Search Grounding
             </span>
             <button 
               type="button"
               onClick={() => setEnableSearchGrounding(!enableSearchGrounding)}
-              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${enableSearchGrounding ? 'bg-cyan-600' : 'bg-slate-700'}`}
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${enableSearchGrounding ? 'bg-[#0284C7]' : 'bg-[#334155]'}`}
               title="Enable or disable web-based fact-checking for data analysis queries"
             >
               <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${enableSearchGrounding ? 'translate-x-4' : 'translate-x-0'}`} />
@@ -470,18 +516,14 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
           </div>
 
           {/* High Thinking Mode Toggle */}
-          <div className={`flex items-center gap-2 border-l pl-3 ${isDarkMode ? 'border-slate-800/60' : 'border-slate-200'}`}>
-            <span className={`font-medium ${thinkingMode ? 'text-blue-500' : isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>High Thinking</span>
+          <div className={`flex items-center gap-2 border-l pl-3 ${isDarkMode ? 'border-[#334155]' : 'border-[#E2E8F0]'}`}>
+            <span className={`font-medium ${thinkingMode ? 'text-[#2563EB]' : isDarkMode ? 'text-[#94A3B8]' : 'text-[#475569]'}`}>Thinking Mode</span>
             <button 
               type="button"
               onClick={() => {
                 setThinkingMode(!thinkingMode);
-                if (!thinkingMode) {
-                  // Force Pro model for High Thinking
-                  setSelectedModel('gemini-3.1-pro-preview');
-                }
               }}
-              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${thinkingMode ? 'bg-blue-600' : 'bg-slate-700'}`}
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${thinkingMode ? 'bg-[#2563EB]' : 'bg-[#334155]'}`}
             >
               <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${thinkingMode ? 'translate-x-4' : 'translate-x-0'}`} />
             </button>
@@ -489,159 +531,124 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
         </div>
       </div>
 
-      {/* Quick Insight Diagnostics Banner for Active File */}
+      {/* Active File Diagnostic Target Strip */}
       {activeFile && (
-        <div className={`p-5 rounded-2xl border transition-all ${isDarkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
-          <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-dashed ${isDarkMode ? 'border-slate-800/60' : 'border-slate-200'}`}>
+        <div className={`p-4 rounded-2xl border transition-all ${isDarkMode ? 'bg-[#0F172A] border-[#334155]' : 'bg-[#FFFFFF] border-[#E2E8F0] shadow-xs'}`}>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-500 border border-blue-500/20 shrink-0">
+              <div className="p-2.5 rounded-xl bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] shrink-0">
                 <FileSpreadsheet className="w-5 h-5" />
               </div>
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className={`font-bold text-sm ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>{activeFile.name}</h2>
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    Active File Diagnostic Target
+                  <h2 className={`font-bold text-sm ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>{activeFile.name}</h2>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[#D1FAE5] text-[#065F46] border border-[#6EE7B7]">
+                    Active Audit Target
+                  </span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#F1F5F9] text-[#475569] border border-[#E2E8F0]">
+                    Quality Score: {activeFile.score}%
                   </span>
                 </div>
-                <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                  {activeFile.rows.length} records • {activeFile.headers.length} schema headers • {activeFile.issues.length} active violations
+                <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#475569]'}`}>
+                  {activeFile.rows.length} rows • {activeFile.headers.length} headers • {activeFile.issues.length} issues detected
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-mono font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 flex items-center gap-1.5">
-                <Zap className="w-3.5 h-3.5 fill-amber-400 text-amber-400 animate-pulse" />
-                Quick Insights Active
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-mono font-bold text-[#1E40AF] bg-[#DBEAFE] px-2.5 py-1 rounded-lg border border-[#93C5FD] flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-[#1E40AF]" />
+                7 Enterprise Specialist Agents Online
               </span>
-            </div>
-          </div>
-
-          <div className="mt-4">
-            <div className="flex items-center justify-between mb-3">
-              <span className={`text-xs font-bold flex items-center gap-1.5 uppercase tracking-wider ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-                Automated Diagnostic Prompts
-              </span>
-              <span className={`text-[10px] font-mono hidden sm:inline ${isDarkMode ? 'text-slate-500' : 'text-slate-600'}`}>
-                Click any prompt to instantly execute AI analysis on active dataset
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-              {quickInsightPrompts.map((qi) => {
-                const IconComponent = qi.icon;
-                return (
-                  <button
-                    key={qi.id}
-                    type="button"
-                    onClick={() => handleRunQuickInsight(qi.prompt)}
-                    disabled={loading}
-                    className={`p-3 rounded-xl border text-left transition-all duration-200 group hover:scale-[1.02] active:scale-[0.98] cursor-pointer flex flex-col justify-between ${
-                      isDarkMode 
-                        ? 'bg-slate-950/70 border-slate-800 hover:border-blue-500/60 hover:bg-slate-900' 
-                        : 'bg-slate-50 border-slate-200 hover:border-blue-400 hover:bg-blue-50/50 shadow-xs'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <div className={`p-1.5 rounded-lg border ${qi.badgeBg}`}>
-                          <IconComponent className="w-4 h-4" />
-                        </div>
-                        <span className={`text-[8px] font-bold font-mono px-1.5 py-0.5 rounded border uppercase ${qi.badgeBg}`}>
-                          {qi.category}
-                        </span>
-                      </div>
-
-                      <h4 className={`font-bold text-xs group-hover:text-blue-500 transition-colors ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                        {qi.title}
-                      </h4>
-                      <p className={`text-[10px] mt-1 line-clamp-2 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                        {qi.description}
-                      </p>
-                    </div>
-
-                    <div className={`mt-3 pt-2 border-t flex items-center justify-between text-[9px] font-bold transition-colors ${isDarkMode ? 'border-slate-800/40 text-slate-500 group-hover:text-blue-400' : 'border-slate-200 text-slate-600 group-hover:text-blue-600'}`}>
-                      <span className="font-mono flex items-center gap-1">
-                        <Zap className="w-2.5 h-2.5 text-amber-400 fill-amber-400" /> Run Prompt
-                      </span>
-                      <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
-                    </div>
-                  </button>
-                );
-              })}
             </div>
           </div>
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Left Side: Dynamic Persona Insights & Recommendations */}
+      {/* Main Grid: Left side Context / Suggestions, Right side Chat Assistant */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        {/* Left Side: Specialist Agent Status & Directives */}
         <div className="lg:col-span-5 space-y-6">
           
-          {/* Persona Card banner */}
-          <div className={`p-6 rounded-2xl border relative overflow-hidden ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
-            <div className="absolute top-0 right-0 p-8 opacity-5">
-              {selectedPersona === 'architect' ? <Database className="w-32 h-32" /> : selectedPersona === 'analyst' ? <BarChart3 className="w-32 h-32" /> : <Bot className="w-32 h-32" />}
+          {/* Active Agent Banner Card */}
+          <div className={`p-6 rounded-2xl border relative overflow-hidden ${isDarkMode ? 'bg-[#0F172A] border-[#334155]' : 'bg-[#FFFFFF] border-[#E2E8F0] shadow-xs'}`}>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <span className="px-2.5 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-[#EFF6FF] text-[#1D4ED8] border border-[#BFDBFE]">
+                {selectedAgent === 'auto' ? 'Orchestrator Mode' : 'Specialist Agent Assigned'}
+              </span>
+              <span className="text-[10px] font-mono text-[#64748B]">Deterministic Tools Linked</span>
             </div>
             
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono uppercase bg-blue-500/10 text-blue-400 border border-blue-500/20">
-              Active Session Persona
-            </span>
-            
-            <h2 className={`text-xl font-bold mt-2 flex items-center gap-2 ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
-              {selectedPersona === 'architect' ? (
+            <h2 className={`text-xl font-bold mt-2 flex items-center gap-2 ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
+              {selectedAgent === 'data_quality' ? (
                 <>
-                  <Database className="w-5 h-5 text-blue-500 shrink-0" />
-                  <span>PostgreSQL Database Architect</span>
+                  <Bot className="w-5 h-5 text-[#2563EB] shrink-0" />
+                  <span>Data Quality Specialist</span>
                 </>
-              ) : selectedPersona === 'analyst' ? (
+              ) : selectedAgent === 'data_cleaning' ? (
                 <>
-                  <BarChart3 className="w-5 h-5 text-emerald-500 shrink-0" />
-                  <span>Strategic BI Analyst</span>
+                  <Sparkles className="w-5 h-5 text-[#059669] shrink-0" />
+                  <span>Data Cleaning Specialist</span>
+                </>
+              ) : selectedAgent === 'statistical' ? (
+                <>
+                  <Activity className="w-5 h-5 text-[#7C3AED] shrink-0" />
+                  <span>Statistical Analysis Specialist</span>
+                </>
+              ) : selectedAgent === 'compliance' ? (
+                <>
+                  <ShieldCheck className="w-5 h-5 text-[#4F46E5] shrink-0" />
+                  <span>Compliance & Integrity Specialist</span>
+                </>
+              ) : selectedAgent === 'business_intelligence' ? (
+                <>
+                  <BarChart3 className="w-5 h-5 text-[#D97706] shrink-0" />
+                  <span>Business Intelligence Specialist</span>
+                </>
+              ) : selectedAgent === 'product_support' ? (
+                <>
+                  <HelpCircle className="w-5 h-5 text-[#0891B2] shrink-0" />
+                  <span>Product & Technical Support Agent</span>
+                </>
+              ) : selectedAgent === 'general_knowledge' ? (
+                <>
+                  <BrainCircuit className="w-5 h-5 text-[#475569] shrink-0" />
+                  <span>General Knowledge Assistant</span>
                 </>
               ) : (
                 <>
-                  <ShieldCheck className="w-5 h-5 text-indigo-500 shrink-0" />
-                  <span>Data Compliance Auditor</span>
+                  <Layers className="w-5 h-5 text-[#2563EB] shrink-0" />
+                  <span>AI Agent Orchestrator</span>
                 </>
               )}
             </h2>
 
-            <p className={`text-xs mt-2 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-              {selectedPersona === 'architect' ? (
-                "Equipped with advanced understanding of physical schema design, normalization indexes, foreign key trees, transactional scaling, and complete SQL scripting."
-              ) : selectedPersona === 'analyst' ? (
-                "Specialized in calculating corporate ROI yields, identifying financial growth leaks, monthly transaction variances, and business KPI pipelines."
+            <p className={`text-xs mt-2 leading-relaxed ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#475569]'}`}>
+              {selectedAgent === 'data_quality' ? (
+                "Directly audits anomaly rates, missing value ratios, duplicate records, schema violations, and data health scores across all columns."
+              ) : selectedAgent === 'data_cleaning' ? (
+                "Specialized in data transformations, duplicate resolution, date ISO standardization, text normalization, and imputation pipelines."
+              ) : selectedAgent === 'statistical' ? (
+                "Computes IQR, standard deviation, Z-score outlier boundaries, correlations, and distribution metrics with mathematical rigor."
+              ) : selectedAgent === 'compliance' ? (
+                "Ensures strict compliance with PII privacy policies (GDPR/HIPAA/CCPA), formula injection safety (=, +, -, @), and regulatory audit trails."
+              ) : selectedAgent === 'business_intelligence' ? (
+                "Extracts commercial KPIs, revenue velocity, category distributions, transaction trends, and executive actionable insights."
+              ) : selectedAgent === 'product_support' ? (
+                "Explains CSV Auditor Pro capabilities, cleaning operations, export formats, local privacy protections, and user workflows."
+              ) : selectedAgent === 'general_knowledge' ? (
+                "Answers broad domain queries, general concepts, programming questions, and technical topics."
               ) : (
-                "Expert in identifying format discrepancies, tracking data-type anomalies, resolving duplicate identifiers, and ensuring strict regulatory compliance."
+                "Automatically classifies your request, routes to the most qualified specialist agent, executes deterministic tools, and coordinates multi-agent collaboration for complex cross-domain queries."
               )}
             </p>
           </div>
 
-          {/* Executive Summary Portfolio */}
-          <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
-            <h3 className={`font-bold text-sm uppercase tracking-wider mb-4 flex items-center gap-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
-              <Sparkles className="w-4 h-4 text-yellow-500 animate-pulse" /> Executive AI Summary
-            </h3>
-            <div className={`p-4 rounded-xl text-xs leading-relaxed space-y-3 ${isDarkMode ? 'bg-slate-950/50 text-slate-300' : 'bg-slate-50 text-slate-700'}`}>
-              <p>
-                Spreadsheet <strong>{activeFile.name}</strong> contains {activeFile.rows.length} rows and {activeFile.headers.length} mapped headers. An automated evaluation flags {activeFile.issues.length} active violations across duplicate checks, numeric columns, and standard ISO formats.
-              </p>
-              <p>
-                <strong>Major Exposure Risk:</strong> Multiple duplicate keys (such as transaction IDs) are recorded. This compromises aggregation metrics, skewing calculated cash assets. Date formats fail ISO compatibility in row 5.
-              </p>
-              <p>
-                <strong>Key Action:</strong> Execute <em>Remove Duplicates</em> and <em>Standardize Dates</em> inside our Cleaning Centers. This immediately corrects the grading profile to A+.
-              </p>
-            </div>
-          </div>
-
-          {/* Prompt Suggestions */}
+          {/* Suggested Prompts for Active Specialist */}
           <div className="space-y-2">
-            <span className={`text-[10px] font-mono font-bold uppercase tracking-widest flex items-center gap-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
-              <Compass className="w-3.5 h-3.5" /> Prompt Guidelines
+            <span className={`text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#475569]'}`}>
+              <Compass className="w-3.5 h-3.5 text-[#2563EB]" /> Recommended Specialist Prompts
             </span>
             <div className="grid grid-cols-1 gap-2">
               {getSuggestions().map((sug, i) => (
@@ -649,52 +656,58 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
                   key={i}
                   type="button"
                   onClick={() => handleSuggestionClick(sug)}
-                  className={`p-3 rounded-xl border text-left text-xs transition-all duration-150 hover:scale-[1.01] active:scale-[0.99] cursor-pointer flex items-center justify-between gap-3 group ${isDarkMode ? 'bg-slate-900/40 border-slate-800 text-slate-300 hover:bg-slate-800/40 hover:text-white' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-2xs'}`}
+                  className={`p-3 rounded-xl border text-left text-xs transition-all duration-150 hover:scale-[1.005] active:scale-[0.99] cursor-pointer flex items-center justify-between gap-3 group ${isDarkMode ? 'bg-[#0F172A] border-[#334155] text-[#CBD5E1] hover:bg-[#1E293B] hover:text-white' : 'bg-[#FFFFFF] border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC] shadow-2xs'}`}
                 >
                   <div>
-                    <span className="font-bold text-blue-500 text-[10px] uppercase block mb-0.5">{sug.label}</span>
-                    <span className={`line-clamp-2 leading-relaxed ${isDarkMode ? 'text-slate-400 group-hover:text-slate-300' : 'text-slate-600 group-hover:text-slate-900'}`}>{sug.text}</span>
+                    <span className="font-bold text-[#2563EB] text-[10px] uppercase block mb-0.5">{sug.label}</span>
+                    <span className={`line-clamp-2 leading-relaxed ${isDarkMode ? 'text-[#94A3B8] group-hover:text-[#E2E8F0]' : 'text-[#475569] group-hover:text-[#0F172A]'}`}>{sug.text}</span>
                   </div>
-                  <ArrowRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-blue-500 shrink-0 transition-colors" />
+                  <ArrowRight className="w-3.5 h-3.5 text-[#94A3B8] group-hover:text-[#2563EB] shrink-0 transition-colors" />
                 </button>
               ))}
             </div>
           </div>
         </div>
 
-        {/* Right Side: Advanced Chat Assistant Panel */}
-        <div className="lg:col-span-7 flex flex-col justify-between h-[520px]">
-          <div className={`p-6 rounded-3xl border flex-1 flex flex-col justify-between overflow-hidden relative ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+        {/* Right Side: Multi-Agent Conversational Auditor Panel */}
+        <div className="lg:col-span-7 flex flex-col justify-between h-[640px]">
+          <div className={`p-6 rounded-3xl border flex-1 flex flex-col justify-between overflow-hidden relative ${isDarkMode ? 'bg-[#0F172A] border-[#334155]' : 'bg-[#FFFFFF] border-[#E2E8F0] shadow-xs'}`}>
             
-            {/* Active Model Indicator Header */}
-            <div className={`flex justify-between items-center border-b border-dashed pb-4 mb-4 ${isDarkMode ? 'border-slate-800/60' : 'border-slate-200'}`}>
+            {/* Active Model & Agent Indicator Header */}
+            <div className={`flex justify-between items-center border-b border-dashed pb-4 mb-4 ${isDarkMode ? 'border-[#334155]' : 'border-[#E2E8F0]'}`}>
               <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-blue-500/10 text-blue-500 rounded-xl">
+                <div className="p-2 bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] rounded-xl">
                   <MessageSquare className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className={`font-bold text-xs uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>Conversational Auditor</h3>
-                  <p className={`text-[10px] mt-0.5 flex items-center gap-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-600'}`}>
-                    <span>Engine:</span> 
-                    <span className="font-mono font-bold text-blue-500 uppercase">
-                      {selectedModel} {thinkingMode && "(High Thinking)"} {enableSearchGrounding && "(Search Grounded)"}
+                  <h3 className={`font-bold text-xs uppercase tracking-wider ${isDarkMode ? 'text-[#CBD5E1]' : 'text-[#334155]'}`}>
+                    Enterprise Conversational Auditor
+                  </h3>
+                  <p className={`text-[10px] mt-0.5 flex items-center gap-1.5 ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
+                    <span>Agent Mode:</span> 
+                    <span className="font-mono font-bold text-[#2563EB] uppercase">
+                      {selectedAgent === 'auto' ? 'AI Orchestrator' : selectedAgent.replace('_', ' ')}
+                    </span>
+                    <span>•</span>
+                    <span className="font-mono text-[#64748B]">
+                      {selectedModel}
                     </span>
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 {enableSearchGrounding && (
-                  <span className="px-2 py-0.5 text-[8px] font-bold uppercase rounded-md bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center gap-1">
+                  <span className="px-2 py-0.5 text-[8px] font-bold uppercase rounded-md bg-[#E0F2FE] text-[#0369A1] border border-[#BAE6FD] flex items-center gap-1">
                     <Globe className="w-2.5 h-2.5 shrink-0" />
                     Grounding ON
                   </span>
                 )}
                 {thinkingMode && (
-                  <span className="px-2 py-0.5 text-[8px] font-bold uppercase rounded-md bg-purple-500/10 text-purple-400 border border-purple-500/20 animate-pulse">
+                  <span className="px-2 py-0.5 text-[8px] font-bold uppercase rounded-md bg-[#F3E8FF] text-[#6B21A8] border border-[#D8B4FE]">
                     Thinking ON
                   </span>
                 )}
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span className="h-2 w-2 rounded-full bg-[#10B981]"></span>
               </div>
             </div>
 
@@ -703,66 +716,125 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
               {chatMessages.map((msg) => (
                 <div 
                   key={msg.id}
-                  className={`flex gap-3 items-start max-w-[85%] ${msg.role === 'user' ? 'ml-auto flex-row-reverse' : ''}`}
+                  className={`flex gap-3 items-start max-w-[90%] ${msg.role === 'user' ? 'ml-auto flex-row-reverse' : ''}`}
                 >
-                  <div className={`p-2 rounded-full font-bold text-[9px] flex items-center justify-center shrink-0 w-8 h-8 text-white ${msg.role === 'user' ? 'bg-blue-600' : 'bg-slate-800'}`}>
-                    {msg.role === 'user' ? 'ME' : 'AI'}
+                  <div className={`p-2 rounded-full font-bold text-[9px] flex items-center justify-center shrink-0 w-8 h-8 text-white ${msg.role === 'user' ? 'bg-[#2563EB]' : 'bg-[#1E293B]'}`}>
+                    {msg.role === 'user' ? 'YOU' : (
+                      renderAgentIcon(msg.activeAgent, "w-4 h-4 text-white")
+                    )}
                   </div>
-                  <div className={`p-3.5 rounded-2xl relative ${msg.role === 'user' ? 'bg-[#2563EB] text-white rounded-tr-none shadow-sm' : isDarkMode ? 'bg-[#1E293B] border border-[#334155] text-[#F8FAFC] rounded-tl-none' : 'bg-[#F1F5F9] border border-[#E2E8F0] text-[#0F172A] rounded-tl-none'}`}>
+                  <div className={`p-3.5 rounded-2xl relative ${msg.role === 'user' ? 'bg-[#2563EB] text-white rounded-tr-none shadow-xs' : isDarkMode ? 'bg-[#1E293B] border border-[#334155] text-[#F8FAFC] rounded-tl-none' : 'bg-[#F8FAFC] border border-[#E2E8F0] text-[#0F172A] rounded-tl-none'}`}>
                     
-                    {/* Intent Classification & Tool Badges Header for Assistant */}
-                    {msg.role === 'assistant' && (msg.intentCategory || msg.executedTools) && (
-                      <div className="mb-2.5 pb-2 border-b border-slate-800/40 flex flex-wrap items-center gap-1.5">
-                        {msg.intentCategory && (
+                    {/* Header for Assistant: Primary Agent Badge & Multi-Agent Collaboration Badges */}
+                    {msg.role === 'assistant' && (
+                      <div className="mb-2.5 pb-2 border-b border-[#334155]/40 flex flex-wrap items-center gap-1.5">
+                        
+                        {/* Primary Specialist Agent Badge */}
+                        {msg.activeAgentName && (
                           <span className={`px-2 py-0.5 rounded-md text-[9px] font-mono font-bold border uppercase flex items-center gap-1 ${
-                            msg.intentCategory === 'CSV_ANALYSIS' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
-                            msg.intentCategory === 'GENERAL_AI' ? 'bg-blue-500/10 text-blue-400 border-blue-500/30' :
-                            msg.intentCategory === 'MIXED_REQUEST' ? 'bg-purple-500/10 text-purple-400 border-purple-500/30' :
-                            'bg-slate-800 text-slate-300 border-slate-700'
+                            msg.activeAgent === 'data_quality' ? 'bg-[#DBEAFE] text-[#1E40AF] border-[#93C5FD]' :
+                            msg.activeAgent === 'data_cleaning' ? 'bg-[#D1FAE5] text-[#065F46] border-[#6EE7B7]' :
+                            msg.activeAgent === 'statistical' ? 'bg-[#F3E8FF] text-[#6B21A8] border-[#D8B4FE]' :
+                            msg.activeAgent === 'compliance' ? 'bg-[#EEF2FF] text-[#3730A3] border-[#C7D2FE]' :
+                            msg.activeAgent === 'business_intelligence' ? 'bg-[#FEF3C7] text-[#92400E] border-[#FCD34D]' :
+                            msg.activeAgent === 'product_support' ? 'bg-[#E0F2FE] text-[#0369A1] border-[#BAE6FD]' :
+                            'bg-[#F1F5F9] text-[#334155] border-[#CBD5E1]'
                           }`}>
-                            <Zap className="w-2.5 h-2.5" />
-                            <span>
-                              {msg.intentCategory === 'CSV_ANALYSIS' ? 'CSV Analysis' :
-                               msg.intentCategory === 'GENERAL_AI' ? 'General AI' :
-                               msg.intentCategory === 'MIXED_REQUEST' ? 'Hybrid AI' : 'AI Response'}
-                              {msg.confidenceScore ? ` (${Math.round(msg.confidenceScore * 100)}%)` : ''}
-                            </span>
+                            {renderAgentIcon(msg.activeAgent, "w-2.5 h-2.5")}
+                            <span>Lead: {msg.activeAgentName}</span>
                           </span>
                         )}
 
-                        {msg.executedTools && msg.executedTools.map((tName, tIdx) => (
-                          <span key={tIdx} className="px-1.5 py-0.5 rounded text-[8px] font-mono bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1">
-                            <Bot className="w-2.5 h-2.5 text-amber-400" />
+                        {/* Intent Classification Badge */}
+                        {msg.intentCategory && !msg.activeAgentName && (
+                          <span className="px-2 py-0.5 rounded-md text-[9px] font-mono font-bold border uppercase flex items-center gap-1 bg-[#DBEAFE] text-[#1E40AF] border-[#93C5FD]">
+                            <Zap className="w-2.5 h-2.5" />
+                            <span>{msg.intentCategory.replace('_', ' ')}</span>
+                          </span>
+                        )}
+
+                        {/* Multi-Agent Collaborator Badges */}
+                        {msg.collaboratingAgents && msg.collaboratingAgents.length > 0 && (
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <span className="text-[8px] font-mono font-bold text-[#64748B] uppercase">Collabs:</span>
+                            {msg.collaboratingAgents.map((collab, cIdx) => (
+                              <span key={cIdx} className="px-1.5 py-0.5 rounded text-[8px] font-mono bg-[#F1F5F9] text-[#334155] border border-[#CBD5E1] flex items-center gap-1">
+                                {renderAgentIcon(collab.id, "w-2 h-2")}
+                                <span>{collab.name}</span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Executed Tools Badges */}
+                        {msg.executedTools && msg.executedTools.length > 0 && msg.executedTools.map((tName, tIdx) => (
+                          <span key={tIdx} className="px-1.5 py-0.5 rounded text-[8px] font-mono bg-[#FEF3C7] text-[#92400E] border border-[#FCD34D] flex items-center gap-1">
+                            <Bot className="w-2.5 h-2.5" />
                             <span>Tool: {tName}</span>
                           </span>
                         ))}
                       </div>
                     )}
 
-                    <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                    {/* Chat Content Body */}
+                    <div className="leading-relaxed whitespace-pre-wrap font-sans text-xs">
+                      {msg.content}
+                    </div>
+
+                    {/* Structured Audit Evidence Cards */}
+                    {msg.role === 'assistant' && msg.evidenceCollected && msg.evidenceCollected.length > 0 && (
+                      <div className="mt-3 pt-2.5 border-t border-[#334155]/30 space-y-1.5">
+                        <span className="text-[9px] font-bold text-[#64748B] uppercase tracking-wider flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-[#059669]" /> Verified Audit Evidence:
+                        </span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                          {msg.evidenceCollected.map((ev, eIdx) => (
+                            <div 
+                              key={eIdx}
+                              className={`p-2 rounded-lg border text-[10px] ${
+                                isDarkMode ? 'bg-[#0F172A] border-[#334155] text-[#CBD5E1]' : 'bg-[#FFFFFF] border-[#E2E8F0] text-[#334155]'
+                              }`}
+                            >
+                              <div className="flex justify-between items-center mb-0.5">
+                                <span className="font-bold text-[#2563EB]">{ev.metricLabel}</span>
+                                <span className="font-mono font-bold text-[#059669]">{String(ev.metricValue)}</span>
+                              </div>
+                              <div className="flex justify-between items-center text-[8px] text-[#64748B]">
+                                <span>Source: {ev.sourceName}</span>
+                                <span>Confidence: {Math.round(ev.confidence * 100)}%</span>
+                              </div>
+                              {ev.columnsInvolved && ev.columnsInvolved.length > 0 && (
+                                <div className="text-[8px] text-[#64748B] truncate mt-0.5">
+                                  Columns: {ev.columnsInvolved.join(', ')}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     
                     {/* RAG Grounded Sources & Citations */}
                     {msg.role === 'assistant' && msg.citations && msg.citations.length > 0 && (
-                      <div className="mt-3 pt-2.5 border-t border-slate-800/40 flex flex-wrap gap-1.5 items-center">
-                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mr-1">Sources:</span>
+                      <div className="mt-3 pt-2.5 border-t border-[#334155]/30 flex flex-wrap gap-1.5 items-center">
+                        <span className="text-[9px] font-bold text-[#64748B] uppercase tracking-wider mr-1">Sources:</span>
                         {msg.citations.map((c, idx) => {
                           const cleanLabel = c.label.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
                           return (
                             <span 
                               key={idx} 
                               className={`px-2 py-0.5 rounded-md text-[9px] font-mono border flex items-center gap-1 ${
-                                c.type === 'doc' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                                c.type === 'dataset' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                                c.type === 'memory' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
-                                c.type === 'web' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' :
-                                'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                                c.type === 'doc' ? 'bg-[#EFF6FF] text-[#1E40AF] border-[#BFDBFE]' :
+                                c.type === 'dataset' ? 'bg-[#D1FAE5] text-[#065F46] border-[#6EE7B7]' :
+                                c.type === 'agent' ? 'bg-[#F3E8FF] text-[#6B21A8] border-[#D8B4FE]' :
+                                c.type === 'web' ? 'bg-[#E0F2FE] text-[#0369A1] border-[#BAE6FD]' :
+                                'bg-[#F1F5F9] text-[#334155] border-[#CBD5E1]'
                               }`}
                             >
-                              {c.type === 'doc' && <FileSpreadsheet className="w-2.5 h-2.5 text-blue-400 shrink-0" />}
-                              {c.type === 'dataset' && <Database className="w-2.5 h-2.5 text-emerald-400 shrink-0" />}
-                              {c.type === 'memory' && <MessageSquare className="w-2.5 h-2.5 text-amber-400 shrink-0" />}
-                              {c.type === 'web' && <Globe className="w-2.5 h-2.5 text-cyan-400 shrink-0" />}
-                              {c.type === 'product' && <Zap className="w-2.5 h-2.5 text-purple-400 shrink-0" />}
+                              {c.type === 'doc' && <FileSpreadsheet className="w-2.5 h-2.5 text-[#1E40AF] shrink-0" />}
+                              {c.type === 'dataset' && <Database className="w-2.5 h-2.5 text-[#065F46] shrink-0" />}
+                              {c.type === 'agent' && <Layers className="w-2.5 h-2.5 text-[#6B21A8] shrink-0" />}
+                              {c.type === 'web' && <Globe className="w-2.5 h-2.5 text-[#0369A1] shrink-0" />}
                               <span>{cleanLabel}</span>
                             </span>
                           );
@@ -770,7 +842,7 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
                       </div>
                     )}
 
-                    <div className="mt-2 pt-1 flex items-center justify-between text-[8px] text-slate-500 font-mono">
+                    <div className="mt-2 pt-1 flex items-center justify-between text-[8px] text-[#64748B] font-mono">
                       {msg.role === 'assistant' ? (
                         <button
                           type="button"
@@ -778,7 +850,7 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
                             navigator.clipboard.writeText(msg.content);
                             alert("Response copied to clipboard!");
                           }}
-                          className="hover:text-blue-400 transition-colors cursor-pointer flex items-center gap-1"
+                          className="hover:text-[#2563EB] transition-colors cursor-pointer flex items-center gap-1"
                         >
                           Copy Output
                         </button>
@@ -790,14 +862,13 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
               ))}
               {loading && (
                 <div className="flex gap-3 items-start max-w-[85%]">
-                  <div className="p-2 rounded-full font-bold text-[9px] flex items-center justify-center shrink-0 w-8 h-8 text-white bg-slate-800">
+                  <div className="p-2 rounded-full font-bold text-[9px] flex items-center justify-center shrink-0 w-8 h-8 text-white bg-[#1E293B]">
                     AI
                   </div>
-                  <div className={`p-3 rounded-2xl ${isDarkMode ? 'bg-slate-950/60 border border-slate-800 rounded-tl-none' : 'bg-slate-100 rounded-tl-none text-slate-800'}`}>
-                    <div className="flex items-center gap-1.5 py-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+                  <div className={`p-3 rounded-2xl ${isDarkMode ? 'bg-[#020617] border border-[#334155] rounded-tl-none' : 'bg-[#F1F5F9] border border-[#E2E8F0] rounded-tl-none text-[#0F172A]'}`}>
+                    <div className="flex items-center gap-2 py-1">
+                      <Layers className="w-3.5 h-3.5 text-[#2563EB] animate-spin" />
+                      <span className="text-xs font-mono text-[#64748B]">Orchestrating specialist agent reasoning...</span>
                     </div>
                   </div>
                 </div>
@@ -812,24 +883,24 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
-                  className={`mt-4 p-2 rounded-xl border flex items-center justify-between gap-3 ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
+                  className={`mt-4 p-2 rounded-xl border flex items-center justify-between gap-3 ${isDarkMode ? 'bg-[#020617] border-[#334155]' : 'bg-[#F8FAFC] border-[#E2E8F0]'}`}
                 >
                   <div className="flex items-center gap-3">
                     <img 
                       src={imagePreview} 
                       alt="Attachment preview" 
-                      className="w-12 h-12 object-cover rounded-lg border border-slate-700" 
+                      className="w-12 h-12 object-cover rounded-lg border border-[#334155]" 
                       referrerPolicy="no-referrer"
                     />
                     <div>
-                      <span className="text-[10px] font-mono text-slate-400 block">Multimodal Image Attachment</span>
-                      <span className="text-xs font-bold text-blue-500 uppercase text-[9px]">Will parse via Gemini 3.1 Pro</span>
+                      <span className="text-[10px] font-mono text-[#64748B] block">Multimodal Document Screenshot</span>
+                      <span className="text-xs font-bold text-[#2563EB] uppercase text-[9px]">Will parse via Vision Model</span>
                     </div>
                   </div>
                   <button 
                     type="button" 
                     onClick={removeAttachedImage}
-                    className="p-1 rounded-md hover:bg-slate-800 text-slate-400 hover:text-white transition-all cursor-pointer"
+                    className="p-1 rounded-md hover:bg-[#334155] text-[#94A3B8] hover:text-white transition-all cursor-pointer"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -844,19 +915,19 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="absolute inset-x-6 bottom-20 p-4 rounded-2xl bg-rose-900/90 border border-rose-500/30 text-white backdrop-blur-md flex items-center justify-between shadow-lg z-25"
+                  className="absolute inset-x-6 bottom-20 p-4 rounded-2xl bg-[#881337] border border-[#BE123C] text-white backdrop-blur-md flex items-center justify-between shadow-lg z-25"
                 >
                   <div className="flex items-center gap-3">
-                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#E11D48]" />
                     <div>
-                      <span className="font-bold text-xs uppercase">Microphone Recording Active</span>
+                      <span className="font-bold text-xs uppercase">Microphone Dictation Active</span>
                       <span className="text-[10px] block opacity-80 font-mono">Duration: {recordingSeconds} seconds</span>
                     </div>
                   </div>
                   <button 
                     type="button"
                     onClick={stopRecording}
-                    className="px-3 py-1.5 bg-white text-rose-900 hover:bg-rose-100 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                    className="px-3 py-1.5 bg-white text-[#881337] hover:bg-[#FFE4E6] rounded-lg text-xs font-bold transition-all cursor-pointer"
                   >
                     Stop & Transcribe
                   </button>
@@ -865,13 +936,13 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
             </AnimatePresence>
 
             {/* Interactive Input Bar */}
-            <form onSubmit={handleSend} className={`mt-4 pt-4 border-t border-dashed flex flex-col gap-2 relative ${isDarkMode ? 'border-slate-800/60' : 'border-slate-200'}`}>
+            <form onSubmit={handleSend} className={`mt-4 pt-4 border-t border-dashed flex flex-col gap-2 relative ${isDarkMode ? 'border-[#334155]' : 'border-[#E2E8F0]'}`}>
               
               {/* Quick Insight Pills above input box */}
               {activeFile && (
                 <div className="flex items-center gap-1.5 overflow-x-auto pb-1 mb-1 scrollbar-none">
-                  <span className="text-[10px] font-mono font-bold text-amber-400 shrink-0 flex items-center gap-1 mr-1">
-                    <Zap className="w-3 h-3 fill-amber-400 text-amber-400" /> Quick Insights:
+                  <span className="text-[10px] font-mono font-bold text-[#D97706] shrink-0 flex items-center gap-1 mr-1">
+                    <Zap className="w-3 h-3 text-[#D97706]" /> Quick Insights:
                   </span>
                   {quickInsightPrompts.map((qi) => {
                     const IconComp = qi.icon;
@@ -897,8 +968,8 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
                 <button 
                   type="button"
                   onClick={isRecording ? stopRecording : startRecording}
-                  className={`p-2.5 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${isRecording ? 'bg-rose-600 border-rose-500 text-white animate-pulse' : isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white' : 'bg-slate-50 border-slate-200 text-slate-500 hover:text-slate-900'}`}
-                  title={isRecording ? "Stop recording" : "Transcribe from Microphone"}
+                  className={`p-2.5 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${isRecording ? 'bg-[#E11D48] border-[#BE123C] text-white' : isDarkMode ? 'bg-[#020617] border-[#334155] text-[#94A3B8] hover:text-white' : 'bg-[#F8FAFC] border-[#E2E8F0] text-[#64748B] hover:text-[#0F172A]'}`}
+                  title={isRecording ? "Stop recording" : "Dictate from Microphone"}
                 >
                   {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
                 </button>
@@ -907,7 +978,7 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
                 <button 
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className={`p-2.5 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${imagePreview ? 'bg-blue-600 border-blue-500 text-white' : isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white' : 'bg-slate-50 border-slate-200 text-slate-500 hover:text-slate-900'}`}
+                  className={`p-2.5 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${imagePreview ? 'bg-[#2563EB] border-[#1D4ED8] text-white' : isDarkMode ? 'bg-[#020617] border-[#334155] text-[#94A3B8] hover:text-white' : 'bg-[#F8FAFC] border-[#E2E8F0] text-[#64748B] hover:text-[#0F172A]'}`}
                   title="Upload receipt photo or document"
                 >
                   <ImageIcon className="w-4 h-4" />
@@ -925,21 +996,21 @@ export default function InsightsCenter({ activeFile, chatMessages, onSendMessage
                   type="text" 
                   value={userInput}
                   onChange={(e) => setUserInput(e.target.value)}
-                  placeholder={isRecording ? "Recording your audio voice..." : "Ask: 'suggest schema anomalies', 'write PostgreSQL scripts'..."}
-                  className={`flex-1 px-3.5 py-2 rounded-xl text-xs focus:outline-none border ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500' : 'bg-white border-slate-300 text-slate-900 focus:border-blue-600'}`}
+                  placeholder={isRecording ? "Recording audio voice..." : "Ask: 'why are sales decreasing and what data issues exist?', 'outlier boundaries', 'PII check'..."}
+                  className={`flex-1 px-3.5 py-2 rounded-xl text-xs focus:outline-none border ${isDarkMode ? 'bg-[#020617] border-[#334155] text-[#F8FAFC] focus:border-[#2563EB]' : 'bg-[#FFFFFF] border-[#CBD5E1] text-[#0F172A] focus:border-[#2563EB]'}`}
                   disabled={isRecording}
                 />
                 <button 
                   type="submit"
                   disabled={(!userInput.trim() && !attachedImage) || loading || isRecording}
-                  className={`p-2.5 text-white rounded-xl shadow cursor-pointer disabled:opacity-50 ${accentClass}`}
+                  className={`p-2.5 text-white rounded-xl shadow-xs cursor-pointer disabled:opacity-50 ${accentClass}`}
                 >
                   <Send className="w-4 h-4" />
                 </button>
               </div>
-              <div className="flex items-center gap-1 text-[9px] text-slate-500 font-mono mt-1">
-                <Info className="w-3 h-3 text-slate-600" />
-                <span>Multi-turn chat persists database mapping & schema context continuously.</span>
+              <div className="flex items-center gap-1 text-[9px] text-[#64748B] font-mono mt-1">
+                <Info className="w-3 h-3 text-[#64748B]" />
+                <span>Enterprise Agent Orchestrator automatically selects lead and collaborating specialists with tool verification.</span>
               </div>
             </form>
           </div>

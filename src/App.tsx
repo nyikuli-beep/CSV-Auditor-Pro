@@ -2194,12 +2194,13 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   // Dispatch prompt context to full-stack backend with RAG Knowledge Base and rich dataset context
   const handleSendChatMessage = async (
     msgContent: string, 
-    model: string = 'gemini-3.6-flash', 
+    model: string = 'gemini-3.7-flash', 
     persona: string = 'auditor',
     image: { data: string; mimeType: string } | null = null,
     thinkingMode: boolean = false,
     enableSearchGrounding: boolean = false,
-    knowledgeBaseId?: string
+    knowledgeBaseId?: string,
+    explicitAgent?: string
   ) => {
     const userMsg: ChatMessage = {
       id: `msg-usr-${Date.now()}`,
@@ -2208,9 +2209,9 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       timestamp: formatTime(new Date())
     };
 
-    const initialCitations = [
-      { type: 'product', label: 'Product Knowledge' },
-      { type: 'doc', label: 'Searching Docs...' }
+    const initialCitations: Array<{ type: string; label: string; url?: string }> = [
+      { type: 'product', label: 'CSV Auditor Pro Enterprise Engine' },
+      { type: 'doc', label: 'Orchestrating Specialist Agents...' }
     ];
 
     if (enableSearchGrounding) {
@@ -2220,7 +2221,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     const aiThinkingMsg: ChatMessage = {
       id: `msg-ai-think-${Date.now()}`,
       role: 'assistant',
-      content: enableSearchGrounding ? 'Performing Google Search fact-checking & analyzing dataset...' : 'Searching documentation & analyzing dataset...',
+      content: enableSearchGrounding ? 'Performing Google Search fact-checking & orchestrating specialist agents...' : 'Orchestrating enterprise specialist agents & gathering audit evidence...',
       timestamp: formatTime(new Date()),
       citations: initialCitations
     };
@@ -2247,6 +2248,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
           thinkingMode: thinkingMode,
           enableSearchGrounding: enableSearchGrounding,
           knowledgeBaseId: knowledgeBaseId,
+          explicitAgent: explicitAgent,
           userContext: {
             uid: user?.uid,
             email: user?.email,
@@ -2282,6 +2284,13 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       let confidenceScore: number | undefined = undefined;
       let executedTools: string[] = [];
       let reasoning: string | undefined = undefined;
+      let activeAgent: string | undefined = undefined;
+      let activeAgentName: string | undefined = undefined;
+      let activeAgentTitle: string | undefined = undefined;
+      let collaboratingAgents: Array<{ id: string; name: string; role: string }> | undefined = undefined;
+      let isCompoundQuery: boolean | undefined = undefined;
+      let routingRationale: string | undefined = undefined;
+      let evidenceCollected: any[] | undefined = undefined;
       let sseBuffer = '';
 
       while (true) {
@@ -2308,6 +2317,13 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
               if (parsed.confidenceScore) confidenceScore = parsed.confidenceScore;
               if (parsed.executedTools) executedTools = parsed.executedTools;
               if (parsed.reasoning) reasoning = parsed.reasoning;
+              if (parsed.activeAgent) activeAgent = parsed.activeAgent;
+              if (parsed.activeAgentName) activeAgentName = parsed.activeAgentName;
+              if (parsed.activeAgentTitle) activeAgentTitle = parsed.activeAgentTitle;
+              if (parsed.collaboratingAgents) collaboratingAgents = parsed.collaboratingAgents;
+              if (parsed.isCompoundQuery !== undefined) isCompoundQuery = parsed.isCompoundQuery;
+              if (parsed.routingRationale) routingRationale = parsed.routingRationale;
+              if (parsed.evidenceCollected) evidenceCollected = parsed.evidenceCollected;
             } else if (parsed.type === 'chunk' && parsed.text) {
               accumulatedText += parsed.text;
             } else if (parsed.type === 'error') {
@@ -2326,6 +2342,13 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                     confidenceScore,
                     executedTools,
                     reasoning,
+                    activeAgent,
+                    activeAgentName,
+                    activeAgentTitle,
+                    collaboratingAgents,
+                    isCompoundQuery,
+                    routingRationale,
+                    evidenceCollected,
                     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
                   }
                 : m

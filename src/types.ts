@@ -210,14 +210,29 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
-  citations?: Array<{ type: 'doc' | 'dataset' | 'memory' | 'product' | string; label: string }>;
+  citations?: Array<{ type: 'doc' | 'dataset' | 'memory' | 'product' | 'agent' | 'tool' | 'web' | string; label: string; url?: string }>;
   retrievedDocs?: string[];
   intent?: string;
-  intentCategory?: 'CSV_ANALYSIS' | 'GENERAL_AI' | 'MIXED_REQUEST' | 'UNKNOWN';
+  intentCategory?: 'CSV_ANALYSIS' | 'GENERAL_AI' | 'MIXED_REQUEST' | 'UNKNOWN' | string;
   confidenceScore?: number;
   executedTools?: string[];
   reasoning?: string;
   statusStep?: string;
+  activeAgent?: string;
+  activeAgentName?: string;
+  activeAgentTitle?: string;
+  collaboratingAgents?: Array<{ id: string; name: string; role: string }>;
+  isCompoundQuery?: boolean;
+  routingRationale?: string;
+  evidenceCollected?: Array<{
+    sourceType: string;
+    sourceName: string;
+    metricLabel: string;
+    metricValue: string | number;
+    columnsInvolved?: string[];
+    affectedRowCount?: number;
+    confidence: number;
+  }>;
 }
 
 export interface ReportConfig {

@@ -157,14 +157,13 @@ export function formatStructuredResponseMarkdown(res: StructuredAIResponse): str
 
 /**
  * Model Selection helper:
- * - gemini-2.5-pro for complex reasoning (thinkingMode, image input, architect/analyst persona, complex audits)
- * - gemini-2.5-flash for fast conversational responses
+ * - gemini-3.7-flash for high-speed, enterprise grounded reasoning and conversational audits
  */
 export function selectGeminiModel(options: { thinkingMode?: boolean; image?: any; persona?: string; model?: string }): string {
-  if (options.thinkingMode || options.image || options.persona === 'architect' || options.persona === 'analyst') {
-    return 'gemini-2.5-pro';
+  if (options.model && options.model.startsWith('gemini')) {
+    return options.model;
   }
-  return 'gemini-2.5-flash';
+  return 'gemini-3.7-flash';
 }
 
 export interface RagRequestOptions {
@@ -530,6 +529,8 @@ export function retrieveKnowledgeChunks(
 
   return [KNOWLEDGE_BASE_CHUNKS[0], KNOWLEDGE_BASE_CHUNKS[1]];
 }
+
+export const getRelevantKnowledgeChunks = retrieveKnowledgeChunks;
 
 /**
  * Formulate System Prompt and Dynamic Context for Gemini AI Call
