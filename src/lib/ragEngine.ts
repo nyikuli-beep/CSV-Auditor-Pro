@@ -514,20 +514,21 @@ export function retrieveKnowledgeChunks(
   // Sort descending by score
   scored.sort((a, b) => b.score - a.score);
 
-  // Return top matches with positive score
-  const filtered = scored.filter(s => s.score > 0).map(s => s.chunk);
+  // Strict relevance threshold (minimum score of 3 for keyword/semantic match)
+  const filtered = scored.filter(s => s.score >= 3).map(s => s.chunk);
   if (filtered.length > 0) {
     return filtered.slice(0, limit);
   }
 
-  // Fallback: If prompt explicitly asks about privacy or security, return the privacy chunk
+  // Targeted check: If prompt explicitly asks about privacy, security, or model training
   const pLower = prompt.toLowerCase();
-  if (pLower.includes('privacy') || pLower.includes('security') || pLower.includes('model training') || pLower.includes('protect')) {
+  if (pLower.includes('privacy') || pLower.includes('model training') || pLower.includes('gdpr') || pLower.includes('soc2')) {
     const secMatch = KNOWLEDGE_BASE_CHUNKS.find(c => c.id === 'security_privacy_ai_training');
     if (secMatch) return [secMatch];
   }
 
-  return [KNOWLEDGE_BASE_CHUNKS[0], KNOWLEDGE_BASE_CHUNKS[1]];
+  // Return empty array when no knowledge chunk is genuinely relevant, allowing direct AI reasoning
+  return [];
 }
 
 export const getRelevantKnowledgeChunks = retrieveKnowledgeChunks;
@@ -931,9 +932,11 @@ export async function generateRAGResponseStream(
     const ds = options.datasetContext;
     fallbackAnswer = `### Audit Analysis for **${ds.fileName}**\n\n- **Quality Score**: ${ds.score ?? 100}/100\n- **Total Rows**: ${ds.rowCount} rows across ${ds.headers?.length || 0} mapped headers\n- **Headers**: ${ds.headers?.join(', ') || 'None'}\n- **Duplicate Rows**: ${ds.duplicatesCount ?? 0}\n- **Blank / Missing Cells**: ${ds.missingValuesCount ?? 0}\n- **Formatting Errors**: ${ds.formatErrorsCount ?? 0}\n- **Outliers Flagged**: ${ds.outliersCount ?? 0}\n\n**Recommended Next Action**: Visit the **Cleaning Center** to execute 1-click deduplication and missing value imputation on ${ds.fileName}.`;
   } else if (intentAnalysis.category === 'GENERAL_AI') {
-    fallbackAnswer = `I am here to assist with general questions, programming, database queries, and data science concepts! How else can I help you today?`;
+    fallbackAnswer = `I am here to assist with general software engineering, data science, database queries, and analytical concepts. How can I assist you with your inquiry?`;
+  } else if (relevantDocs.length > 0) {
+    fallbackAnswer = `${docSummary}`;
   } else {
-    fallbackAnswer = `Based on CSV Auditor Pro product documentation and your workspace context:\n\n${docSummary}`;
+    fallbackAnswer = `I am ready to assist you with data auditing, statistical analysis, schema validation, and CSV dataset hygiene.`;
   }
 
   const fallbackStructured: StructuredAIResponse = {
@@ -1114,8 +1117,7 @@ export async function generateRAGResponse(
     cacheStatus: 'MISS'
   });
 
-  const docSummary = relevantDocs.map(d => `**${d.title}**: ${d.content}`).join('\n\n');
-  let fallbackAnswer = `Based on CSV Auditor Pro product documentation and your workspace context:\n\n${docSummary}`;
+  let fallbackAnswer = '';
 
   if (faqId && selectedKnowledgeBaseEntry) {
     fallbackAnswer = `### ${selectedKnowledgeBaseEntry.title}\n\n${selectedKnowledgeBaseEntry.content}`;
@@ -1126,6 +1128,11 @@ export async function generateRAGResponse(
     fallbackAnswer = `### How CSV Auditor Pro Works (Simple Non-Technical Guide)\n\nThink of **CSV Auditor Pro** as an automated spell-checker and quality auditor for your company's spreadsheets!\n\nHere is how the application operates in simple, step-by-step terms:\n\n1. **Safe Private Upload**: You drag and drop or upload your CSV, TSV, or Excel files (up to 50MB). The file is processed directly inside your web browser—your sensitive company rows are never saved on public servers.\n\n2. **Automated Health Check**: The engine instantly scans every row and column for 15+ data health errors (like duplicate records, blank cells, invalid date formats, and strange numerical outliers) and calculates an overall **0-100 Quality Score**.\n\n3. **1-Click Smart Cleaning**: Instead of manually editing thousands of spreadsheet cells, you click simple buttons to automatically remove duplicates, fill empty boxes with defaults, clean up messy text, and format dates consistently.\n\n4. **Schema & Structure Guard**: Verify that incoming spreadsheets match your team's required field names and data types before importing them into company databases.\n\n5. **Sharing & Compliance Reports**: Export clean spreadsheets or generate executive PDF compliance reports to send to managers and teammates.\n\n**Key Takeaway**: Non-technical staff can clean and audit complex spreadsheets in minutes without writing Excel formulas or programming code!`;
   } else if (intent === 'CSV_ANALYSIS') {
     fallbackAnswer = `CSV Auditor Pro is an enterprise spreadsheet audit and data compliance platform providing automated anomaly detection, real-time data cleaning, schema validation, and team collaboration.`;
+  } else if (relevantDocs.length > 0) {
+    const docSummary = relevantDocs.map(d => `**${d.title}**: ${d.content}`).join('\n\n');
+    fallbackAnswer = `${docSummary}`;
+  } else {
+    fallbackAnswer = `I am ready to assist you with data auditing, statistical analysis, schema validation, and CSV dataset hygiene.`;
   }
 
   const fallbackStructured: StructuredAIResponse = {
