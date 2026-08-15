@@ -87,73 +87,51 @@ export class AgentOrchestrator {
 
     const lower = prompt.toLowerCase();
     const intentResult = detectUserIntent(prompt, hasDataset, headers);
-    const fineClassification = classifyDetailedIntent(prompt);
 
-    // Rule 0: Conversational Greetings & Small Talk (Hi, Hello, Thanks, How are you?)
-    if (intentResult.category === 'CONVERSATIONAL_GREETING' || fineClassification.fineCategory === 'GREETING_SMALLTALK') {
+    // Rule 0: Conversational Greetings & Pleasantries (Execution Path: CONVERSATION)
+    // NEVER execute tools or inject dataset context
+    if (intentResult.executionPath === 'CONVERSATION' || intentResult.category === 'GREETING' || intentResult.category === 'GENERAL_CONVERSATION' || intentResult.category === 'CONVERSATIONAL_GREETING') {
       return {
         primaryAgent: 'product_support_agent',
         collaboratingAgents: [],
         isCompoundQuery: false,
-        routingRationale: 'Conversational greeting or pleasantry. Providing a warm, direct conversational response without triggering documentation RAG or dataset audit tools.',
+        routingRationale: 'Conversational greeting or pleasantry. Routing directly to Gemini without dataset tools or summaries.',
         requiredTools: [],
         requiresRag: false,
-        intentCategory: 'CONVERSATIONAL_GREETING',
-        fineCategory: 'GREETING_SMALLTALK',
+        intentCategory: 'GREETING',
+        fineCategory: 'GREETING',
+        executionPath: 'CONVERSATION',
+        requiresDatasetAnalysis: false,
         confidence: 0.99
       };
     }
 
-    // Rule 1: Product Support (Platform, Subscription, Team, Tenancy, Pricing, Quota)
-    const isPlatformQuery = 
-      lower.includes('how to use') || 
-      lower.includes('csv auditor pro') || 
-      lower.includes('pricing') || 
-      lower.includes('tier') || 
-      lower.includes('subscription') || 
-      lower.includes('enterprise plan') || 
-      lower.includes('team') || 
-      lower.includes('invite') || 
-      lower.includes('export pdf') || 
-      lower.includes('api key') || 
-      lower.includes('workspace');
-
-    if (isPlatformQuery && (!hasDataset || (!lower.includes('this file') && !lower.includes('my column')))) {
+    // Rule 1: General AI, Help, Dashboard Questions, Platform Guidance (Execution Path: GENERAL_AI)
+    // NEVER execute dataset tools unless explicit CSV operation is requested
+    if (intentResult.executionPath === 'GENERAL_AI' || !intentResult.requiresDatasetAnalysis) {
+      const isProductHelp = intentResult.category === 'HELP' || intentResult.category === 'ENTERPRISE_PLATFORM_GUIDANCE' || intentResult.category === 'DASHBOARD_QUESTIONS';
       return {
-        primaryAgent: 'product_support_agent',
+        primaryAgent: isProductHelp ? 'product_support_agent' : 'general_knowledge_agent',
         collaboratingAgents: [],
         isCompoundQuery: false,
-        routingRationale: 'Query pertains to CSV Auditor Pro platform features, workspace settings, or subscription entitlements.',
-        requiredTools: [],
-        requiresRag: true,
-        intentCategory: 'APP_EXPLANATION',
-        fineCategory: 'GENERAL_PRODUCT_INFORMATION',
-        confidence: 0.98
-      };
-    }
-
-    // Rule 2: General Knowledge (No dataset uploaded and general question)
-    if (!hasDataset && !isPlatformQuery) {
-      return {
-        primaryAgent: 'general_knowledge_agent',
-        collaboratingAgents: [],
-        isCompoundQuery: false,
-        routingRationale: 'External knowledge question without an active dataset loaded.',
+        routingRationale: intentResult.reasoning || 'General AI query. Routing directly to Gemini without dataset analysis.',
         requiredTools: [],
         requiresRag: false,
-        intentCategory: 'GENERAL_AI',
-        fineCategory: 'GENERAL_AI',
-        confidence: 0.95
+        intentCategory: intentResult.category,
+        fineCategory: intentResult.fineCategory,
+        executionPath: 'GENERAL_AI',
+        requiresDatasetAnalysis: false,
+        confidence: intentResult.confidenceScore || 0.95
       };
     }
 
-    // Rule 3: Check for Compound / Multi-Agent Questions
-    // e.g., "Why are my sales decreasing and what data quality issues could be causing this?"
-    const hasBusinessIntent = lower.includes('sales') || lower.includes('revenue') || lower.includes('trend') || lower.includes('business') || lower.includes('kpi') || lower.includes('executive') || lower.includes('decision');
-    const hasQualityIntent = lower.includes('quality') || lower.includes('duplicate') || lower.includes('missing') || lower.includes('null') || lower.includes('blank') || lower.includes('invalid') || lower.includes('error');
+    // Rule 2: CSV Operations (Execution Path: CSV_OPERATIONS)
+    // Explicit dataset analysis, cleaning, BI brief, statistics, compliance requested by user
+    const hasBusinessIntent = lower.includes('sales') || lower.includes('revenue') || lower.includes('trend') || lower.includes('business') || lower.includes('kpi') || lower.includes('executive') || lower.includes('decision') || intentResult.category === 'EXECUTIVE_BI_BRIEF';
+    const hasQualityIntent = lower.includes('quality') || lower.includes('duplicate') || lower.includes('missing') || lower.includes('null') || lower.includes('blank') || lower.includes('invalid') || lower.includes('error') || intentResult.category === 'CSV_ANALYSIS';
     const hasStatsIntent = lower.includes('statistic') || lower.includes('outlier') || lower.includes('mean') || lower.includes('distribution') || lower.includes('correlation') || lower.includes('deviation') || lower.includes('z-score');
-    const hasCleaningIntent = lower.includes('clean') || lower.includes('fix') || lower.includes('remedy') || lower.includes('standardize') || lower.includes('format') || lower.includes('normalize');
-    const hasComplianceIntent = lower.includes('compliance') || lower.includes('gdpr') || lower.includes('soc2') || lower.includes('privacy') || lower.includes('pii') || lower.includes('formula') || lower.includes('security');
+    const hasCleaningIntent = lower.includes('clean') || lower.includes('fix') || lower.includes('remedy') || lower.includes('standardize') || lower.includes('format') || lower.includes('normalize') || intentResult.category === 'DATA_CLEANING';
+    const hasComplianceIntent = lower.includes('compliance') || lower.includes('gdpr') || lower.includes('soc2') || lower.includes('privacy') || lower.includes('pii') || lower.includes('formula') || lower.includes('security') || intentResult.category === 'COMPLIANCE';
 
     // Multi-Agent Case A: Business + Quality + Stats Collaboration
     if (hasBusinessIntent && (hasQualityIntent || hasStatsIntent)) {
@@ -169,8 +147,10 @@ export class AgentOrchestrator {
         routingRationale: 'Compound business inquiry requiring multi-agent synthesis of statistical metrics and data quality forensics.',
         requiredTools: ['summarizeDataset', 'calculateStatistics', 'findDuplicates', 'detectOutliers'],
         requiresRag: false,
-        intentCategory: 'MIXED_REQUEST',
-        fineCategory: 'AI_ANALYSIS',
+        intentCategory: 'EXECUTIVE_BI_BRIEF',
+        fineCategory: 'EXECUTIVE_BI_BRIEF',
+        executionPath: 'CSV_OPERATIONS',
+        requiresDatasetAnalysis: true,
         confidence: 0.96
       };
     }
@@ -184,8 +164,10 @@ export class AgentOrchestrator {
         routingRationale: 'Data inspection request combined with actionable cleaning remediation requirements.',
         requiredTools: ['summarizeDataset', 'findMissingValues', 'findDuplicates'],
         requiresRag: false,
-        intentCategory: 'CSV_ANALYSIS',
+        intentCategory: 'DATA_CLEANING',
         fineCategory: 'DATA_CLEANING',
+        executionPath: 'CSV_OPERATIONS',
+        requiresDatasetAnalysis: true,
         confidence: 0.97
       };
     }
@@ -201,9 +183,11 @@ export class AgentOrchestrator {
         isCompoundQuery: collaborating.length > 0,
         routingRationale: 'Governance, security, and compliance verification request.',
         requiredTools: ['findInvalidCharacters', 'summarizeDataset'],
-        requiresRag: true,
-        intentCategory: 'CSV_ANALYSIS',
-        fineCategory: 'SECURITY_PRIVACY',
+        requiresRag: false,
+        intentCategory: 'COMPLIANCE',
+        fineCategory: 'COMPLIANCE',
+        executionPath: 'CSV_OPERATIONS',
+        requiresDatasetAnalysis: true,
         confidence: 0.95
       };
     }
@@ -218,7 +202,9 @@ export class AgentOrchestrator {
         requiredTools: ['calculateStatistics', 'detectOutliers', 'calculateCorrelation', 'summarizeDataset'],
         requiresRag: false,
         intentCategory: 'CSV_ANALYSIS',
-        fineCategory: 'AI_ANALYSIS',
+        fineCategory: 'CSV_ANALYSIS',
+        executionPath: 'CSV_OPERATIONS',
+        requiresDatasetAnalysis: true,
         confidence: 0.98
       };
     }
@@ -232,8 +218,10 @@ export class AgentOrchestrator {
         routingRationale: 'Data standardization, transformation, or hygiene request.',
         requiredTools: ['summarizeDataset', 'findMissingValues'],
         requiresRag: false,
-        intentCategory: 'CSV_ANALYSIS',
+        intentCategory: 'DATA_CLEANING',
         fineCategory: 'DATA_CLEANING',
+        executionPath: 'CSV_OPERATIONS',
+        requiresDatasetAnalysis: true,
         confidence: 0.97
       };
     }
@@ -247,22 +235,26 @@ export class AgentOrchestrator {
         routingRationale: 'Executive briefing or high-level dataset synthesis request.',
         requiredTools: ['summarizeDataset', 'calculateStatistics'],
         requiresRag: false,
-        intentCategory: 'CSV_ANALYSIS',
-        fineCategory: 'CSV_AUDITING',
+        intentCategory: 'EXECUTIVE_BI_BRIEF',
+        fineCategory: 'EXECUTIVE_BI_BRIEF',
+        executionPath: 'CSV_OPERATIONS',
+        requiresDatasetAnalysis: true,
         confidence: 0.96
       };
     }
 
-    // Default Fallback: Data Quality Auditor
+    // Explicit CSV analysis fallback
     return {
       primaryAgent: 'data_quality_auditor',
       collaboratingAgents: [],
       isCompoundQuery: false,
-      routingRationale: 'General dataset inspection and quality audit.',
+      routingRationale: 'General dataset inspection and quality audit requested on active CSV.',
       requiredTools: ['summarizeDataset', 'findMissingValues', 'findDuplicates'],
       requiresRag: false,
       intentCategory: 'CSV_ANALYSIS',
-      fineCategory: 'SCHEMA_ANALYSIS',
+      fineCategory: 'CSV_ANALYSIS',
+      executionPath: 'CSV_OPERATIONS',
+      requiresDatasetAnalysis: true,
       confidence: 0.92
     };
   }
@@ -386,7 +378,7 @@ export class AgentOrchestrator {
     ];
 
     // Build System Instruction
-    let systemInstruction = `You are the Enterprise Conversational Auditor & Specialist AI System for CSV Auditor Pro.
+    let systemInstruction = `You are the Enterprise Conversational Auditor inside CSV Auditor Pro. Your role is to provide accurate, professional, enterprise-grade responses. Respond naturally to greetings and general questions. Only perform CSV analysis when the user's request explicitly requires it. Never assume the user wants dataset analysis simply because a CSV exists. When CSV analysis is requested, explain findings clearly, provide actionable recommendations, and maintain a professional enterprise tone.
 PRIMARY SPECIALIST: ${primaryAgentDef.name} (${primaryAgentDef.title})
 ${primaryAgentDef.systemDirective}\n`;
 
@@ -395,7 +387,7 @@ ${primaryAgentDef.systemDirective}\n`;
 1. NATURAL, DIRECT RESPONSES:
    - Begin your responses directly with the answer itself.
    - NEVER prepend responses with "Regarding...", "Based on the knowledge base...", "According to stored information...", or any generic template opening.
-   - If the user provides a greeting or pleasantry (e.g., "Hi", "Hello", "Hey", "Thanks", "How are you?"), respond warmly and helpfully as the Enterprise Conversational Auditor, giving a brief orientation without dumping unrequested documentation.
+   - If the user provides a greeting or pleasantry (e.g., "Hi", "Hello", "Hey", "Thanks", "How are you?"), respond warmly and helpfully as the Enterprise Conversational Auditor, giving a brief orientation without dumping unrequested documentation or dataset summaries.
 
 2. GENERAL KNOWLEDGE CAPABILITY:
    - You have deep dynamic intelligence in software engineering, SQL, Python, mathematics, statistics, data science, spreadsheet formulas, cloud architecture, and data governance. Answer general inquiries directly using your dynamic intelligence.
@@ -440,9 +432,10 @@ Structure your findings into clear, authoritative sections:
       dynamicContextPrompt += `- User Context: Tier=${request.userContext.tier || 'Enterprise'}, Org=${request.userContext.organizationName || 'Default Workspace'}, Role=${request.userContext.role || 'Data Lead'}\n`;
     }
 
-    // Dataset Context
+    // Dataset Context - ONLY inject when plan.requiresDatasetAnalysis is true
     const hasDataset = Boolean(request.datasetContext && request.datasetContext.headers && request.datasetContext.headers.length > 0);
-    if (hasDataset && request.datasetContext) {
+    const shouldInjectDataset = plan.requiresDatasetAnalysis !== false && hasDataset;
+    if (shouldInjectDataset && request.datasetContext) {
       dynamicContextPrompt += `\n### DATASET CONTEXT\n`;
       dynamicContextPrompt += `- File: "${request.datasetContext.fileName || 'active_dataset.csv'}"\n`;
       dynamicContextPrompt += `- Total Rows: ${(request.datasetContext.rowCount || 0).toLocaleString()} | Total Columns: ${request.datasetContext.headers.length}\n`;

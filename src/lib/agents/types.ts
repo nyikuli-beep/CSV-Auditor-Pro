@@ -6,7 +6,7 @@
 import { ToolResult } from '../aiToolRegistry';
 import { StructuredCSVContext } from '../csvContextEngine';
 import { KnowledgeChunk } from '../ragEngine';
-import { AIIntentCategory, FineGrainedIntentCategory } from '../intentDetectionEngine';
+import { AIIntentCategory, FineGrainedIntentCategory, ExecutionPath } from '../intentDetectionEngine';
 import { ConfidenceAssessment } from '../confidenceScoringEngine';
 import { EnterpriseRiskAssessment } from '../riskAssessmentEngine';
 import { ActionableRecommendation, ProactiveInsight, FollowUpSuggestion } from '../recommendationEngine';
@@ -57,6 +57,8 @@ export interface MultiAgentPlan {
   requiresRag: boolean;
   intentCategory: AIIntentCategory;
   fineCategory: FineGrainedIntentCategory;
+  executionPath?: ExecutionPath;
+  requiresDatasetAnalysis?: boolean;
   confidence: number;
 }
 

@@ -46,21 +46,20 @@ export const DEFAULT_AI_MODEL = 'gemini-3.7-flash';
 // ==========================================
 // ENTERPRISE PERMANENT SYSTEM PROMPT
 // ==========================================
-export const ENTERPRISE_SYSTEM_PROMPT = `You are the Lead Enterprise Conversational Auditor for CSV Auditor Pro.
-Your mission is to provide rigorous, accurate, mathematically grounded, and actionable analysis of CSV datasets, data hygiene, schema integrity, enterprise compliance, spreadsheet formulas, programming, and general knowledge.
+export const ENTERPRISE_SYSTEM_PROMPT = `You are the Enterprise Conversational Auditor inside CSV Auditor Pro. Your role is to provide accurate, professional, enterprise-grade responses. Respond naturally to greetings and general questions. Only perform CSV analysis when the user's request explicitly requires it. Never assume the user wants dataset analysis simply because a CSV exists. When CSV analysis is requested, explain findings clearly, provide actionable recommendations, and maintain a professional enterprise tone.
 
 CONVERSATIONAL INTENT & GUARDRAILS:
 1. INTENT EVALUATION & NATURAL OPENINGS:
    - Begin your responses directly with the answer itself.
    - NEVER prepend responses with "Regarding...", "Based on the knowledge base...", "According to stored information...", or "CSV Auditor Pro Knowledge Base Response:".
-   - If the user provides a greeting or pleasantry (e.g., "Hi", "Hello", "Thanks", "How are you?"), respond warmly, directly, and concisely as the Conversational Auditor. State what you can assist with without dumping documentation pages.
+   - If the user provides a greeting or pleasantry (e.g., "Hi", "Hello", "Thanks", "How are you?"), respond warmly, directly, and concisely as the Conversational Auditor. State what you can assist with without dumping unrequested dataset summaries or documentation.
 
 2. GENERAL KNOWLEDGE CAPABILITIES:
    - You possess comprehensive knowledge in software engineering, database design, SQL, Python, JavaScript, statistical modeling, machine learning, cloud architecture, Excel formulas, and business analysis.
    - Answer general queries directly and intelligently using your internal knowledge.
 
 3. TRUTHFULNESS & GROUNDED FORENSICS:
-   - When a dataset is active, ground all factual findings in the provided dataset metadata, column statistical profiles, and deterministic tool outputs.
+   - When CSV analysis is explicitly requested, ground all factual findings in the provided dataset metadata, column statistical profiles, and deterministic tool outputs.
    - If a specific column, metric, or parameter is not present in the dataset, explicitly state what is missing instead of fabricating data.
    - For numerical metrics (mean, median, standard deviation, duplicate counts, null percentages), rely strictly on the calculated values provided in the context.
 
@@ -510,9 +509,11 @@ export class AIService {
       const fallbackResponse = this.generateOfflineFallbackResponse(options, {
         category: plan.intentCategory,
         fineCategory: plan.fineCategory,
+        executionPath: plan.executionPath || 'GENERAL_AI',
         confidenceScore: plan.confidence,
         reasoning: plan.routingRationale,
         suggestedTools: plan.requiredTools,
+        requiresDatasetAnalysis: plan.requiresDatasetAnalysis ?? false,
         hasActiveDataset: !!options.datasetContext
       }, executedTools);
       onChunk(fallbackResponse);
@@ -581,30 +582,93 @@ export class AIService {
       console.log(`[Enterprise Orchestrator Streaming] Agent: ${primaryAgentDef.name} (Collabs: ${collaboratingDefs.length}) | Latency: ${totalLatency}ms | Tools: ${executedTools.length}`);
     } catch (error: any) {
       console.error('[AIService] Gemini Multi-Agent Streaming call failed:', error);
+      
+      const errorMessage = error?.message || '';
+      const isQuotaError = errorMessage.includes('429') || errorMessage.includes('RESOURCE_EXHAUSTED') || errorMessage.includes('quota');
+      const isAuthError = errorMessage.includes('API_KEY_INVALID') || errorMessage.includes('UNAUTHENTICATED') || errorMessage.includes('api key');
+
+      if (isQuotaError) {
+        onChunk(`\n\n*(Enterprise AI Service Notice: Gemini API rate limit or token quota reached. Switching to local deterministic engine.)*\n\n`);
+      } else if (isAuthError) {
+        onChunk(`\n\n*(Enterprise AI Service Notice: API authentication check required. Switching to local deterministic engine.)*\n\n`);
+      }
+
       const fallbackText = this.generateOfflineFallbackResponse(options, {
         category: plan.intentCategory,
         fineCategory: plan.fineCategory,
+        executionPath: plan.executionPath || 'GENERAL_AI',
         confidenceScore: plan.confidence,
         reasoning: plan.routingRationale,
         suggestedTools: plan.requiredTools,
+        requiresDatasetAnalysis: plan.requiresDatasetAnalysis ?? false,
         hasActiveDataset: !!options.datasetContext
       }, executedTools);
-      onChunk(`\n\n*(Dynamic Assistant Fallback)*\n\n${fallbackText}`);
+      onChunk(fallbackText);
     }
   }
 
   /**
    * Generates a dynamic fallback response when API key is unavailable or during network failure
+   * Strictly adheres to intent classification: Greetings and General AI never dump dataset stats!
    */
   private generateOfflineFallbackResponse(
     options: AIChatRequestOptions,
     intentResult: IntentAnalysisResult,
     executedToolResults: ToolResult[]
   ): string {
-    if (intentResult.category === 'CONVERSATIONAL_GREETING' || intentResult.fineCategory === 'GREETING_SMALLTALK') {
-      return `Hello! I am your Enterprise Conversational Auditor for CSV Auditor Pro.\n\nI can assist you with automated spreadsheet auditing, detecting duplicate rows, calculating statistics, fixing data quality issues, and verifying compliance. How can I help you today?`;
+    const isGreeting = 
+      intentResult.executionPath === 'CONVERSATION' ||
+      intentResult.category === 'GREETING' || 
+      intentResult.category === 'GENERAL_CONVERSATION' || 
+      intentResult.category === 'CONVERSATIONAL_GREETING' || 
+      intentResult.fineCategory === 'GREETING' || 
+      intentResult.fineCategory === 'GENERAL_CONVERSATION' ||
+      intentResult.fineCategory === 'GREETING_SMALLTALK';
+
+    if (isGreeting) {
+      return `Hello! I am your Enterprise Conversational Auditor for CSV Auditor Pro.
+
+I can assist you with data quality auditing, spreadsheet hygiene, finding duplicates, statistical distributions, formula injection protection, and compliance verification.
+
+How can I assist you today?`;
     }
 
+    const isGeneralAI = 
+      intentResult.executionPath === 'GENERAL_AI' ||
+      intentResult.category === 'GENERAL_KNOWLEDGE' ||
+      intentResult.category === 'HELP' ||
+      intentResult.category === 'ENTERPRISE_PLATFORM_GUIDANCE' ||
+      intentResult.category === 'DASHBOARD_QUESTIONS' ||
+      intentResult.requiresDatasetAnalysis === false;
+
+    if (isGeneralAI) {
+      if (intentResult.category === 'HELP') {
+        return `### Getting Started with CSV Auditor Pro
+
+CSV Auditor Pro provides automated auditing, hygiene, and intelligence for enterprise tabular data:
+- **Instant Audit**: Upload your CSV file to compute an automated Health Score (0–100).
+- **Cleaning Center**: Resolve duplicates, fill missing values, and trim formatting deviations with one click.
+- **Statistical Profiling**: Inspect mean, standard deviation, IQR, and z-score anomaly detection across numeric columns.
+- **Executive BI Brief**: Generate automated executive summaries and stakeholder reports.
+- **Compliance & Security**: Verify GDPR/SOC2 standards and detect formula injection vulnerabilities.
+
+Ask any specific question or upload a dataset to begin.`;
+      }
+
+      if (intentResult.category === 'ENTERPRISE_PLATFORM_GUIDANCE') {
+        return `### Workspace & Tenancy Guidance
+
+CSV Auditor Pro offers enterprise multi-tenancy and workspace security:
+- **Role-Based Access Control (RBAC)**: Manage Admin, Auditor, and Viewer permissions.
+- **Data Isolation**: Datasets are encrypted in transit and at rest with strict organization boundaries.
+- **Audit Trails**: Export signed PDF compliance records for SOC2 and GDPR compliance.
+- **Enterprise Integrations**: Configure custom API connectors and team invitations in User Settings.`;
+      }
+
+      return `I am here to help with data engineering, SQL, Python, Excel formulas, data hygiene standards, or answering questions about your enterprise data pipelines.`;
+    }
+
+    // Explicit CSV analysis requested
     const d = options.datasetContext;
     if (d && d.fileName) {
       let response = `### Executive Summary\n` +
