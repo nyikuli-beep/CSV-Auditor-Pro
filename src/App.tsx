@@ -2219,6 +2219,19 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     knowledgeBaseId?: string,
     explicitAgent?: string
   ) => {
+    const isOwner = user?.role === 'Owner' || (user?.email?.toLowerCase().trim() === 'nyikulibramwel@gmail.com');
+    if (!isOwner) {
+      const earlyAccessNotice: ChatMessage = {
+        id: `msg-ai-notice-${Date.now()}`,
+        role: 'assistant',
+        content: 'Artificial Intelligence features (Conversational Auditor, Autonomous Multi-Agent Forensics, and 1-Click Anomaly Remediation) are currently active in Early Access exclusively for the Workspace Owner (nyikulibramwel@gmail.com). Team-wide multi-seat AI capability is coming soon for all non-owner roles.',
+        timestamp: formatTime(new Date()),
+        citations: [{ type: 'product', label: 'Coming Soon • Multi-Seat AI' }]
+      };
+      setChatMessages(prev => [...prev, earlyAccessNotice]);
+      return;
+    }
+
     const userMsg: ChatMessage = {
       id: `msg-usr-${Date.now()}`,
       role: 'user',
@@ -2559,7 +2572,12 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                         { id: 'schema', label: 'Schema Validator', icon: ShieldCheck },
                         { id: 'results', label: 'Audit Findings', icon: Sparkles, badge: activeFile ? activeFile.issues.length : 0 },
                         { id: 'clean', label: 'Hygiene Workspace', icon: Trash2 },
-                        { id: 'insights', label: 'AI Intelligence', icon: MessageSquare },
+                        { 
+                          id: 'insights', 
+                          label: 'AI Intelligence', 
+                          icon: MessageSquare, 
+                          badgeText: !(user?.role === 'Owner' || (user?.email?.toLowerCase().trim() === 'nyikulibramwel@gmail.com')) ? 'Coming Soon' : undefined 
+                        },
                         { id: 'gmail', label: 'Email Compliance', icon: Mail },
                         { id: 'reports', label: 'Branded Reports', icon: FileText },
                         { id: 'history', label: 'File Archive', icon: History },
@@ -2595,11 +2613,18 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                               }`} />
                               <span>{tab.label}</span>
                             </span>
-                            {tab.badge !== undefined && tab.badge > 0 && (
-                              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#2563EB] text-white shrink-0">
-                                {tab.badge}
-                              </span>
-                            )}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {tab.badgeText && (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#FEF3C7] text-[#B45309] dark:bg-[#78350F]/50 dark:text-[#FDE68A] border border-[#FDE68A] dark:border-[#92400E]">
+                                  {tab.badgeText}
+                                </span>
+                              )}
+                              {tab.badge !== undefined && tab.badge > 0 && (
+                                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#2563EB] text-white">
+                                  {tab.badge}
+                                </span>
+                              )}
+                            </div>
                           </button>
                         );
                       })}
@@ -2730,7 +2755,13 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                   { id: 'schema', label: 'Schema Validator', icon: ShieldCheck, shortcut: 'Alt+S' },
                   { id: 'results', label: 'Audit Findings', icon: Sparkles, badge: activeFile ? activeFile.issues.length : 0, shortcut: 'Alt+R' },
                   { id: 'clean', label: 'Hygiene Workspace', icon: Trash2, shortcut: 'Alt+C' },
-                  { id: 'insights', label: 'AI Intelligence', icon: MessageSquare, shortcut: 'Alt+I' },
+                  { 
+                    id: 'insights', 
+                    label: 'AI Intelligence', 
+                    icon: MessageSquare, 
+                    badgeText: !(user?.role === 'Owner' || (user?.email?.toLowerCase().trim() === 'nyikulibramwel@gmail.com')) ? 'Coming Soon' : undefined,
+                    shortcut: 'Alt+I' 
+                  },
                   { id: 'gmail', label: 'Email Compliance', icon: Mail, shortcut: 'Alt+G' },
                   { id: 'reports', label: 'Branded Reports', icon: FileText, shortcut: 'Alt+P' },
                   { id: 'history', label: 'File Archive', icon: History, shortcut: 'Alt+H' },
@@ -2755,7 +2786,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                               ? 'text-[#D1D5DB] hover:bg-[#374151] hover:text-[#F9FAFB]' 
                               : 'text-[#6B7280] hover:bg-[#F3F4F6] hover:text-[#111827]'
                         }`}
-                        title={`${tab.label} (${tab.shortcut})`}
+                        title={`${tab.label}${tab.badgeText ? ` (${tab.badgeText})` : ''} (${tab.shortcut})`}
                       >
                         <Icon className={`w-4 h-4 shrink-0 transition-colors ${
                           isActive 
@@ -2768,6 +2799,9 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                           <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold bg-[#2563EB] text-white flex items-center justify-center border border-white dark:border-[#1F2937]">
                             {tab.badge > 9 ? '9+' : tab.badge}
                           </span>
+                        )}
+                        {tab.badgeText && (
+                          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#D97706] border border-white dark:border-[#1F2937]" />
                         )}
                       </button>
                     );
@@ -2798,6 +2832,11 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                         <span className="truncate">{tab.label}</span>
                       </span>
                       <div className="flex items-center gap-1.5 shrink-0">
+                        {tab.badgeText && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#FEF3C7] text-[#B45309] dark:bg-[#78350F]/50 dark:text-[#FDE68A] border border-[#FDE68A] dark:border-[#92400E]">
+                            {tab.badgeText}
+                          </span>
+                        )}
                         {tab.badge !== undefined && tab.badge > 0 && (
                           <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#2563EB] text-white font-mono shrink-0">
                             {tab.badge}
@@ -3005,6 +3044,10 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                         onSendMessage={handleSendChatMessage}
                         isDarkMode={isDarkMode}
                         accentClass={accentClass}
+                        isOwner={user?.role === 'Owner' || (user?.email?.toLowerCase().trim() === 'nyikulibramwel@gmail.com')}
+                        userRole={user?.role || 'Owner'}
+                        userEmail={user?.email || ''}
+                        onNavigate={handleNavigateTab}
                       />
                     )}
 

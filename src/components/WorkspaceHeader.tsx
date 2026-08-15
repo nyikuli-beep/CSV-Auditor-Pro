@@ -98,7 +98,7 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
       case 'schema': return 'Schema Compliance';
       case 'results': return 'Audit Findings';
       case 'clean': return 'Hygiene Laboratory';
-      case 'insights': return 'AI Intelligence Core';
+      case 'insights': return isOwner ? 'AI Intelligence Core' : 'AI Intelligence (Coming Soon)';
       case 'gmail': return 'Gmail Compliance Hub';
       case 'reports': return 'Branded PDF Reports';
       case 'history': return 'File Archive Repository';

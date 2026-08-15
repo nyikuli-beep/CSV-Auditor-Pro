@@ -487,11 +487,10 @@ export default function DashboardHome({
     return totalMins;
   }, [files]);
 
-  const hoursSaved = (timeSavedMinutes / 60).toFixed(1);
-  const isOwner = currentUserEmail.toLowerCase() === 'nyikulibramwel@gmail.com';
-  const pendingRequests = slotRequests.filter(r => r.status === 'pending');
-
   const { user: authUser } = useAuth();
+  const hoursSaved = (timeSavedMinutes / 60).toFixed(1);
+  const isOwner = (currentUserEmail?.toLowerCase() === 'nyikulibramwel@gmail.com') || (authUser?.email?.toLowerCase() === 'nyikulibramwel@gmail.com');
+  const pendingRequests = slotRequests.filter(r => r.status === 'pending');
 
   // Extract user first name from Firebase auth or email fallback
   const firstName = useMemo(() => {
@@ -637,7 +636,13 @@ export default function DashboardHome({
             onClick={() => onNavigate('insights')}
             className={`px-4 py-2 text-sm font-semibold border rounded-xl flex items-center gap-2 transition-all cursor-pointer ${isDarkMode ? 'bg-slate-900 border-slate-800 hover:bg-slate-800' : 'bg-white border-slate-200 hover:bg-slate-50'}`}
           >
-            <Sparkles className="w-4 h-4 text-blue-500" /> AI Insights
+            <Sparkles className="w-4 h-4 text-blue-500" />
+            <span>AI Insights</span>
+            {!isOwner && (
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#FEF3C7] text-[#B45309] dark:bg-[#78350F]/50 dark:text-[#FDE68A] border border-[#FDE68A] dark:border-[#92400E]">
+                Coming Soon
+              </span>
+            )}
           </button>
         </div>
       </motion.div>

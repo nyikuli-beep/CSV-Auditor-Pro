@@ -54,13 +54,258 @@ interface InsightsCenterProps {
   ) => void;
   isDarkMode: boolean;
   accentClass: string;
+  isOwner?: boolean;
+  userRole?: string;
+  userEmail?: string;
+  onNavigate?: (tab: string) => void;
 }
 
-export default function InsightsCenter({ activeFile, chatMessages, onSendMessage, isDarkMode, accentClass }: InsightsCenterProps) {
+export default function InsightsCenter({ 
+  activeFile, 
+  chatMessages, 
+  onSendMessage, 
+  isDarkMode, 
+  accentClass,
+  isOwner = true,
+  userRole = 'Owner',
+  userEmail = '',
+  onNavigate
+}: InsightsCenterProps) {
   const { plan, entitlements, openProCheckout, openEnterpriseModal } = useBilling();
   const [userInput, setUserInput] = useState('');
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Early access request state for non-owner users
+  const [accessRequested, setAccessRequested] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(`ai_early_access_requested_${userEmail || 'user'}`) === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleRequestEarlyAccess = () => {
+    try {
+      localStorage.setItem(`ai_early_access_requested_${userEmail || 'user'}`, 'true');
+    } catch {}
+    setAccessRequested(true);
+  };
+
+  // NON-OWNER COMING SOON VIEW
+  if (!isOwner) {
+    return (
+      <div className="space-y-6 max-w-6xl mx-auto animate-fadeIn pb-12">
+        {/* Top Header Card */}
+        <div className={`p-6 sm:p-8 rounded-2xl border ${
+          isDarkMode ? 'bg-[#0F172A] border-[#334155] text-[#F8FAFC]' : 'bg-[#FFFFFF] border-[#E2E8F0] text-[#0F172A]'
+        }`}>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <span className="px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider bg-[#2563EB]/10 text-[#2563EB] border border-[#2563EB]/20 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-[#2563EB]" />
+                  <span>Enterprise Feature</span>
+                </span>
+                <span className="px-2.5 py-1 rounded-md text-xs font-bold bg-[#FEF3C7] text-[#B45309] dark:bg-[#78350F]/50 dark:text-[#FDE68A] border border-[#FDE68A] dark:border-[#92400E] flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-[#D97706]" />
+                  <span>Coming Soon for Non-Owners</span>
+                </span>
+                <span className={`px-2.5 py-1 rounded-md text-xs font-mono font-medium border ${
+                  isDarkMode ? 'bg-[#1E293B] border-[#334155] text-[#94A3B8]' : 'bg-[#F1F5F9] border-[#E2E8F0] text-[#475569]'
+                }`}>
+                  Current Role: {userRole || 'Member'}
+                </span>
+              </div>
+
+              <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
+                Artificial Intelligence & Conversational Auditor
+              </h1>
+              <p className={`text-sm sm:text-base max-w-3xl leading-relaxed ${
+                isDarkMode ? 'text-[#94A3B8]' : 'text-[#475569]'
+              }`}>
+                Artificial Intelligence capabilities — including conversational CSV audits, multi-agent root cause analysis, automated data hygiene proposals, and Executive BI brief generation — are currently in <strong>Early Access for the Workspace Owner</strong>. Team-wide multi-seat AI capability is rolling out soon.
+              </p>
+            </div>
+
+            <div className="shrink-0 flex flex-col sm:flex-row md:flex-col gap-3">
+              {accessRequested ? (
+                <div className={`px-4 py-3 rounded-xl border flex items-center gap-2.5 text-xs font-semibold ${
+                  isDarkMode ? 'bg-[#064E3B]/30 border-[#059669]/50 text-[#34D399]' : 'bg-[#ECFDF5] border-[#A7F3D0] text-[#065F46]'
+                }`}>
+                  <CheckCircle2 className="w-4 h-4 text-[#059669] shrink-0" />
+                  <div>
+                    <p className="font-bold">Access Request Registered</p>
+                    <p className="text-[11px] opacity-80">Workspace Owner notified</p>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={handleRequestEarlyAccess}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-[#2563EB] hover:bg-[#1D4ED8] transition-colors flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>Request Early Access</span>
+                </button>
+              )}
+
+              {onNavigate && (
+                <button
+                  onClick={() => onNavigate('dashboard')}
+                  className={`px-5 py-2.5 rounded-xl text-xs font-bold border transition-colors flex items-center justify-center gap-2 cursor-pointer ${
+                    isDarkMode ? 'bg-[#1E293B] border-[#334155] text-[#F8FAFC] hover:bg-[#334155]' : 'bg-[#F8FAFC] border-[#CBD5E1] text-[#0F172A] hover:bg-[#F1F5F9]'
+                  }`}
+                >
+                  <span>Back to Dashboard</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Features Roadmap / Coming Soon Capabilities */}
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className={`text-base font-bold ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
+                Upcoming Artificial Intelligence Capabilities
+              </h2>
+              <p className={`text-xs ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
+                Features currently active in Owner preview and staging for all team roles
+              </p>
+            </div>
+            <span className={`text-xs font-mono px-2 py-1 rounded border ${
+              isDarkMode ? 'bg-[#1E293B] border-[#334155] text-[#94A3B8]' : 'bg-[#F1F5F9] border-[#E2E8F0] text-[#64748B]'
+            }`}>
+              Powered by Google Gemini 3.7 Flash
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Card 1 */}
+            <div className={`p-5 rounded-xl border transition-all ${
+              isDarkMode ? 'bg-[#0F172A] border-[#334155]' : 'bg-[#FFFFFF] border-[#E2E8F0]'
+            }`}>
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="p-2.5 rounded-lg bg-[#2563EB]/10 text-[#2563EB] border border-[#2563EB]/20">
+                  <Bot className="w-5 h-5 text-[#2563EB]" />
+                </div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#FEF3C7] text-[#B45309] dark:bg-[#78350F]/50 dark:text-[#FDE68A] border border-[#FDE68A] dark:border-[#92400E]">
+                  Coming Soon
+                </span>
+              </div>
+              <h3 className={`font-bold text-sm mb-1.5 ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
+                Conversational Tabular Auditor
+              </h3>
+              <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
+                Query active spreadsheet columns in natural language, detect anomalies, request custom Excel/SQL formulas, and get instant explanations for data validation errors.
+              </p>
+            </div>
+
+            {/* Card 2 */}
+            <div className={`p-5 rounded-xl border transition-all ${
+              isDarkMode ? 'bg-[#0F172A] border-[#334155]' : 'bg-[#FFFFFF] border-[#E2E8F0]'
+            }`}>
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="p-2.5 rounded-lg bg-[#7C3AED]/10 text-[#7C3AED] border border-[#7C3AED]/20">
+                  <BrainCircuit className="w-5 h-5 text-[#7C3AED]" />
+                </div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#FEF3C7] text-[#B45309] dark:bg-[#78350F]/50 dark:text-[#FDE68A] border border-[#FDE68A] dark:border-[#92400E]">
+                  Coming Soon
+                </span>
+              </div>
+              <h3 className={`font-bold text-sm mb-1.5 ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
+                Autonomous Multi-Agent Forensics
+              </h3>
+              <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
+                5 coordinated AI specialist agents (Data Quality, Statistical Variance, Data Hygiene, ISO Compliance, and Business Intelligence) collaborating dynamically on your files.
+              </p>
+            </div>
+
+            {/* Card 3 */}
+            <div className={`p-5 rounded-xl border transition-all ${
+              isDarkMode ? 'bg-[#0F172A] border-[#334155]' : 'bg-[#FFFFFF] border-[#E2E8F0]'
+            }`}>
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="p-2.5 rounded-lg bg-[#D97706]/10 text-[#D97706] border border-[#D97706]/20">
+                  <Zap className="w-5 h-5 text-[#D97706]" />
+                </div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#FEF3C7] text-[#B45309] dark:bg-[#78350F]/50 dark:text-[#FDE68A] border border-[#FDE68A] dark:border-[#92400E]">
+                  Coming Soon
+                </span>
+              </div>
+              <h3 className={`font-bold text-sm mb-1.5 ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
+                1-Click AI Anomaly Remediation
+              </h3>
+              <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
+                Automated multi-step remediation proposals, intelligent duplicate merging, statistical missing value imputation, and whitespace trimming.
+              </p>
+            </div>
+
+            {/* Card 4 */}
+            <div className={`p-5 rounded-xl border transition-all ${
+              isDarkMode ? 'bg-[#0F172A] border-[#334155]' : 'bg-[#FFFFFF] border-[#E2E8F0]'
+            }`}>
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="p-2.5 rounded-lg bg-[#059669]/10 text-[#059669] border border-[#059669]/20">
+                  <BarChart3 className="w-5 h-5 text-[#059669]" />
+                </div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#FEF3C7] text-[#B45309] dark:bg-[#78350F]/50 dark:text-[#FDE68A] border border-[#FDE68A] dark:border-[#92400E]">
+                  Coming Soon
+                </span>
+              </div>
+              <h3 className={`font-bold text-sm mb-1.5 ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
+                Executive BI & Stakeholder Briefs
+              </h3>
+              <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
+                Instant synthesis of executive-ready summary briefs, revenue velocity metrics, compliance posture ratings, and signed PDF audit certificates.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Workspace Administration & Available Features */}
+        <div className={`p-5 rounded-xl border ${
+          isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-[#F8FAFC] border-[#E2E8F0]'
+        }`}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-[#2563EB]/10 text-[#2563EB] shrink-0 mt-0.5">
+                <ShieldCheck className="w-4 h-4 text-[#2563EB]" />
+              </div>
+              <div>
+                <h4 className={`text-xs font-bold ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
+                  Features Available in Your Current Plan
+                </h4>
+                <p className={`text-xs ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
+                  Rule-based Schema Validation, Duplicate Detection, Missing Value Cleaning, and Branded PDF Reports remain fully active and unlimited.
+                </p>
+              </div>
+            </div>
+            {onNavigate && (
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => onNavigate('clean')}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-[#2563EB] text-white hover:bg-[#1D4ED8] transition-colors cursor-pointer"
+                >
+                  Open Hygiene Workspace
+                </button>
+                <button
+                  onClick={() => onNavigate('schema')}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
+                    isDarkMode ? 'bg-[#0F172A] border-[#334155] text-[#F8FAFC] hover:bg-[#334155]' : 'bg-white border-[#CBD5E1] text-[#0F172A] hover:bg-[#F1F5F9]'
+                  }`}
+                >
+                  Schema Validator
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!entitlements.allowAiInsights) {
     return (
