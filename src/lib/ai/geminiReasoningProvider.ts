@@ -4,6 +4,8 @@
  * Provides server-side Gemini 3.7 Flash reasoning for:
  * 1. Conversational Auditor (real-time SSE streaming with multi-turn chat, search grounding, thinking mode)
  * 2. AI Insights Engine (grounded, deterministic error analysis, statistical profiles, and executive summaries)
+ * 
+ * All reasoning is grounded in deterministic statistical calculations and profiler results.
  */
 
 import { GoogleGenAI } from '@google/genai';
@@ -17,27 +19,24 @@ import {
   AICitation,
   AI_ENGINE_UPGRADE_MESSAGE
 } from './types';
+import { buildGroundedContext, formatGroundedPrompt } from './contextBuilder';
 
-// Default model as per system instructions
 const DEFAULT_MODEL = 'gemini-3.7-flash';
 
-const AUDITOR_CORE_SYSTEM_INSTRUCTION = `You are the Conversational Auditor for CSV Auditor Pro, an enterprise SaaS platform for tabular data quality, spreadsheet hygiene, statistical validation, and compliance assurance.
+const AUDITOR_CORE_SYSTEM_INSTRUCTION = `You are the Enterprise Data Auditor & Intelligence Engine for CSV Auditor Pro.
 
-CORE DIRECTIVES & GROUNDED REASONING:
-1. TRUTHFULNESS & GROUNDED FINDINGS:
-   - When a dataset is provided, strictly ground your analysis in the verified metadata, column names, issue counts, and sample records provided in the context.
-   - Never fabricate column names, row counts, duplicate statistics, or statistical metrics that are not in the context.
-   - If information is missing or not provided, explicitly state what is missing instead of guessing.
+STRICT GROUNDING & REASONING DIRECTIVES:
+1. TRUTHFULNESS & GROUNDED EVIDENCE:
+   - All numbers, sums, averages, rankings, trends, and quality metrics MUST come exclusively from the deterministic calculation evidence supplied in the context.
+   - NEVER invent column names, row counts, percentage statistics, or duplicate counts.
+   - Clearly distinguish verified calculated facts (e.g. "Total calculated revenue is $124,500 across 450 transactions") from analytical interpretations or recommendations.
+   - If the requested analysis cannot be answered with the supplied dataset or columns, explicitly state that the data is insufficient (insufficient_data).
 
-2. CONVERSATIONAL BEHAVIOR:
-   - If the user provides a greeting, question, or general query (e.g. "Hello", "How does this work?", "Write a SQL query for deduplication"), answer directly, warmly, and helpfully.
-   - Do NOT dump dataset summaries unless the user specifically asks about the dataset or data quality.
-   - Never prefix responses with robotic phrases like "Regarding your dataset..." or "Based on the knowledge base...". Start directly with the answer.
-
-3. ENTERPRISE PROFESSIONALISM:
-   - Provide clear, structured Markdown responses with bold headings, bullet points, and code blocks (SQL, Python, Excel formulas) when relevant.
-   - Maintain an objective, professional tone suitable for Data Engineers, Financial Analysts, and Compliance Officers.
-   - Avoid emojis, fluff, or unsolicited promotional statements.
+2. DIRECT & PROFESSIONAL CONVERSATION:
+   - For general conversational queries (greetings, formula requests, SQL questions), answer helpfully, clearly, and concisely without dumping dataset statistics.
+   - For dataset-specific questions, explain the computed findings with structured clarity (bold headings, key figures, and bullet points).
+   - Avoid robotic prefixes like "Based on the provided dataset...". Start directly with the answer.
+   - Avoid emojis and marketing fluff. Keep tone objective, precise, and forensic.
 `;
 
 const PERSONA_PROMPTS: Record<string, string> = {
@@ -49,7 +48,7 @@ const PERSONA_PROMPTS: Record<string, string> = {
 };
 
 export class GeminiReasoningProvider implements ReasoningEngineProvider {
-  public name = 'Gemini Reasoning Layer';
+  public name = 'Gemini Data-Grounded Reasoning Layer';
   public version = '3.7-flash';
   private client: GoogleGenAI | null = null;
 
@@ -76,47 +75,7 @@ export class GeminiReasoningProvider implements ReasoningEngineProvider {
   }
 
   /**
-   * Builds the formatted prompt context for the conversational auditor
-   */
-  private buildConversationalContext(request: ConversationalAuditorRequest): string {
-    let context = '';
-
-    // 1. User & Workspace context
-    if (request.userContext) {
-      const u = request.userContext;
-      context += `[Workspace Context: User "${u.name || 'User'}", Role "${u.role || 'Member'}", Workspace "${u.workspaceName || 'Enterprise'}", Tier "${u.subscriptionPlan || 'pro'}"]\n`;
-    }
-
-    // 2. Active dataset context (if any)
-    if (request.analysisContext && request.analysisContext.fileName) {
-      const d = request.analysisContext;
-      context += `\n[ACTIVE DATASET: "${d.fileName}"]\n`;
-      context += `- Dimensions: ${(d.rowCount || 0).toLocaleString()} rows across ${(d.columnCount || d.headers?.length || 0)} columns\n`;
-      if (d.headers && d.headers.length > 0) {
-        context += `- Headers (${d.headers.length}): [${d.headers.join(', ')}]\n`;
-      }
-      if (d.score !== undefined) {
-        context += `- Overall Quality Score: ${d.score}/100\n`;
-      }
-      if (d.issuesCount !== undefined) {
-        context += `- Total Issues: ${d.issuesCount} (Duplicates: ${d.duplicatesCount ?? 0}, Missing Values: ${d.missingValuesCount ?? 0}, Format Errors: ${d.formatErrorsCount ?? 0}, Outliers: ${d.outliersCount ?? 0})\n`;
-      }
-      if (d.sampleRows && d.sampleRows.length > 0) {
-        context += `- Sample Verified Rows (${Math.min(d.sampleRows.length, 3)}):\n${JSON.stringify(d.sampleRows.slice(0, 3), null, 2)}\n`;
-      }
-      if (d.cleaningOperationsPerformed && d.cleaningOperationsPerformed.length > 0) {
-        context += `- Cleaning Operations Applied: ${d.cleaningOperationsPerformed.join(', ')}\n`;
-      }
-    } else {
-      context += `\n[No active CSV dataset currently loaded]\n`;
-    }
-
-    context += `\nUser Prompt: ${request.prompt}`;
-    return context;
-  }
-
-  /**
-   * Stream a conversation turn with multi-turn history and optional search grounding
+   * Stream a conversation turn with grounded context, multi-turn history, and search grounding
    */
   public async streamConversation(
     request: ConversationalAuditorRequest,
@@ -126,6 +85,9 @@ export class GeminiReasoningProvider implements ReasoningEngineProvider {
     const requestId = `req_${Date.now()}`;
     const modelToUse = request.model || DEFAULT_MODEL;
 
+    // 1. Build Data-Grounded Context
+    const groundedContext = buildGroundedContext(request.prompt, request.analysisContext);
+
     // If Gemini client is not available, emit graceful upgrade message
     if (!ai) {
       const meta: ConversationalAuditorMeta = {
@@ -133,8 +95,10 @@ export class GeminiReasoningProvider implements ReasoningEngineProvider {
         model: modelToUse,
         status: 'upgrading',
         citations: [{ type: 'system', label: 'AI Architecture Phase 2' }],
-        intent: 'general',
-        confidenceScore: 1.0
+        intent: groundedContext.routePlan.intent,
+        confidenceScore: 1.0,
+        confidenceStatus: 'moderate_confidence',
+        routePlan: groundedContext.routePlan
       };
       callbacks.onMeta(meta);
       callbacks.onChunk(AI_ENGINE_UPGRADE_MESSAGE);
@@ -161,7 +125,7 @@ export class GeminiReasoningProvider implements ReasoningEngineProvider {
         });
       }
 
-      // Current turn
+      // Current turn with grounded evidence
       const currentParts: any[] = [];
       if (request.image && request.image.data) {
         currentParts.push({
@@ -172,8 +136,8 @@ export class GeminiReasoningProvider implements ReasoningEngineProvider {
         });
       }
 
-      const promptWithContext = this.buildConversationalContext(request);
-      currentParts.push({ text: promptWithContext });
+      const formattedPrompt = formatGroundedPrompt(groundedContext, request.userContext);
+      currentParts.push({ text: formattedPrompt });
       contents.push({ role: 'user', parts: currentParts });
 
       // Request configuration
@@ -187,7 +151,7 @@ export class GeminiReasoningProvider implements ReasoningEngineProvider {
         config.tools = [{ googleSearch: {} }];
       }
 
-      // Thinking config (Gemini 3 series)
+      // Thinking config
       if (request.thinkingMode) {
         config.thinkingConfig = {
           thinkingBudget: 2048
@@ -203,16 +167,19 @@ export class GeminiReasoningProvider implements ReasoningEngineProvider {
       }
 
       if (request.enableSearchGrounding) {
-        citations.push({ type: 'web', label: 'Google Search Fact-Checking' });
+        citations.push({ type: 'web', label: 'Google Search Grounding' });
       }
 
       const meta: ConversationalAuditorMeta = {
         requestId,
         model: modelToUse,
-        status: 'ready',
+        status: groundedContext.hasSufficientData ? 'ready' : 'insufficient_data',
         citations,
-        intent: 'auditing',
-        confidenceScore: 0.98
+        intent: groundedContext.routePlan.intent,
+        confidenceScore: groundedContext.routePlan.confidence,
+        confidenceStatus: groundedContext.hasSufficientData ? 'high_confidence' : 'insufficient_data',
+        relevantColumns: groundedContext.routePlan.targetColumns,
+        routePlan: groundedContext.routePlan
       };
 
       callbacks.onMeta(meta);
@@ -255,7 +222,7 @@ export class GeminiReasoningProvider implements ReasoningEngineProvider {
   }
 
   /**
-   * Generates factual, un-fabricated dataset insights
+   * Generates grounded, deterministic dataset insights
    */
   public async generateInsights(request: AIInsightsRequest): Promise<AIInsightsResponse> {
     const ai = this.initClient();
@@ -274,21 +241,22 @@ export class GeminiReasoningProvider implements ReasoningEngineProvider {
     }
 
     const d = request.analysisContext;
-    if (!d || !d.fileName) {
+    if (!d || !d.fileName || (d.rowCount || 0) === 0) {
       return {
         id,
         insightType: request.insightType,
         content: "No active dataset loaded in the workspace. Upload a CSV file to generate automated insights.",
-        status: 'ready',
+        status: 'insufficient_data',
         citations: [],
         generatedAt: new Date().toISOString()
       };
     }
 
+    // Build grounded context for the insight type
     let promptGoal = '';
     switch (request.insightType) {
       case 'error_patterns':
-        promptGoal = `Analyze the dataset quality and error breakdown. Total issues: ${d.issuesCount || 0}, Duplicates: ${d.duplicatesCount || 0}, Missing: ${d.missingValuesCount || 0}, Format errors: ${d.formatErrorsCount || 0}. Provide a prioritized remediation breakdown with concrete steps and SQL/Python snippets to fix the top issues.`;
+        promptGoal = `Analyze the dataset quality findings and error breakdown. Total issues: ${d.issuesCount || 0}, Duplicates: ${d.duplicatesCount || 0}, Missing: ${d.missingValuesCount || 0}, Format errors: ${d.formatErrorsCount || 0}. Provide a prioritized remediation breakdown with concrete steps and SQL/Python snippets to fix the top issues.`;
         break;
       case 'statistical_outliers':
         promptGoal = `Evaluate statistical distributions and outlier risks across the dataset columns (${d.headers?.join(', ') || 'N/A'}). Outliers detected: ${d.outliersCount || 0}. Explain how IQR and Z-scores should be used to filter anomalies without losing valid business transactions.`;
@@ -303,18 +271,8 @@ export class GeminiReasoningProvider implements ReasoningEngineProvider {
         promptGoal = request.prompt || `Provide a structured quality analysis of "${d.fileName}".`;
     }
 
-    const promptText = `
-Dataset Context:
-- File Name: "${d.fileName}"
-- Dimensions: ${(d.rowCount || 0).toLocaleString()} rows x ${(d.columnCount || d.headers?.length || 0)} columns
-- Columns: [${d.headers?.join(', ') || ''}]
-- Health Score: ${d.score ?? 95}/100
-- Issues: ${d.issuesCount || 0} total (Duplicates: ${d.duplicatesCount || 0}, Missing: ${d.missingValuesCount || 0}, Format Errors: ${d.formatErrorsCount || 0}, Outliers: ${d.outliersCount || 0})
-- Sample Records: ${JSON.stringify(d.sampleRows?.slice(0, 3) || [])}
-
-Goal:
-${promptGoal}
-`;
+    const groundedContext = buildGroundedContext(promptGoal, request.analysisContext);
+    const promptText = formatGroundedPrompt(groundedContext, request.userContext);
 
     try {
       const response = await ai.models.generateContent({
@@ -335,6 +293,7 @@ ${promptGoal}
           { type: 'dataset', label: `Dataset: ${d.fileName}` },
           { type: 'model', label: 'Gemini 3.7 Flash' }
         ],
+        structuredData: groundedContext.deterministicResults,
         generatedAt: new Date().toISOString()
       };
     } catch (err: any) {
