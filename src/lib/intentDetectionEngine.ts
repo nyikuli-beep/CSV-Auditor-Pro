@@ -149,11 +149,17 @@ export function classifyDetailedIntent(
     return { fineCategory: 'GENERAL_CONVERSATION', confidence: 0.99, matchedKeywords: ['conversation_smalltalk'] };
   }
 
-  // 2. DATA CLEANING
+  // 2. DATA CLEANING & REMEDIATION
   const cleaningKw = [
     'clean data', 'cleaning plan', 'how to clean', 'clean this', 'deduplicate', 'dedupe',
     'duplicate row', 'remove duplicates', 'missing value', 'imputation', 'impute', 'blank cell',
-    'trim whitespace', 'text casing', 'date formatting', 'iso date', 'autofix', 'normalize values'
+    'trim whitespace', 'text casing', 'date formatting', 'iso date', 'autofix', 'normalize values',
+    'provide fix', 'provide a fix', 'provide fixes', 'give fix', 'how to fix', 'fix issues',
+    'fix errors', 'fix anomalies', 'fix this', 'fix it', 'fix data', 'fix missing', 'fix duplicates',
+    'fix outliers', 'fix formatting', 'fix', 'remediate', 'remediation', 'remediation plan',
+    'resolve issues', 'resolve errors', 'resolve anomalies', 'repair data', 'correct data',
+    'cleaning script', 'python fix', 'sql fix', 'excel fix', 'suggest fix', 'suggest fixes',
+    'how can i fix', 'how do i fix', 'what should i fix', 'fix all', 'solve issues', 'solution'
   ];
   if (cleaningKw.some(kw => p.includes(kw))) {
     return { fineCategory: 'DATA_CLEANING', confidence: 0.95, matchedKeywords: cleaningKw.filter(kw => p.includes(kw)) };
@@ -321,13 +327,18 @@ export function detectUserIntent(
     p.includes('audit report') || p.includes('executive brief') || p.includes('bi brief') ||
     p.includes('clean this') || p.includes('deduplicate') || p.includes('remove duplicates') ||
     p.includes('find outliers') || p.includes('anomaly scan') || p.includes('calculate statistics') ||
-    p.includes('average of') || p.includes('mean of') || p.includes('pii scan') || p.includes('check gdpr');
+    p.includes('average of') || p.includes('mean of') || p.includes('pii scan') || p.includes('check gdpr') ||
+    p.includes('provide fix') || p.includes('provide a fix') || p.includes('fix') || p.includes('remediate') ||
+    p.includes('remediation') || p.includes('how to fix') || p.includes('what is wrong') || p.includes('show errors') ||
+    p.includes('show issues') || p.includes('audit') || p.includes('clean') || p.includes('score') ||
+    p.includes('missing') || p.includes('duplicate') || p.includes('outlier') || p.includes('quality');
 
   const isExplicitCSVOperation = hasActiveDataset && (
     mentionsActiveColumn ||
     hasExplicitAnalysisPhrase ||
     fineCategory === 'DATA_CLEANING' ||
     fineCategory === 'EXECUTIVE_BI_BRIEF' ||
+    fineCategory === 'CSV_AUDITING' ||
     (fineCategory === 'COMPLIANCE' && (p.includes('file') || p.includes('data') || p.includes('scan') || p.includes('dataset'))) ||
     fineCategory === 'CSV_ANALYSIS'
   );
@@ -336,9 +347,9 @@ export function detectUserIntent(
     let category: AIIntentCategory = 'CSV_ANALYSIS';
     const suggestedTools: string[] = [];
 
-    if (fineCategory === 'DATA_CLEANING' || p.includes('clean') || p.includes('dedupe') || p.includes('duplicate') || p.includes('impute')) {
+    if (fineCategory === 'DATA_CLEANING' || p.includes('clean') || p.includes('fix') || p.includes('remediat') || p.includes('dedupe') || p.includes('duplicate') || p.includes('impute')) {
       category = 'DATA_CLEANING';
-      suggestedTools.push('findDuplicates', 'findMissingValues', 'findInvalidCharacters');
+      suggestedTools.push('findDuplicates', 'findMissingValues', 'findInvalidCharacters', 'summarizeDataset');
     } else if (fineCategory === 'EXECUTIVE_BI_BRIEF' || p.includes('executive brief') || p.includes('bi report') || p.includes('board summary')) {
       category = 'EXECUTIVE_BI_BRIEF';
       suggestedTools.push('summarizeDataset', 'calculateStatistics', 'detectOutliers');
@@ -347,10 +358,10 @@ export function detectUserIntent(
       suggestedTools.push('findInvalidCharacters', 'detectPII');
     } else {
       category = 'CSV_ANALYSIS';
-      if (p.includes('duplicate')) suggestedTools.push('findDuplicates');
+      if (p.includes('duplicate') || p.includes('fix')) suggestedTools.push('findDuplicates');
       if (p.includes('outlier') || p.includes('anomaly') || p.includes('z-score')) suggestedTools.push('detectOutliers');
       if (p.includes('stat') || p.includes('mean') || p.includes('average') || p.includes('distribution')) suggestedTools.push('calculateStatistics');
-      if (suggestedTools.length === 0) suggestedTools.push('summarizeDataset');
+      if (suggestedTools.length === 0) suggestedTools.push('summarizeDataset', 'findMissingValues', 'findDuplicates');
     }
 
     return {

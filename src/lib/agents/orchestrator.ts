@@ -68,19 +68,34 @@ export class AgentOrchestrator {
     prompt: string, 
     hasDataset: boolean, 
     headers: string[] = [], 
-    explicitAgent?: SpecialistAgentType
+    explicitAgent?: SpecialistAgentType | string
   ): MultiAgentPlan {
-    // If explicitly assigned agent
-    if (explicitAgent && SPECIALIST_AGENTS[explicitAgent]) {
+    // If explicitly assigned agent (with normalization)
+    const normalizedAgent = explicitAgent ? (
+      explicitAgent === 'data_cleaning' ? 'data_cleaning_expert' :
+      explicitAgent === 'data_quality' ? 'data_quality_auditor' :
+      explicitAgent === 'statistical' ? 'statistical_analyst' :
+      explicitAgent === 'compliance' ? 'compliance_auditor' :
+      explicitAgent === 'business_intelligence' ? 'business_intelligence_analyst' :
+      explicitAgent === 'product_support' ? 'product_support_agent' :
+      explicitAgent === 'general_knowledge' ? 'general_knowledge_agent' :
+      explicitAgent
+    ) : undefined;
+
+    if (normalizedAgent && SPECIALIST_AGENTS[normalizedAgent as SpecialistAgentType]) {
+      const agentKey = normalizedAgent as SpecialistAgentType;
+      const isCleaning = agentKey === 'data_cleaning_expert';
       return {
-        primaryAgent: explicitAgent,
-        collaboratingAgents: [],
-        isCompoundQuery: false,
-        routingRationale: `Directly targeted agent: ${SPECIALIST_AGENTS[explicitAgent].name}`,
-        requiredTools: SPECIALIST_AGENTS[explicitAgent].toolAffinities,
-        requiresRag: explicitAgent === 'product_support_agent' || explicitAgent === 'compliance_auditor',
-        intentCategory: 'CSV_ANALYSIS',
-        fineCategory: 'CSV_AUDITING',
+        primaryAgent: agentKey,
+        collaboratingAgents: isCleaning ? ['data_quality_auditor'] : [],
+        isCompoundQuery: isCleaning,
+        routingRationale: `Directly targeted agent: ${SPECIALIST_AGENTS[agentKey].name}`,
+        requiredTools: isCleaning ? ['summarizeDataset', 'findMissingValues', 'findDuplicates', 'findInvalidCharacters'] : SPECIALIST_AGENTS[agentKey].toolAffinities,
+        requiresRag: agentKey === 'product_support_agent' || agentKey === 'compliance_auditor',
+        intentCategory: isCleaning ? 'DATA_CLEANING' : 'CSV_ANALYSIS',
+        fineCategory: isCleaning ? 'DATA_CLEANING' : 'CSV_AUDITING',
+        executionPath: 'CSV_OPERATIONS',
+        requiresDatasetAnalysis: hasDataset && agentKey !== 'general_knowledge_agent' && agentKey !== 'product_support_agent',
         confidence: 1.0
       };
     }
@@ -396,7 +411,16 @@ ${primaryAgentDef.systemDirective}\n`;
    - When analyzing an active dataset, cite exact column names, real counts, and calculated metrics from the provided dynamic context.
    - If requested information or columns are not present in the dataset, clearly state what is missing rather than fabricating data.
 
-4. ENTERPRISE COMMUNICATION STANDARDS:
+4. DATA REMEDIATION & FIX REQUEST DIRECTIVES:
+   - Whenever the user asks for a fix, remediation plan, cleaning script, or how to resolve errors:
+     a. Explicitly break down the exact anomalies found in the active dataset.
+     b. Provide clear step-by-step remediation instructions (imputation methods, deduplication rules, formatting standards).
+     c. Provide a ready-to-run, complete Python (pandas) script tailored specifically to the dataset headers.
+     d. Provide a ready-to-run SQL cleaning query (using ROW_NUMBER() for deduplication, COALESCE, TRIM, etc.).
+     e. Provide relevant Excel/Google Sheets formula solutions (e.g. TRIM, CLEAN, UNIQUE, XLOOKUP).
+     f. Direct the user to the Hygiene Laboratory in CSV Auditor Pro for 1-click automated execution.
+
+5. ENTERPRISE COMMUNICATION STANDARDS:
    - Tone: Professional, technical, concise, authoritative, and actionable.
    - Formats: Use clean bullet points, markdown bolding for key terms, and exact numeric statistics.
    - Icons: Never use emojis. Use clean semantic markdown layout.

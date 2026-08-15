@@ -614,6 +614,14 @@ export default function InsightsCenter({
   // Quick Diagnostic Prompts definition when a file is active
   const quickInsightPrompts = activeFile ? [
     {
+      id: 'fix-remediation',
+      title: 'Automated Fix & Code',
+      category: 'Remediation',
+      prompt: `Provide complete remediation fix for all issues in "${activeFile.name}". Include step-by-step cleaning strategy, Python pandas script, SQL query, and Excel formulas.`,
+      icon: Sparkles,
+      pillBg: 'bg-[#D1FAE5] text-[#065F46] border-[#6EE7B7] hover:bg-[#A7F3D0]'
+    },
+    {
       id: 'error-patterns',
       title: 'Top 5 Error Patterns',
       category: 'Data Quality',
@@ -636,14 +644,6 @@ export default function InsightsCenter({
       prompt: `Perform a comprehensive PII and formula security compliance audit on "${activeFile.name}". Verify email formatting, phone numbers, and formula injection safety.`,
       icon: ShieldCheck,
       pillBg: 'bg-[#EEF2FF] text-[#3730A3] border-[#C7D2FE] hover:bg-[#E0E7FF]'
-    },
-    {
-      id: 'cleaning-script',
-      title: 'Generate Cleaning Plan',
-      category: 'Transformation',
-      prompt: `Generate an automated cleaning and data transformation action plan for active dataset "${activeFile.name}" to achieve 100% compliance quality score.`,
-      icon: Sparkles,
-      pillBg: 'bg-[#D1FAE5] text-[#065F46] border-[#6EE7B7] hover:bg-[#A7F3D0]'
     },
     {
       id: 'bi-kpis',
