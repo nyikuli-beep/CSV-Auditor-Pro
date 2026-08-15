@@ -5,7 +5,15 @@
 
 import { ToolResult } from '../aiToolRegistry';
 import { StructuredCSVContext } from '../csvContextEngine';
-import { KnowledgeChunk } from '../ragEngine';
+
+export interface KnowledgeChunk {
+  id: string;
+  sourceFile: string;
+  title: string;
+  category: string;
+  content: string;
+  keywords: string[];
+}
 import { AIIntentCategory, FineGrainedIntentCategory, ExecutionPath } from '../intentDetectionEngine';
 import { ConfidenceAssessment } from '../confidenceScoringEngine';
 import { EnterpriseRiskAssessment } from '../riskAssessmentEngine';

@@ -14,7 +14,7 @@ import { requireAuth, AuthRequest } from './src/middleware/auth.ts';
 import { eq, desc } from 'drizzle-orm';
 import { dispatchGmailEmail, checkProductionEnvironmentVars } from './src/lib/gmailService.ts';
 import { sendEmail, getEmailLogs, logEmailDelivery, sanitizeEmailErrorMessage, isValidEmailAddress } from './src/lib/emailService.ts';
-import { generateRAGResponse, generateRAGResponseStream } from './src/lib/ragEngine.ts';
+import { conversationalAuditorService, aiInsightsService, geminiReasoningProvider, buildAnalysisContext } from './src/lib/ai/index.ts';
 import { aiService } from './src/lib/aiService.ts';
 import crypto from 'crypto';
 import {
@@ -1281,7 +1281,11 @@ ${company}`;
 // CENTRALIZED ENTERPRISE AI AUDITOR SERVICES (GEMINI 3.7 FLASH)
 // =========================================================
 
-// 1. API: Enterprise Gemini Audit Chat (RAG, Context Injection, Intent Detection & SSE Streaming)
+// Wire Phase 2 Gemini Reasoning Layer into services
+conversationalAuditorService.setReasoningProvider(geminiReasoningProvider);
+aiInsightsService.setReasoningProvider(geminiReasoningProvider);
+
+// 1. API: Enterprise Gemini Audit Chat (Conversational Auditor SSE Streaming)
 app.post('/api/gemini/chat', async (req, res) => {
   const { 
     prompt, 
@@ -1292,10 +1296,7 @@ app.post('/api/gemini/chat', async (req, res) => {
     userContext, 
     image, 
     thinkingMode = false, 
-    enableSearchGrounding = false, 
-    knowledgeBaseId, 
-    intentCategory,
-    explicitAgent
+    enableSearchGrounding = false
   } = req.body;
 
   if (!prompt) {
@@ -1310,35 +1311,57 @@ app.post('/api/gemini/chat', async (req, res) => {
   res.setHeader('X-Accel-Buffering', 'no');
 
   try {
-    await aiService.chatStream(
+    const analysisContext = fileContext ? buildAnalysisContext(fileContext) : null;
+
+    await conversationalAuditorService.streamChat(
       {
         prompt,
         history,
-        datasetContext: fileContext,
+        analysisContext,
         userContext,
         model,
         persona,
         thinkingMode,
         enableSearchGrounding,
-        image,
-        knowledgeBaseId,
-        intentCategory,
-        explicitAgent
+        image
       },
-      (meta) => {
-        res.write(`data: ${JSON.stringify({ type: 'meta', ...meta })}\n\n`);
-      },
-      (textChunk) => {
-        res.write(`data: ${JSON.stringify({ type: 'chunk', text: textChunk })}\n\n`);
+      {
+        onMeta: (meta) => {
+          res.write(`data: ${JSON.stringify({ type: 'meta', ...meta })}\n\n`);
+        },
+        onChunk: (textChunk) => {
+          res.write(`data: ${JSON.stringify({ type: 'chunk', text: textChunk })}\n\n`);
+        },
+        onDone: () => {
+          res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
+          res.end();
+        }
       }
     );
-
-    res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
-    res.end();
   } catch (error: any) {
-    console.error('[Enterprise AI Server Error] Streaming failed:', error);
+    console.error('[Conversational Auditor Server Error] Streaming failed:', error);
     res.write(`data: ${JSON.stringify({ type: 'error', error: error.message || 'Service temporarily unavailable.' })}\n\n`);
     res.end();
+  }
+});
+
+// 1b. API: Enterprise AI Dataset Insights Generation
+app.post('/api/gemini/insights', async (req, res) => {
+  try {
+    const { insightType = 'error_patterns', fileContext, prompt, model = 'gemini-3.7-flash' } = req.body;
+    const analysisContext = fileContext ? buildAnalysisContext(fileContext) : null;
+
+    const result = await aiInsightsService.generateInsights({
+      insightType,
+      analysisContext,
+      prompt,
+      model
+    });
+
+    res.json(result);
+  } catch (error: any) {
+    console.error('[AI Insights Server Error] Generation failed:', error);
+    res.status(500).json({ error: error.message || 'Failed to generate dataset insight.' });
   }
 });
 

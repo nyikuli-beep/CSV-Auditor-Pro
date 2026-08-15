@@ -2426,14 +2426,8 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
         }
       }
     } catch (err) {
-      // Dynamic fallback if streaming network connection is interrupted
-      let fallbackText = '';
-      if (activeFile) {
-        const rowCount = activeFile.totalRowsCount || activeFile.rows.length;
-        fallbackText = `Dataset **${activeFile.name}** contains ${rowCount.toLocaleString()} rows and ${activeFile.headers.length} columns with a health score of ${activeFile.score}%. You can review flagged duplicate rows and formatting issues in the Cleaning Center.`;
-      } else {
-        fallbackText = `I am your Conversational Auditor for CSV Auditor Pro. Please upload a dataset or ask any question regarding data auditing, statistics, schema validation, or SQL/Python queries.`;
-      }
+      // Graceful fallback if streaming network connection is interrupted
+      const fallbackText = "AI analysis engine is currently being upgraded.";
 
       setTimeout(() => {
         setChatMessages(prev => prev.map(m => 
@@ -2442,7 +2436,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                 ...m, 
                 content: fallbackText, 
                 citations: [
-                  { type: 'product', label: 'Conversational Auditor' }
+                  { type: 'system', label: 'AI Architecture Phase 1 Reset' }
                 ],
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
               }

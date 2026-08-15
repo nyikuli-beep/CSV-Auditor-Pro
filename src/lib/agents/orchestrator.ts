@@ -26,7 +26,7 @@ import {
   ToolResult 
 } from '../aiToolRegistry';
 import { StructuredCSVContext } from '../csvContextEngine';
-import { retrieveKnowledgeChunks, KnowledgeChunk } from '../ragEngine';
+import { KnowledgeChunk } from './types';
 import { detectUserIntent, classifyDetailedIntent, AIIntentCategory, FineGrainedIntentCategory } from '../intentDetectionEngine';
 import { buildWorkspaceMemoryPromptBlock, recordConversationInsightInMemory } from '../workspaceMemoryEngine';
 import { evaluateResponseConfidence } from '../confidenceScoringEngine';

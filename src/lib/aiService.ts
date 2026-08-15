@@ -25,9 +25,11 @@ import {
   buildStructuredCSVContext, 
   StructuredCSVContext 
 } from './csvContextEngine';
-import { 
-  KnowledgeChunk 
-} from './ragEngine';
+import {
+  conversationalAuditorService,
+  ConversationalAuditorRequest,
+  ConversationalAuditorMeta
+} from './ai';
 import { 
   agentOrchestrator 
 } from './agents/orchestrator';
@@ -42,48 +44,6 @@ import {
 
 // Default Enterprise AI Model
 export const DEFAULT_AI_MODEL = 'gemini-3.7-flash';
-
-// ==========================================
-// ENTERPRISE PERMANENT SYSTEM PROMPT
-// ==========================================
-export const ENTERPRISE_SYSTEM_PROMPT = `You are the Enterprise Conversational Auditor inside CSV Auditor Pro. Your role is to provide accurate, professional, enterprise-grade responses. Respond naturally to greetings and general questions. Only perform CSV analysis when the user's request explicitly requires it. Never assume the user wants dataset analysis simply because a CSV exists. When CSV analysis is requested, explain findings clearly, provide actionable recommendations, and maintain a professional enterprise tone.
-
-CONVERSATIONAL INTENT & GUARDRAILS:
-1. INTENT EVALUATION & NATURAL OPENINGS:
-   - Begin your responses directly with the answer itself.
-   - NEVER prepend responses with "Regarding...", "Based on the knowledge base...", "According to stored information...", or "CSV Auditor Pro Knowledge Base Response:".
-   - If the user provides a greeting or pleasantry (e.g., "Hi", "Hello", "Thanks", "How are you?"), respond warmly, directly, and concisely as the Conversational Auditor. State what you can assist with without dumping unrequested dataset summaries or documentation.
-
-2. GENERAL KNOWLEDGE CAPABILITIES:
-   - You possess comprehensive knowledge in software engineering, database design, SQL, Python, JavaScript, statistical modeling, machine learning, cloud architecture, Excel formulas, and business analysis.
-   - Answer general queries directly and intelligently using your internal knowledge.
-
-3. TRUTHFULNESS & GROUNDED FORENSICS:
-   - When CSV analysis is explicitly requested, ground all factual findings in the provided dataset metadata, column statistical profiles, and deterministic tool outputs.
-   - If a specific column, metric, or parameter is not present in the dataset, explicitly state what is missing instead of fabricating data.
-   - For numerical metrics (mean, median, standard deviation, duplicate counts, null percentages), rely strictly on the calculated values provided in the context.
-
-4. PROFESSIONAL ENTERPRISE TONE:
-   - Maintain an objective, authoritative, and analytical tone suitable for Chief Data Officers, Risk Analysts, and Enterprise Compliance Teams.
-   - Do NOT use emojis, playful slang, promotional hype, or filler phrases.
-   - Use clear, structured Markdown headers, bullet points, and code blocks for readability.
-
-5. AUDIT REPORTING STRUCTURE (for detailed reviews):
-   When providing comprehensive analyses or dataset evaluations, structure your response as follows:
-   - **Executive Summary**: A concise 1-2 sentence overview of the finding or answer.
-   - **Key Findings**: Clear, bulleted breakdown of anomalies, quality metrics, or structural evaluations.
-   - **Data Quality & Risk Assessment**: Concrete metrics (e.g. data quality score, null rate, formula injection risks).
-   - **Recommended Actions**: Prioritized, step-by-step guidance to resolve identified issues.
-`;
-
-// Persona-specific instructions to overlay on top of the Enterprise System Prompt
-export const PERSONA_INSTRUCTIONS: Record<string, string> = {
-  auditor: "Persona: Forensic Data Auditor. Emphasize compliance, security vulnerabilities, formula injection prevention, and regulatory data integrity.",
-  scientist: "Persona: Principal Data Scientist. Emphasize statistical distributions, outlier z-scores, IQR bounds, skewness, null imputation strategies, and correlation.",
-  developer: "Persona: Senior Software Engineer & DBA. Emphasize schema definitions, SQL DDL generation, column type normalization, JSON API serialization, and migration safety.",
-  compliance: "Persona: Corporate Compliance Officer. Emphasize GDPR/SOC2 standards, PII sanitization, audit trail retention schedules, and tenant data isolation.",
-  general: "Persona: Senior Technical Consultant. Provide direct, balanced, and actionable guidance across data cleaning and workflow automation."
-};
 
 // Types & Interfaces
 export interface AIUserContext {
@@ -113,7 +73,7 @@ export interface AIDatasetContext {
   activeSchema?: string | null;
   anomaliesSummary?: string[];
   rows?: Record<string, any>[];
-  structuredContext?: StructuredCSVContext;
+  structuredContext?: any;
 }
 
 export interface AIChatRequestOptions {
@@ -128,13 +88,13 @@ export interface AIChatRequestOptions {
   enableSearchGrounding?: boolean;
   knowledgeBaseId?: string;
   intentCategory?: string;
-  explicitAgent?: SpecialistAgentType;
+  explicitAgent?: any;
 }
 
 export interface AIChatResponseMeta {
-  intent: AIIntentCategory;
-  fineCategory: FineGrainedIntentCategory;
-  confidenceScore: number;
+  intent?: any;
+  fineCategory?: any;
+  confidenceScore?: number;
   confidenceDetails?: any;
   riskAssessment?: any;
   recommendations?: any[];
@@ -142,19 +102,19 @@ export interface AIChatResponseMeta {
   explainability?: any;
   followUpSuggestions?: any[];
   executiveReport?: any;
-  reasoning: string;
-  executedTools: string[];
-  retrievedDocs: string[];
-  citations: Array<{ type: string; label: string; url?: string }>;
-  modelUsed: string;
-  latencyMs: number;
-  activeAgent?: SpecialistAgentType;
+  reasoning?: string;
+  executedTools?: string[];
+  retrievedDocs?: string[];
+  citations?: Array<{ type: string; label: string; url?: string }>;
+  modelUsed?: string;
+  latencyMs?: number;
+  activeAgent?: any;
   activeAgentName?: string;
   activeAgentTitle?: string;
-  collaboratingAgents?: Array<{ id: SpecialistAgentType; name: string; role: string }>;
+  collaboratingAgents?: Array<{ id: any; name: string; role: string }>;
   isCompoundQuery?: boolean;
   routingRationale?: string;
-  evidenceCollected?: AgentEvidence[];
+  evidenceCollected?: any[];
 }
 
 export interface AIChatResponse {
@@ -233,543 +193,61 @@ export class AIService {
     return Boolean(this.initClient());
   }
 
-  /**
-   * Builds the complete Structured Prompt with Dynamic Context Injection
-   */
-  public buildStructuredPrompt(
-    options: AIChatRequestOptions, 
-    _intentResult: IntentAnalysisResult, 
-    executedToolResults: ToolResult[], 
-    _knowledgeChunks: KnowledgeChunk[] = []
-  ): {
-    systemInstruction: string;
-    userContent: string;
-    modelToUse: string;
-  } {
-    const modelToUse = options.model && options.model.startsWith('gemini')
-      ? (options.model.includes('3.7') ? 'gemini-3.7-flash' : options.model)
-      : DEFAULT_AI_MODEL;
 
-    // 1. Build System Instruction with Persona
-    const personaKey = options.persona || 'auditor';
-    const personaInstruction = PERSONA_INSTRUCTIONS[personaKey] || PERSONA_INSTRUCTIONS.auditor;
-    const systemInstruction = `${ENTERPRISE_SYSTEM_PROMPT}\n\nACTIVE PERSONA CONTEXT:\n${personaInstruction}`;
-
-    // 2. Build User & Workspace Tenancy Context Section
-    let contextSection = `=== ENTERPRISE WORKSPACE & USER CONTEXT ===\n`;
-    if (options.userContext) {
-      const u = options.userContext;
-      contextSection += `- User: ${u.name || 'Enterprise Analyst'} (${u.email || 'user@company.com'})\n`;
-      contextSection += `- Workspace Role: ${u.role || 'Admin'}\n`;
-      contextSection += `- Organization / Workspace: ${u.workspaceName || 'Corporate Workspace'}\n`;
-      contextSection += `- Subscription Tier: ${(u.subscriptionPlan || 'enterprise').toUpperCase()}\n`;
-      if (u.teamMembersCount) {
-        contextSection += `- Active Team Tenancy Seats: ${u.teamMembersCount}\n`;
-      }
-    } else {
-      contextSection += `- Workspace: CSV Auditor Pro Enterprise Tenancy\n`;
-    }
-
-    // 3. Build Dataset & Profile Context Section
-    if (options.datasetContext) {
-      const d = options.datasetContext;
-      contextSection += `\n=== ACTIVE DATASET CONTEXT: "${d.fileName}" ===\n`;
-      contextSection += `- Dimensions: ${d.rowCount.toLocaleString()} Rows x ${(d.columnCount || d.headers.length)} Columns\n`;
-      contextSection += `- Headers: [${d.headers.join(', ')}]\n`;
-      if (d.score !== undefined) {
-        contextSection += `- Data Integrity Score: ${d.score}/100\n`;
-      }
-      if (d.issuesCount !== undefined) {
-        contextSection += `- Detected Quality Issues: ${d.issuesCount} total (${d.duplicatesCount || 0} duplicates, ${d.missingValuesCount || 0} missing values, ${d.formatErrorsCount || 0} format errors, ${d.outliersCount || 0} outliers)\n`;
-      }
-
-      // Column Profile details if available
-      if (d.structuredContext && d.structuredContext.columnProfiles) {
-        contextSection += `\nColumn Structural Breakdown:\n`;
-        d.structuredContext.columnProfiles.slice(0, 10).forEach(cp => {
-          contextSection += `  * "${cp.name}" [Type: ${cp.type} | Missing: ${cp.missingCount} (${cp.nullPercentage}%) | Unique: ${cp.uniqueValuesCount}]\n`;
-          if (cp.stats) {
-            contextSection += `    Stats: Min: ${cp.stats.min}, Max: ${cp.stats.max}, Mean: ${cp.stats.mean}, Median: ${cp.stats.median}\n`;
-          }
-        });
-      }
-
-      // Sample rows for grounded context (capped at 5 rows)
-      if (d.rows && d.rows.length > 0) {
-        contextSection += `\nSample Verified Rows (First ${Math.min(d.rows.length, 5)} records):\n`;
-        contextSection += JSON.stringify(d.rows.slice(0, 5), null, 2) + '\n';
-      }
-    } else {
-      contextSection += `\n[No active CSV dataset loaded in the current workspace view]\n`;
-    }
-
-    // 4. Injected Deterministic Tool Outputs
-    if (executedToolResults.length > 0) {
-      contextSection += `\n=== DETERMINISTIC TOOL EXECUTION RESULTS (GROUND TRUTH) ===\n`;
-      executedToolResults.forEach(tr => {
-        contextSection += `[Tool: ${tr.toolName}]\n`;
-        contextSection += `Summary: ${tr.summary}\n`;
-        contextSection += `Data: ${JSON.stringify(tr.data)}\n\n`;
-      });
-    }
-
-    // 5. User Prompt & Goal
-    const userContent = `${contextSection}\n=== USER INQUIRY ===\n${options.prompt}\n\nPlease provide a direct, accurate, and actionable answer.`;
-
-    return {
-      systemInstruction,
-      userContent,
-      modelToUse
-    };
-  }
 
   /**
-   * Execute Automatic Intent Detection and Select Relevant Deterministic Tools
-   */
-  public analyzeIntentAndRunTools(options: AIChatRequestOptions): {
-    intentResult: IntentAnalysisResult;
-    executedToolResults: ToolResult[];
-    knowledgeChunks: KnowledgeChunk[];
-    citations: Array<{ type: string; label: string; url?: string }>;
-  } {
-    const hasDataset = Boolean(options.datasetContext && options.datasetContext.headers && options.datasetContext.headers.length > 0);
-    const headersList = options.datasetContext?.headers || [];
-    const intentResult = detectUserIntent(options.prompt, hasDataset, headersList, options.intentCategory);
-
-    // Run deterministic tools for grounded answers when dataset is loaded
-    const executedToolResults: ToolResult[] = [];
-    const citations: Array<{ type: string; label: string; url?: string }> = [
-      { type: 'product', label: 'CSV Auditor Pro Enterprise Engine' }
-    ];
-
-    if (hasDataset && options.datasetContext) {
-      const headers = options.datasetContext.headers;
-      const rows = options.datasetContext.rows || [];
-
-      // 1. Dataset overview
-      if (rows.length > 0 && (options.prompt.toLowerCase().includes('summary') || options.prompt.toLowerCase().includes('overview') || options.prompt.toLowerCase().includes('score') || options.prompt.toLowerCase().includes('quality'))) {
-        executedToolResults.push(summarizeDataset(headers, rows));
-        citations.push({ type: 'tool', label: 'Dataset Structural Summary' });
-      }
-
-      // 2. Duplicate detection
-      if (rows.length > 0 && (options.prompt.toLowerCase().includes('duplicate') || options.prompt.toLowerCase().includes('dedup') || options.prompt.toLowerCase().includes('repeat'))) {
-        executedToolResults.push(findDuplicates(headers, rows));
-        citations.push({ type: 'tool', label: 'Duplicate Cluster Analyzer' });
-      }
-
-      // 3. Statistical calculations
-      const lowerPrompt = options.prompt.toLowerCase();
-      if (rows.length > 0 && (lowerPrompt.includes('average') || lowerPrompt.includes('mean') || lowerPrompt.includes('median') || lowerPrompt.includes('stats') || lowerPrompt.includes('standard deviation') || lowerPrompt.includes('distribution'))) {
-        const matchedCol = headers.find(h => lowerPrompt.includes(h.toLowerCase()));
-        if (matchedCol) {
-          executedToolResults.push(calculateStatistics(rows, matchedCol));
-          citations.push({ type: 'tool', label: `Statistical Engine (${matchedCol})` });
-        }
-      }
-
-      // 4. Anomaly and Outlier scan
-      if (rows.length > 0 && (lowerPrompt.includes('anomaly') || lowerPrompt.includes('outlier') || lowerPrompt.includes('deviation') || lowerPrompt.includes('abnormal'))) {
-        executedToolResults.push(detectOutliers(headers, rows, undefined, 2.5));
-        citations.push({ type: 'tool', label: 'Z-Score Anomaly Scanner' });
-      }
-    }
-
-    if (options.enableSearchGrounding) {
-      citations.push({ type: 'web', label: 'Google Search Fact-Checking' });
-    }
-
-    return {
-      intentResult,
-      executedToolResults,
-      knowledgeChunks: [],
-      citations
-    };
-  }
-
-  /**
-   * Main Conversational SSE Streaming Chat Method (Enterprise Multi-Agent Orchestrated)
+   * Conversational Streaming Chat Method (Delegates cleanly to ConversationalAuditorService)
    */
   public async chatStream(
     options: AIChatRequestOptions,
     onMeta: (meta: AIChatResponseMeta) => void,
     onChunk: (chunk: string) => void
   ): Promise<void> {
-    const startTime = Date.now();
-    const ai = this.initClient();
-
-    const hasDataset = Boolean(options.datasetContext && options.datasetContext.headers && options.datasetContext.headers.length > 0);
-    const headersList = options.datasetContext?.headers || [];
-
-    // 1. Enterprise Agent Orchestrator: Multi-Agent Intent Routing & Planning
-    const plan = agentOrchestrator.planRouting(
-      options.prompt,
-      hasDataset,
-      headersList,
-      options.explicitAgent
-    );
-
-    // 2. Execute Deterministic Tools & Extract Evidence via Specialist Agents
-    const structuredContext = options.datasetContext?.structuredContext || (
-      options.datasetContext ? {
-        fileId: options.datasetContext.fileId || 'temp_file',
+    const request: ConversationalAuditorRequest = {
+      prompt: options.prompt,
+      history: options.history?.map(h => ({
+        role: (h.role === 'model' || h.role === 'assistant') ? 'assistant' : 'user',
+        content: h.content
+      })),
+      analysisContext: options.datasetContext ? {
+        fileId: options.datasetContext.fileId,
         fileName: options.datasetContext.fileName,
-        fileSize: (options.datasetContext as any).fileSizeBytes || 0,
-        fileSizeBytesFormatted: `${options.datasetContext.rowCount} rows`,
-        encoding: 'UTF-8',
-        delimiter: ',',
         rowCount: options.datasetContext.rowCount,
-        columnCount: options.datasetContext.headers.length,
+        columnCount: options.datasetContext.columnCount || options.datasetContext.headers?.length,
         headers: options.datasetContext.headers,
-        qualityScore: options.datasetContext.score || 95,
-        nullPercentageTotal: 0,
-        duplicateRowsCount: options.datasetContext.duplicatesCount || 0,
-        duplicateColsCount: 0,
-        formulaInjectionRisksCount: 0,
-        columnProfiles: [],
-        anomaliesDetectedCount: options.datasetContext.issuesCount || 0,
-        sampleRowsSanitized: options.datasetContext.rows || [],
-        updatedAt: new Date().toISOString()
-      } as StructuredCSVContext : undefined
-    );
-
-    const { executedTools, evidence } = agentOrchestrator.executeAgentTools(plan, structuredContext);
-
-    // 3. Construct Unified Multi-Agent Prompt
-    const primaryAgentDef = SPECIALIST_AGENTS[plan.primaryAgent];
-    const collaboratingDefs = plan.collaboratingAgents.map(id => SPECIALIST_AGENTS[id]).filter(Boolean);
-
-    const citations: Array<{ type: string; label: string; url?: string }> = [
-      { type: 'agent', label: `${primaryAgentDef.name} (${primaryAgentDef.title})` }
-    ];
-
-    collaboratingDefs.forEach(c => {
-      citations.push({ type: 'agent', label: `Collab: ${c.name}` });
-    });
-
-    executedTools.forEach(t => {
-      citations.push({ type: 'tool', label: t.toolName });
-    });
-
-    if (options.enableSearchGrounding) {
-      citations.push({ type: 'web', label: 'Google Search Fact-Checking' });
-    }
-
-    const { systemInstruction, dynamicContextPrompt, meta: responseMeta } = agentOrchestrator.constructCollaborativePrompt(
-      plan,
-      {
-        prompt: options.prompt,
-        datasetContext: structuredContext,
-        userContext: options.userContext ? {
-          userId: options.userContext.uid,
-          tier: options.userContext.subscriptionPlan,
-          role: options.userContext.role,
-          organizationName: options.userContext.workspaceName
-        } : undefined,
-        enableSearchGrounding: options.enableSearchGrounding,
-        knowledgeBaseId: options.knowledgeBaseId
-      },
-      executedTools,
-      evidence,
-      []
-    );
-
-    const meta: AIChatResponseMeta = {
-      intent: plan.intentCategory,
-      fineCategory: plan.fineCategory,
-      confidenceScore: responseMeta.confidenceScore || plan.confidence,
-      confidenceDetails: responseMeta.confidenceAssessment,
-      riskAssessment: responseMeta.riskAssessment,
-      recommendations: responseMeta.recommendations,
-      proactiveInsights: responseMeta.proactiveInsights,
-      explainability: responseMeta.explainability,
-      followUpSuggestions: responseMeta.followUpSuggestions,
-      executiveReport: responseMeta.executiveReport,
-      reasoning: plan.routingRationale,
-      executedTools: executedTools.map(t => t.toolName),
-      retrievedDocs: [],
-      citations,
-      modelUsed: DEFAULT_AI_MODEL,
-      latencyMs: 0,
-      activeAgent: plan.primaryAgent,
-      activeAgentName: primaryAgentDef.name,
-      activeAgentTitle: primaryAgentDef.title,
-      collaboratingAgents: collaboratingDefs.map(c => ({ id: c.id, name: c.name, role: c.title })),
-      isCompoundQuery: plan.isCompoundQuery,
-      routingRationale: plan.routingRationale,
-      evidenceCollected: evidence
+        score: options.datasetContext.score,
+        issuesCount: options.datasetContext.issuesCount,
+        duplicatesCount: options.datasetContext.duplicatesCount,
+        missingValuesCount: options.datasetContext.missingValuesCount,
+        formatErrorsCount: options.datasetContext.formatErrorsCount,
+        outliersCount: options.datasetContext.outliersCount,
+        sampleRows: options.datasetContext.rows?.slice(0, 5)
+      } : null,
+      userContext: options.userContext,
+      model: options.model,
+      persona: options.persona,
+      thinkingMode: options.thinkingMode,
+      enableSearchGrounding: options.enableSearchGrounding,
+      image: options.image
     };
 
-    // Emit initial metadata event to client
-    onMeta(meta);
-
-    // 4. Execute Streaming API call with Gemini or fallback dynamically
-    if (!ai) {
-      console.warn('[AIService] GEMINI_API_KEY omitted or offline. Emitting dynamic audit response.');
-      const fallbackResponse = this.generateOfflineFallbackResponse(options, {
-        category: plan.intentCategory,
-        fineCategory: plan.fineCategory,
-        executionPath: plan.executionPath || 'GENERAL_AI',
-        confidenceScore: plan.confidence,
-        reasoning: plan.routingRationale,
-        suggestedTools: plan.requiredTools,
-        requiresDatasetAnalysis: plan.requiresDatasetAnalysis ?? false,
-        hasActiveDataset: !!options.datasetContext
-      }, executedTools);
-      onChunk(fallbackResponse);
-      return;
-    }
-
-    try {
-      // Build conversation contents including history
-      const contents: any[] = [];
-
-      // Add conversation history
-      if (options.history && options.history.length > 0) {
-        options.history.slice(-8).forEach(msg => {
-          const role = (msg.role === 'assistant' || msg.role === 'model') ? 'model' : 'user';
-          contents.push({
-            role,
-            parts: [{ text: msg.content }]
-          });
+    await conversationalAuditorService.streamChat(request, {
+      onMeta: (meta: ConversationalAuditorMeta) => {
+        onMeta({
+          modelUsed: meta.model,
+          citations: meta.citations,
+          confidenceScore: meta.confidenceScore,
+          executedTools: [],
+          retrievedDocs: []
         });
+      },
+      onChunk: (chunk: string) => {
+        onChunk(chunk);
       }
-
-      // Add multimodal image if attached
-      const currentParts: any[] = [];
-      if (options.image && options.image.data) {
-        currentParts.push({
-          inlineData: {
-            mimeType: options.image.mimeType || 'image/png',
-            data: options.image.data
-          }
-        });
-      }
-      currentParts.push({ text: dynamicContextPrompt });
-      contents.push({ role: 'user', parts: currentParts });
-
-      const requestConfig: any = {
-        systemInstruction,
-        temperature: 0.2
-      };
-
-      // Search grounding configuration if requested
-      if (options.enableSearchGrounding) {
-        requestConfig.tools = [{ googleSearch: {} }];
-      }
-
-      // Thinking mode / reasoning support for Gemini 3.7 Flash
-      if (options.thinkingMode) {
-        requestConfig.thinkingConfig = {
-          thinkingBudget: 2048
-        };
-      }
-
-      const modelToUse = (options.model && typeof options.model === 'string' && options.model.startsWith('gemini'))
-        ? options.model
-        : DEFAULT_AI_MODEL;
-
-      const responseStream = await ai.models.generateContentStream({
-        model: modelToUse,
-        contents,
-        config: requestConfig
-      });
-
-      for await (const chunk of responseStream) {
-        const text = chunk.text;
-        if (text) {
-          onChunk(text);
-        }
-      }
-
-      const totalLatency = Date.now() - startTime;
-      console.log(`[Enterprise Orchestrator Streaming] Agent: ${primaryAgentDef.name} (Collabs: ${collaboratingDefs.length}) | Latency: ${totalLatency}ms | Tools: ${executedTools.length}`);
-    } catch (error: any) {
-      console.error('[AIService] Gemini Multi-Agent Streaming call failed:', error);
-      
-      const errorMessage = error?.message || '';
-      const isQuotaError = errorMessage.includes('429') || errorMessage.includes('RESOURCE_EXHAUSTED') || errorMessage.includes('quota');
-      const isAuthError = errorMessage.includes('API_KEY_INVALID') || errorMessage.includes('UNAUTHENTICATED') || errorMessage.includes('api key');
-
-      if (isQuotaError) {
-        onChunk(`*(Enterprise AI Service Notice: Gemini API rate limit or token quota reached. Generating deterministic audit & remediation engine output.)*\n\n`);
-      } else if (isAuthError) {
-        onChunk(`*(Enterprise AI Service Notice: Running deterministic audit & remediation engine.)*\n\n`);
-      }
-
-      const fallbackText = this.generateOfflineFallbackResponse(options, {
-        category: plan.intentCategory,
-        fineCategory: plan.fineCategory,
-        executionPath: plan.executionPath || 'GENERAL_AI',
-        confidenceScore: plan.confidence,
-        reasoning: plan.routingRationale,
-        suggestedTools: plan.requiredTools,
-        requiresDatasetAnalysis: plan.requiresDatasetAnalysis ?? false,
-        hasActiveDataset: !!options.datasetContext
-      }, executedTools);
-      onChunk(fallbackText);
-    }
+    });
   }
 
-  /**
-   * Generates a dynamic response when API key is unavailable or during network failure
-   * Strictly adheres to intent classification with rich data remediation blueprints
-   */
-  private generateOfflineFallbackResponse(
-    options: AIChatRequestOptions,
-    intentResult: IntentAnalysisResult,
-    executedToolResults: ToolResult[]
-  ): string {
-    const promptLower = (options.prompt || '').toLowerCase();
-    const isGreeting = 
-      intentResult.executionPath === 'CONVERSATION' ||
-      intentResult.category === 'GREETING' || 
-      intentResult.category === 'GENERAL_CONVERSATION' || 
-      intentResult.category === 'CONVERSATIONAL_GREETING' || 
-      intentResult.fineCategory === 'GREETING' || 
-      intentResult.fineCategory === 'GENERAL_CONVERSATION' ||
-      intentResult.fineCategory === 'GREETING_SMALLTALK';
 
-    if (isGreeting) {
-      return `Hello! I am your Enterprise Conversational Auditor for CSV Auditor Pro.
-
-I can assist you with data quality auditing, spreadsheet hygiene, finding duplicates, statistical distributions, formula injection protection, and compliance verification.
-
-How can I assist you with your data today?`;
-    }
-
-    const d = options.datasetContext;
-    const isFixOrCleaning = 
-      intentResult.category === 'DATA_CLEANING' ||
-      intentResult.fineCategory === 'DATA_CLEANING' ||
-      promptLower.includes('fix') ||
-      promptLower.includes('remediat') ||
-      promptLower.includes('clean') ||
-      promptLower.includes('dedupe') ||
-      promptLower.includes('solve') ||
-      promptLower.includes('repair') ||
-      promptLower.includes('error') ||
-      promptLower.includes('issue');
-
-    // If active dataset exists and user asks for a fix / cleaning / audit
-    if (d && d.fileName && isFixOrCleaning) {
-      const headerList = d.headers && d.headers.length > 0 ? d.headers.join(', ') : 'Columns';
-      const sampleCols = d.headers && d.headers.length > 0 ? d.headers.slice(0, 4) : ['id', 'name', 'amount', 'date'];
-      
-      let response = `### Forensic Audit & Remediation Blueprint for "${d.fileName}"\n\n` +
-        `**Dataset Overview:** ${(d.rowCount || 0).toLocaleString()} rows across ${d.headers.length} columns | **Health Score:** ${d.score ?? 95}/100\n\n` +
-        `#### Diagnosed Anomalies\n` +
-        `- **Duplicate Records:** ${d.duplicatesCount || 0} duplicate row instances detected.\n` +
-        `- **Missing / Blank Values:** ${d.missingValuesCount || 0} blank cells across key fields.\n` +
-        `- **Formatting & Type Deviations:** ${d.formatErrorsCount || 0} invalid dates, unnormalized casings, or malformed values.\n` +
-        `- **Statistical Outliers:** ${d.outliersCount || 0} values deviating >2.5 standard deviations from the mean.\n\n`;
-
-      if (executedToolResults.length > 0) {
-        response += `#### Tool Execution Evidence\n`;
-        executedToolResults.forEach(tr => {
-          response += `- **${tr.toolName}:** ${tr.summary}\n`;
-        });
-        response += `\n`;
-      }
-
-      response += `#### Recommended Remediation Strategy\n` +
-        `1. **Deduplication:** Remove exact duplicate rows while retaining the primary record based on unique entity identifiers.\n` +
-        `2. **Missing Value Imputation:** Apply column-specific imputation (median for skewed numeric metrics, mode for categorical values, forward-fill for time-series).\n` +
-        `3. **Format Standardization:** Normalize all date fields to standard ISO-8601 (\`YYYY-MM-DD\`), strip leading/trailing whitespace, and normalize email casings.\n` +
-        `4. **Formula Injection Sanitization:** Prefix formula trigger characters (\`=\`, \`+\`, \`-\`, \`@\`) with single quotes (\`'\`) to prevent spreadsheet execution.\n\n` +
-        `#### Automated Python (pandas) Remediation Pipeline\n` +
-        `\`\`\`python\n` +
-        `import pandas as pd\n` +
-        `import numpy as np\n\n` +
-        `# 1. Load dataset\n` +
-        `df = pd.read_csv("${d.fileName}")\n\n` +
-        `# 2. Trim string whitespace and sanitize formula injection\n` +
-        `for col in df.select_dtypes(include='object').columns:\n` +
-        `    df[col] = df[col].astype(str).str.strip()\n` +
-        `    df[col] = df[col].apply(lambda x: f"'{x}" if str(x).startswith(('=', '+', '-', '@')) else x)\n\n` +
-        `# 3. Deduplicate rows\n` +
-        `df = df.drop_duplicates()\n\n` +
-        `# 4. Handle missing values\n` +
-        `numeric_cols = df.select_dtypes(include=[np.number]).columns\n` +
-        `for col in numeric_cols:\n` +
-        `    df[col] = df[col].fillna(df[col].median())\n\n` +
-        `# 5. Export clean dataset\n` +
-        `df.to_csv("clean_${d.fileName}", index=False)\n` +
-        `print("Data cleaning complete. Verified rows:", len(df))\n` +
-        `\`\`\`\n\n` +
-        `#### SQL Remediation Query (PostgreSQL / Snowflake / BigQuery)\n` +
-        `\`\`\`sql\n` +
-        `WITH deduplicated AS (\n` +
-        `  SELECT *,\n` +
-        `    ROW_NUMBER() OVER(PARTITION BY ${sampleCols[0]} ORDER BY ${sampleCols[sampleCols.length - 1]} DESC) as row_num\n` +
-        `  FROM dataset_table\n` +
-        `)\n` +
-        `SELECT\n` +
-        `  ${sampleCols.map(c => `TRIM(${c}) AS ${c}`).join(',\n  ')}\n` +
-        `FROM deduplicated\n` +
-        `WHERE row_num = 1;\n` +
-        `\`\`\`\n\n` +
-        `#### 1-Click Application Action\n` +
-        `You can apply these fixes immediately inside CSV Auditor Pro by switching to the **Hygiene Workspace** and clicking **"Apply Quick Clean"** or **"Autofix All Issues"**.`;
-
-      return response;
-    }
-
-    // Explicit CSV analysis without direct fix keywords
-    if (d && d.fileName) {
-      let response = `### Executive Summary for "${d.fileName}"\n` +
-        `Completed automated audit for dataset **"${d.fileName}"** (${(d.rowCount || 0).toLocaleString()} rows, ${d.columnCount || d.headers.length} columns). Overall data integrity score is **${d.score ?? 95}%**.\n\n` +
-        `### Key Findings\n` +
-        `- **Data Quality**: Identified ${d.issuesCount || 0} issues across the dataset.\n` +
-        `- **Duplicate Records**: ${d.duplicatesCount || 0} duplicate row instances found.\n` +
-        `- **Null / Missing Values**: ${d.missingValuesCount || 0} blank entries detected.\n` +
-        `- **Format Anomalies**: ${d.formatErrorsCount || 0} date/email formatting deviations.\n\n`;
-
-      if (executedToolResults.length > 0) {
-        response += `### Deterministic Tool Findings\n`;
-        executedToolResults.forEach(tr => {
-          response += `- **${tr.toolName}**: ${tr.summary}\n`;
-        });
-        response += `\n`;
-      }
-
-      response += `### Recommended Next Steps\n` +
-        `1. Open the **Hygiene Workspace** to resolve duplicates and fill missing values.\n` +
-        `2. Standardize column date/currency casing using Canonical Schema Mappings.\n` +
-        `3. Export verified audit PDF report for governance records.`;
-
-      return response;
-    }
-
-    if (intentResult.category === 'HELP') {
-      return `### Getting Started with CSV Auditor Pro
-
-CSV Auditor Pro provides automated auditing, hygiene, and intelligence for enterprise tabular data:
-- **Instant Audit**: Upload your CSV file to compute an automated Health Score (0–100).
-- **Cleaning Center**: Resolve duplicates, fill missing values, and trim formatting deviations with one click.
-- **Statistical Profiling**: Inspect mean, standard deviation, IQR, and z-score anomaly detection across numeric columns.
-- **Executive BI Brief**: Generate automated executive summaries and stakeholder reports.
-- **Compliance & Security**: Verify GDPR/SOC2 standards and detect formula injection vulnerabilities.
-
-Upload a dataset or ask any specific question to begin.`;
-    }
-
-    if (intentResult.category === 'ENTERPRISE_PLATFORM_GUIDANCE') {
-      return `### Workspace & Tenancy Guidance
-
-CSV Auditor Pro offers enterprise multi-tenancy and workspace security:
-- **Role-Based Access Control (RBAC)**: Manage Admin, Auditor, and Viewer permissions.
-- **Data Isolation**: Datasets are encrypted in transit and at rest with strict organization boundaries.
-- **Audit Trails**: Export signed PDF compliance records for SOC2 and GDPR compliance.
-- **Enterprise Integrations**: Configure custom API connectors and team invitations in User Settings.`;
-    }
-
-    return `### Enterprise Data Intelligence
-
-I can assist with data quality engineering, Python cleaning pipelines, SQL transformation queries, Excel formulas, and statistical anomalies.
-
-To audit an active spreadsheet, upload a CSV dataset or select one from your files repository.`;
-  }
 
   // ==========================================
   // SPECIALIZED ENTERPRISE AI ENDPOINTS
