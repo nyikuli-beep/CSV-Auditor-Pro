@@ -24,7 +24,8 @@ export class AnalysisRouter {
     prompt: string,
     rows: Record<string, any>[],
     headers: string[],
-    datasetProfile?: DatasetProfile
+    datasetProfile?: DatasetProfile,
+    previousPlan?: AnalysisRoutePlan
   ): {
     routePlan: AnalysisRoutePlan;
     results: {
@@ -37,7 +38,7 @@ export class AnalysisRouter {
       anomalyReport?: any;
     };
   } {
-    const routePlan = this.plan(prompt, headers, datasetProfile);
+    const routePlan = this.plan(prompt, headers, datasetProfile, previousPlan);
     const safeRows = Array.isArray(rows) ? rows : [];
 
     const results: any = {};
@@ -131,7 +132,8 @@ export class AnalysisRouter {
   public static plan(
     prompt: string,
     headers: string[],
-    datasetProfile?: DatasetProfile
+    datasetProfile?: DatasetProfile,
+    previousPlan?: AnalysisRoutePlan
   ): AnalysisRoutePlan {
     const text = prompt.toLowerCase().trim();
 
@@ -150,7 +152,17 @@ export class AnalysisRouter {
     }
 
     // 2. Identify candidate columns from headers
-    const matchedColumns = this.extractMatchedColumns(text, headers);
+    let matchedColumns = this.extractMatchedColumns(text, headers);
+
+    // If follow-up context is active and user didn't mention specific columns, inherit from previous turn
+    if (matchedColumns.length === 0 && previousPlan && previousPlan.targetColumns.length > 0) {
+      const isFollowUpKeywords = text.includes('what about') || text.includes('and ') || text.includes('how about') ||
+        text.includes('the rest') || text.includes('bottom') || text.includes('top') || text.includes('average') ||
+        text.includes('sum') || text.includes('median') || text.includes('percentage') || text.includes('breakdown');
+      if (isFollowUpKeywords) {
+        matchedColumns = [...previousPlan.targetColumns];
+      }
+    }
 
     const numericCols = datasetProfile?.numericColumns || [];
     const dateCols = datasetProfile?.dateColumns || [];
@@ -162,10 +174,18 @@ export class AnalysisRouter {
 
     // Fallback if no specific column found but intent requires one
     if (metricColumns.length === 0 && numericCols.length > 0) {
-      metricColumns.push(numericCols[0]);
+      if (previousPlan?.metricColumns?.length) {
+        metricColumns.push(...previousPlan.metricColumns.filter(c => numericCols.includes(c)));
+      } else {
+        metricColumns.push(numericCols[0]);
+      }
     }
     if (dateColumns.length === 0 && dateCols.length > 0) {
-      dateColumns.push(dateCols[0]);
+      if (previousPlan?.dateColumns?.length) {
+        dateColumns.push(...previousPlan.dateColumns.filter(c => dateCols.includes(c)));
+      } else {
+        dateColumns.push(dateCols[0]);
+      }
     }
 
     // 3. Classify Intent

@@ -15,3 +15,4 @@ export * from './contextBuilder';
 export * from './insightsService';
 export * from './conversationalAuditorService';
 export * from './geminiReasoningProvider';
+export * from './insightsEngine';

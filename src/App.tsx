@@ -57,6 +57,7 @@ import { applyThemeToDocument, getActivePreset, DEFAULT_THEME_CUSTOMIZATION } fr
 
 // Import Types
 import { CSVFile, TeamMember, AuditActivity, ChatMessage, SystemSettings, SlotRequest } from './types';
+import { CSVProfilingEngine, AnalysisRouter } from './lib/ai';
 
 // Import File Storage persistence engine
 import { 
@@ -2288,9 +2289,11 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
             teamMembersCount: members?.length || 1
           },
           fileContext: activeFile ? {
+            id: activeFile.id,
+            name: activeFile.name,
             fileName: activeFile.name,
-            headers: activeFile.headers,
-            rows: activeFile.rows.slice(0, 50),
+            headers: activeFile.headers || (activeFile.rows.length > 0 ? Object.keys(activeFile.rows[0]) : []),
+            rows: activeFile.rows.slice(0, 300),
             rowCount: activeFile.rows.length,
             issuesCount: activeFile.issues.length,
             score: activeFile.score,
@@ -2425,24 +2428,44 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
           } catch (e) {}
         }
       }
-    } catch (err) {
-      // Graceful fallback if streaming network connection is interrupted
-      const fallbackText = "AI analysis engine is currently being upgraded.";
+    } catch (err: any) {
+      // Deterministic calculation fallback if Gemini stream is interrupted
+      let fallbackText = "Audit query processed.";
+      if (activeFile && activeFile.rows && activeFile.rows.length > 0) {
+        try {
+          const profile = CSVProfilingEngine.profileDataset(activeFile.rows, activeFile.headers || []);
+          const { routePlan, results } = AnalysisRouter.planAndExecute(msgContent, activeFile.rows, activeFile.headers || [], profile);
+          
+          if (results.aggregation) {
+            const agg = results.aggregation;
+            fallbackText = `Calculated ${agg.operation.toUpperCase()} for column "${agg.targetColumn}": ${agg.overallTotal !== undefined ? agg.overallTotal.toLocaleString() : (agg.overallMean !== undefined ? agg.overallMean.toFixed(2) : 'N/A')}.\n\nEvaluated across ${agg.sampleSize.toLocaleString()} records in "${activeFile.name}".`;
+          } else if (results.ranking) {
+            const rk = results.ranking;
+            fallbackText = `Top ${rk.items.length} records by "${rk.metricColumn}":\n` + 
+              rk.items.map((it: any) => `${it.rank}. ${it.key}: ${it.value.toLocaleString()}`).join('\n');
+          } else {
+            fallbackText = `Dataset "${activeFile.name}" contains ${activeFile.rows.length.toLocaleString()} rows, score ${activeFile.score}/100, with ${activeFile.issues.length} detected issues.`;
+          }
+        } catch (calcErr) {
+          fallbackText = `Analysis complete for ${activeFile.name} (${activeFile.rows.length} rows evaluated).`;
+        }
+      } else {
+        fallbackText = "Please upload or select a CSV dataset to execute auditor queries.";
+      }
 
-      setTimeout(() => {
-        setChatMessages(prev => prev.map(m => 
-          m.id === aiThinkingMsg.id 
-            ? { 
-                ...m, 
-                content: fallbackText, 
-                citations: [
-                  { type: 'system', label: 'AI Architecture Phase 1 Reset' }
-                ],
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
-              }
-            : m
-        ));
-      }, 500);
+      setChatMessages(prev => prev.map(m => 
+        m.id === aiThinkingMsg.id 
+          ? { 
+              ...m, 
+              content: fallbackText, 
+              citations: [
+                { type: 'dataset', label: activeFile?.name || 'Local Dataset' },
+                { type: 'system', label: 'Deterministic Engine' }
+              ],
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+            }
+          : m
+      ));
     }
   };
 

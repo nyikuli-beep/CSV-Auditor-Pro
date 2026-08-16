@@ -478,4 +478,43 @@ export class StatisticalAnalysisEngine {
         return `${year}-${month}-${day}`;
     }
   }
+
+  public static trend(
+    rows: Record<string, any>[],
+    dateColumn: string,
+    valueColumn: string,
+    granularity: DateGranularity = 'month'
+  ): TrendResult {
+    return this.computeTrend(rows, dateColumn, valueColumn, granularity);
+  }
+
+  public static correlation(
+    rows: Record<string, any>[],
+    columnA: string,
+    columnB: string
+  ): CorrelationResult {
+    return this.computeCorrelation(rows, columnA, columnB);
+  }
+
+  public static ranking(
+    rows: Record<string, any>[],
+    targetColumn: string,
+    metricColumn?: string,
+    direction: 'desc' | 'asc' = 'desc',
+    limit: number = 10
+  ): RankingResult {
+    return this.computeRanking(rows, targetColumn, metricColumn, direction, limit);
+  }
+
+  public static aggregation(
+    rows: Record<string, any>[],
+    targetColumn: string,
+    operation: AggregationOperation = 'sum',
+    groupByColumn?: string,
+    dateGranularity?: DateGranularity
+  ): AggregationResult {
+    return this.computeAggregation(rows, targetColumn, operation, groupByColumn, dateGranularity);
+  }
 }
+
+export const StatisticalEngine = StatisticalAnalysisEngine;
