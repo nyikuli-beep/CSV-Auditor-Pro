@@ -126,7 +126,8 @@ export function buildGroundedContext(
       trend: results.trend,
       correlation: results.correlation,
       qualityReport: results.qualityReport || analysisContext?.qualityReport,
-      anomalyReport: results.anomalyReport || analysisContext?.anomalyReport
+      anomalyReport: results.anomalyReport || analysisContext?.anomalyReport,
+      remediationEvidence: results.remediationEvidence
     },
     sampleRecords: rows.slice(0, 3),
     hasSufficientData,
@@ -162,6 +163,33 @@ export function formatGroundedPrompt(
 
   // Deterministic Execution Findings
   const res = context.deterministicResults;
+
+  if (res.remediationEvidence) {
+    const rem = res.remediationEvidence;
+    prompt += `=== SPECIFIC REMEDIATION TARGET & FORENSIC CONTEXT ===\n`;
+    prompt += `- Target Column: "${rem.targetColumn}"\n`;
+    prompt += `- Issue Type: ${rem.issueType}\n`;
+    if (rem.referencedAffectedCount !== undefined) {
+      prompt += `- Referenced Finding in Issue: ${rem.referencedAffectedCount.toLocaleString()} affected cells/occurrences\n`;
+    }
+    prompt += `- Active File Status: ${rem.isCleanedOrResolvedInActiveState ? `Dataset in workspace is already cleaned (0 missing cells in current view; ${rem.referencedAffectedCount} cells identified in original audit)` : `${rem.currentDatasetMissingCount} missing cells currently in workspace (${rem.currentDatasetTotalRows} total rows)`}\n`;
+    if (rem.topCategories && rem.topCategories.length > 0) {
+      prompt += `- Distinct Categories (${rem.currentDatasetUniqueCount} unique): ${rem.topCategories.map(c => `"${c.value}" (${c.count}, ${c.percentage}%)`).join(', ')}\n`;
+    }
+    prompt += `- Recommended Action: ${rem.recommendedAction}\n`;
+    prompt += `- Forensic & Domain Rationale: ${rem.rationale}\n`;
+    prompt += `- Implementation Recipes:\n`;
+    if (rem.implementationStrategies.pythonCodeSnippet) {
+      prompt += `  * Python / Pandas:\n\`\`\`python\n${rem.implementationStrategies.pythonCodeSnippet}\n\`\`\`\n`;
+    }
+    if (rem.implementationStrategies.sqlQuerySnippet) {
+      prompt += `  * SQL:\n\`\`\`sql\n${rem.implementationStrategies.sqlQuerySnippet}\n\`\`\`\n`;
+    }
+    if (rem.implementationStrategies.inAppAction) {
+      prompt += `  * In-App Workflow: ${rem.implementationStrategies.inAppAction}\n`;
+    }
+    prompt += `- Validation: ${rem.validationCheck}\n\n`;
+  }
 
   if (res.aggregation) {
     prompt += `=== DETERMINISTIC AGGREGATION EVIDENCE ===\n`;
@@ -245,11 +273,26 @@ export function formatGroundedPrompt(
   }
 
   prompt += `=== USER QUERY ===\n${context.userQuestion}\n\n`;
-  prompt += `INSTRUCTIONS FOR RESPONSE:
+
+  if (context.routePlan.intent === 'remediation' || res.remediationEvidence) {
+    prompt += `CRITICAL INSTRUCTIONS FOR THIS REMEDIATION REQUEST:
+1. Directly answer how to implement the remediation for the specified issue/column.
+2. NEVER output or start with a generic dataset overview (e.g. "Dataset 'file.csv' contains X rows, score 100/100...").
+3. Structure your response clearly as an expert Data Auditor:
+   - **Direct Answer**: Clear, direct summary of the remediation action.
+   - **Why (Rationale & Domain Context)**: Explain why this method is chosen (e.g., why mode imputation is dangerous for demographic/sensitive fields vs. explicit 'Unknown' categorization).
+   - **Recommended Remediation Strategy**: Step-by-step strategy.
+   - **Implementation Steps**: Practical implementation recipes with Python/Pandas code snippet, SQL query, and CSV Auditor Pro in-app workflow.
+   - **Validation**: How to verify the fix and ensure data integrity.
+4. Ground all counts, categories, and code column names strictly in the provided evidence.`;
+  } else {
+    prompt += `INSTRUCTIONS FOR RESPONSE:
 1. Ground your explanation exclusively in the deterministic calculations and evidence provided above.
 2. State exact numbers from the evidence; never fabricate or guess statistics.
-3. If the evidence does not answer the question or data is missing, clearly state that data is insufficient.
-4. Structure the response clearly with bold titles, bullet points, and code/formulas where helpful.`;
+3. If the user asks about a specific column or finding, address that specific inquiry directly without reciting the whole dataset summary.
+4. If the evidence does not answer the question or data is missing, clearly state that data is insufficient.
+5. Structure the response clearly with bold titles, bullet points, and code/formulas where helpful.`;
+  }
 
   return prompt;
 }

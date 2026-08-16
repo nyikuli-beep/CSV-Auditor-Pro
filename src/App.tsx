@@ -2295,6 +2295,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
             headers: activeFile.headers || (activeFile.rows.length > 0 ? Object.keys(activeFile.rows[0]) : []),
             rows: activeFile.rows.slice(0, 300),
             rowCount: activeFile.rows.length,
+            issues: activeFile.issues,
             issuesCount: activeFile.issues.length,
             score: activeFile.score,
             duplicatesCount: activeFile.issues.filter(i => i.type === 'duplicate').length,

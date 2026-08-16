@@ -16,3 +16,4 @@ export * from './insightsService';
 export * from './conversationalAuditorService';
 export * from './geminiReasoningProvider';
 export * from './insightsEngine';
+export * from './responseValidator';

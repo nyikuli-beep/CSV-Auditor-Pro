@@ -20,6 +20,7 @@ import {
   AI_ENGINE_UPGRADE_MESSAGE
 } from './types';
 import { buildGroundedContext, formatGroundedPrompt } from './contextBuilder';
+import { ResponseValidationMiddleware } from './responseValidator';
 
 const DEFAULT_MODEL = 'gemini-3.7-flash';
 
@@ -32,9 +33,18 @@ STRICT GROUNDING & REASONING DIRECTIVES:
    - Clearly distinguish verified calculated facts (e.g. "Total calculated revenue is $124,500 across 450 transactions") from analytical interpretations or recommendations.
    - If the requested analysis cannot be answered with the supplied dataset or columns, explicitly state that the data is insufficient (insufficient_data).
 
-2. DIRECT & PROFESSIONAL CONVERSATION:
-   - For general conversational queries (greetings, formula requests, SQL questions), answer helpfully, clearly, and concisely without dumping dataset statistics.
-   - For dataset-specific questions, explain the computed findings with structured clarity (bold headings, key figures, and bullet points).
+2. DIRECT, TARGETED & FORENSIC CONVERSATION:
+   - When the user asks about a specific issue, recommendation, remediation plan, column, or error (e.g. "How should I implement the remediation plan for: 'Handle Missing Values in \"suspect_gender\" (293 cells)'?"):
+     * ALWAYS ANSWER THAT SPECIFIC INQUIRY DIRECTLY AND COMPREHENSIVELY.
+     * NEVER start with or substitute a generic dataset overview (e.g. DO NOT say "Dataset 'xyz.csv' contains X rows, score 100/100, with 0 detected issues").
+     * Provide structured, expert data auditor guidance:
+       - **Direct Answer**: The exact remediation action to take.
+       - **Why (Rationale & Domain Context)**: Explain why (e.g. avoiding demographic mode imputation for sensitive attributes vs explicit 'Unknown' categorization).
+       - **Recommended Remediation Strategy**: Step-by-step strategy.
+       - **Implementation Steps**: Practical implementation recipes with Python/Pandas code, SQL query, and CSV Auditor Pro in-app workflow.
+       - **Validation**: Queries and checks to verify the fix.
+   - For follow-up questions (e.g. "What should I replace them with?", "Show me the SQL for that"), continue the active context directly without reciting file metadata.
+   - For general conversational queries (greetings, formula requests, general SQL questions), answer helpfully, clearly, and concisely without dumping dataset statistics.
    - Avoid robotic prefixes like "Based on the provided dataset...". Start directly with the answer.
    - Avoid emojis and marketing fluff. Keep tone objective, precise, and forensic.
 `;
@@ -184,17 +194,68 @@ export class GeminiReasoningProvider implements ReasoningEngineProvider {
 
       callbacks.onMeta(meta);
 
-      const responseStream = await ai.models.generateContentStream({
+      // Generate response from Gemini
+      const initialResponse = await ai.models.generateContent({
         model: modelToUse,
         contents,
         config
       });
 
-      for await (const chunk of responseStream) {
-        const text = chunk.text;
-        if (text) {
-          callbacks.onChunk(text);
+      let finalResponseText = initialResponse.text || '';
+
+      // Execute Response Validation Middleware to evaluate intent alignment
+      const validation = ResponseValidationMiddleware.validate(
+        finalResponseText,
+        groundedContext,
+        request.prompt
+      );
+
+      // If a generic summary or mismatch is returned for a specific intent (e.g. remediation), trigger re-prompting with strict constraints
+      if (!validation.isValid && validation.repromptInstruction) {
+        console.warn('[ResponseValidationMiddleware] AI output mismatch detected:', validation.detectedMismatches);
+
+        try {
+          const repromptContents = [
+            ...contents,
+            { role: 'model', parts: [{ text: finalResponseText }] },
+            { role: 'user', parts: [{ text: validation.repromptInstruction }] }
+          ];
+
+          const repromptResponse = await ai.models.generateContent({
+            model: modelToUse,
+            contents: repromptContents,
+            config: {
+              ...config,
+              temperature: 0.1
+            }
+          });
+
+          const correctedText = repromptResponse.text || '';
+          const revalidation = ResponseValidationMiddleware.validate(
+            correctedText,
+            groundedContext,
+            request.prompt
+          );
+
+          if (revalidation.isValid) {
+            finalResponseText = correctedText;
+          } else if (validation.fallbackContent) {
+            finalResponseText = validation.fallbackContent;
+          } else {
+            finalResponseText = correctedText || finalResponseText;
+          }
+        } catch (repromptErr) {
+          console.error('[ResponseValidationMiddleware] Reprompting failed, applying deterministic fallback:', repromptErr);
+          if (validation.fallbackContent) {
+            finalResponseText = validation.fallbackContent;
+          }
         }
+      }
+
+      // Stream the validated response text smoothly
+      const chunkSize = 32;
+      for (let i = 0; i < finalResponseText.length; i += chunkSize) {
+        callbacks.onChunk(finalResponseText.slice(i, i + chunkSize));
       }
 
       if (callbacks.onDone) {

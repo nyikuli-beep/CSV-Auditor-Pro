@@ -249,8 +249,14 @@ export interface AnomalyReport {
 // ==========================================
 
 export type AnalysisIntent = 
-  | 'dataset_summary'
+  | 'remediation'
+  | 'recommendation'
+  | 'explanation'
+  | 'missing_values'
+  | 'duplicate_analysis'
+  | 'column_information'
   | 'column_lookup'
+  | 'dataset_summary'
   | 'aggregation'
   | 'comparison'
   | 'ranking'
@@ -259,8 +265,39 @@ export type AnalysisIntent =
   | 'anomaly_analysis'
   | 'correlation'
   | 'filtering'
-  | 'unsupported_request'
-  | 'general_conversation';
+  | 'general_conversation'
+  | 'unsupported_request';
+
+export interface ReferencedIssueInfo {
+  rawTitle?: string;
+  action?: string;
+  column?: string;
+  issueType?: 'missing_values' | 'duplicate_rows' | 'outliers' | 'invalid_format' | 'formula_injection' | 'inconsistent_categorical' | 'general';
+  affectedCount?: number;
+  description?: string;
+}
+
+export interface RemediationEvidence {
+  targetColumn: string;
+  issueType: string;
+  referencedAffectedCount?: number;
+  currentDatasetMissingCount?: number;
+  currentDatasetTotalRows?: number;
+  currentDatasetUniqueCount?: number;
+  topCategories?: Array<{ value: string; count: number; percentage: number }>;
+  isCleanedOrResolvedInActiveState?: boolean;
+  recommendedAction: string;
+  rationale: string;
+  implementationStrategies: {
+    categoryImputation?: string;
+    explicitCategoryStrategy?: string;
+    ruleBasedStrategy?: string;
+    pythonCodeSnippet?: string;
+    sqlQuerySnippet?: string;
+    inAppAction?: string;
+  };
+  validationCheck: string;
+}
 
 export interface AnalysisRoutePlan {
   intent: AnalysisIntent;
@@ -268,6 +305,7 @@ export interface AnalysisRoutePlan {
   groupColumns: string[];
   dateColumns: string[];
   metricColumns: string[];
+  referencedIssue?: ReferencedIssueInfo;
   filterCriteria?: Record<string, any>;
   operation?: AggregationOperation | string;
   direction?: 'desc' | 'asc';
@@ -303,6 +341,7 @@ export interface StructuredGroundedContext {
     correlation?: CorrelationResult;
     qualityReport?: Partial<DataQualityReport>;
     anomalyReport?: Partial<AnomalyReport>;
+    remediationEvidence?: RemediationEvidence;
     customCalculations?: Record<string, any>;
   };
   sampleRecords?: Record<string, any>[];
