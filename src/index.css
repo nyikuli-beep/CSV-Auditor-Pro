@@ -17,17 +17,26 @@
   --text-secondary: #4B5563;
   --text-muted: #6B7280;
   
-  --bg-app: #F9FAFB;
+  --bg-app: #F8FAFC;
   --bg-card: #FFFFFF;
-  --bg-secondary: #F3F4F6;
-  --border-color: #E5E7EB;
-  --border-hover: #D1D5DB;
+  --bg-secondary: #F1F5F9;
+  --border-color: #E2E8F0;
+  --border-hover: #CBD5E1;
   
-  --bg-hover: #F3F4F6;
-  --bg-active: #E5E7EB;
+  --bg-hover: #F1F5F9;
+  --bg-active: #E2E8F0;
   --bg-blue-subtle: #EFF6FF;
   --border-blue-subtle: #BFDBFE;
   --text-blue-subtle: #1D4ED8;
+
+  /* 3D Card Elevation Tokens - Light Mode */
+  --card-shadow-level-1: 0 1px 3px rgba(15, 23, 42, 0.04), 0 4px 12px -1px rgba(15, 23, 42, 0.05), inset 0 1px 0 rgba(255, 255, 255, 1);
+  --card-shadow-level-2: 0 2px 4px rgba(15, 23, 42, 0.04), 0 8px 20px -2px rgba(15, 23, 42, 0.07), inset 0 1px 0 rgba(255, 255, 255, 1);
+  --card-shadow-level-3: 0 3px 6px rgba(15, 23, 42, 0.04), 0 12px 28px -3px rgba(15, 23, 42, 0.09), inset 0 1px 0 rgba(255, 255, 255, 1);
+  --card-shadow-hover: 0 4px 8px rgba(15, 23, 42, 0.05), 0 16px 32px -4px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255, 255, 255, 1);
+  
+  --btn-shadow-elevated: 0 1px 2px rgba(15, 23, 42, 0.08), 0 3px 8px -1px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  --btn-shadow-elevated-hover: 0 2px 4px rgba(15, 23, 42, 0.1), 0 6px 14px -2px rgba(15, 23, 42, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 .dark {
@@ -38,17 +47,26 @@
   --text-secondary: #9CA3AF;
   --text-muted: #6B7280;
   
-  --bg-app: #0F172A;
-  --bg-card: #1E293B;
-  --bg-secondary: #111827;
-  --border-color: #334155;
-  --border-hover: #475569;
+  --bg-app: #0B0F19;
+  --bg-card: #151D2E;
+  --bg-secondary: #0F172A;
+  --border-color: #222F43;
+  --border-hover: #334155;
   
   --bg-hover: #1E293B;
   --bg-active: #334155;
   --bg-blue-subtle: rgba(30, 58, 138, 0.25);
   --border-blue-subtle: #1D4ED8;
   --text-blue-subtle: #60A5FA;
+
+  /* 3D Card Elevation Tokens - Dark Mode */
+  --card-shadow-level-1: 0 2px 4px rgba(0, 0, 0, 0.35), 0 6px 16px -2px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --card-shadow-level-2: 0 3px 6px rgba(0, 0, 0, 0.4), 0 10px 24px -3px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.09);
+  --card-shadow-level-3: 0 4px 8px rgba(0, 0, 0, 0.45), 0 14px 32px -4px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  --card-shadow-hover: 0 6px 12px rgba(0, 0, 0, 0.5), 0 20px 40px -4px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+
+  --btn-shadow-elevated: 0 2px 4px rgba(0, 0, 0, 0.4), 0 4px 10px -1px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  --btn-shadow-elevated-hover: 0 3px 6px rgba(0, 0, 0, 0.5), 0 8px 16px -2px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
 html, body, #root {
@@ -252,18 +270,69 @@ html.reduced-motion *,
   background: rgba(148, 163, 184, 0.5);
 }
 
+/* 3D Elevated Card System & Tokens */
+.card-elevated-1 {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--card-shadow-level-1);
+  border-radius: 0.75rem; /* 12px */
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1), border-color 180ms ease;
+}
+
+.card-elevated-2 {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--card-shadow-level-2);
+  border-radius: 0.75rem; /* 12px */
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1), border-color 180ms ease;
+}
+
+.card-elevated-3 {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--card-shadow-level-3);
+  border-radius: 0.75rem; /* 12px */
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1), border-color 180ms ease;
+}
+
+.card-hover-lift {
+  cursor: pointer;
+  will-change: transform, box-shadow;
+}
+
+.card-hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--card-shadow-hover) !important;
+}
+
+.btn-elevated {
+  box-shadow: var(--btn-shadow-elevated);
+  transition: transform 150ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 150ms cubic-bezier(0.16, 1, 0.3, 1), opacity 150ms ease;
+}
+
+.btn-elevated:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--btn-shadow-elevated-hover);
+}
+
+.btn-elevated:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: var(--btn-shadow-elevated);
+}
+
 /* High Density Flat Card and Utility Classes */
 .hd-card {
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 0.75rem; /* 12px */
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--card-shadow-level-1);
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .dark .hd-card {
   background-color: var(--bg-card);
   border-color: var(--border-color);
-  box-shadow: none;
+  box-shadow: var(--card-shadow-level-1);
 }
 
 .hd-border {
