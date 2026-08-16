@@ -142,42 +142,41 @@ export function formatGroundedPrompt(
   context: StructuredGroundedContext,
   userContext?: UserContext | null
 ): string {
-  let prompt = '';
+  let prompt = `=== USER TASK / AUDIT INQUIRY ===\n${context.userQuestion}\n\n`;
 
   if (userContext) {
-    prompt += `[WORKSPACE: "${userContext.workspaceName || 'Enterprise'}" | User: "${userContext.name || 'Auditor'}" | Tier: "${userContext.subscriptionPlan || 'pro'}"]\n\n`;
+    prompt += `[WORKSPACE CONTEXT: "${userContext.workspaceName || 'Enterprise'}" | User: "${userContext.name || 'Auditor'}" | Tier: "${userContext.subscriptionPlan || 'pro'}"]\n\n`;
   }
 
   if (!context.hasSufficientData) {
     prompt += `[DATASET STATUS: Insufficient Data]\nReason: ${context.insufficientDataReason}\n\n`;
-    prompt += `User Query: ${context.userQuestion}`;
+    prompt += `Please inform the user that no active dataset records were found in the workspace, and provide general data auditing advice or instructions to upload a CSV file.\n`;
     return prompt;
   }
 
+  prompt += `=== DATASET AUDIT EVIDENCE & PROFILE (FOR YOUR REFERENCE) ===\n`;
   const d = context.datasetProfileSummary;
-  prompt += `=== VERIFIED DATASET PROFILE ===\n`;
-  prompt += `- File: "${d.fileName}"\n`;
-  prompt += `- Dimensions: ${d.rowCount.toLocaleString()} rows x ${d.columnCount} columns\n`;
-  prompt += `- Columns: [${d.headers.join(', ')}]\n`;
-  prompt += `- Quality Score: ${d.qualityScore}/100 | Duplicates: ${d.duplicateRowCount} | Missing Data: ${d.overallMissingPercentage}%\n\n`;
+  prompt += `- Source File: "${d.fileName}" (${d.rowCount.toLocaleString()} rows x ${d.columnCount} columns)\n`;
+  prompt += `- Available Columns: [${d.headers.join(', ')}]\n`;
+  prompt += `- Data Quality Score: ${d.qualityScore}/100 | Duplicate Rows: ${d.duplicateRowCount} | Missing Data: ${d.overallMissingPercentage}%\n\n`;
 
   // Deterministic Execution Findings
   const res = context.deterministicResults;
 
   if (res.remediationEvidence) {
     const rem = res.remediationEvidence;
-    prompt += `=== SPECIFIC REMEDIATION TARGET & FORENSIC CONTEXT ===\n`;
+    prompt += `=== SPECIFIC REMEDIATION TARGET & EVIDENCE ===\n`;
     prompt += `- Target Column: "${rem.targetColumn}"\n`;
     prompt += `- Issue Type: ${rem.issueType}\n`;
     if (rem.referencedAffectedCount !== undefined) {
       prompt += `- Referenced Finding in Issue: ${rem.referencedAffectedCount.toLocaleString()} affected cells/occurrences\n`;
     }
-    prompt += `- Active File Status: ${rem.isCleanedOrResolvedInActiveState ? `Dataset in workspace is already cleaned (0 missing cells in current view; ${rem.referencedAffectedCount} cells identified in original audit)` : `${rem.currentDatasetMissingCount} missing cells currently in workspace (${rem.currentDatasetTotalRows} total rows)`}\n`;
+    prompt += `- Active File State: ${rem.isCleanedOrResolvedInActiveState ? `Dataset in workspace is already cleaned (0 missing cells in current view; ${rem.referencedAffectedCount} cells identified in original audit)` : `${rem.currentDatasetMissingCount} missing cells currently in workspace (${rem.currentDatasetTotalRows} total rows)`}\n`;
     if (rem.topCategories && rem.topCategories.length > 0) {
       prompt += `- Distinct Categories (${rem.currentDatasetUniqueCount} unique): ${rem.topCategories.map(c => `"${c.value}" (${c.count}, ${c.percentage}%)`).join(', ')}\n`;
     }
     prompt += `- Recommended Action: ${rem.recommendedAction}\n`;
-    prompt += `- Forensic & Domain Rationale: ${rem.rationale}\n`;
+    prompt += `- Forensic Rationale: ${rem.rationale}\n`;
     prompt += `- Implementation Recipes:\n`;
     if (rem.implementationStrategies.pythonCodeSnippet) {
       prompt += `  * Python / Pandas:\n\`\`\`python\n${rem.implementationStrategies.pythonCodeSnippet}\n\`\`\`\n`;
@@ -272,26 +271,28 @@ export function formatGroundedPrompt(
     prompt += `\n`;
   }
 
-  prompt += `=== USER QUERY ===\n${context.userQuestion}\n\n`;
-
   if (context.routePlan.intent === 'remediation' || res.remediationEvidence) {
-    prompt += `CRITICAL INSTRUCTIONS FOR THIS REMEDIATION REQUEST:
-1. Directly answer how to implement the remediation for the specified issue/column.
-2. NEVER output or start with a generic dataset overview (e.g. "Dataset 'file.csv' contains X rows, score 100/100...").
-3. Structure your response clearly as an expert Data Auditor:
-   - **Direct Answer**: Clear, direct summary of the remediation action.
-   - **Why (Rationale & Domain Context)**: Explain why this method is chosen (e.g., why mode imputation is dangerous for demographic/sensitive fields vs. explicit 'Unknown' categorization).
-   - **Recommended Remediation Strategy**: Step-by-step strategy.
-   - **Implementation Steps**: Practical implementation recipes with Python/Pandas code snippet, SQL query, and CSV Auditor Pro in-app workflow.
-   - **Validation**: How to verify the fix and ensure data integrity.
-4. Ground all counts, categories, and code column names strictly in the provided evidence.`;
+    prompt += `=== CRITICAL RESPONSE DIRECTIVES ===\n`;
+    prompt += `1. Directly answer how to implement the remediation for the specified issue/column.\n`;
+    prompt += `2. NEVER start with a generic dataset overview (DO NOT say "Dataset 'file.csv' contains X rows, score 100/100..."). Start immediately with the solution.\n`;
+    prompt += `3. Structure your response clearly:\n`;
+    prompt += `   ### Direct Answer\n`;
+    prompt += `   (Clear summary of the remediation action to take)\n\n`;
+    prompt += `   ### Why (Rationale & Domain Context)\n`;
+    prompt += `   (Explain why this method is chosen, e.g. avoiding mode imputation for demographic/sensitive fields vs explicit 'Unknown' categorization)\n\n`;
+    prompt += `   ### Recommended Remediation Strategy\n`;
+    prompt += `   (Step-by-step strategy for handling the issue)\n\n`;
+    prompt += `   ### Implementation Steps\n`;
+    prompt += `   (Provide Python/Pandas code snippet, SQL query, and in-app cleaning recipe)\n\n`;
+    prompt += `   ### Validation\n`;
+    prompt += `   (How to verify the fix and ensure data integrity)\n`;
+    prompt += `4. Ground all counts, categories, and code column names strictly in the provided evidence.`;
   } else {
-    prompt += `INSTRUCTIONS FOR RESPONSE:
-1. Ground your explanation exclusively in the deterministic calculations and evidence provided above.
-2. State exact numbers from the evidence; never fabricate or guess statistics.
-3. If the user asks about a specific column or finding, address that specific inquiry directly without reciting the whole dataset summary.
-4. If the evidence does not answer the question or data is missing, clearly state that data is insufficient.
-5. Structure the response clearly with bold titles, bullet points, and code/formulas where helpful.`;
+    prompt += `=== RESPONSE DIRECTIVES ===\n`;
+    prompt += `1. Answer the user's specific question directly, concisely, and accurately.\n`;
+    prompt += `2. Do NOT recite generic dataset statistics unless the user explicitly requested a summary.\n`;
+    prompt += `3. Ground all numbers and calculations strictly in the provided evidence.\n`;
+    prompt += `4. Format your answer with clean Markdown headers, bullet points, and code blocks as appropriate.`;
   }
 
   return prompt;
