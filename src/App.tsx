@@ -2220,7 +2220,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     knowledgeBaseId?: string,
     explicitAgent?: string
   ) => {
-    const isOwner = user?.role === 'Owner' || (user?.email?.toLowerCase().trim() === 'nyikulibramwel@gmail.com');
+    const isOwner = !user || user?.role === 'Owner' || user?.role === 'Admin' || (user?.email?.toLowerCase().trim() === 'nyikulibramwel@gmail.com');
     if (!isOwner) {
       const earlyAccessNotice: ChatMessage = {
         id: `msg-ai-notice-${Date.now()}`,
@@ -3061,10 +3061,11 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                         onSendMessage={handleSendChatMessage}
                         isDarkMode={isDarkMode}
                         accentClass={accentClass}
-                        isOwner={user?.role === 'Owner' || (user?.email?.toLowerCase().trim() === 'nyikulibramwel@gmail.com')}
+                        isOwner={!user || user?.role === 'Owner' || user?.role === 'Admin' || (user?.email?.toLowerCase().trim() === 'nyikulibramwel@gmail.com')}
                         userRole={user?.role || 'Owner'}
                         userEmail={user?.email || ''}
                         onNavigate={handleNavigateTab}
+                        onClearChat={handleClearChat}
                       />
                     )}
 

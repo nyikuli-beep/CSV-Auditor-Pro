@@ -47,6 +47,7 @@ interface InsightsCenterProps {
   userRole?: string;
   userEmail?: string;
   onNavigate?: (tabId: string) => void;
+  onClearChat?: () => void;
 }
 
 type ActiveInsightView = 
@@ -67,7 +68,8 @@ export default function InsightsCenter({
   isOwner,
   userRole,
   userEmail,
-  onNavigate
+  onNavigate,
+  onClearChat
 }: InsightsCenterProps) {
   const [activeView, setActiveView] = useState<ActiveInsightView>('executive');
   const [loadingStage, setLoadingStage] = useState<'idle' | 'profiling' | 'analyzing' | 'generating'>('idle');
@@ -390,6 +392,7 @@ ${p.recommendations.priorityActions.map((a, i) => (
                 onSendMessage={onSendMessage}
                 isDarkMode={isDarkMode}
                 accentClass={accentClass}
+                onClearChat={onClearChat}
               />
             )}
           </>
@@ -403,6 +406,7 @@ ${p.recommendations.priorityActions.map((a, i) => (
             onSendMessage={onSendMessage}
             isDarkMode={isDarkMode}
             accentClass={accentClass}
+            onClearChat={onClearChat}
           />
         )}
       </div>

@@ -19,29 +19,16 @@ import {
   Terminal,
   Layers,
   Copy,
-  Check
+  Check,
+  Table,
+  Target,
+  FileCode
 } from 'lucide-react';
-import { AnalysisRouter } from '../../lib/ai/router';
-import { CSVProfilingEngine } from '../../lib/ai/profiler';
-
-export interface ChatMessageItem {
-  id: string;
-  sender: 'user' | 'assistant';
-  text: string;
-  timestamp: string;
-  isStreaming?: boolean;
-  groundingStatus?: 'verified' | 'derived' | 'interpretation' | 'insufficient_data';
-  citations?: Array<{ type: string; label: string }>;
-  relevantColumns?: string[];
-  suggestedColumns?: string[];
-  deterministicSummary?: string;
-  routeIntent?: string;
-  image?: string;
-}
+import { ChatMessage } from '../../types';
 
 interface ConversationalAuditorViewProps {
   activeFile: any;
-  chatMessages: any[];
+  chatMessages: ChatMessage[] | any[];
   onSendMessage: (
     prompt: string, 
     model?: string, 
@@ -52,6 +39,7 @@ interface ConversationalAuditorViewProps {
   ) => void;
   isDarkMode: boolean;
   accentClass: string;
+  onClearChat?: () => void;
 }
 
 const QUICK_DIAGNOSTIC_PROMPTS = [
@@ -68,7 +56,8 @@ export default function ConversationalAuditorView({
   chatMessages,
   onSendMessage,
   isDarkMode,
-  accentClass
+  accentClass,
+  onClearChat
 }: ConversationalAuditorViewProps) {
   const [inputPrompt, setInputPrompt] = useState('');
   const [selectedPersona, setSelectedPersona] = useState('auditor');
@@ -183,12 +172,13 @@ export default function ConversationalAuditorView({
     setTimeout(() => setCopiedMessageId(null), 2000);
   };
 
-  const getGroundingBadge = (msg: any) => {
-    const status = msg.groundingStatus || (msg.sender === 'assistant' ? 'verified' : null);
-    if (!status || msg.sender === 'user') return null;
+  const getGroundingBadge = (msg: any, isUser: boolean) => {
+    if (isUser) return null;
+    const status = msg.groundingStatus || msg.confidenceStatus || (msg.statusStep ? 'derived' : 'verified');
 
     switch (status) {
       case 'verified':
+      case 'high_confidence':
         return (
           <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1">
             <CheckCircle2 className="w-3 h-3 text-emerald-500" />
@@ -196,6 +186,7 @@ export default function ConversationalAuditorView({
           </span>
         );
       case 'derived':
+      case 'moderate_confidence':
         return (
           <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-800 flex items-center gap-1">
             <Activity className="w-3 h-3 text-blue-500" />
@@ -210,6 +201,7 @@ export default function ConversationalAuditorView({
           </span>
         );
       case 'insufficient_data':
+      case 'low_confidence':
         return (
           <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800 flex items-center gap-1">
             <HelpCircle className="w-3 h-3 text-amber-500" />
@@ -222,11 +214,11 @@ export default function ConversationalAuditorView({
   };
 
   return (
-    <div className="flex flex-col h-[700px] rounded-2xl border overflow-hidden bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm">
+    <div className="flex flex-col h-[720px] rounded-2xl border overflow-hidden bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
       {/* Control Bar Header */}
       <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 flex flex-wrap items-center justify-between gap-3 shrink-0">
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-500 border border-blue-500/20">
+        <div className="flex items-center gap-2.5">
+          <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
             <Sparkles className="w-4 h-4" />
           </div>
           <div>
@@ -268,7 +260,7 @@ export default function ConversationalAuditorView({
             onClick={() => setThinkingMode(!thinkingMode)}
             className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border flex items-center gap-1 transition-colors cursor-pointer ${
               thinkingMode
-                ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-300'
+                ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-800'
                 : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'
             }`}
             title="Enable deep analytical step-by-step thinking (2,048 token budget)"
@@ -282,7 +274,7 @@ export default function ConversationalAuditorView({
             onClick={() => setSearchGrounding(!searchGrounding)}
             className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border flex items-center gap-1 transition-colors cursor-pointer ${
               searchGrounding
-                ? 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-300'
+                ? 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-800'
                 : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'
             }`}
             title="Ground answers with Google Search for external standards and compliance regulations"
@@ -290,6 +282,16 @@ export default function ConversationalAuditorView({
             <Search className="w-3.5 h-3.5 text-blue-500" />
             Search
           </button>
+
+          {onClearChat && chatMessages.length > 0 && (
+            <button
+              onClick={onClearChat}
+              className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
+              title="Clear conversation history"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -308,7 +310,7 @@ export default function ConversationalAuditorView({
               <p className="text-xs text-slate-500 leading-relaxed">
                 {activeFile 
                   ? 'Ask any natural question about columns, statistics, anomalies, or formulas. Every calculation is performed deterministically before Gemini explains the findings.'
-                  : 'Upload a CSV file to inspect distributions, detect anomalies, or run complex SQL/Pandas transformations.'}
+                  : 'Upload a CSV file to inspect distributions, detect anomalies, or run complex transformations.'}
               </p>
             </div>
 
@@ -336,77 +338,114 @@ export default function ConversationalAuditorView({
         )}
 
         {/* Message Bubble List */}
-        {chatMessages.map(msg => (
-          <div
-            key={msg.id}
-            className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
-          >
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-[10px] font-bold text-slate-400 uppercase">
-                {msg.sender === 'user' ? 'You' : `Auditor (${selectedPersona})`}
-              </span>
-              <span className="text-[10px] text-slate-400 font-mono">
-                {msg.timestamp || ''}
-              </span>
-              {getGroundingBadge(msg)}
-            </div>
+        {chatMessages.map(msg => {
+          // Normalize role/sender and content/text across all message payloads
+          const isUser = msg.role === 'user' || msg.sender === 'user';
+          const messageContent = (msg.content !== undefined ? msg.content : msg.text) || '';
+          const isStreaming = Boolean(msg.isStreaming);
+          const activeAgentLabel = msg.activeAgentName || msg.activeAgentTitle || `Auditor (${selectedPersona})`;
 
+          return (
             <div
-              className={`p-4 rounded-2xl max-w-2xl text-xs leading-relaxed transition-all relative group ${
-                msg.sender === 'user'
-                  ? 'bg-blue-600 text-white rounded-tr-xs'
-                  : isDarkMode
-                  ? 'bg-slate-800/90 text-slate-100 border border-slate-700 rounded-tl-xs'
-                  : 'bg-slate-100 text-slate-900 border border-slate-200 rounded-tl-xs'
-              }`}
+              key={msg.id}
+              className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
             >
-              {/* If attached image exists in message */}
-              {msg.image && (
-                <div className="mb-2 max-w-xs rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700">
-                  <img src={msg.image} alt="User attachment" className="w-full object-cover" />
-                </div>
-              )}
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase">
+                  {isUser ? 'You' : activeAgentLabel}
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono">
+                  {msg.timestamp || ''}
+                </span>
+                {getGroundingBadge(msg, isUser)}
+              </div>
 
-              {/* Message Content */}
-              <div className="whitespace-pre-wrap font-sans">
-                {msg.text}
-                {msg.isStreaming && (
-                  <span className="inline-block w-1.5 h-3 bg-blue-500 ml-1 animate-pulse" />
+              <div
+                className={`p-4 rounded-2xl max-w-2xl text-xs leading-relaxed transition-all relative group ${
+                  isUser
+                    ? 'bg-blue-600 text-white rounded-tr-xs shadow-xs'
+                    : isDarkMode
+                    ? 'bg-slate-800/95 text-slate-100 border border-slate-700 rounded-tl-xs shadow-xs'
+                    : 'bg-slate-100 text-slate-900 border border-slate-200 rounded-tl-xs shadow-xs'
+                }`}
+              >
+                {/* If attached image exists in message */}
+                {msg.image && (
+                  <div className="mb-2 max-w-xs rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700">
+                    <img 
+                      src={typeof msg.image === 'string' ? msg.image : (msg.image.data ? `data:${msg.image.mimeType || 'image/png'};base64,${msg.image.data}` : '')} 
+                      alt="User attachment" 
+                      className="w-full object-cover" 
+                    />
+                  </div>
+                )}
+
+                {/* Message Content */}
+                <div className="whitespace-pre-wrap font-sans">
+                  {messageContent ? (
+                    messageContent
+                  ) : (
+                    <span className="text-slate-400 dark:text-slate-500 italic flex items-center gap-1.5">
+                      <RefreshCw className="w-3 h-3 animate-spin text-blue-500" />
+                      Analyzing dataset & computing forensic evidence...
+                    </span>
+                  )}
+                  {isStreaming && (
+                    <span className="inline-block w-1.5 h-3 bg-blue-500 ml-1 animate-pulse" />
+                  )}
+                </div>
+
+                {/* Copy Message Tool Button */}
+                {!isUser && messageContent && (
+                  <button
+                    onClick={() => handleCopyMessage(msg.id, messageContent)}
+                    className="absolute top-2 right-2 p-1 rounded-md opacity-0 group-hover:opacity-100 bg-slate-200/80 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 transition-opacity cursor-pointer"
+                    title="Copy message"
+                  >
+                    {copiedMessageId === msg.id ? (
+                      <Check className="w-3 h-3 text-emerald-500" />
+                    ) : (
+                      <Copy className="w-3 h-3" />
+                    )}
+                  </button>
                 )}
               </div>
 
-              {/* Copy Message Tool Button */}
-              {msg.sender === 'assistant' && (
-                <button
-                  onClick={() => handleCopyMessage(msg.id, msg.text)}
-                  className="absolute top-2 right-2 p-1 rounded-md opacity-0 group-hover:opacity-100 bg-slate-200/80 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 transition-opacity cursor-pointer"
-                  title="Copy message"
-                >
-                  {copiedMessageId === msg.id ? (
-                    <Check className="w-3 h-3 text-emerald-500" />
-                  ) : (
-                    <Copy className="w-3 h-3" />
+              {/* Citations and Metadata Footer if present */}
+              {!isUser && ((msg.citations && msg.citations.length > 0) || (msg.relevantColumns && msg.relevantColumns.length > 0) || msg.intent) && (
+                <div className="flex items-center gap-1.5 mt-1 flex-wrap max-w-2xl">
+                  {msg.citations && msg.citations.length > 0 && (
+                    <>
+                      <span className="text-[9px] uppercase font-bold text-slate-400">Sources:</span>
+                      {msg.citations.map((c: any, idx: number) => (
+                        <span
+                          key={`cit-${idx}`}
+                          className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
+                        >
+                          {c.label || c}
+                        </span>
+                      ))}
+                    </>
                   )}
-                </button>
+
+                  {msg.relevantColumns && msg.relevantColumns.length > 0 && (
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 flex items-center gap-1">
+                      <Table className="w-2.5 h-2.5" />
+                      {msg.relevantColumns.join(', ')}
+                    </span>
+                  )}
+
+                  {msg.intent && (
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800 flex items-center gap-1">
+                      <Target className="w-2.5 h-2.5" />
+                      {msg.intent}
+                    </span>
+                  )}
+                </div>
               )}
             </div>
-
-            {/* Citations Footer if present */}
-            {msg.citations && msg.citations.length > 0 && (
-              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                <span className="text-[9px] uppercase font-bold text-slate-400">Sources:</span>
-                {msg.citations.map((c: any, idx: number) => (
-                  <span
-                    key={idx}
-                    className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700"
-                  >
-                    {c.label}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
+          );
+        })}
 
         <div ref={messagesEndRef} />
       </div>
@@ -480,7 +519,7 @@ export default function ConversationalAuditorView({
             disabled={!inputPrompt.trim() && !selectedImage}
             className={`p-2.5 rounded-xl text-white font-bold transition-all cursor-pointer shrink-0 flex items-center justify-center ${
               inputPrompt.trim() || selectedImage
-                ? 'bg-blue-600 hover:bg-blue-700 shadow-sm'
+                ? 'bg-blue-600 hover:bg-blue-700 shadow-xs'
                 : 'bg-slate-300 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
             }`}
           >
