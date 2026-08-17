@@ -534,9 +534,9 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
           formulaRisksCount: activeFile.issues?.filter(i => i.type === 'formula_injection').length || 0,
           outliersCount: activeFile.issues?.filter(i => i.type === 'outlier').length || 0
         }
-      });
+      }, activeFile);
     } else {
-      setDatasetContext(null);
+      setDatasetContext(null, null);
     }
   }, [activeFile, setDatasetContext]);
 

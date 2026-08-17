@@ -14,7 +14,7 @@ import { requireAuth, AuthRequest } from './src/middleware/auth.ts';
 import { eq, desc } from 'drizzle-orm';
 import { dispatchGmailEmail, checkProductionEnvironmentVars } from './src/lib/gmailService.ts';
 import { sendEmail, getEmailLogs, logEmailDelivery, sanitizeEmailErrorMessage, isValidEmailAddress } from './src/lib/emailService.ts';
-import { conversationalAuditorService, aiInsightsService, geminiReasoningProvider, buildAnalysisContext } from './src/lib/ai/index.ts';
+import { conversationalAuditorService, aiInsightsService, geminiReasoningProvider, buildAnalysisContext, csvAuditorAIService } from './src/lib/ai/index.ts';
 import { aiService } from './src/lib/aiService.ts';
 import crypto from 'crypto';
 import {
@@ -1364,6 +1364,101 @@ app.post('/api/gemini/insights', async (req, res) => {
     res.status(500).json({ error: error.message || 'Failed to generate dataset insight.' });
   }
 });
+
+// 1c. API: Floating CSV Auditor AI Chat (Firebase Auth + Dataset Authorization + Gemini 3.7 Flash)
+app.post('/api/ai/assistant/chat', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { 
+      message, 
+      datasetId, 
+      pageContext = { page: 'dashboard', title: 'Dashboard' }, 
+      recommendationContext, 
+      conversationHistory = [], 
+      analysisContext, 
+      selectedColumns,
+      fileContext,
+      requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}` 
+    } = req.body;
+
+    const user = req.user;
+    if (!user || !user.uid) {
+      res.status(401).json({ error: 'Unauthorized: Missing valid authentication credentials.' });
+      return;
+    }
+
+    // Verify dataset authorization server-side
+    let datasetFile: any = null;
+    const targetFileId = datasetId || analysisContext?.fileId || fileContext?.id;
+
+    if (targetFileId) {
+      // 1. Try to find the file in Postgres
+      try {
+        const fileResults = await db.select().from(files).where(eq(files.id, targetFileId));
+        if (fileResults && fileResults.length > 0) {
+          const dbFile = fileResults[0];
+          const isOwner = dbFile.ownerId === user.uid;
+          const isSuperAdmin = (user.email || '').toLowerCase().trim() === 'nyikulibramwel@gmail.com';
+          
+          if (!isOwner && !isSuperAdmin) {
+            // Check team membership authorization
+            res.status(403).json({ 
+              success: false,
+              answer: 'Access denied: You do not have authorization to query this dataset.',
+              grounding: 'error',
+              requestId,
+              timestamp: new Date().toISOString(),
+              error: 'Forbidden dataset access'
+            });
+            return;
+          }
+          datasetFile = dbFile;
+        }
+      } catch (dbErr) {
+        console.warn('[CSV Auditor AI] DB lookup error:', dbErr);
+      }
+
+      // 2. Fallback to local store or client-provided context if DB was offline or dataset was in memory
+      if (!datasetFile) {
+        if (localFilesStore.has(targetFileId)) {
+          datasetFile = localFilesStore.get(targetFileId);
+        } else if (fileContext && fileContext.name) {
+          datasetFile = fileContext;
+        }
+      }
+    } else if (fileContext && fileContext.name) {
+      datasetFile = fileContext;
+    }
+
+    const response = await csvAuditorAIService.processChat({
+      request: {
+        requestId,
+        message,
+        datasetId: targetFileId,
+        pageContext,
+        recommendationContext,
+        conversationHistory,
+        analysisContext,
+        selectedColumns
+      },
+      userId: user.uid,
+      userEmail: user.email,
+      datasetFile
+    });
+
+    res.json(response);
+  } catch (error: any) {
+    console.error('[CSV Auditor AI Server Error] Request failed:', error);
+    res.status(500).json({
+      success: false,
+      answer: `Audit service error: ${error.message || 'Unable to process inquiry.'}`,
+      grounding: 'error',
+      requestId: req.body?.requestId || `err_${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      error: error.message
+    });
+  }
+});
+
 
 import { executeToolByName } from './src/lib/aiToolRegistry.ts';
 

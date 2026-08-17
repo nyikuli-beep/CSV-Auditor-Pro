@@ -11,12 +11,17 @@ import {
   Check, 
   Copy, 
   FileSpreadsheet,
-  ChevronDown,
-  Info
+  Info,
+  ShieldCheck,
+  Cpu,
+  Layers,
+  ArrowRight,
+  RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import ReactMarkdown from 'react-markdown';
 import { useAssistant } from '../../context/AssistantContext';
-import { AssistantMessage } from '../../types/assistant';
+import { AssistantMessage, GroundingState } from '../../types/assistant';
 
 interface FloatingChatPanelProps {
   isDarkMode: boolean;
@@ -33,7 +38,6 @@ const DEFAULT_SUGGESTED_QUESTIONS = [
 
 export const FloatingChatPanel: React.FC<FloatingChatPanelProps> = ({
   isDarkMode,
-  accentClass = 'bg-blue-600 hover:bg-blue-700',
   onNavigate
 }) => {
   const {
@@ -75,7 +79,7 @@ export const FloatingChatPanel: React.FC<FloatingChatPanelProps> = ({
 
   const handleSend = () => {
     if (!inputPrompt.trim() || isProcessing) return;
-    const promptToSend = inputPrompt;
+    const promptToSend = inputPrompt.trim();
     setInputPrompt('');
     sendMessage(promptToSend);
   };
@@ -94,7 +98,97 @@ export const FloatingChatPanel: React.FC<FloatingChatPanelProps> = ({
   };
 
   const handleSelectSuggestedQuestion = (question: string) => {
+    if (isProcessing) return;
     sendMessage(question);
+  };
+
+  const renderGroundingBadge = (grounding?: GroundingState) => {
+    switch (grounding) {
+      case 'data-verified':
+        return (
+          <span 
+            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${
+              isDarkMode 
+                ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800' 
+                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+            }`}
+            title="Factually verified by deterministic calculations on your dataset"
+          >
+            <ShieldCheck className="w-2.5 h-2.5 text-emerald-500" />
+            Data-Verified
+          </span>
+        );
+      case 'data-derived':
+        return (
+          <span 
+            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${
+              isDarkMode 
+                ? 'bg-cyan-950/60 text-cyan-300 border-cyan-800' 
+                : 'bg-cyan-50 text-cyan-700 border-cyan-200'
+            }`}
+            title="Derived from dataset structure and profile"
+          >
+            <FileSpreadsheet className="w-2.5 h-2.5 text-cyan-500" />
+            Data-Derived
+          </span>
+        );
+      case 'general-ai':
+        return (
+          <span 
+            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${
+              isDarkMode 
+                ? 'bg-purple-950/60 text-purple-300 border-purple-800' 
+                : 'bg-purple-50 text-purple-700 border-purple-200'
+            }`}
+            title="General data engineering / conceptual knowledge"
+          >
+            <Cpu className="w-2.5 h-2.5 text-purple-500" />
+            General Concept
+          </span>
+        );
+      case 'interpretation':
+        return (
+          <span 
+            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${
+              isDarkMode 
+                ? 'bg-blue-950/60 text-blue-300 border-blue-800' 
+                : 'bg-blue-50 text-blue-700 border-blue-200'
+            }`}
+            title="Forensic auditor remediation guidance"
+          >
+            <Info className="w-2.5 h-2.5 text-blue-500" />
+            Auditor Guidance
+          </span>
+        );
+      case 'insufficient-data':
+        return (
+          <span 
+            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${
+              isDarkMode 
+                ? 'bg-amber-950/60 text-amber-300 border-amber-800' 
+                : 'bg-amber-50 text-amber-700 border-amber-200'
+            }`}
+          >
+            <AlertCircle className="w-2.5 h-2.5 text-amber-500" />
+            Insufficient Data
+          </span>
+        );
+      case 'error':
+        return (
+          <span 
+            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${
+              isDarkMode 
+                ? 'bg-rose-950/60 text-rose-300 border-rose-800' 
+                : 'bg-rose-50 text-rose-700 border-rose-200'
+            }`}
+          >
+            <AlertCircle className="w-2.5 h-2.5 text-rose-500" />
+            Error
+          </span>
+        );
+      default:
+        return null;
+    }
   };
 
   if (!isOpen) return null;
@@ -115,7 +209,7 @@ export const FloatingChatPanel: React.FC<FloatingChatPanelProps> = ({
         className={`fixed z-50 rounded-2xl shadow-2xl border flex flex-col overflow-hidden transition-colors ${
           isMinimized 
             ? 'bottom-20 right-5 sm:right-6 w-[340px] sm:w-[380px]' 
-            : 'bottom-20 right-3 left-3 sm:left-auto sm:right-6 sm:w-[410px] h-[580px] max-h-[82vh]'
+            : 'bottom-20 right-3 left-3 sm:left-auto sm:right-6 sm:w-[440px] h-[620px] max-h-[85vh]'
         } ${
           isDarkMode 
             ? 'bg-[#111827] border-[#374151] text-[#F9FAFB]' 
@@ -128,7 +222,7 @@ export const FloatingChatPanel: React.FC<FloatingChatPanelProps> = ({
         {/* Header */}
         <div 
           className={`px-4 py-3.5 border-b flex items-center justify-between select-none shrink-0 ${
-            isDarkMode ? 'bg-[#1F2937]/90 border-[#374151]' : 'bg-[#F8FAFC] border-[#E5E7EB]'
+            isDarkMode ? 'bg-[#1F2937]/95 border-[#374151]' : 'bg-[#F8FAFC] border-[#E5E7EB]'
           }`}
         >
           <div className="flex items-center gap-2.5 min-w-0">
@@ -139,13 +233,13 @@ export const FloatingChatPanel: React.FC<FloatingChatPanelProps> = ({
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-sm leading-tight truncate">CSV Auditor AI</h3>
                 <span className={`text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded ${
-                  isDarkMode ? 'bg-slate-800 text-blue-400 border border-slate-700' : 'bg-blue-50 text-blue-700 border border-blue-200'
+                  isDarkMode ? 'bg-blue-950/80 text-blue-300 border border-blue-800' : 'bg-blue-50 text-blue-700 border border-blue-200'
                 }`}>
-                  Phase 1
+                  Gemini 3.7
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 truncate leading-tight">
-                Your data assistant
+                Forensic data intelligence & remediation
               </p>
             </div>
           </div>
@@ -277,7 +371,7 @@ export const FloatingChatPanel: React.FC<FloatingChatPanelProps> = ({
                         <span>Ready to assist</span>
                       </div>
                       <p className="leading-relaxed">
-                        Hi! I'm your CSV Auditor AI. Ask me anything about your current dataset.
+                        Hi! I'm your CSV Auditor AI powered by Gemini 3.7 Flash. Ask me anything about your active dataset or remediation strategies.
                       </p>
                     </div>
 
@@ -314,16 +408,14 @@ export const FloatingChatPanel: React.FC<FloatingChatPanelProps> = ({
                           <button
                             key={idx}
                             onClick={() => handleSelectSuggestedQuestion(question)}
-                            className={`w-full text-left p-2 rounded-lg border text-[11px] font-medium transition-colors flex items-center justify-between gap-2 cursor-pointer group ${
+                            className={`w-full text-left p-2.5 rounded-lg border text-[11px] font-medium transition-colors flex items-center justify-between gap-2 cursor-pointer group ${
                               isDarkMode 
                                 ? 'bg-slate-800/40 hover:bg-slate-800 border-slate-700 text-slate-300 hover:text-white' 
                                 : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700 hover:text-slate-900'
                             }`}
                           >
                             <span className="truncate">{question}</span>
-                            <span className="text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                              &rarr;
-                            </span>
+                            <ArrowRight className="w-3.5 h-3.5 text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                           </button>
                         ))}
                       </div>
@@ -343,7 +435,7 @@ export const FloatingChatPanel: React.FC<FloatingChatPanelProps> = ({
                         No Active CSV Selected
                       </h4>
                       <p className="text-[11px] text-slate-500 leading-relaxed">
-                        Upload or select a CSV to start analyzing your data.
+                        Upload or select a CSV to query data statistics, missing values, and anomalies.
                       </p>
                     </div>
                     {onNavigate && (
@@ -363,66 +455,174 @@ export const FloatingChatPanel: React.FC<FloatingChatPanelProps> = ({
             )}
 
             {/* Conversation Messages */}
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
-              >
-                <div
-                  className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 relative group text-xs ${
-                    msg.role === 'user'
-                      ? 'bg-blue-600 text-white rounded-br-xs'
-                      : isDarkMode
-                        ? 'bg-slate-800 border border-slate-700 text-slate-200 rounded-bl-xs'
-                        : 'bg-slate-100 border border-slate-200 text-slate-800 rounded-bl-xs'
-                  }`}
-                >
-                  {/* Content with basic formatting */}
-                  <div className="whitespace-pre-wrap leading-relaxed">
-                    {msg.content}
+            {messages.map((msg) => {
+              if (msg.role === 'user') {
+                return (
+                  <div key={msg.id} className="flex flex-col items-end">
+                    <div className="max-w-[85%] rounded-2xl rounded-br-xs px-3.5 py-2.5 bg-blue-600 text-white text-xs shadow-xs">
+                      <div className="whitespace-pre-wrap leading-relaxed">
+                        {msg.content}
+                      </div>
+                      <div className="flex items-center justify-between gap-2 mt-1 pt-1 border-t border-blue-500/40 text-[9px] text-blue-100">
+                        <span>{msg.timestamp}</span>
+                        <button
+                          onClick={() => handleCopyMessage(msg.id, msg.content)}
+                          title="Copy user message"
+                          className="opacity-60 hover:opacity-100 p-0.5 rounded cursor-pointer transition-opacity"
+                        >
+                          {copiedMsgId === msg.id ? (
+                            <Check className="w-2.5 h-2.5 text-emerald-300" />
+                          ) : (
+                            <Copy className="w-2.5 h-2.5" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              // Assistant message
+              const isSending = msg.status === 'sending';
+              const isError = msg.status === 'error';
+
+              return (
+                <div key={msg.id} className="flex flex-col items-start space-y-1.5 max-w-[92%]">
+                  <div 
+                    className={`w-full rounded-2xl rounded-bl-xs px-3.5 py-3 border text-xs shadow-xs transition-colors ${
+                      isError
+                        ? isDarkMode 
+                          ? 'bg-rose-950/40 border-rose-800 text-rose-200' 
+                          : 'bg-rose-50 border-rose-200 text-rose-900'
+                        : isDarkMode
+                          ? 'bg-slate-800/90 border-slate-700 text-slate-200'
+                          : 'bg-white border-slate-200 text-slate-800'
+                    }`}
+                  >
+                    {/* Header Badges: Grounding & Source */}
+                    {!isSending && (
+                      <div className="flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-slate-700/30 dark:border-slate-700/50">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {renderGroundingBadge(msg.grounding)}
+                          {msg.source && (
+                            <span 
+                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono truncate max-w-[140px] border ${
+                                isDarkMode ? 'bg-slate-900 text-slate-400 border-slate-700' : 'bg-slate-100 text-slate-600 border-slate-200'
+                              }`}
+                              title={`Source: ${msg.source}`}
+                            >
+                              <FileSpreadsheet className="w-2.5 h-2.5 text-emerald-500 shrink-0" />
+                              <span className="truncate">{msg.source}</span>
+                            </span>
+                          )}
+                        </div>
+
+                        <button
+                          onClick={() => handleCopyMessage(msg.id, msg.content)}
+                          title="Copy response"
+                          className="opacity-50 hover:opacity-100 p-0.5 rounded cursor-pointer transition-opacity text-slate-400 hover:text-slate-200"
+                        >
+                          {copiedMsgId === msg.id ? (
+                            <Check className="w-3 h-3 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Content Rendering */}
+                    {isSending ? (
+                      <div className="flex items-center gap-2 py-1 text-slate-400">
+                        <div className="flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-bounce" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-bounce [animation-delay:0.2s]" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-bounce [animation-delay:0.4s]" />
+                        </div>
+                        <span className="text-[11px] font-medium">
+                          Auditing data with Gemini 3.7 Flash...
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="markdown-body space-y-2 leading-relaxed text-xs overflow-x-auto">
+                        <ReactMarkdown
+                          components={{
+                            h3: ({ node, ...props }) => (
+                              <h3 className="font-bold text-xs text-blue-600 dark:text-blue-400 mt-2 mb-1" {...props} />
+                            ),
+                            h4: ({ node, ...props }) => (
+                              <h4 className="font-semibold text-xs text-slate-800 dark:text-slate-200 mt-1.5 mb-0.5" {...props} />
+                            ),
+                            ul: ({ node, ...props }) => (
+                              <ul className="list-disc pl-4 space-y-1 my-1" {...props} />
+                            ),
+                            ol: ({ node, ...props }) => (
+                              <ol className="list-decimal pl-4 space-y-1 my-1" {...props} />
+                            ),
+                            code: ({ node, className, children, ...props }) => {
+                              const match = /language-(\w+)/.exec(className || '');
+                              const isInline = !match && !String(children).includes('\n');
+                              if (isInline) {
+                                return (
+                                  <code className="px-1 py-0.5 rounded font-mono text-[10px] bg-slate-200/80 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-blue-600 dark:text-blue-300" {...props}>
+                                    {children}
+                                  </code>
+                                );
+                              }
+                              return (
+                                <div className="my-2 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 bg-slate-900 text-slate-100 p-2.5 font-mono text-[10px]">
+                                  <div className="text-[9px] uppercase tracking-wider text-slate-400 mb-1 font-sans font-bold">
+                                    {match ? match[1] : 'code'}
+                                  </div>
+                                  <pre className="overflow-x-auto whitespace-pre-wrap">
+                                    <code>{children}</code>
+                                  </pre>
+                                </div>
+                              );
+                            }
+                          }}
+                        >
+                          {msg.content}
+                        </ReactMarkdown>
+                      </div>
+                    )}
+
+                    {/* Timestamp */}
+                    {!isSending && (
+                      <div className="mt-2 pt-1 text-[9px] text-slate-400 text-right">
+                        {msg.timestamp}
+                      </div>
+                    )}
                   </div>
 
-                  {/* Message Meta / Copy button */}
-                  <div className={`flex items-center justify-between gap-2 mt-1 pt-1 border-t text-[9px] ${
-                    msg.role === 'user' ? 'border-blue-500/40 text-blue-100' : 'border-slate-700/40 dark:border-slate-700 text-slate-400'
-                  }`}>
-                    <span>{msg.timestamp}</span>
-
-                    <button
-                      onClick={() => handleCopyMessage(msg.id, msg.content)}
-                      title="Copy message text"
-                      className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer"
-                    >
-                      {copiedMsgId === msg.id ? (
-                        <Check className="w-2.5 h-2.5 text-emerald-400" />
-                      ) : (
-                        <Copy className="w-2.5 h-2.5" />
-                      )}
-                    </button>
-                  </div>
+                  {/* Suggested Follow-up chips */}
+                  {msg.suggestedFollowUps && msg.suggestedFollowUps.length > 0 && !isSending && (
+                    <div className="space-y-1 pt-0.5 w-full">
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block px-0.5">
+                        Follow-up Questions
+                      </span>
+                      <div className="flex flex-col gap-1">
+                        {msg.suggestedFollowUps.map((followUp, fIdx) => (
+                          <button
+                            key={fIdx}
+                            onClick={() => handleSelectSuggestedQuestion(followUp)}
+                            disabled={isProcessing}
+                            className={`text-left text-[10px] px-2.5 py-1.5 rounded-lg border font-medium transition-colors flex items-center justify-between gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                              isDarkMode 
+                                ? 'bg-slate-800/50 hover:bg-slate-800 border-slate-700 text-slate-300 hover:text-white' 
+                                : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700 hover:text-slate-900'
+                            }`}
+                          >
+                            <span className="truncate">{followUp}</span>
+                            <ArrowRight className="w-2.5 h-2.5 text-blue-500 shrink-0" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
-
-            {/* Processing / Thinking indicator */}
-            {isProcessing && (
-              <div className="flex items-start gap-2">
-                <div 
-                  className={`rounded-2xl rounded-bl-xs px-3.5 py-2.5 border text-xs flex items-center gap-2 ${
-                    isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-700'
-                  }`}
-                >
-                  <div className="flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-bounce" />
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-bounce [animation-delay:0.2s]" />
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-bounce [animation-delay:0.4s]" />
-                  </div>
-                  <span className="text-[11px] font-medium text-slate-400">
-                    Capturing context...
-                  </span>
-                </div>
-              </div>
-            )}
+              );
+            })}
 
             <div ref={messagesEndRef} />
           </div>
@@ -432,7 +632,7 @@ export const FloatingChatPanel: React.FC<FloatingChatPanelProps> = ({
         {!isMinimized && (
           <div 
             className={`p-3 border-t shrink-0 ${
-              isDarkMode ? 'bg-[#1F2937]/90 border-[#374151]' : 'bg-[#F8FAFC] border-[#E5E7EB]'
+              isDarkMode ? 'bg-[#1F2937]/95 border-[#374151]' : 'bg-[#F8FAFC] border-[#E5E7EB]'
             }`}
           >
             <div className="relative flex items-end gap-2">
@@ -442,6 +642,7 @@ export const FloatingChatPanel: React.FC<FloatingChatPanelProps> = ({
                 value={inputPrompt}
                 onChange={(e) => setInputPrompt(e.target.value)}
                 onKeyDown={handleKeyDown}
+                disabled={isProcessing}
                 placeholder={datasetContext ? "Ask about your data..." : "Upload a CSV to start analyzing..."}
                 rows={1}
                 aria-label="Ask CSV Auditor AI"
@@ -449,7 +650,7 @@ export const FloatingChatPanel: React.FC<FloatingChatPanelProps> = ({
                   isDarkMode 
                     ? 'bg-slate-900 border-slate-700 text-white placeholder-slate-500 focus:border-blue-500' 
                     : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400 focus:border-blue-500'
-                }`}
+                } ${isProcessing ? 'opacity-60 cursor-not-allowed' : ''}`}
               />
 
               <button
@@ -461,13 +662,17 @@ export const FloatingChatPanel: React.FC<FloatingChatPanelProps> = ({
                   inputPrompt.trim() && !isProcessing ? 'bg-blue-600 hover:bg-blue-700 shadow-xs' : 'bg-slate-500'
                 }`}
               >
-                <Send className="w-3.5 h-3.5" />
+                {isProcessing ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Send className="w-3.5 h-3.5" />
+                )}
               </button>
             </div>
 
             <div className="flex items-center justify-between text-[9px] text-slate-400 mt-1.5 px-0.5">
               <span>Press <strong className="font-mono text-slate-500">Enter</strong> to send, <strong className="font-mono text-slate-500">Shift+Enter</strong> for newline</span>
-              <span className="font-medium text-slate-500">Phase 1 Architecture</span>
+              <span className="font-medium text-slate-500">Grounded in Gemini 3.7 Flash</span>
             </div>
           </div>
         )}

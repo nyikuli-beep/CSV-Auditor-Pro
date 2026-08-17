@@ -1,10 +1,13 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import {
   AssistantMessage,
   AssistantPageContext,
   AssistantDatasetContext,
-  AssistantRecommendationContext
+  AssistantRecommendationContext,
+  CSVAuditorAIRequest,
+  ConversationHistoryItem
 } from '../types/assistant';
+import { AssistantClient } from '../lib/assistantClient';
 
 interface AssistantContextType {
   isOpen: boolean;
@@ -19,7 +22,8 @@ interface AssistantContextType {
   pageContext: AssistantPageContext;
   setPageContext: (ctx: AssistantPageContext) => void;
   datasetContext: AssistantDatasetContext | null;
-  setDatasetContext: (ctx: AssistantDatasetContext | null) => void;
+  setDatasetContext: (ctx: AssistantDatasetContext | null, rawFile?: any) => void;
+  rawFileContext: any | null;
   recommendationContext: AssistantRecommendationContext | null;
   setRecommendationContext: (ctx: AssistantRecommendationContext | null) => void;
   isProcessing: boolean;
@@ -33,13 +37,21 @@ export const AssistantProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [isMinimized, setIsMinimized] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const isProcessingRef = useRef<boolean>(false);
 
   // Initialize messages from session storage
   const [messages, setMessages] = useState<AssistantMessage[]>(() => {
     try {
       const saved = sessionStorage.getItem(STORAGE_KEY_MESSAGES);
       if (saved) {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          // Filter out any lingering 'sending' placeholder messages on reload
+          return parsed.map((m: AssistantMessage) => ({
+            ...m,
+            status: m.status === 'sending' ? 'error' : m.status
+          }));
+        }
       }
     } catch {
       // ignore
@@ -61,17 +73,24 @@ export const AssistantProvider: React.FC<{ children: ReactNode }> = ({ children 
     title: 'Dashboard'
   });
 
-  const [datasetContext, setDatasetContext] = useState<AssistantDatasetContext | null>(null);
+  const [datasetContext, setDatasetContextState] = useState<AssistantDatasetContext | null>(null);
+  const [rawFileContext, setRawFileContext] = useState<any | null>(null);
   const [recommendationContext, setRecommendationContext] = useState<AssistantRecommendationContext | null>(null);
+
+  const setDatasetContext = useCallback((ctx: AssistantDatasetContext | null, rawFile?: any) => {
+    setDatasetContextState(ctx);
+    if (rawFile !== undefined) {
+      setRawFileContext(rawFile);
+    }
+  }, []);
 
   const openAssistant = useCallback((initialPrompt?: string) => {
     setIsOpen(true);
     setIsMinimized(false);
     if (initialPrompt && initialPrompt.trim()) {
-      // If an initial prompt was passed, we can handle it
       setTimeout(() => {
         sendMessage(initialPrompt.trim());
-      }, 50);
+      }, 100);
     }
   }, []);
 
@@ -98,35 +117,112 @@ export const AssistantProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, []);
 
   const sendMessage = useCallback(async (content: string) => {
-    if (!content.trim()) return;
+    const trimmed = (content || '').trim();
+    if (!trimmed) return;
+
+    // Duplicate submission protection: if already processing, reject concurrent call
+    if (isProcessingRef.current) {
+      console.warn('[AssistantContext] Submission ignored: another request is in progress.');
+      return;
+    }
+
+    isProcessingRef.current = true;
+    setIsProcessing(true);
+
+    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const userMsgId = `msg_user_${Date.now()}`;
+    const asstMsgId = `msg_asst_${Date.now()}`;
 
     const userMsg: AssistantMessage = {
-      id: `msg_user_${Date.now()}`,
+      id: userMsgId,
       role: 'user',
-      content: content.trim(),
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      content: trimmed,
+      timestamp: now,
       status: 'complete'
     };
 
-    setMessages(prev => [...prev, userMsg]);
-    setIsProcessing(true);
+    const pendingAsstMsg: AssistantMessage = {
+      id: asstMsgId,
+      role: 'assistant',
+      content: '',
+      timestamp: now,
+      status: 'sending'
+    };
 
-    // Phase 1: Clean Foundation & Context Verification Shell
-    // DO NOT connect Gemini yet or generate hard-coded responses.
-    // Simulate immediate readiness and confirmation of context capture.
-    setTimeout(() => {
-      const assistantMsg: AssistantMessage = {
-        id: `msg_asst_${Date.now()}`,
-        role: 'assistant',
-        content: `CSV Auditor AI is active in Phase 1 mode. Current page: "${pageContext.page}". Dataset context: ${datasetContext ? `"${datasetContext.fileName}" (${datasetContext.rowCount} rows)` : 'No active CSV'}. Real-time Gemini reasoning intelligence will connect in Phase 2.`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        status: 'complete'
+    // Show user message and pending assistant loading state immediately
+    setMessages(prev => [...prev, userMsg, pendingAsstMsg]);
+
+    try {
+      // Build conversation history (compact prior turns)
+      const historyItems: ConversationHistoryItem[] = messages
+        .filter(m => m.status === 'complete' && (m.role === 'user' || m.role === 'assistant'))
+        .slice(-8)
+        .map(m => ({
+          role: m.role as 'user' | 'assistant',
+          content: m.content
+        }));
+
+      const requestPayload: CSVAuditorAIRequest = {
+        requestId: asstMsgId,
+        message: trimmed,
+        datasetId: datasetContext?.fileId,
+        pageContext,
+        recommendationContext,
+        conversationHistory: historyItems,
+        analysisContext: datasetContext
       };
 
-      setMessages(prev => [...prev, assistantMsg]);
+      const result = await AssistantClient.sendChat(requestPayload, rawFileContext);
+
+      setMessages(prev => {
+        return prev.map(msg => {
+          if (msg.id === asstMsgId) {
+            if (result.success) {
+              return {
+                ...msg,
+                content: result.answer || 'Completed analysis.',
+                status: 'complete',
+                grounding: result.grounding || 'data-verified',
+                source: result.source,
+                analysisType: result.analysisType,
+                evidence: result.evidence,
+                suggestedFollowUps: result.suggestedFollowUps,
+                error: undefined
+              };
+            } else {
+              return {
+                ...msg,
+                content: result.answer || 'An error occurred while processing your audit request.',
+                status: 'error',
+                grounding: 'error',
+                error: result.error || 'Request failed'
+              };
+            }
+          }
+          return msg;
+        });
+      });
+    } catch (err: any) {
+      console.error('[AssistantContext] Send message error:', err);
+      setMessages(prev => {
+        return prev.map(msg => {
+          if (msg.id === asstMsgId) {
+            return {
+              ...msg,
+              content: 'A communication error occurred. Please check your connection and try again.',
+              status: 'error',
+              grounding: 'error',
+              error: err?.message || 'Network error'
+            };
+          }
+          return msg;
+        });
+      });
+    } finally {
+      isProcessingRef.current = false;
       setIsProcessing(false);
-    }, 400);
-  }, [pageContext, datasetContext]);
+    }
+  }, [messages, pageContext, datasetContext, recommendationContext, rawFileContext]);
 
   return (
     <AssistantContext.Provider
@@ -144,6 +240,7 @@ export const AssistantProvider: React.FC<{ children: ReactNode }> = ({ children 
         setPageContext,
         datasetContext,
         setDatasetContext,
+        rawFileContext,
         recommendationContext,
         setRecommendationContext,
         isProcessing
@@ -161,3 +258,4 @@ export const useAssistant = (): AssistantContextType => {
   }
   return context;
 };
+
