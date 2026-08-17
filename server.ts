@@ -1368,9 +1368,25 @@ app.post('/api/gemini/insights', async (req, res) => {
 // 1c. API: Floating CSV Auditor AI Chat (Firebase Auth / Guest + Dataset Authorization + Gemini 3.7 Flash)
 const aiChatEndpoints = [
   '/api/ai/assistant/chat',
+  '/api/ai/assistant/chat/',
   '/api/ai/chat',
+  '/api/ai/chat/',
   '/api/conversational-auditor/chat',
-  '/api/conversational-auditor'
+  '/api/conversational-auditor/chat/',
+  '/api/conversational-auditor',
+  '/api/conversational-auditor/',
+  '/api/assistant/chat',
+  '/api/assistant/chat/',
+  '/api/ai-assistant/chat',
+  '/api/ai-assistant/chat/',
+  '/api/chat/assistant',
+  '/api/chat/assistant/',
+  '/api/audit/chat',
+  '/api/audit/chat/',
+  '/api/v1/chat',
+  '/api/v1/chat/',
+  '/api/v1/assistant/chat',
+  '/api/v1/assistant/chat/'
 ];
 
 // Handle non-POST methods with explicit HTTP 405 Method Not Allowed
@@ -1604,6 +1620,62 @@ app.post('/api/gemini/bulk-autofix', async (req, res) => {
   } catch (err: any) {
     console.error('Error in bulk auto-fix:', err);
     res.status(500).json({ error: err.message || 'Failed to auto-fix records.' });
+  }
+});
+
+// 8. API: Forensic Issue Explanation via Gemini 3.7 Flash
+app.post(['/api/gemini/explain', '/api/gemini/explain/'], async (req, res) => {
+  try {
+    const { issue } = req.body;
+    if (!issue) {
+      res.status(400).json({ error: 'Issue object is required.' });
+      return;
+    }
+
+    const ai = getGeminiClient();
+    if (ai) {
+      try {
+        const prompt = `You are CSV Auditor Pro AI. Provide a concise, highly professional 2-3 sentence forensic explanation of this data quality audit issue and the exact recommended remediation:
+Type: ${issue.type}
+Column: ${issue.column}
+Row: ${issue.row || 'N/A'}
+Value: ${JSON.stringify(issue.value)}
+Details: ${issue.details || issue.message || 'Standard audit finding'}`;
+
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.7-flash',
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          config: { temperature: 0.2, maxOutputTokens: 300 }
+        });
+
+        const text = (response.text || '').trim();
+        if (text) {
+          res.json({ explanation: text });
+          return;
+        }
+      } catch (geminiErr) {
+        console.warn('[Gemini Explain] Upstream error, using deterministic forensic explanation:', geminiErr);
+      }
+    }
+
+    // Deterministic forensic fallback
+    let explanation = '';
+    if (issue.type === 'duplicate') {
+      explanation = `Duplicated rows lead to skewed totals and inaccurate statistical analysis. Column "${issue.column}" contains matching redundant entries. We recommend applying deduplication to preserve distinct atomic records.`;
+    } else if (issue.type === 'missing_value') {
+      explanation = `Cell in row ${issue.row || 'N/A'} column "${issue.column}" is empty. Missing values disrupt downstream models and database NOT NULL constraints. Imputing with mean/median or domain fallback values is recommended.`;
+    } else if (issue.type === 'invalid_format') {
+      explanation = `Value "${issue.value}" violates expected format constraints for column "${issue.column}". Standardize values to maintain data pipeline compatibility.`;
+    } else if (issue.type === 'outlier') {
+      explanation = `Value "${issue.value}" lies multiple standard deviations away from the column mean. Verify whether this represents an extreme outlier or data entry discrepancy.`;
+    } else {
+      explanation = `Identified data quality finding in column "${issue.column}". Verify formatting and constraints to maintain data integrity.`;
+    }
+
+    res.json({ explanation });
+  } catch (err: any) {
+    console.error('Error explaining issue:', err);
+    res.status(500).json({ error: err.message || 'Failed to generate explanation.' });
   }
 });
 
