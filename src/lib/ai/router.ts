@@ -711,7 +711,7 @@ export class AnalysisRouter {
     return greetings.includes(text) || (text.length <= 15 && greetings.some(g => text.startsWith(g)));
   }
 
-  private static extractMatchedColumns(text: string, headers: string[]): string[] {
+  public static extractMatchedColumns(text: string, headers: string[]): string[] {
     const matched: string[] = [];
     const normalizedText = text.toLowerCase().replace(/[^a-z0-9_ ]/g, ' ');
 

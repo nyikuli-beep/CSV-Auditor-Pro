@@ -26,23 +26,40 @@ import { DataQualityEngine } from './dataQuality';
 import { StatisticalAnalysisEngine } from './statisticalEngine';
 import { AnomalyDetectionEngine } from './anomalyEngine';
 import { AnalysisRouter } from './router';
-import { DatasetProfile, AnalysisRoutePlan, ColumnProfile } from './types';
+import { ResponseValidationMiddleware } from './responseValidator';
+import { 
+  DatasetProfile, 
+  AnalysisRoutePlan, 
+  ColumnProfile, 
+  StructuredGroundedContext,
+  DataQualityReport,
+  AnomalyReport
+} from './types';
 
 const CSV_AUDITOR_SYSTEM_INSTRUCTION = `You are CSV Auditor AI, the expert forensic data auditor, statistician, and data engineering assistant embedded in CSV Auditor Pro.
 
 CRITICAL OPERATIONAL RULES:
 1. TASK-FIRST DIRECT ANSWERS:
-   - When the user asks a question, task, or asks for advice: DIRECTLY ANSWER THE QUESTION IMMEDIATELY.
+   - When the user asks a question, task, or asks for advice: DIRECTLY ANSWER THE QUESTION IMMEDIATELY in the first sentence.
    - NEVER start your response with a generic dataset overview preamble (DO NOT say "Dataset 'xyz.csv' contains X rows and a score of 100/100...").
    - Only describe the overall dataset size or profile if the user explicitly asks for an overview or summary (e.g., "Summarize this dataset", "Give me a dataset overview").
 
-2. STRICT DATA GROUNDING & VERIFIED FACTS:
+2. STRICT DATA GROUNDING & VERIFIED FACTS VS INTERPRETATION:
    - When verified dataset calculations and metrics are provided in the context:
      * Ground all numbers, counts, percentages, sums, and column names strictly in the provided evidence.
      * NEVER invent column names, row counts, or fake statistics.
-     * Clearly distinguish verified mathematical facts from recommendations or interpretations.
+     * Clearly distinguish verified mathematical facts from recommendations or interpretations:
+       - **VERIFIED DATA**: Factual numbers calculated from the dataset.
+       - **AUDITOR INTERPRETATION**: What the finding means for data science, downstream pipelines, and reporting.
+       - **RECOMMENDED ACTION**: Suggested remediation steps.
+     * Do not present AI interpretation as if it were a calculated fact.
 
-3. REMEDIATION & ACTION PLANS:
+3. DATASET STATE & STALE ANALYSIS AWARENESS:
+   - If the user or context references an earlier recommendation (e.g. "293 missing values in suspect_gender") but the current dataset state contains 0 missing values (or different counts):
+     * Explicitly acknowledge the discrepancy: Explain that the current dataset no longer contains those issues and that the recommendation appears to refer to an earlier dataset state.
+     * Never report contradictory numbers.
+
+4. REMEDIATION & ACTION PLANS:
    - When the user asks how to remediate, fix, or implement a recommendation (e.g., missing values in a column, replacing with 'Unknown', deduplication, outlier handling):
      * Provide structured, expert data auditor guidance:
        - **Direct Answer**: The exact remediation action to take.
@@ -51,16 +68,16 @@ CRITICAL OPERATIONAL RULES:
        - **Implementation Steps**: Practical implementation recipes with Python/Pandas code, SQL query, and CSV Auditor Pro in-app workflow.
        - **Validation**: Queries and checks to verify the fix.
 
-4. GENERAL CONCEPTUAL & EDUCATIONAL QUESTIONS:
+5. GENERAL CONCEPTUAL & EDUCATIONAL QUESTIONS:
    - When the user asks general data science / database questions (e.g., "What is data normalization?", "What is an outlier?", "Explain referential integrity"):
      * Provide a clear, educational, and authoritative explanation.
      * DO NOT claim this was discovered from the user's CSV. Clearly frame it as general data management principles.
 
-5. MULTI-TURN CONTINUITY:
-   - For follow-up questions (e.g., "How should I fix that?", "What was my previous question?", "How does that compare?"):
-     * Use the provided conversation history to maintain context seamlessly.
+6. MULTI-TURN CONTINUITY & PRONOUN RESOLUTION:
+   - For follow-up questions (e.g., "How should I fix that?", "What about the second column?", "Would Unknown be better?"):
+     * Use the provided conversation history to maintain context seamlessly and resolve pronouns accurately.
 
-6. FORMATTING & PROFESSIONAL TONE:
+7. FORMATTING & PROFESSIONAL TONE:
    - Use clean Markdown with headers (###), bullet points, and code blocks (\`\`\`python, \`\`\`sql) where relevant.
    - Do NOT use emojis. Maintain an objective, authoritative, and helpful professional tone.
 `;
@@ -69,6 +86,7 @@ export interface ProcessChatParams {
   request: CSVAuditorAIRequest;
   userEmail?: string;
   userId?: string;
+  userIp?: string;
   datasetFile?: {
     id: string;
     name: string;
@@ -79,9 +97,22 @@ export interface ProcessChatParams {
   } | null;
 }
 
+interface CachedDatasetAnalysis {
+  datasetProfile: DatasetProfile;
+  qualityReport?: DataQualityReport;
+  anomalyReport?: AnomalyReport;
+  timestamp: number;
+}
+
 export class CSVAuditorAIService {
   private static instance: CSVAuditorAIService | null = null;
   private client: GoogleGenAI | null = null;
+  
+  // In-memory cache for computed profiles & reports (LRU style, max 30 datasets)
+  private analysisCache = new Map<string, CachedDatasetAnalysis>();
+  
+  // In-memory rate limiting store (user UID/IP -> timestamps[])
+  private rateLimitStore = new Map<string, number[]>();
 
   private constructor() {
     this.initClient();
@@ -100,7 +131,7 @@ export class CSVAuditorAIService {
         apiKey: process.env.GEMINI_API_KEY,
         httpOptions: {
           headers: {
-            'User-Agent': 'csv-auditor-pro'
+            'User-Agent': 'csv-auditor-pro-enterprise'
           }
         }
       });
@@ -109,11 +140,29 @@ export class CSVAuditorAIService {
   }
 
   /**
+   * Enforces in-memory rate limiting per user/IP (30 requests / minute)
+   */
+  public checkRateLimit(identifier: string, maxRequests: number = 30, windowMs: number = 60000): boolean {
+    const now = Date.now();
+    const timestamps = this.rateLimitStore.get(identifier) || [];
+    const validTimestamps = timestamps.filter(t => now - t < windowMs);
+
+    if (validTimestamps.length >= maxRequests) {
+      this.rateLimitStore.set(identifier, validTimestamps);
+      return false; // Rate limit exceeded
+    }
+
+    validTimestamps.push(now);
+    this.rateLimitStore.set(identifier, validTimestamps);
+    return true; // Allowed
+  }
+
+  /**
    * Main entry point to process a chat request from the floating assistant
    */
   public async processChat(params: ProcessChatParams): Promise<CSVAuditorAIResponse> {
     const startTime = Date.now();
-    const { request, userEmail, userId, datasetFile } = params;
+    const { request, userEmail, userId, userIp, datasetFile } = params;
     const requestId = request.requestId || `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const userPrompt = (request.message || '').trim();
 
@@ -125,6 +174,19 @@ export class CSVAuditorAIService {
         requestId,
         timestamp: new Date().toISOString(),
         error: 'Empty prompt'
+      };
+    }
+
+    // Rate Limit Check
+    const rateLimitKey = userId || userEmail || userIp || 'anonymous_user';
+    if (!this.checkRateLimit(rateLimitKey, 35, 60000)) {
+      return {
+        success: false,
+        answer: 'You have reached the temporary rate limit for CSV Auditor AI inquiries. Please wait a moment before sending your next question.',
+        grounding: 'error',
+        requestId,
+        timestamp: new Date().toISOString(),
+        error: 'Rate limit exceeded'
       };
     }
 
@@ -147,17 +209,49 @@ export class CSVAuditorAIService {
           ? datasetFile.headers
           : Object.keys(rows[0] || {});
 
-        // Build deterministic profile
-        datasetProfile = CSVProfilingEngine.profileDataset(rows, headers, datasetFile.id, datasetFile.name);
+        // Build or retrieve cached deterministic profile
+        const cacheKey = `${datasetFile.id}_${rows.length}_${headers.length}_${datasetFile.name || ''}`;
+        const cached = this.analysisCache.get(cacheKey);
+
+        if (cached && Date.now() - cached.timestamp < 1000 * 60 * 30) {
+          datasetProfile = cached.datasetProfile;
+        } else {
+          datasetProfile = CSVProfilingEngine.profileDataset(rows, headers, datasetFile.id, datasetFile.name);
+          this.analysisCache.set(cacheKey, {
+            datasetProfile,
+            timestamp: Date.now()
+          });
+
+          // Trim cache if too large
+          if (this.analysisCache.size > 30) {
+            const oldestKey = this.analysisCache.keys().next().value;
+            if (oldestKey) this.analysisCache.delete(oldestKey);
+          }
+        }
       }
 
-      // 3. Question Routing & Deterministic Execution
+      // 3. Detect Stale Recommendation State
+      let staleStateDetected = false;
+      let staleStateExplanation = '';
+
+      if (request.recommendationContext && datasetProfile) {
+        const rec = request.recommendationContext;
+        const targetColName = rec.columnName;
+        if (targetColName && datasetProfile.columnProfiles[targetColName]) {
+          const colProf = datasetProfile.columnProfiles[targetColName];
+          if (rec.affectedCount !== undefined && rec.affectedCount > 0 && colProf.missingCount === 0) {
+            staleStateDetected = true;
+            staleStateExplanation = `The active dataset currently contains 0 missing values in "${targetColName}". The referenced recommendation (${rec.affectedCount} missing cells) refers to an earlier dataset state before cleaning was applied.`;
+          }
+        }
+      }
+
+      // 4. Question Routing & Deterministic Execution
       let executionResults: any = {};
       let routePlan: AnalysisRoutePlan | undefined;
 
-      if (!isGeneralQuery && (rows.length > 0 || (headers.length > 0))) {
-        // If recommendation context is provided, attach to routing
-        const previousPlan = this.extractPreviousPlanFromHistory(request.conversationHistory);
+      if (!isGeneralQuery && (rows.length > 0 || headers.length > 0)) {
+        const previousPlan = this.extractPreviousPlanFromHistory(request.conversationHistory, headers);
         const { routePlan: plan, results } = AnalysisRouter.planAndExecute(
           userPrompt,
           rows,
@@ -169,7 +263,7 @@ export class CSVAuditorAIService {
         executionResults = results;
         analysisType = plan.intent;
 
-        // Determine grounding and populate evidence
+        // Populate evidence and follow-ups based on intent
         if (plan.intent === 'remediation') {
           grounding = 'interpretation';
           if (results.remediationEvidence) {
@@ -253,6 +347,10 @@ export class CSVAuditorAIService {
             evidence.calculations = { columnProfile: datasetProfile.columnProfiles[colName] };
             evidence.columns = [colName];
           }
+          suggestedFollowUps = [
+            `What are the unique value frequencies for "${colName}"?`,
+            `Are there format violations in "${colName}"?`
+          ];
         } else if (plan.intent === 'dataset_summary') {
           grounding = 'data-derived';
           evidence.metadata = {
@@ -269,7 +367,7 @@ export class CSVAuditorAIService {
         grounding = 'insufficient-data';
       }
 
-      // 4. Build Context Payload for Gemini
+      // 5. Build Context Payload for Gemini
       const promptPayload = this.buildGeminiPrompt({
         userPrompt,
         isGeneralQuery,
@@ -279,12 +377,39 @@ export class CSVAuditorAIService {
         executionResults,
         recommendationContext: request.recommendationContext,
         pageContext: request.pageContext,
-        conversationHistory: request.conversationHistory || []
+        staleStateDetected,
+        staleStateExplanation
       });
 
-      // 5. Call Gemini 3.7 Flash Server-Side
+      // 6. Call Gemini 3.7 Flash Server-Side with Response Validation & Controlled Regeneration
       const ai = this.initClient();
       let answerText = '';
+
+      const groundedContext: StructuredGroundedContext = {
+        userQuestion: userPrompt,
+        datasetProfileSummary: {
+          fileName: datasetFile?.name || 'dataset.csv',
+          rowCount: datasetProfile?.rowCount || rows.length,
+          columnCount: datasetProfile?.columnCount || headers.length,
+          headers,
+          qualityScore: datasetProfile?.qualityScore || 100,
+          duplicateRowCount: datasetProfile?.duplicateRowCount || 0,
+          overallMissingPercentage: datasetProfile?.overallMissingPercentage || 0
+        },
+        relevantColumnProfiles: Object.values(datasetProfile?.columnProfiles || {}),
+        routePlan: routePlan || {
+          intent: 'general_conversation',
+          targetColumns: [],
+          groupColumns: [],
+          dateColumns: [],
+          metricColumns: [],
+          requiresExecution: false,
+          confidence: 0.9,
+          reasoning: 'Fallback route'
+        },
+        deterministicResults: executionResults,
+        hasSufficientData: rows.length > 0
+      };
 
       if (ai) {
         const contents: any[] = [];
@@ -317,9 +442,48 @@ export class CSVAuditorAIService {
         });
 
         answerText = (response.text || '').trim();
+
+        // 7. Relevance & Response Validation Middleware
+        const validation = ResponseValidationMiddleware.validate(answerText, groundedContext, userPrompt);
+
+        if (!validation.isValid && validation.repromptInstruction) {
+          console.warn(`[CSV AUDITOR AI] Initial response failed validation (${validation.detectedMismatches.join('; ')}). Attempting controlled regeneration...`);
+          try {
+            const repromptContents = [
+              ...contents,
+              { role: 'model', parts: [{ text: answerText }] },
+              { role: 'user', parts: [{ text: validation.repromptInstruction }] }
+            ];
+
+            const regenResponse = await ai.models.generateContent({
+              model: DEFAULT_GEMINI_MODEL,
+              contents: repromptContents,
+              config: {
+                systemInstruction: CSV_AUDITOR_SYSTEM_INSTRUCTION,
+                temperature: 0.1, // Lower temperature for strict adherence
+                maxOutputTokens: DEFAULT_GENERATION_CONFIG.maxOutputTokens
+              }
+            });
+
+            const regenText = (regenResponse.text || '').trim();
+            const secondValidation = ResponseValidationMiddleware.validate(regenText, groundedContext, userPrompt);
+
+            if (secondValidation.isValid && regenText.length > 50) {
+              answerText = regenText;
+            } else if (validation.fallbackContent) {
+              console.warn('[CSV AUDITOR AI] Regeneration was still generic. Using deterministic forensic fallback.');
+              answerText = validation.fallbackContent;
+            }
+          } catch (regenErr) {
+            console.error('[CSV AUDITOR AI] Regeneration error:', regenErr);
+            if (validation.fallbackContent) {
+              answerText = validation.fallbackContent;
+            }
+          }
+        }
       }
 
-      // 6. Fallback if Gemini returned empty text or key not configured
+      // 8. Fallback if Gemini returned empty text or client not configured
       if (!answerText) {
         if (!ai) {
           answerText = this.generateOfflineFallbackAnswer({
@@ -336,7 +500,7 @@ export class CSVAuditorAIService {
         }
       }
 
-      // 7. Structured Logging
+      // 9. Structured Logging
       const durationMs = Date.now() - startTime;
       console.log(`[CSV AUDITOR AI] reqId=${requestId} user=${userId || 'anon'} dataset=${datasetFile?.name || 'none'} intent=${analysisType} grounding=${grounding} duration=${durationMs}ms`);
 
@@ -403,7 +567,6 @@ export class CSVAuditorAIService {
       !text.includes('in column') &&
       !text.includes('remediation')
     ) {
-      // If none of the words match dataset column terms or row terms
       return true;
     }
 
@@ -422,7 +585,8 @@ export class CSVAuditorAIService {
     executionResults?: any;
     recommendationContext?: any;
     pageContext?: any;
-    conversationHistory?: any[];
+    staleStateDetected?: boolean;
+    staleStateExplanation?: string;
   }): string {
     const {
       userPrompt,
@@ -432,7 +596,9 @@ export class CSVAuditorAIService {
       routePlan,
       executionResults,
       recommendationContext,
-      pageContext
+      pageContext,
+      staleStateDetected,
+      staleStateExplanation
     } = params;
 
     let p = `USER INQUIRY:\n${userPrompt}\n\n`;
@@ -462,13 +628,20 @@ export class CSVAuditorAIService {
     p += `- Duplicate Rows: ${datasetProfile.duplicateRowCount.toLocaleString()} (${datasetProfile.duplicateRowPercentage}%)\n`;
     p += `- Total Missing Cells: ${datasetProfile.totalMissingCells.toLocaleString()} (${datasetProfile.overallMissingPercentage}%)\n\n`;
 
+    // Stale Analysis Alert
+    if (staleStateDetected && staleStateExplanation) {
+      p += `CRITICAL DATASET STATE AWARENESS (STALE RECOMMENDATION DETECTED):\n`;
+      p += `- ${staleStateExplanation}\n`;
+      p += `- INSTRUCTION: You MUST explain that the active dataset no longer contains those missing values, and that the recommendation appears to refer to an earlier dataset state before cleaning.\n\n`;
+    }
+
     // Active recommendation context if viewing recommendations
     if (recommendationContext && recommendationContext.title) {
       p += `ACTIVE RECOMMENDATION CONTEXT:\n`;
       p += `- Title: "${recommendationContext.title}"\n`;
       p += `- Issue Category: ${recommendationContext.issueCategory || 'General'}\n`;
       if (recommendationContext.columnName) p += `- Target Column: "${recommendationContext.columnName}"\n`;
-      if (recommendationContext.affectedCount !== undefined) p += `- Affected Records: ${recommendationContext.affectedCount.toLocaleString()}\n`;
+      if (recommendationContext.affectedCount !== undefined) p += `- Affected Records in Finding: ${recommendationContext.affectedCount.toLocaleString()}\n`;
       if (recommendationContext.severity) p += `- Severity: ${recommendationContext.severity}\n`;
       if (recommendationContext.description) p += `- Description: ${recommendationContext.description}\n\n`;
     }
@@ -525,7 +698,8 @@ export class CSVAuditorAIService {
     p += `DIRECTIVES:\n`;
     p += `1. Directly answer the user's specific inquiry. Do not output a generic dataset summary unless asked.\n`;
     p += `2. Ground all numbers strictly in the provided verified evidence.\n`;
-    p += `3. Maintain a professional, objective tone without emojis.`;
+    p += `3. Separate verified facts from recommendations.\n`;
+    p += `4. Maintain a professional, objective tone without emojis.`;
 
     return p;
   }
@@ -567,15 +741,35 @@ export class CSVAuditorAIService {
   }
 
   /**
-   * Helper to extract previous routing plan from history
+   * Helper to extract previous routing plan from history to resolve pronouns
    */
-  private extractPreviousPlanFromHistory(history?: any[]): AnalysisRoutePlan | undefined {
+  private extractPreviousPlanFromHistory(history?: any[], headers: string[] = []): AnalysisRoutePlan | undefined {
     if (!Array.isArray(history) || history.length === 0) return undefined;
-    // Inspect last user prompt
-    const lastUserTurn = [...history].reverse().find(h => h.role === 'user');
-    if (!lastUserTurn) return undefined;
+
+    // Search backwards for the last user prompt and matched columns
+    const userTurns = history.filter(h => h.role === 'user');
+    if (userTurns.length === 0) return undefined;
+
+    for (let i = userTurns.length - 1; i >= 0; i--) {
+      const turn = userTurns[i];
+      const matchedCols = AnalysisRouter.extractMatchedColumns(turn.content, headers);
+      if (matchedCols.length > 0) {
+        return {
+          intent: 'column_information',
+          targetColumns: matchedCols,
+          groupColumns: [],
+          dateColumns: [],
+          metricColumns: [],
+          requiresExecution: true,
+          confidence: 0.9,
+          reasoning: `Inherited column context "${matchedCols[0]}" from conversation history.`
+        };
+      }
+    }
+
     return undefined;
   }
 }
 
 export const csvAuditorAIService = CSVAuditorAIService.getInstance();
+

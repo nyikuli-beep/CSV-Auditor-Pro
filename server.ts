@@ -1429,6 +1429,8 @@ app.post('/api/ai/assistant/chat', requireAuth, async (req: AuthRequest, res) =>
       datasetFile = fileContext;
     }
 
+    const userIp = (req.headers['x-forwarded-for'] as string) || req.ip || '127.0.0.1';
+
     const response = await csvAuditorAIService.processChat({
       request: {
         requestId,
@@ -1442,8 +1444,14 @@ app.post('/api/ai/assistant/chat', requireAuth, async (req: AuthRequest, res) =>
       },
       userId: user.uid,
       userEmail: user.email,
+      userIp,
       datasetFile
     });
+
+    if (!response.success && response.error === 'Rate limit exceeded') {
+      res.status(429).json(response);
+      return;
+    }
 
     res.json(response);
   } catch (error: any) {

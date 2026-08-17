@@ -587,10 +587,28 @@ export const FloatingChatPanel: React.FC<FloatingChatPanelProps> = ({
                       </div>
                     )}
 
-                    {/* Timestamp */}
+                    {/* Timestamp & Retry */}
                     {!isSending && (
-                      <div className="mt-2 pt-1 text-[9px] text-slate-400 text-right">
-                        {msg.timestamp}
+                      <div className="mt-2 pt-1 text-[9px] text-slate-400 flex items-center justify-between">
+                        {isError ? (
+                          <button
+                            onClick={() => {
+                              // Find preceding user message to retry
+                              const currentIdx = messages.findIndex(m => m.id === msg.id);
+                              if (currentIdx > 0 && messages[currentIdx - 1]?.role === 'user') {
+                                sendMessage(messages[currentIdx - 1].content);
+                              }
+                            }}
+                            disabled={isProcessing}
+                            className="inline-flex items-center gap-1 font-semibold text-rose-500 hover:text-rose-400 transition-colors cursor-pointer"
+                          >
+                            <RefreshCw className="w-2.5 h-2.5" />
+                            Retry Question
+                          </button>
+                        ) : (
+                          <span />
+                        )}
+                        <span>{msg.timestamp}</span>
                       </div>
                     )}
                   </div>
