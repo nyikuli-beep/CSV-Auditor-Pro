@@ -1,14 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   CheckCircle2, 
   Activity, 
   HelpCircle, 
   Sparkles, 
-  Layers, 
-  ArrowRight,
-  Database,
-  Search,
-  Scale
+  ArrowRight, 
+  Scale,
+  AlertTriangle
 } from 'lucide-react';
 import { InsightCardItem } from '../../lib/ai/insightsEngine';
 
@@ -55,7 +53,7 @@ export default function EvidenceCard({ item, isDarkMode, onExecuteAction }: Evid
       case 'derived':
         return <Activity className="w-3.5 h-3.5 text-blue-500 shrink-0" />;
       case 'warning':
-        return <AlertIcon className="w-3.5 h-3.5 text-amber-500 shrink-0" />;
+        return <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />;
       case 'review':
         return <HelpCircle className="w-3.5 h-3.5 text-purple-500 shrink-0" />;
       case 'success':
@@ -185,9 +183,9 @@ export default function EvidenceCard({ item, isDarkMode, onExecuteAction }: Evid
           {onExecuteAction && (
             <button
               onClick={() => onExecuteAction(item.actionableStep || item.summary)}
-              className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline shrink-0"
+              className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline shrink-0 cursor-pointer"
             >
-              Ask Auditor
+              Ask AI Assistant
             </button>
           )}
         </div>
@@ -196,12 +194,3 @@ export default function EvidenceCard({ item, isDarkMode, onExecuteAction }: Evid
   );
 }
 
-function AlertIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-      <line x1="12" y1="9" x2="12" y2="13" />
-      <line x1="12" y1="17" x2="12.01" y2="17" />
-    </svg>
-  );
-}

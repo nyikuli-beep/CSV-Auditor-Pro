@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Sparkles, 
-  MessageSquare, 
   ShieldCheck, 
   FileText, 
   BarChart3, 
@@ -13,11 +12,6 @@ import {
   Copy, 
   Check, 
   RefreshCw, 
-  Download,
-  Layers,
-  ArrowRight,
-  ShieldAlert,
-  SlidersHorizontal,
   ChevronRight
 } from 'lucide-react';
 import { CSVFile } from '../types';
@@ -28,26 +22,16 @@ import StatisticalTab from './insights/StatisticalTab';
 import TrendsPatternsTab from './insights/TrendsPatternsTab';
 import AnomaliesTab from './insights/AnomaliesTab';
 import RecommendationsTab from './insights/RecommendationsTab';
-import ConversationalAuditorView from './insights/ConversationalAuditorView';
+import { useAssistant } from '../context/AssistantContext';
 
 interface InsightsCenterProps {
   activeFile: CSVFile | null;
-  chatMessages: any[];
-  onSendMessage: (
-    prompt: string, 
-    model?: string, 
-    persona?: string, 
-    image?: { data: string; mimeType: string }, 
-    thinkingMode?: boolean, 
-    enableSearchGrounding?: boolean
-  ) => void;
   isDarkMode: boolean;
   accentClass: string;
   isOwner?: boolean;
   userRole?: string;
   userEmail?: string;
   onNavigate?: (tabId: string) => void;
-  onClearChat?: () => void;
 }
 
 type ActiveInsightView = 
@@ -56,25 +40,22 @@ type ActiveInsightView =
   | 'statistical' 
   | 'trends' 
   | 'anomalies' 
-  | 'recommendations' 
-  | 'chat';
+  | 'recommendations';
 
 export default function InsightsCenter({
   activeFile,
-  chatMessages,
-  onSendMessage,
   isDarkMode,
   accentClass,
   isOwner,
   userRole,
   userEmail,
-  onNavigate,
-  onClearChat
+  onNavigate
 }: InsightsCenterProps) {
   const [activeView, setActiveView] = useState<ActiveInsightView>('executive');
   const [loadingStage, setLoadingStage] = useState<'idle' | 'profiling' | 'analyzing' | 'generating'>('idle');
   const [insightsPayload, setInsightsPayload] = useState<FullDatasetInsightsPayload | null>(null);
   const [copiedReport, setCopiedReport] = useState(false);
+  const { openAssistant, setRecommendationContext } = useAssistant();
 
   // Compute deterministic insights whenever the activeFile changes
   useEffect(() => {
@@ -112,9 +93,8 @@ export default function InsightsCenter({
     return () => clearTimeout(timer1);
   }, [activeFile?.id, activeFile?.rows, activeFile?.name]);
 
-  const handleAskAuditor = (prompt: string) => {
-    setActiveView('chat');
-    onSendMessage(prompt);
+  const handleAskAssistant = (prompt: string) => {
+    openAssistant(prompt);
   };
 
   const handleCopyMarkdownReport = () => {
@@ -181,8 +161,7 @@ ${p.recommendations.priorityActions.map((a, i) => (
     { id: 'statistical', label: 'Statistical Profile', icon: BarChart3, badge: insightsPayload ? `${insightsPayload.statisticalInsights.numericColumnsCount} cols` : undefined },
     { id: 'trends', label: 'Trends & Patterns', icon: TrendingUp },
     { id: 'anomalies', label: 'Potential Anomalies', icon: HelpCircle, badge: insightsPayload?.potentialAnomalies.totalPotentialAnomalies ? `${insightsPayload.potentialAnomalies.totalPotentialAnomalies}` : undefined },
-    { id: 'recommendations', label: 'Recommendations', icon: Zap, badge: insightsPayload ? `${insightsPayload.recommendations.priorityActions.length}` : undefined },
-    { id: 'chat', label: 'Conversational Auditor', icon: MessageSquare, isChat: true }
+    { id: 'recommendations', label: 'Recommendations', icon: Zap, badge: insightsPayload ? `${insightsPayload.recommendations.priorityActions.length}` : undefined }
   ];
 
   return (
@@ -195,11 +174,11 @@ ${p.recommendations.priorityActions.map((a, i) => (
               <Sparkles className="w-4 h-4" />
             </div>
             <h1 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
-              AI Intelligence & Auditor Hub
+              AI Intelligence & Insights Hub
             </h1>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Data-grounded forensic analysis, deterministic statistical profiles, and multi-turn conversational reasoning.
+            Data-grounded forensic analysis, deterministic statistical profiles, and automated remediation intelligence.
           </p>
         </div>
 
@@ -249,9 +228,7 @@ ${p.recommendations.priorityActions.map((a, i) => (
               onClick={() => setActiveView(item.id as ActiveInsightView)}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shrink-0 transition-all cursor-pointer ${
                 isActive
-                  ? item.isChat
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
+                  ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/80'
               }`}
             >
@@ -312,12 +289,10 @@ ${p.recommendations.priorityActions.map((a, i) => (
             </div>
             <div className="max-w-md mx-auto space-y-1">
               <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                {activeView === 'chat' 
-                  ? 'Upload or select a CSV to start asking questions about your data' 
-                  : 'Upload or select a CSV to generate data insights'}
+                Upload or select a CSV to generate data insights
               </h3>
               <p className="text-xs text-slate-500 leading-relaxed">
-                Connect a dataset to run deterministic profiling, calculate metric distributions, scan for formula injection vulnerabilities, and interact with the AI Conversational Auditor.
+                Connect a dataset to run deterministic profiling, calculate metric distributions, scan for formula injection vulnerabilities, and review recommended remediation steps.
               </p>
             </div>
             {onNavigate && (
@@ -339,7 +314,7 @@ ${p.recommendations.priorityActions.map((a, i) => (
               <ExecutiveSummaryTab 
                 data={insightsPayload.executiveSummary}
                 isDarkMode={isDarkMode}
-                onAskAuditor={handleAskAuditor}
+                onAskAuditor={handleAskAssistant}
               />
             )}
 
@@ -347,7 +322,7 @@ ${p.recommendations.priorityActions.map((a, i) => (
               <DataQualityTab
                 data={insightsPayload.dataQuality}
                 isDarkMode={isDarkMode}
-                onAskAuditor={handleAskAuditor}
+                onAskAuditor={handleAskAssistant}
                 onNavigateClean={onNavigate ? () => onNavigate('clean') : undefined}
               />
             )}
@@ -356,7 +331,7 @@ ${p.recommendations.priorityActions.map((a, i) => (
               <StatisticalTab
                 data={insightsPayload.statisticalInsights}
                 isDarkMode={isDarkMode}
-                onAskAuditor={handleAskAuditor}
+                onAskAuditor={handleAskAssistant}
               />
             )}
 
@@ -364,7 +339,7 @@ ${p.recommendations.priorityActions.map((a, i) => (
               <TrendsPatternsTab
                 data={insightsPayload.trendsPatterns}
                 isDarkMode={isDarkMode}
-                onAskAuditor={handleAskAuditor}
+                onAskAuditor={handleAskAssistant}
               />
             )}
 
@@ -372,7 +347,7 @@ ${p.recommendations.priorityActions.map((a, i) => (
               <AnomaliesTab
                 data={insightsPayload.potentialAnomalies}
                 isDarkMode={isDarkMode}
-                onAskAuditor={handleAskAuditor}
+                onAskAuditor={handleAskAssistant}
               />
             )}
 
@@ -380,36 +355,16 @@ ${p.recommendations.priorityActions.map((a, i) => (
               <RecommendationsTab
                 data={insightsPayload.recommendations}
                 isDarkMode={isDarkMode}
-                onAskAuditor={handleAskAuditor}
+                onAskAuditor={(prompt) => {
+                  handleAskAssistant(prompt);
+                }}
                 onNavigateClean={onNavigate ? () => onNavigate('clean') : undefined}
               />
             )}
-
-            {activeView === 'chat' && (
-              <ConversationalAuditorView
-                activeFile={activeFile}
-                chatMessages={chatMessages}
-                onSendMessage={onSendMessage}
-                isDarkMode={isDarkMode}
-                accentClass={accentClass}
-                onClearChat={onClearChat}
-              />
-            )}
           </>
-        )}
-
-        {/* Active File is null but user selected chat */}
-        {!activeFile && activeView === 'chat' && loadingStage === 'idle' && (
-          <ConversationalAuditorView
-            activeFile={null}
-            chatMessages={chatMessages}
-            onSendMessage={onSendMessage}
-            isDarkMode={isDarkMode}
-            accentClass={accentClass}
-            onClearChat={onClearChat}
-          />
         )}
       </div>
     </div>
   );
 }
+

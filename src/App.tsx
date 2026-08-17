@@ -136,6 +136,9 @@ function safeLazy<T extends React.ComponentType<any>>(
 }
 
 // Import Views (Lazy Loaded for Low-Memory Devices & Mobile Startup Performance)
+import { AssistantProvider, useAssistant } from './context/AssistantContext';
+import { FloatingAssistant } from './components/assistant';
+
 const AuthView = safeLazy(() => import('./components/AuthView'));
 const DashboardHome = safeLazy(() => import('./components/DashboardHome'));
 const UploadCenter = safeLazy(() => import('./components/UploadCenter'));
@@ -504,6 +507,38 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       setConfiguredTimeZone(settings.timezone);
     }
   }, [settings.timezone, setConfiguredTimeZone]);
+
+  // Global Floating AI Assistant Context Synchronization
+  const { setPageContext, setDatasetContext } = useAssistant();
+
+  useEffect(() => {
+    setPageContext({
+      page: activeTab,
+      title: activeTab.charAt(0).toUpperCase() + activeTab.slice(1)
+    });
+  }, [activeTab, setPageContext]);
+
+  useEffect(() => {
+    if (activeFile) {
+      setDatasetContext({
+        fileId: activeFile.id,
+        fileName: activeFile.name,
+        rowCount: activeFile.rows?.length || 0,
+        columnCount: activeFile.headers?.length || (activeFile.rows?.[0] ? Object.keys(activeFile.rows[0]).length : 0),
+        headers: activeFile.headers || (activeFile.rows?.[0] ? Object.keys(activeFile.rows[0]) : []),
+        score: activeFile.score,
+        dataQualitySummary: {
+          missingCount: activeFile.issues?.filter(i => i.type === 'missing_value').length || 0,
+          duplicateCount: activeFile.issues?.filter(i => i.type === 'duplicate').length || 0,
+          formatErrorsCount: activeFile.issues?.filter(i => i.type === 'invalid_format').length || 0,
+          formulaRisksCount: activeFile.issues?.filter(i => i.type === 'formula_injection').length || 0,
+          outliersCount: activeFile.issues?.filter(i => i.type === 'outlier').length || 0
+        }
+      });
+    } else {
+      setDatasetContext(null);
+    }
+  }, [activeFile, setDatasetContext]);
 
   // Load state preferences from cookies if allowed on initial mount
   useEffect(() => {
@@ -3058,15 +3093,12 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                     {activeTab === 'insights' && (
                       <InsightsCenter 
                         activeFile={activeFile}
-                        chatMessages={chatMessages}
-                        onSendMessage={handleSendChatMessage}
                         isDarkMode={isDarkMode}
                         accentClass={accentClass}
                         isOwner={!user || user?.role === 'Owner' || user?.role === 'Admin' || (user?.email?.toLowerCase().trim() === 'nyikulibramwel@gmail.com')}
                         userRole={user?.role || 'Owner'}
                         userEmail={user?.email || ''}
                         onNavigate={handleNavigateTab}
-                        onClearChat={handleClearChat}
                       />
                     )}
 
@@ -3300,6 +3332,13 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
         )}
       </AnimatePresence>
 
+      {/* Global Floating AI Assistant */}
+      <FloatingAssistant
+        isDarkMode={isDarkMode}
+        accentClass={accentClass}
+        onNavigate={handleNavigateTab}
+      />
+
     </motion.div>
   );
 }
@@ -3325,65 +3364,67 @@ export default function App() {
 
   return (
     <GlobalErrorBoundary>
-      <Routes>
-        <Route 
-          path="/" 
-          element={
-            user ? (
-              <Navigate to="/dashboard" replace />
-            ) : (
-              <Suspense fallback={<LoadingSpinner message="Initializing CSV Auditor Pro..." />}>
-                <LandingPage 
-                  onStartTrial={() => navigate('/login')}
-                  isDarkMode={isDarkMode}
-                  toggleTheme={() => setIsDarkMode(!isDarkMode)}
-                  accentClass="bg-blue-600 hover:bg-blue-700"
-                  onSelectPlan={(plan) => {
-                    if (plan === 'pro' || plan === 'enterprise') {
-                      openPaddleCheckout(plan, user?.email || undefined);
-                    } else {
-                      navigate('/login');
-                    }
-                  }}
-                />
+      <AssistantProvider>
+        <Routes>
+          <Route 
+            path="/" 
+            element={
+              user ? (
+                <Navigate to="/dashboard" replace />
+              ) : (
+                <Suspense fallback={<LoadingSpinner message="Initializing CSV Auditor Pro..." />}>
+                  <LandingPage 
+                    onStartTrial={() => navigate('/login')}
+                    isDarkMode={isDarkMode}
+                    toggleTheme={() => setIsDarkMode(!isDarkMode)}
+                    accentClass="bg-blue-600 hover:bg-blue-700"
+                    onSelectPlan={(plan) => {
+                      if (plan === 'pro' || plan === 'enterprise') {
+                        openPaddleCheckout(plan, user?.email || undefined);
+                      } else {
+                        navigate('/login');
+                      }
+                    }}
+                  />
 
-              </Suspense>
-            )
-          } 
-        />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/verify-email" element={<VerifyEmail />} />
-        <Route path="/about-founder" element={<AboutFounderPage />} />
-        <Route path="/founder" element={<AboutFounderPage />} />
+                </Suspense>
+              )
+            } 
+          />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/about-founder" element={<AboutFounderPage />} />
+          <Route path="/founder" element={<AboutFounderPage />} />
 
-        {/* Public Legal & Informational Pages */}
-        <Route path="/privacy" element={<Suspense fallback={<LoadingSpinner message="Loading Privacy Policy..." />}><PrivacyPolicyPage /></Suspense>} />
-        <Route path="/terms" element={<Suspense fallback={<LoadingSpinner message="Loading Terms of Service..." />}><TermsOfServicePage /></Suspense>} />
-        <Route path="/refund-policy" element={<Suspense fallback={<LoadingSpinner message="Loading Refund Policy..." />}><RefundPolicyPage /></Suspense>} />
-        <Route path="/about" element={<Suspense fallback={<LoadingSpinner message="Loading About Us..." />}><AboutPage /></Suspense>} />
-        <Route path="/contact" element={<Suspense fallback={<LoadingSpinner message="Loading Contact Support..." />}><ContactPage /></Suspense>} />
+          {/* Public Legal & Informational Pages */}
+          <Route path="/privacy" element={<Suspense fallback={<LoadingSpinner message="Loading Privacy Policy..." />}><PrivacyPolicyPage /></Suspense>} />
+          <Route path="/terms" element={<Suspense fallback={<LoadingSpinner message="Loading Terms of Service..." />}><TermsOfServicePage /></Suspense>} />
+          <Route path="/refund-policy" element={<Suspense fallback={<LoadingSpinner message="Loading Refund Policy..." />}><RefundPolicyPage /></Suspense>} />
+          <Route path="/about" element={<Suspense fallback={<LoadingSpinner message="Loading About Us..." />}><AboutPage /></Suspense>} />
+          <Route path="/contact" element={<Suspense fallback={<LoadingSpinner message="Loading Contact Support..." />}><ContactPage /></Suspense>} />
 
-        {/* Protected Workspace Routes */}
-        <Route path="/dashboard" element={<ProtectedRoute><WorkspaceContent initialTab="dashboard" /></ProtectedRoute>} />
-        <Route path="/upload" element={<ProtectedRoute><WorkspaceContent initialTab="upload" /></ProtectedRoute>} />
-        <Route path="/schema" element={<ProtectedRoute><WorkspaceContent initialTab="schema" /></ProtectedRoute>} />
-        <Route path="/results" element={<ProtectedRoute><WorkspaceContent initialTab="results" /></ProtectedRoute>} />
-        <Route path="/clean" element={<ProtectedRoute><WorkspaceContent initialTab="clean" /></ProtectedRoute>} />
-        <Route path="/insights" element={<ProtectedRoute><WorkspaceContent initialTab="insights" /></ProtectedRoute>} />
-        <Route path="/gmail" element={<ProtectedRoute><WorkspaceContent initialTab="gmail" /></ProtectedRoute>} />
-        <Route path="/reports" element={<ProtectedRoute><WorkspaceContent initialTab="reports" /></ProtectedRoute>} />
-        <Route path="/history" element={<ProtectedRoute><WorkspaceContent initialTab="history" /></ProtectedRoute>} />
-        <Route path="/team" element={<ProtectedRoute><WorkspaceContent initialTab="team" /></ProtectedRoute>} />
-        <Route path="/settings" element={<ProtectedRoute><WorkspaceContent initialTab="settings" /></ProtectedRoute>} />
-        <Route path="/profile" element={<ProtectedRoute><WorkspaceContent initialTab="settings" /></ProtectedRoute>} />
-        <Route path="/admin" element={<ProtectedRoute><WorkspaceContent initialTab="admin" /></ProtectedRoute>} />
+          {/* Protected Workspace Routes */}
+          <Route path="/dashboard" element={<ProtectedRoute><WorkspaceContent initialTab="dashboard" /></ProtectedRoute>} />
+          <Route path="/upload" element={<ProtectedRoute><WorkspaceContent initialTab="upload" /></ProtectedRoute>} />
+          <Route path="/schema" element={<ProtectedRoute><WorkspaceContent initialTab="schema" /></ProtectedRoute>} />
+          <Route path="/results" element={<ProtectedRoute><WorkspaceContent initialTab="results" /></ProtectedRoute>} />
+          <Route path="/clean" element={<ProtectedRoute><WorkspaceContent initialTab="clean" /></ProtectedRoute>} />
+          <Route path="/insights" element={<ProtectedRoute><WorkspaceContent initialTab="insights" /></ProtectedRoute>} />
+          <Route path="/gmail" element={<ProtectedRoute><WorkspaceContent initialTab="gmail" /></ProtectedRoute>} />
+          <Route path="/reports" element={<ProtectedRoute><WorkspaceContent initialTab="reports" /></ProtectedRoute>} />
+          <Route path="/history" element={<ProtectedRoute><WorkspaceContent initialTab="history" /></ProtectedRoute>} />
+          <Route path="/team" element={<ProtectedRoute><WorkspaceContent initialTab="team" /></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute><WorkspaceContent initialTab="settings" /></ProtectedRoute>} />
+          <Route path="/profile" element={<ProtectedRoute><WorkspaceContent initialTab="settings" /></ProtectedRoute>} />
+          <Route path="/admin" element={<ProtectedRoute><WorkspaceContent initialTab="admin" /></ProtectedRoute>} />
 
-        {/* Branded CSV Auditor Pro 404 Route */}
-        <Route path="/404" element={<BrandedNotFound isDarkMode={isDarkMode} />} />
-        <Route path="*" element={<BrandedNotFound isDarkMode={isDarkMode} />} />
-      </Routes>
+          {/* Branded CSV Auditor Pro 404 Route */}
+          <Route path="/404" element={<BrandedNotFound isDarkMode={isDarkMode} />} />
+          <Route path="*" element={<BrandedNotFound isDarkMode={isDarkMode} />} />
+        </Routes>
+      </AssistantProvider>
     </GlobalErrorBoundary>
   );
 }

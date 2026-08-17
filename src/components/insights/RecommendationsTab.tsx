@@ -207,7 +207,7 @@ export default function RecommendationsTab({
                       onClick={() => onAskAuditor(`How should I implement the remediation plan for: "${action.title}"?`)}
                       className="px-3 py-1 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white transition-colors flex items-center gap-1.5 cursor-pointer"
                     >
-                      Ask Auditor
+                      Ask AI Assistant
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   )}
