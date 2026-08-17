@@ -203,6 +203,18 @@ export class CSVAuditorAIService {
       let grounding: GroundingState = isGeneralQuery ? 'general-ai' : 'data-verified';
       let suggestedFollowUps: string[] = [];
 
+      if (datasetFile) {
+        if (typeof datasetFile.rows === 'string') {
+          try { datasetFile.rows = JSON.parse(datasetFile.rows); } catch {}
+        }
+        if (typeof datasetFile.headers === 'string') {
+          try { datasetFile.headers = JSON.parse(datasetFile.headers); } catch {}
+        }
+        if (typeof datasetFile.issues === 'string') {
+          try { datasetFile.issues = JSON.parse(datasetFile.issues); } catch {}
+        }
+      }
+
       if (datasetFile && Array.isArray(datasetFile.rows) && datasetFile.rows.length > 0) {
         rows = datasetFile.rows;
         headers = Array.isArray(datasetFile.headers) && datasetFile.headers.length > 0
@@ -430,54 +442,82 @@ export class CSVAuditorAIService {
           parts: [{ text: promptPayload }]
         });
 
-        const response = await ai.models.generateContent({
-          model: DEFAULT_GEMINI_MODEL,
-          contents,
-          config: {
-            systemInstruction: CSV_AUDITOR_SYSTEM_INSTRUCTION,
-            temperature: DEFAULT_GENERATION_CONFIG.temperature,
-            topP: DEFAULT_GENERATION_CONFIG.topP,
-            maxOutputTokens: DEFAULT_GENERATION_CONFIG.maxOutputTokens
-          }
-        });
-
-        answerText = (response.text || '').trim();
-
-        // 7. Relevance & Response Validation Middleware
-        const validation = ResponseValidationMiddleware.validate(answerText, groundedContext, userPrompt);
-
-        if (!validation.isValid && validation.repromptInstruction) {
-          console.warn(`[CSV AUDITOR AI] Initial response failed validation (${validation.detectedMismatches.join('; ')}). Attempting controlled regeneration...`);
+        let geminiError: any = null;
+        for (let attempt = 0; attempt < 2; attempt++) {
           try {
-            const repromptContents = [
-              ...contents,
-              { role: 'model', parts: [{ text: answerText }] },
-              { role: 'user', parts: [{ text: validation.repromptInstruction }] }
-            ];
-
-            const regenResponse = await ai.models.generateContent({
+            if (attempt > 0) {
+              await new Promise(r => setTimeout(r, 1200));
+            }
+            const response = await ai.models.generateContent({
               model: DEFAULT_GEMINI_MODEL,
-              contents: repromptContents,
+              contents,
               config: {
                 systemInstruction: CSV_AUDITOR_SYSTEM_INSTRUCTION,
-                temperature: 0.1, // Lower temperature for strict adherence
+                temperature: DEFAULT_GENERATION_CONFIG.temperature,
+                topP: DEFAULT_GENERATION_CONFIG.topP,
                 maxOutputTokens: DEFAULT_GENERATION_CONFIG.maxOutputTokens
               }
             });
 
-            const regenText = (regenResponse.text || '').trim();
-            const secondValidation = ResponseValidationMiddleware.validate(regenText, groundedContext, userPrompt);
+            answerText = (response.text || '').trim();
+            geminiError = null;
+            break;
+          } catch (err: any) {
+            geminiError = err;
+            console.warn(`[CSV AUDITOR AI] Gemini attempt ${attempt + 1} error:`, err?.message || err);
+          }
+        }
 
-            if (secondValidation.isValid && regenText.length > 50) {
-              answerText = regenText;
-            } else if (validation.fallbackContent) {
-              console.warn('[CSV AUDITOR AI] Regeneration was still generic. Using deterministic forensic fallback.');
-              answerText = validation.fallbackContent;
-            }
-          } catch (regenErr) {
-            console.error('[CSV AUDITOR AI] Regeneration error:', regenErr);
-            if (validation.fallbackContent) {
-              answerText = validation.fallbackContent;
+        if (!answerText && geminiError) {
+          console.warn('[CSV AUDITOR AI] Utilizing grounded deterministic engine for response.');
+          answerText = this.generateOfflineFallbackAnswer({
+            userPrompt,
+            isGeneralQuery,
+            datasetProfile,
+            routePlan,
+            executionResults,
+            recommendationContext: request.recommendationContext
+          });
+          grounding = 'data-verified';
+        }
+
+        // 7. Relevance & Response Validation Middleware
+        if (answerText && !geminiError) {
+          const validation = ResponseValidationMiddleware.validate(answerText, groundedContext, userPrompt);
+
+          if (!validation.isValid && validation.repromptInstruction) {
+            console.warn(`[CSV AUDITOR AI] Initial response failed validation (${validation.detectedMismatches.join('; ')}). Attempting controlled regeneration...`);
+            try {
+              const repromptContents = [
+                ...contents,
+                { role: 'model', parts: [{ text: answerText }] },
+                { role: 'user', parts: [{ text: validation.repromptInstruction }] }
+              ];
+
+              const regenResponse = await ai.models.generateContent({
+                model: DEFAULT_GEMINI_MODEL,
+                contents: repromptContents,
+                config: {
+                  systemInstruction: CSV_AUDITOR_SYSTEM_INSTRUCTION,
+                  temperature: 0.1, // Lower temperature for strict adherence
+                  maxOutputTokens: DEFAULT_GENERATION_CONFIG.maxOutputTokens
+                }
+              });
+
+              const regenText = (regenResponse.text || '').trim();
+              const secondValidation = ResponseValidationMiddleware.validate(regenText, groundedContext, userPrompt);
+
+              if (secondValidation.isValid && regenText.length > 50) {
+                answerText = regenText;
+              } else if (validation.fallbackContent) {
+                console.warn('[CSV AUDITOR AI] Regeneration was still generic. Using deterministic forensic fallback.');
+                answerText = validation.fallbackContent;
+              }
+            } catch (regenErr) {
+              console.error('[CSV AUDITOR AI] Regeneration error:', regenErr);
+              if (validation.fallbackContent) {
+                answerText = validation.fallbackContent;
+              }
             }
           }
         }
@@ -723,6 +763,35 @@ export class CSVAuditorAIService {
       return `### Direct Answer\n${rem.recommendedAction}\n\n### Why (Rationale & Domain Context)\n${rem.rationale}\n\n### Implementation Steps\n\`\`\`python\n${rem.implementationStrategies?.pythonCodeSnippet || '# Imputation script'}\n\`\`\`\n\n### Validation\n${rem.validationCheck}`;
     }
 
+    if (routePlan?.intent === 'data_quality' || userPrompt.toLowerCase().includes('quality') || userPrompt.toLowerCase().includes('issue') || userPrompt.toLowerCase().includes('problem')) {
+      const issues: string[] = [];
+      const colProfiles: ColumnProfile[] = Object.values(datasetProfile.columnProfiles || {});
+      const missingCols = colProfiles.filter((c: ColumnProfile) => c.missingCount > 0).sort((a, b) => b.missingCount - a.missingCount);
+      
+      if (missingCols.length > 0) {
+        const topMissing = missingCols[0];
+        issues.push(`1. **Missing Values**: Column \`${topMissing.name}\` contains **${topMissing.missingCount.toLocaleString()} missing cells** (${topMissing.missingPercentage}% of rows). Total missing across dataset: **${datasetProfile.totalMissingCells.toLocaleString()} cells**.`);
+      }
+      if (datasetProfile.duplicateRowCount > 0) {
+        issues.push(`2. **Duplicate Records**: Identified **${datasetProfile.duplicateRowCount.toLocaleString()} duplicate rows** (${datasetProfile.duplicateRowPercentage}% of total dataset).`);
+      }
+      if (datasetProfile.formulaInjectionCount > 0) {
+        issues.push(`3. **Formula Injection Security Hazard**: Found **${datasetProfile.formulaInjectionCount} cell(s)** beginning with formula characters (\`=\`, \`+\`, \`-\`, \`@\`) that pose dynamic execution hazards in spreadsheets.`);
+      }
+      if (datasetProfile.formatErrorCount > 0) {
+        issues.push(`4. **Format Violations**: Identified **${datasetProfile.formatErrorCount.toLocaleString()} format inconsistencies** across typed columns.`);
+      }
+      if (datasetProfile.outlierCount > 0) {
+        issues.push(`5. **Statistical Anomalies / Outliers**: Detected **${datasetProfile.outlierCount.toLocaleString()} extreme numeric values** exceeding 3 standard deviations from the mean.`);
+      }
+
+      if (issues.length === 0) {
+        return `### Data Quality Assessment for "${datasetProfile.fileName}"\n\nNo critical data quality issues were detected. The dataset has an overall quality score of **${datasetProfile.qualityScore}/100** with 0 missing cells and 0 duplicate rows across ${datasetProfile.rowCount.toLocaleString()} records.`;
+      }
+
+      return `### Data Quality Audit for "${datasetProfile.fileName}"\n\nThe dataset currently has an overall data quality score of **${datasetProfile.qualityScore}/100** across **${datasetProfile.rowCount.toLocaleString()} rows** and **${datasetProfile.columnCount} columns**.\n\n### Primary Data Quality Issues\n${issues.join('\n\n')}\n\n### Recommended Remediation Actions\n- **Impute or Filter Nulls**: Address missing values in \`${missingCols[0]?.name || 'impacted columns'}\` via domain-appropriate fallback or removal.\n- **Deduplication**: Remove duplicate records to maintain primary key integrity.\n- **Formula Sanitization**: Strip or escape leading formula operators to safeguard spreadsheet viewing.`;
+    }
+
     if (routePlan?.intent === 'missing_values') {
       const colProfiles: ColumnProfile[] = Object.values(datasetProfile.columnProfiles || {});
       const missingCols = colProfiles
@@ -735,6 +804,10 @@ export class CSVAuditorAIService {
 
       const top = missingCols[0];
       return `The column with the highest number of missing values is **${top.name}** with **${top.missingCount.toLocaleString()} missing cells** (${top.missingPercentage}% of all rows). Across the entire dataset, there are ${datasetProfile.totalMissingCells.toLocaleString()} total missing cells.`;
+    }
+
+    if (routePlan?.intent === 'duplicate_analysis') {
+      return `### Duplicate Analysis for "${datasetProfile.fileName}"\n\n- **Duplicate Rows**: ${datasetProfile.duplicateRowCount.toLocaleString()} (${datasetProfile.duplicateRowPercentage}% of total)\n- **Unique Rows**: ${(datasetProfile.rowCount - datasetProfile.duplicateRowCount).toLocaleString()}\n\nUse the Clean Data tab to deduplicate these records.`;
     }
 
     return `The dataset **"${datasetProfile.fileName}"** contains **${datasetProfile.rowCount.toLocaleString()} rows** and **${datasetProfile.columnCount} columns** with an overall data quality score of **${datasetProfile.qualityScore}/100**.`;

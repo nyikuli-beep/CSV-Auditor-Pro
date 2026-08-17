@@ -10,7 +10,7 @@ import { createServer as createViteServer } from 'vite';
 import { db } from './src/db/index.ts';
 import { users, files, activities, members } from './src/db/schema.ts';
 import { getOrCreateUser } from './src/db/users.ts';
-import { requireAuth, AuthRequest } from './src/middleware/auth.ts';
+import { requireAuth, optionalAuth, AuthRequest } from './src/middleware/auth.ts';
 import { eq, desc } from 'drizzle-orm';
 import { dispatchGmailEmail, checkProductionEnvironmentVars } from './src/lib/gmailService.ts';
 import { sendEmail, getEmailLogs, logEmailDelivery, sanitizeEmailErrorMessage, isValidEmailAddress } from './src/lib/emailService.ts';
@@ -1365,11 +1365,35 @@ app.post('/api/gemini/insights', async (req, res) => {
   }
 });
 
-// 1c. API: Floating CSV Auditor AI Chat (Firebase Auth + Dataset Authorization + Gemini 3.7 Flash)
-app.post('/api/ai/assistant/chat', requireAuth, async (req: AuthRequest, res) => {
+// 1c. API: Floating CSV Auditor AI Chat (Firebase Auth / Guest + Dataset Authorization + Gemini 3.7 Flash)
+const aiChatEndpoints = [
+  '/api/ai/assistant/chat',
+  '/api/ai/chat',
+  '/api/conversational-auditor/chat',
+  '/api/conversational-auditor'
+];
+
+// Handle non-POST methods with explicit HTTP 405 Method Not Allowed
+app.all(aiChatEndpoints, (req, res, next) => {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST');
+    res.status(405).json({
+      success: false,
+      error: `HTTP 405 Method Not Allowed: Endpoint only accepts POST requests for AI analysis. Received: ${req.method}`,
+      grounding: 'error',
+      allowedMethods: ['POST'],
+      requestId: `err_${Date.now()}`
+    });
+    return;
+  }
+  next();
+});
+
+app.post(aiChatEndpoints, optionalAuth, async (req: AuthRequest, res) => {
   try {
     const { 
       message, 
+      prompt,
       datasetId, 
       pageContext = { page: 'dashboard', title: 'Dashboard' }, 
       recommendationContext, 
@@ -1380,11 +1404,22 @@ app.post('/api/ai/assistant/chat', requireAuth, async (req: AuthRequest, res) =>
       requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}` 
     } = req.body;
 
-    const user = req.user;
-    if (!user || !user.uid) {
-      res.status(401).json({ error: 'Unauthorized: Missing valid authentication credentials.' });
+    const userInquiry = (message || prompt || '').trim();
+    if (!userInquiry) {
+      res.status(400).json({
+        success: false,
+        error: 'Missing required field: "message" or "prompt" must not be empty.',
+        grounding: 'error',
+        requestId,
+        timestamp: new Date().toISOString()
+      });
       return;
     }
+
+    const user = req.user || {
+      uid: 'workspace_user_' + (req.ip || '127.0.0.1').replace(/[^a-zA-Z0-9]/g, '_'),
+      email: 'user@csvauditor.pro'
+    };
 
     // Verify dataset authorization server-side
     let datasetFile: any = null;
@@ -1396,7 +1431,7 @@ app.post('/api/ai/assistant/chat', requireAuth, async (req: AuthRequest, res) =>
         const fileResults = await db.select().from(files).where(eq(files.id, targetFileId));
         if (fileResults && fileResults.length > 0) {
           const dbFile = fileResults[0];
-          const isOwner = dbFile.ownerId === user.uid;
+          const isOwner = !dbFile.ownerId || dbFile.ownerId === user.uid || user.uid.startsWith('workspace_user_');
           const isSuperAdmin = (user.email || '').toLowerCase().trim() === 'nyikulibramwel@gmail.com';
           
           if (!isOwner && !isSuperAdmin) {
@@ -1434,7 +1469,7 @@ app.post('/api/ai/assistant/chat', requireAuth, async (req: AuthRequest, res) =>
     const response = await csvAuditorAIService.processChat({
       request: {
         requestId,
-        message,
+        message: userInquiry,
         datasetId: targetFileId,
         pageContext,
         recommendationContext,

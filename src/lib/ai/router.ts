@@ -310,7 +310,10 @@ export class AnalysisRouter {
     if (
       text.includes('quality') || text.includes('clean') || text.includes('error') ||
       text.includes('health') || text.includes('injection') || text.includes('audit this') ||
-      text.includes('data hygiene') || text.includes('validation rule')
+      text.includes('data hygiene') || text.includes('validation rule') ||
+      text.includes('issue') || text.includes('problem') || text.includes('defect') ||
+      text.includes('finding') || text.includes('violation') || text.includes('anomaly') ||
+      text.includes('data-quality')
     ) {
       return {
         intent: 'data_quality',
@@ -320,7 +323,7 @@ export class AnalysisRouter {
         metricColumns,
         requiresExecution: true,
         confidence: 0.95,
-        reasoning: 'User asked about overall dataset quality score, errors, or hygiene audit.'
+        reasoning: 'User asked about overall dataset quality score, errors, issues, or hygiene audit.'
       };
     }
 

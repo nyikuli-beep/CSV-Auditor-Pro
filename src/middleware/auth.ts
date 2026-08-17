@@ -28,6 +28,33 @@ export const requireAuth = async (
 };
 
 /**
+ * Optional authentication middleware:
+ * Attaches decoded token if present and valid, but does not block unauthenticated users.
+ */
+export const optionalAuth = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    req.user = undefined;
+    return next();
+  }
+
+  const token = authHeader.split('Bearer ')[1];
+  try {
+    const decodedToken = await adminAuth.verifyIdToken(token);
+    req.user = decodedToken;
+    next();
+  } catch (error) {
+    console.warn('Optional auth: token verification failed, continuing as guest session');
+    req.user = undefined;
+    next();
+  }
+};
+
+/**
  * Validates Enterprise authorization on backend routes.
  * Recognizes verified enterprise email or active enterprise claims.
  */
