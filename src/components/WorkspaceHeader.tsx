@@ -22,8 +22,10 @@ import {
   CheckCircle2,
   SlidersHorizontal,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  Sparkles
 } from 'lucide-react';
+import { useAssistant } from '../context/AssistantContext';
 import { SlotRequest } from '../types';
 
 interface WorkspaceHeaderProps {
@@ -69,6 +71,7 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
 
   const { timeData } = useTime();
+  const { isOpen: isAssistantOpen, toggleAssistant, datasetContext } = useAssistant();
   const displayClock = timeData.timeString || currentTime;
 
   const notificationsRef = useRef<HTMLDivElement>(null);
@@ -194,6 +197,27 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
         >
           <Compass className="w-4 h-4 text-emerald-500" />
           <span className="hidden lg:inline">Tour</span>
+        </button>
+
+        {/* CSV Auditor AI Assistant Trigger Button */}
+        <button
+          id="btn-header-assistant-toggle"
+          onClick={toggleAssistant}
+          aria-label="CSV Auditor AI Assistant (Alt + J)"
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border cursor-pointer font-bold text-xs transition-all ${
+            isAssistantOpen
+              ? 'bg-blue-600 border-blue-500 text-white shadow-sm'
+              : isDarkMode 
+                ? 'bg-blue-950/40 border-blue-800/60 text-blue-300 hover:text-white hover:bg-blue-900/60' 
+                : 'bg-blue-50 border-blue-200 text-blue-700 hover:text-blue-950 hover:bg-blue-100'
+          }`}
+          title="Open CSV Auditor AI (Alt + J)"
+        >
+          <Sparkles className={`w-4 h-4 ${isAssistantOpen ? 'text-white' : 'text-blue-500'}`} />
+          <span className="hidden sm:inline">Ask AI</span>
+          {datasetContext && (
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+          )}
         </button>
 
         {/* Desktop & Tablet: Keyboard Shortcuts Button */}

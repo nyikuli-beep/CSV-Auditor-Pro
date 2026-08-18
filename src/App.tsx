@@ -509,7 +509,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   }, [settings.timezone, setConfiguredTimeZone]);
 
   // Global Floating AI Assistant Context Synchronization
-  const { setPageContext, setDatasetContext } = useAssistant();
+  const { setPageContext, setDatasetContext, toggleAssistant, isOpen: isAssistantOpen } = useAssistant();
 
   useEffect(() => {
     setPageContext({
@@ -642,6 +642,10 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
           e.preventDefault();
           setActiveTab('team');
           triggerShortcutToast('Team Tenancy', 'Alt + T');
+        } else if (key === 'j') {
+          e.preventDefault();
+          toggleAssistant();
+          triggerShortcutToast(isAssistantOpen ? 'Closed CSV Auditor AI' : 'Opened CSV Auditor AI', 'Alt + J');
         } else if (key === 'a') {
           e.preventDefault();
           if (user?.role === 'Admin' || user?.role === 'Owner') {
