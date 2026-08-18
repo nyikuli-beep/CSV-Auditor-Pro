@@ -1,6 +1,6 @@
 /**
- * CSV Auditor Pro - Frontend Assistant Client (Phase 2)
- * Secure communication layer between Floating Assistant UI and backend Firebase + Gemini service.
+ * CSV Auditor Pro - Authoritative Frontend Assistant Client
+ * Communicates exclusively with the authoritative POST /api/chat endpoint.
  */
 
 import { auth } from '../firebase';
@@ -8,7 +8,7 @@ import { CSVAuditorAIRequest, CSVAuditorAIResponse } from '../types/assistant';
 
 export class AssistantClient {
   /**
-   * Sends a user query along with verified workspace and dataset context to the secure backend.
+   * Sends a user query along with verified workspace and dataset context to the secure /api/chat backend.
    */
   public static async sendChat(request: CSVAuditorAIRequest, activeFileContext?: any): Promise<CSVAuditorAIResponse> {
     const requestId = request.requestId || `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -26,20 +26,38 @@ export class AssistantClient {
         headers['Authorization'] = `Bearer ${idToken}`;
       }
 
+      // Build authoritative CSV and file context
+      const fileName = activeFileContext?.name || request.analysisContext?.fileName || 'dataset.csv';
+      const rowCount = activeFileContext?.rows ? activeFileContext.rows.length : (request.analysisContext?.rowCount || 0);
+      const auditFindings = activeFileContext?.issues || [];
+      const score = activeFileContext?.score ?? request.analysisContext?.score;
+      const headersList = activeFileContext?.headers || (activeFileContext?.rows && activeFileContext.rows.length > 0 ? Object.keys(activeFileContext.rows[0]) : []);
+
       const payload = {
-        ...request,
+        message: request.message,
         requestId,
+        csvContext: {
+          fileName,
+          rowCount,
+          headers: headersList,
+          score,
+          auditFindings
+        },
         fileContext: activeFileContext ? {
           id: activeFileContext.id || request.datasetId,
-          name: activeFileContext.name || request.analysisContext?.fileName,
-          rows: activeFileContext.rows,
-          headers: activeFileContext.headers,
-          score: activeFileContext.score,
-          issues: activeFileContext.issues
-        } : undefined
+          name: fileName,
+          rows: activeFileContext.rows ? activeFileContext.rows.slice(0, 100) : [],
+          headers: headersList,
+          score,
+          issues: auditFindings
+        } : undefined,
+        pageContext: request.pageContext,
+        recommendationContext: request.recommendationContext,
+        conversationHistory: request.conversationHistory,
+        analysisContext: request.analysisContext
       };
 
-      const response = await fetch('/api/ai/assistant/chat', {
+      const response = await fetch('/api/chat', {
         method: 'POST',
         headers,
         body: JSON.stringify(payload)
@@ -47,29 +65,35 @@ export class AssistantClient {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.error || errorData.answer || `Server responded with status ${response.status}`;
+        const rawErrMsg = typeof errorData.error === 'object' 
+          ? errorData.error?.message 
+          : (errorData.error || errorData.answer || errorData.message || `HTTP ${response.status}`);
+        
+        console.warn(`[AssistantClient] Server error ${response.status}:`, rawErrMsg);
 
         return {
           success: false,
-          answer: `I was unable to complete your audit request: ${errorMessage}`,
+          answer: typeof errorData.answer === 'string' && errorData.answer.trim()
+            ? errorData.answer
+            : `The CSV Auditor AI could not complete this request at this time (${response.status}). Please verify the dataset and try again.`,
           grounding: 'error',
           requestId,
           timestamp: new Date().toISOString(),
-          error: errorMessage
+          error: rawErrMsg
         };
       }
 
       const data: CSVAuditorAIResponse = await response.json();
       return data;
     } catch (err: any) {
-      console.error('[AssistantClient Error]:', err);
+      console.error('[AssistantClient Error]:', err?.message || err);
       return {
         success: false,
-        answer: 'A network error occurred while communicating with the audit service. Please try again.',
+        answer: 'A network communication error occurred while contacting the CSV Auditor AI service. Please check your network connection.',
         grounding: 'error',
         requestId,
         timestamp: new Date().toISOString(),
-        error: err.message || 'Network request failed'
+        error: err?.message || 'Network request failed'
       };
     }
   }

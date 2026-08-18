@@ -131,7 +131,7 @@ export class CSVAuditorAIService {
         apiKey: process.env.GEMINI_API_KEY,
         httpOptions: {
           headers: {
-            'User-Agent': 'csv-auditor-pro-enterprise'
+            'User-Agent': 'aistudio-build'
           }
         }
       });
@@ -443,13 +443,12 @@ export class CSVAuditorAIService {
         });
 
         let geminiError: any = null;
-        for (let attempt = 0; attempt < 2; attempt++) {
+        const candidateModels = ['gemini-3.1-flash-lite', DEFAULT_GEMINI_MODEL, 'gemini-flash-latest'];
+        
+        for (const candidateModel of candidateModels) {
           try {
-            if (attempt > 0) {
-              await new Promise(r => setTimeout(r, 1200));
-            }
             const response = await ai.models.generateContent({
-              model: DEFAULT_GEMINI_MODEL,
+              model: candidateModel,
               contents,
               config: {
                 systemInstruction: CSV_AUDITOR_SYSTEM_INSTRUCTION,
@@ -459,12 +458,14 @@ export class CSVAuditorAIService {
               }
             });
 
-            answerText = (response.text || '').trim();
-            geminiError = null;
-            break;
+            answerText = (response.text || response.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+            if (answerText) {
+              geminiError = null;
+              break;
+            }
           } catch (err: any) {
             geminiError = err;
-            console.warn(`[CSV AUDITOR AI] Gemini attempt ${attempt + 1} error:`, err?.message || err);
+            console.warn(`[CSV AUDITOR AI] Gemini model ${candidateModel} error:`, err?.message || err);
           }
         }
 
@@ -474,6 +475,7 @@ export class CSVAuditorAIService {
             userPrompt,
             isGeneralQuery,
             datasetProfile,
+            datasetFile,
             routePlan,
             executionResults,
             recommendationContext: request.recommendationContext
@@ -494,17 +496,24 @@ export class CSVAuditorAIService {
                 { role: 'user', parts: [{ text: validation.repromptInstruction }] }
               ];
 
-              const regenResponse = await ai.models.generateContent({
-                model: DEFAULT_GEMINI_MODEL,
-                contents: repromptContents,
-                config: {
-                  systemInstruction: CSV_AUDITOR_SYSTEM_INSTRUCTION,
-                  temperature: 0.1, // Lower temperature for strict adherence
-                  maxOutputTokens: DEFAULT_GENERATION_CONFIG.maxOutputTokens
+              let regenText = '';
+              for (const m of candidateModels) {
+                try {
+                  const regenResponse = await ai.models.generateContent({
+                    model: m,
+                    contents: repromptContents,
+                    config: {
+                      systemInstruction: CSV_AUDITOR_SYSTEM_INSTRUCTION,
+                      temperature: 0.1,
+                      maxOutputTokens: DEFAULT_GENERATION_CONFIG.maxOutputTokens
+                    }
+                  });
+                  regenText = (regenResponse.text || regenResponse.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+                  if (regenText) break;
+                } catch (e) {
+                  // try next model
                 }
-              });
-
-              const regenText = (regenResponse.text || '').trim();
+              }
               const secondValidation = ResponseValidationMiddleware.validate(regenText, groundedContext, userPrompt);
 
               if (secondValidation.isValid && regenText.length > 50) {
@@ -579,6 +588,13 @@ export class CSVAuditorAIService {
       'explain normalization',
       'what is an outlier',
       'what is an anomaly',
+      'what does duplicate data mean',
+      'what is duplicate data',
+      'what are duplicate records',
+      'explain duplicate',
+      'what is formula injection',
+      'explain formula injection',
+      'what is csv injection',
       'explain referential integrity',
       'what is referential integrity',
       'what is first normal form',
@@ -592,7 +608,9 @@ export class CSVAuditorAIService {
       'what is iqr',
       'explain interquartile range',
       'what is pearson correlation',
-      'difference between mean and median'
+      'difference between mean and median',
+      'what is data cleaning',
+      'what is data quality'
     ];
 
     if (generalKeywords.some(kw => text.includes(kw))) {
@@ -600,12 +618,12 @@ export class CSVAuditorAIService {
     }
 
     if (
-      (text.startsWith('what is ') || text.startsWith('explain ') || text.startsWith('define ')) &&
+      (text.startsWith('what is ') || text.startsWith('what does ') || text.startsWith('explain ') || text.startsWith('define ') || text.startsWith('tell me about ')) &&
       !text.includes('this dataset') &&
       !text.includes('this file') &&
       !text.includes('my data') &&
       !text.includes('in column') &&
-      !text.includes('remediation')
+      !text.includes('in my file')
     ) {
       return true;
     }
@@ -653,20 +671,37 @@ export class CSVAuditorAIService {
       p += `ACTIVE WORKSPACE PAGE: "${pageContext.page}" (${pageContext.title || pageContext.page})\n`;
     }
 
-    if (!datasetFile || !datasetProfile) {
+    if (!datasetFile && !datasetProfile) {
       p += `DATASET STATUS: No active dataset loaded in workspace.\n`;
       p += `INSTRUCTION: If the user asks about dataset facts, inform them that no CSV is currently active, and provide general advice on what to upload.\n`;
       return p;
     }
 
     // Include factual summary of dataset
+    const fileName = datasetFile?.name || 'dataset.csv';
+    const rowCount = datasetProfile?.rowCount ?? (Array.isArray(datasetFile?.rows) ? datasetFile.rows.length : (datasetFile?.rowCount || 'N/A'));
+    const headersList = datasetProfile?.headers ?? datasetFile?.headers ?? [];
+    const qualityScore = datasetProfile?.qualityScore ?? datasetFile?.score ?? 'N/A';
+    const duplicateRows = datasetProfile?.duplicateRowCount ?? 0;
+    const missingCells = datasetProfile?.totalMissingCells ?? 0;
+
     p += `DATASET METADATA (VERIFIED FACTS):\n`;
-    p += `- File Name: "${datasetFile.name}"\n`;
-    p += `- Total Rows: ${datasetProfile.rowCount.toLocaleString()}\n`;
-    p += `- Total Columns: ${datasetProfile.columnCount} [${datasetProfile.headers.join(', ')}]\n`;
-    p += `- Data Quality Score: ${datasetProfile.qualityScore}/100\n`;
-    p += `- Duplicate Rows: ${datasetProfile.duplicateRowCount.toLocaleString()} (${datasetProfile.duplicateRowPercentage}%)\n`;
-    p += `- Total Missing Cells: ${datasetProfile.totalMissingCells.toLocaleString()} (${datasetProfile.overallMissingPercentage}%)\n\n`;
+    p += `- File Name: "${fileName}"\n`;
+    p += `- Total Rows: ${typeof rowCount === 'number' ? rowCount.toLocaleString() : rowCount}\n`;
+    p += `- Total Columns: ${headersList.length} [${headersList.join(', ')}]\n`;
+    p += `- Data Quality Score: ${qualityScore}/100\n`;
+    if (datasetProfile) {
+      p += `- Duplicate Rows: ${duplicateRows.toLocaleString()} (${datasetProfile.duplicateRowPercentage}%)\n`;
+      p += `- Total Missing Cells: ${missingCells.toLocaleString()} (${datasetProfile.overallMissingPercentage}%)\n\n`;
+    }
+
+    if (Array.isArray(datasetFile?.issues) && datasetFile.issues.length > 0) {
+      p += `AUDIT FINDINGS & DETECTED ISSUES (${datasetFile.issues.length} detected):\n`;
+      datasetFile.issues.forEach((iss: any, idx: number) => {
+        p += `${idx + 1}. [${iss.severity || 'Medium'}] ${iss.type || iss.title || 'Issue'} on column "${iss.column || 'General'}": ${iss.description || iss.message || ''} (${iss.count || iss.affectedCount || 0} affected rows)\n`;
+      });
+      p += `\n`;
+    }
 
     // Stale Analysis Alert
     if (staleStateDetected && staleStateExplanation) {
@@ -748,14 +783,29 @@ export class CSVAuditorAIService {
    * Offline / Fallback generator if Gemini is temporarily unavailable
    */
   private generateOfflineFallbackAnswer(params: any): string {
-    const { userPrompt, isGeneralQuery, datasetProfile, routePlan, executionResults } = params;
+    const { userPrompt, isGeneralQuery, datasetProfile, datasetFile, routePlan, executionResults } = params;
 
     if (isGeneralQuery) {
-      return `### General Data Engineering Guidance\n\nFor conceptual questions regarding data modeling, normalization, or anomaly detection, standard database and statistical principles apply. Data normalization is the systematic structuring of database tables to minimize redundancy and dependency (e.g. 1NF, 2NF, 3NF).`;
+      return `### General Data Engineering Guidance\n\nFor conceptual questions regarding data modeling, normalization, or anomaly detection, standard database and statistical principles apply. Data normalization is the systematic structuring of database tables to minimize redundancy and dependency (e.g. 1NF, 2NF, 3NF). Duplicate data refers to identical or near-identical records within a dataset that can skew analytics and reporting.`;
     }
 
-    if (!datasetProfile) {
+    if (!datasetProfile && (!datasetFile || (!datasetFile.issues && !datasetFile.headers))) {
       return `No active CSV dataset is currently selected. Please upload or open a dataset from the Upload Center to inspect row counts, data quality findings, and anomalies.`;
+    }
+
+    const fileName = datasetProfile?.fileName || datasetFile?.name || 'dataset.csv';
+    const score = datasetProfile?.qualityScore ?? datasetFile?.score ?? 85;
+
+    if (routePlan?.intent === 'remediation' && executionResults?.remediationEvidence) {
+      const rem = executionResults.remediationEvidence;
+      return `### Direct Answer\n${rem.recommendedAction}\n\n### Why (Rationale & Domain Context)\n${rem.rationale}\n\n### Implementation Steps\n\`\`\`python\n${rem.implementationStrategies?.pythonCodeSnippet || '# Imputation script'}\n\`\`\`\n\n### Validation\n${rem.validationCheck}`;
+    }
+
+    if (Array.isArray(datasetFile?.issues) && datasetFile.issues.length > 0) {
+      const issueLines = datasetFile.issues.map((iss: any, idx: number) => {
+        return `${idx + 1}. **${iss.type || iss.title || 'Quality Issue'}** on column \`${iss.column || 'General'}\`: ${iss.description || iss.message || ''} (${iss.count || iss.affectedCount || 0} affected rows, ${iss.severity || 'Medium'} severity).`;
+      });
+      return `### Data Quality Assessment for "${fileName}"\n\nThe dataset currently has an overall data quality score of **${score}/100**.\n\n### Detected Quality Findings\n${issueLines.join('\n\n')}\n\n### Recommended Remediation Actions\n- Standardize missing or inconsistent entries in the flagged columns.\n- Apply data cleaning rules in the Clean tab or export a Python cleaning script.`;
     }
 
     if (routePlan?.intent === 'remediation' && executionResults?.remediationEvidence) {
