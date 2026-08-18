@@ -1365,6 +1365,85 @@ app.post('/api/gemini/insights', async (req, res) => {
   }
 });
 
+// Diagnostic Endpoint: POST /api/ai-test (Step 5 & 6)
+const aiTestEndpoints = ['/api/ai-test', '/api/ai-test/'];
+
+app.all(aiTestEndpoints, (req, res, next) => {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST');
+    res.status(405).json({
+      success: false,
+      error: `HTTP 405 Method Not Allowed: Endpoint only accepts POST requests. Received: ${req.method}`,
+      allowedMethods: ['POST']
+    });
+    return;
+  }
+  next();
+});
+
+app.post(aiTestEndpoints, async (req, res) => {
+  const requestId = `test_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const model = 'gemini-3.7-flash';
+  console.log(`[AI Test Diagnostic] [${requestId}] Route: /api/ai-test, Method: POST, Target Model: ${model}`);
+
+  try {
+    const { message } = req.body || {};
+    if (!message || typeof message !== 'string' || !message.trim()) {
+      res.status(400).json({
+        success: false,
+        error: 'Missing required field: "message" must be a non-empty string.',
+        requestId
+      });
+      return;
+    }
+
+    const ai = getGeminiClient();
+    if (!ai) {
+      console.error(`[AI Test Diagnostic] [${requestId}] GEMINI_API_KEY environment variable is not configured.`);
+      res.status(503).json({
+        success: false,
+        error: 'GEMINI_API_KEY environment variable is not configured.',
+        requestId,
+        model
+      });
+      return;
+    }
+
+    const response = await ai.models.generateContent({
+      model,
+      contents: [{ role: 'user', parts: [{ text: message.trim() }] }],
+      config: {
+        temperature: 0.1,
+        maxOutputTokens: 200
+      }
+    });
+
+    const reply = (response.text || '').trim();
+    console.log(`[AI Test Diagnostic] [${requestId}] Upstream Gemini call succeeded for model: ${model}`);
+
+    res.json({
+      success: true,
+      answer: reply,
+      model,
+      requestId,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err: any) {
+    const upstreamStatus = err?.status || err?.code || 500;
+    const sanitizedError = err?.message || 'Upstream Gemini communication failed.';
+    console.error(`[AI Test Diagnostic] [${requestId}] Upstream error (${upstreamStatus}):`, sanitizedError);
+
+    res.status(typeof upstreamStatus === 'number' && upstreamStatus >= 400 && upstreamStatus < 600 ? upstreamStatus : 500).json({
+      success: false,
+      error: sanitizedError,
+      upstreamStatus,
+      model,
+      requestId,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // 1c. API: Floating CSV Auditor AI Chat (Firebase Auth / Guest + Dataset Authorization + Gemini 3.7 Flash)
 const aiChatEndpoints = [
   '/api/ai/assistant/chat',
