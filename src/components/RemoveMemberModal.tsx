@@ -10,6 +10,8 @@ interface RemoveMemberModalProps {
   member: OrganizationMember | null;
   actorUid: string;
   actorRole: OrganizationRole;
+  actorEmail?: string;
+  actorName?: string;
   isDarkMode: boolean;
   onMemberRemoved: (memberUid: string) => void;
 }
@@ -21,6 +23,8 @@ export default function RemoveMemberModal({
   member,
   actorUid,
   actorRole,
+  actorEmail,
+  actorName,
   isDarkMode,
   onMemberRemoved
 }: RemoveMemberModalProps) {
@@ -39,7 +43,11 @@ export default function RemoveMemberModal({
         memberUid: member.uid,
         memberRole: member.role,
         actorUid,
-        actorRole
+        actorRole,
+        actorEmail,
+        actorName,
+        memberEmail: member.email,
+        memberName: member.displayName
       });
 
       if (res.success) {

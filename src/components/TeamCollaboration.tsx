@@ -279,24 +279,26 @@ export default function TeamCollaboration({
       });
     }
 
-    // Merge members passed from parent workspace if any are missing
-    members.forEach((legacyMember) => {
-      const email = (legacyMember.email || '').toLowerCase().trim();
-      if (!list.some(m => m.email.toLowerCase() === email)) {
-        const mappedRole: OrganizationRole = legacyMember.role === 'Owner' ? 'Owner' : legacyMember.role === 'Admin' ? 'Admin' : 'Member';
-        list.push({
-          uid: legacyMember.id || `usr-${email.replace(/[^a-zA-Z0-9]/g, '_')}`,
-          organizationId: DEFAULT_ORG_ID,
-          email: legacyMember.email,
-          displayName: legacyMember.name,
-          role: mappedRole,
-          status: legacyMember.status === 'denied' || legacyMember.accessDenied ? 'suspended' : 'active',
-          joinedAt: new Date().toISOString(),
-          lastActive: 'Session active',
-          avatar: legacyMember.avatar
-        });
-      }
-    });
+    // Only populate from legacy fallback if Firestore orgMembers is completely uninitialized
+    if (orgMembers.length === 0) {
+      members.forEach((legacyMember) => {
+        const email = (legacyMember.email || '').toLowerCase().trim();
+        if (!list.some(m => m.email.toLowerCase() === email)) {
+          const mappedRole: OrganizationRole = legacyMember.role === 'Owner' ? 'Owner' : legacyMember.role === 'Admin' ? 'Admin' : 'Member';
+          list.push({
+            uid: legacyMember.id || `usr-${email.replace(/[^a-zA-Z0-9]/g, '_')}`,
+            organizationId: DEFAULT_ORG_ID,
+            email: legacyMember.email,
+            displayName: legacyMember.name,
+            role: mappedRole,
+            status: legacyMember.status === 'denied' || legacyMember.accessDenied ? 'suspended' : 'active',
+            joinedAt: new Date().toISOString(),
+            lastActive: 'Session active',
+            avatar: legacyMember.avatar
+          });
+        }
+      });
+    }
 
     return list;
   }, [orgMembers, organization, members]);
@@ -421,11 +423,19 @@ export default function TeamCollaboration({
     }
 
     setActionLoadingUid(invitation.id);
-    const res = await resendOrganizationInvitation(DEFAULT_ORG_ID, invitation.id, currentRole);
+    const res = await resendOrganizationInvitation(
+      DEFAULT_ORG_ID, 
+      invitation.id, 
+      currentRole,
+      user?.uid || 'usr-actor',
+      effectiveEmail,
+      user?.displayName || effectiveEmail.split('@')[0]
+    );
     setActionLoadingUid(null);
 
     if (res.success) {
       showToast('success', `Renewed invitation for ${invitation.email} for 7 days.`);
+      setOrgInvitations(prev => prev.map(inv => inv.id === invitation.id ? { ...inv, status: 'pending', expiresAt: new Date(Date.now() + 7 * 86400000).toISOString() } : inv));
     } else {
       showToast('error', res.error || 'Failed to resend invitation.');
     }
@@ -439,11 +449,19 @@ export default function TeamCollaboration({
     }
 
     setActionLoadingUid(invitation.id);
-    const res = await cancelOrganizationInvitation(DEFAULT_ORG_ID, invitation.id, currentRole);
+    const res = await cancelOrganizationInvitation(
+      DEFAULT_ORG_ID, 
+      invitation.id, 
+      currentRole,
+      user?.uid || 'usr-actor',
+      effectiveEmail,
+      user?.displayName || effectiveEmail.split('@')[0]
+    );
     setActionLoadingUid(null);
 
     if (res.success) {
       showToast('success', `Cancelled invitation for ${invitation.email}.`);
+      setOrgInvitations(prev => prev.map(inv => inv.id === invitation.id ? { ...inv, status: 'cancelled' } : inv));
     } else {
       showToast('error', res.error || 'Failed to cancel invitation.');
     }
@@ -1699,6 +1717,7 @@ export default function TeamCollaboration({
         isDarkMode={isDarkMode}
         onInvitationCreated={(newInv) => {
           showToast('success', `Created invitation for ${newInv.email}.`);
+          setOrgInvitations(prev => [newInv, ...prev.filter(i => i.id !== newInv.id)]);
         }}
       />
 
@@ -1710,10 +1729,16 @@ export default function TeamCollaboration({
         member={memberToRemove}
         actorUid={user?.uid || 'usr-actor'}
         actorRole={currentRole}
+        actorEmail={effectiveEmail}
+        actorName={user?.displayName || effectiveEmail.split('@')[0]}
         isDarkMode={isDarkMode}
         onMemberRemoved={(removedUid) => {
           showToast('success', 'Organization access has been revoked for this member.');
           setOrgMembers(prev => prev.filter(m => m.uid !== removedUid));
+          if (memberToRemove) {
+            onDeleteMember?.(memberToRemove.uid, memberToRemove.email);
+          }
+          setMemberToRemove(null);
         }}
       />
 

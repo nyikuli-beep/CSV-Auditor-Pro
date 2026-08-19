@@ -903,10 +903,8 @@ export async function createOrganizationInvitation(params: {
 
     return { success: true, invitation };
   } catch (err: any) {
-    console.warn('Firestore createOrganizationInvitation fallback to local cache:', err);
-    const list = localInvitationsStore.get(orgId) || [];
-    localInvitationsStore.set(orgId, [invitation, ...list]);
-    return { success: true, invitation };
+    console.error('Firestore createOrganizationInvitation error:', err);
+    return { success: false, error: err?.message || 'Failed to create and record organization invitation in database.' };
   }
 }
 
@@ -1005,16 +1003,8 @@ export async function resendOrganizationInvitation(
 
     return { success: true };
   } catch (err: any) {
-    console.warn('Firestore resendOrganizationInvitation error:', err);
-    const cached = localInvitationsStore.get(orgId) || [];
-    const updated = cached.map(inv => {
-      if (inv.id === invitationId) {
-        return { ...inv, status: 'pending' as InvitationStatus, expiresAt: expiresIso };
-      }
-      return inv;
-    });
-    localInvitationsStore.set(orgId, updated);
-    return { success: true };
+    console.error('Firestore resendOrganizationInvitation error:', err);
+    return { success: false, error: err?.message || 'Failed to resend invitation in database.' };
   }
 }
 
@@ -1066,16 +1056,8 @@ export async function cancelOrganizationInvitation(
 
     return { success: true };
   } catch (err: any) {
-    console.warn('Firestore cancelOrganizationInvitation error:', err);
-    const cached = localInvitationsStore.get(orgId) || [];
-    const updated = cached.map(inv => {
-      if (inv.id === invitationId) {
-        return { ...inv, status: 'cancelled' as InvitationStatus };
-      }
-      return inv;
-    });
-    localInvitationsStore.set(orgId, updated);
-    return { success: true };
+    console.error('Firestore cancelOrganizationInvitation error:', err);
+    return { success: false, error: err?.message || 'Failed to cancel invitation in database.' };
   }
 }
 
@@ -1250,6 +1232,13 @@ export async function removeOrganizationMember(params: {
     const memberRef = doc(db, 'organizations', orgId, 'members', memberUid);
     await deleteDoc(memberRef);
 
+    // Also remove from legacy top-level members collection to avoid ghost re-population
+    try {
+      await deleteDoc(doc(db, 'members', memberUid));
+    } catch {
+      // Legacy document may not exist; ignore
+    }
+
     // Update local cache
     const cached = localMembersStore.get(orgId) || [];
     localMembersStore.set(orgId, cached.filter(m => m.uid !== memberUid));
@@ -1277,10 +1266,8 @@ export async function removeOrganizationMember(params: {
 
     return { success: true };
   } catch (err: any) {
-    console.warn('Firestore removeOrganizationMember error:', err);
-    const cached = localMembersStore.get(orgId) || [];
-    localMembersStore.set(orgId, cached.filter(m => m.uid !== memberUid));
-    return { success: true };
+    console.error('Firestore removeOrganizationMember error:', err);
+    return { success: false, error: err?.message || 'Failed to remove member from organization database.' };
   }
 }
 
@@ -1349,8 +1336,8 @@ export async function updateOrganizationMemberRole(params: {
 
     return { success: true };
   } catch (err: any) {
-    console.warn('Firestore updateOrganizationMemberRole error:', err);
-    return { success: false, error: 'Failed to update member role.' };
+    console.error('Firestore updateOrganizationMemberRole error:', err);
+    return { success: false, error: err?.message || 'Failed to update member role in database.' };
   }
 }
 
@@ -1415,11 +1402,8 @@ export async function updateOrganizationMemberPermissions(params: {
 
     return { success: true };
   } catch (err: any) {
-    console.warn('Firestore updateOrganizationMemberPermissions error:', err);
-    // Local memory update fallback
-    const cached = localMembersStore.get(orgId) || [];
-    localMembersStore.set(orgId, cached.map(m => m.uid === memberUid ? { ...m, permissions } : m));
-    return { success: true };
+    console.error('Firestore updateOrganizationMemberPermissions error:', err);
+    return { success: false, error: err?.message || 'Failed to update member permissions in database.' };
   }
 }
 
