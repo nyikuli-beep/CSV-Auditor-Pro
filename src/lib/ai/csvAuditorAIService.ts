@@ -191,17 +191,11 @@ export class CSVAuditorAIService {
     }
 
     try {
-      // 1. Check if query is a pure general data science / conceptual question
-      const isGeneralQuery = this.isGeneralConceptQuery(userPrompt);
-
-      // 2. Prepare Dataset Data & Deterministic Analysis if dataset is available
+      // 1. Prepare Dataset Data & Deterministic Analysis if dataset is available
       let datasetProfile: DatasetProfile | undefined;
       let rows: Record<string, any>[] = [];
       let headers: string[] = [];
       let evidence: AssistantEvidence = {};
-      let analysisType: string = isGeneralQuery ? 'general_knowledge' : 'dataset_inquiry';
-      let grounding: GroundingState = isGeneralQuery ? 'general-ai' : 'data-verified';
-      let suggestedFollowUps: string[] = [];
 
       if (datasetFile) {
         if (typeof datasetFile.rows === 'string') {
@@ -241,6 +235,12 @@ export class CSVAuditorAIService {
           }
         }
       }
+
+      // Check if query is a pure general data science / conceptual question
+      const isGeneralQuery = this.isGeneralConceptQuery(userPrompt, headers);
+      let analysisType: string = isGeneralQuery ? 'general_knowledge' : 'dataset_inquiry';
+      let grounding: GroundingState = isGeneralQuery ? 'general-ai' : 'data-verified';
+      let suggestedFollowUps: string[] = [];
 
       // 3. Detect Stale Recommendation State
       let staleStateDetected = false;
@@ -580,51 +580,54 @@ export class CSVAuditorAIService {
   /**
    * Identifies if a query is purely conceptual / general data science knowledge
    */
-  private isGeneralConceptQuery(prompt: string): boolean {
+  private isGeneralConceptQuery(prompt: string, headers: string[] = []): boolean {
     const text = prompt.toLowerCase().trim();
+
+    // If text mentions any column from the dataset, it is NEVER a pure general concept query
+    if (headers.length > 0) {
+      const matched = AnalysisRouter.extractMatchedColumns(text, headers);
+      if (matched.length > 0) {
+        return false;
+      }
+    }
+
+    // If text mentions dataset words or calculations, treat as dataset inquiry
+    const datasetTerms = [
+      'dataset', 'file', 'data', 'row', 'column', 'null', 'missing', 'duplicate',
+      'error', 'issue', 'anomaly', 'outlier', 'average', 'mean', 'median', 'sum',
+      'total', 'highest', 'lowest', 'top', 'bottom', 'count', 'max', 'min',
+      'rank', 'trend', 'distribution', 'clean', 'remediat', 'audit', 'score',
+      'show me', 'which', 'how many', 'find', 'list', 'filter', 'table', 'csv'
+    ];
+    if (datasetTerms.some(term => text.includes(term))) {
+      return false;
+    }
+
     const generalKeywords = [
       'what is data normalization',
-      'what is normalization',
-      'explain normalization',
-      'what is an outlier',
-      'what is an anomaly',
-      'what does duplicate data mean',
-      'what is duplicate data',
-      'what are duplicate records',
-      'explain duplicate',
-      'what is formula injection',
-      'explain formula injection',
-      'what is csv injection',
-      'explain referential integrity',
-      'what is referential integrity',
-      'what is first normal form',
       'what is 1nf',
       'what is 2nf',
       'what is 3nf',
-      'what is data profiling',
-      'explain data imputation',
-      'what is imputation',
+      'what is first normal form',
+      'what is second normal form',
+      'what is third normal form',
+      'what is referential integrity',
+      'explain referential integrity',
+      'what is formula injection',
+      'explain formula injection',
+      'what is csv injection',
+      'explain csv injection',
+      'what is a z-score',
       'what is z-score',
       'what is iqr',
       'explain interquartile range',
       'what is pearson correlation',
-      'difference between mean and median',
-      'what is data cleaning',
-      'what is data quality'
+      'what is data imputation',
+      'explain data imputation',
+      'difference between mean and median'
     ];
 
-    if (generalKeywords.some(kw => text.includes(kw))) {
-      return true;
-    }
-
-    if (
-      (text.startsWith('what is ') || text.startsWith('what does ') || text.startsWith('explain ') || text.startsWith('define ') || text.startsWith('tell me about ')) &&
-      !text.includes('this dataset') &&
-      !text.includes('this file') &&
-      !text.includes('my data') &&
-      !text.includes('in column') &&
-      !text.includes('in my file')
-    ) {
+    if (generalKeywords.some(kw => text === kw || text === `${kw}?` || text.startsWith(`${kw} `))) {
       return true;
     }
 
@@ -678,7 +681,7 @@ export class CSVAuditorAIService {
     }
 
     // Include factual summary of dataset
-    const fileName = datasetFile?.name || 'dataset.csv';
+    const fileName = datasetFile?.name || datasetProfile?.fileName || 'dataset.csv';
     const rowCount = datasetProfile?.rowCount ?? (Array.isArray(datasetFile?.rows) ? datasetFile.rows.length : (datasetFile?.rowCount || 'N/A'));
     const headersList = datasetProfile?.headers ?? datasetFile?.headers ?? [];
     const qualityScore = datasetProfile?.qualityScore ?? datasetFile?.score ?? 'N/A';
@@ -693,11 +696,27 @@ export class CSVAuditorAIService {
     if (datasetProfile) {
       p += `- Duplicate Rows: ${duplicateRows.toLocaleString()} (${datasetProfile.duplicateRowPercentage}%)\n`;
       p += `- Total Missing Cells: ${missingCells.toLocaleString()} (${datasetProfile.overallMissingPercentage}%)\n\n`;
+
+      // Column profiles breakdown
+      p += `COLUMN PROFILES & STATISTICAL METRICS:\n`;
+      Object.entries(datasetProfile.columnProfiles || {}).forEach(([colName, prof]) => {
+        let colDetail = `- Column "${colName}": Type=${prof.inferredType}, Missing=${prof.missingCount} (${prof.missingPercentage}%), Unique=${prof.uniqueCount}`;
+        if (prof.stats) {
+          colDetail += `, Min=${prof.stats.min}, Max=${prof.stats.max}, Mean=${prof.stats.mean}, Median=${prof.stats.median}`;
+        } else if (prof.dateRange) {
+          colDetail += `, Earliest=${prof.dateRange.minDate}, Latest=${prof.dateRange.maxDate}`;
+        } else if (prof.frequencyDistribution && prof.frequencyDistribution.length > 0) {
+          const topCats = prof.frequencyDistribution.slice(0, 4).map(f => `"${f.value}": ${f.count}`).join(', ');
+          colDetail += `, Top Values=[${topCats}]`;
+        }
+        p += `${colDetail}\n`;
+      });
+      p += `\n`;
     }
 
     if (Array.isArray(datasetFile?.issues) && datasetFile.issues.length > 0) {
       p += `AUDIT FINDINGS & DETECTED ISSUES (${datasetFile.issues.length} detected):\n`;
-      datasetFile.issues.forEach((iss: any, idx: number) => {
+      datasetFile.issues.slice(0, 15).forEach((iss: any, idx: number) => {
         p += `${idx + 1}. [${iss.severity || 'Medium'}] ${iss.type || iss.title || 'Issue'} on column "${iss.column || 'General'}": ${iss.description || iss.message || ''} (${iss.count || iss.affectedCount || 0} affected rows)\n`;
       });
       p += `\n`;
@@ -767,12 +786,59 @@ export class CSVAuditorAIService {
         }
         p += `\n`;
       }
+
+      if (executionResults.qualityReport) {
+        const qr = executionResults.qualityReport;
+        p += `VERIFIED QUALITY REPORT EVIDENCE:\n`;
+        p += `- Total Quality Issues: ${qr.totalIssuesCount}\n`;
+        p += `- Quality Score: ${qr.qualityScore}/100\n`;
+        qr.findings.slice(0, 8).forEach((f: any, idx: number) => {
+          p += `  ${idx + 1}. [${f.severity}] ${f.category} in "${f.column || 'general'}": ${f.description} (${f.count} affected)\n`;
+        });
+        p += `\n`;
+      }
+
+      if (executionResults.anomalyReport) {
+        const ar = executionResults.anomalyReport;
+        p += `VERIFIED ANOMALY REPORT EVIDENCE:\n`;
+        p += `- Total Anomalies Detected: ${ar.totalAnomaliesCount}\n`;
+        ar.findings.slice(0, 8).forEach((f: any, idx: number) => {
+          p += `  ${idx + 1}. Row #${f.rowIndex} [${f.type}] in "${f.column}": Value=${f.value}, Reason=${f.reason}\n`;
+        });
+        p += `\n`;
+      }
+    }
+
+    // Sample rows representation for row-level reasoning
+    if (Array.isArray(datasetFile?.rows) && datasetFile.rows.length > 0) {
+      p += `SAMPLE DATASET ROWS (First 5 records):\n`;
+      p += `\`\`\`json\n${JSON.stringify(datasetFile.rows.slice(0, 5), null, 2)}\n\`\`\`\n\n`;
+
+      // Check if user inquiry references a specific value, token, or identifier in rows
+      const inquiryTokens = userPrompt.split(/[\s,?:;"']+/).filter(t => t.length >= 3 && !['what', 'which', 'where', 'when', 'show', 'tell', 'about', 'from', 'with', 'this', 'that', 'have'].includes(t.toLowerCase()));
+      if (inquiryTokens.length > 0) {
+        const matchingRows: Array<{ rowIndex: number; data: any }> = [];
+        for (let i = 0; i < datasetFile.rows.length && matchingRows.length < 5; i++) {
+          const row = datasetFile.rows[i];
+          const rowValuesStr = Object.values(row).map(v => String(v || '').toLowerCase()).join(' ');
+          for (const token of inquiryTokens) {
+            if (rowValuesStr.includes(token.toLowerCase())) {
+              matchingRows.push({ rowIndex: i + 1, data: row });
+              break;
+            }
+          }
+        }
+        if (matchingRows.length > 0) {
+          p += `MATCHED RECORDS REFERENCED IN USER QUERY:\n`;
+          p += `\`\`\`json\n${JSON.stringify(matchingRows, null, 2)}\n\`\`\`\n\n`;
+        }
+      }
     }
 
     // Directives
     p += `DIRECTIVES:\n`;
-    p += `1. Directly answer the user's specific inquiry. Do not output a generic dataset summary unless asked.\n`;
-    p += `2. Ground all numbers strictly in the provided verified evidence.\n`;
+    p += `1. Directly answer the user's specific inquiry using the verified facts, column statistics, calculations, and sample records above.\n`;
+    p += `2. Ground all numbers, counts, and findings strictly in the provided evidence. Do NOT invent numbers.\n`;
     p += `3. Separate verified facts from recommendations.\n`;
     p += `4. Maintain a professional, objective tone without emojis.`;
 

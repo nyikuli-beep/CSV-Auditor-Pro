@@ -537,6 +537,24 @@ export class AnalysisRouter {
     const doubleQuoteMatch = prompt.match(/"([^"]{10,})"/); // long double quotes that represent a full recommendation title
 
     const rawTitle = singleQuoteMatch ? singleQuoteMatch[1] : (doubleQuoteMatch ? doubleQuoteMatch[1] : '');
+    
+    // Only treat prompt as searchTarget if explicitly asking for remediation/action
+    const lowerPrompt = prompt.toLowerCase();
+    const isExplicitRemediationContext = (
+      lowerPrompt.includes('remediation') ||
+      lowerPrompt.includes('how to fix') ||
+      lowerPrompt.includes('how should i fix') ||
+      lowerPrompt.includes('how to handle') ||
+      lowerPrompt.includes('how to resolve') ||
+      lowerPrompt.includes('how should i implement') ||
+      lowerPrompt.includes('how to implement') ||
+      lowerPrompt.includes('action plan for')
+    );
+
+    if (!rawTitle && !isExplicitRemediationContext) {
+      return null;
+    }
+
     const searchTarget = rawTitle || prompt;
 
     // Check if searchTarget contains an issue description
@@ -552,7 +570,7 @@ export class AnalysisRouter {
       lowerSearch.includes('remediation')
     );
 
-    if (!hasIssueMarker && !rawTitle) {
+    if (!hasIssueMarker) {
       return null;
     }
 
