@@ -1,4 +1,5 @@
 import { ThemeCustomization, ThemePreset, AccentColor } from '../types';
+import { DEFAULT_TYPOGRAPHY, applyTypographyToDocument } from './typographyEngine';
 
 export const DEFAULT_THEME_CUSTOMIZATION: ThemeCustomization = {
   preset: 'default-dark',
@@ -25,6 +26,7 @@ export const DEFAULT_THEME_CUSTOMIZATION: ThemeCustomization = {
     reducedMotion: false,
     largerClickTargets: false,
   },
+  typography: DEFAULT_TYPOGRAPHY,
 };
 
 export interface ThemePresetDetails {
@@ -413,6 +415,9 @@ export function applyThemeToDocument(customization: ThemeCustomization, isDarkMo
   } else {
     root.classList.remove('reduced-motion');
   }
+
+  // Apply centralized typography settings (font family, font size, font weight, web fonts)
+  applyTypographyToDocument(customization.typography || DEFAULT_THEME_CUSTOMIZATION.typography);
 }
 
 /**
@@ -454,6 +459,11 @@ export function importThemeJSON(jsonString: string): ThemeCustomization | null {
         keyboardFocusIndicators: parsed.accessibility?.keyboardFocusIndicators ?? true,
         reducedMotion: Boolean(parsed.accessibility?.reducedMotion),
         largerClickTargets: Boolean(parsed.accessibility?.largerClickTargets),
+      },
+      typography: {
+        fontFamily: parsed.typography?.fontFamily || DEFAULT_THEME_CUSTOMIZATION.typography?.fontFamily || 'system-default',
+        fontSize: parsed.typography?.fontSize || DEFAULT_THEME_CUSTOMIZATION.typography?.fontSize || 'medium',
+        fontWeight: parsed.typography?.fontWeight || DEFAULT_THEME_CUSTOMIZATION.typography?.fontWeight || 'regular',
       },
     };
   } catch (err) {

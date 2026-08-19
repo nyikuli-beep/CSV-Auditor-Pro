@@ -10,6 +10,12 @@
 
 /* Centralized Theme Token System */
 :root {
+  /* Centralized Typography Tokens */
+  --app-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --app-font-size: 16px;
+  --app-font-weight: 400;
+  --app-font-base: 16px;
+
   /* Light Mode Tokens */
   --primary-blue: #2563EB;
   --link-color: #1D4ED8;
@@ -76,14 +82,28 @@ html, body, #root {
   overflow-x: hidden;
   margin: 0;
   padding: 0;
-  font-size: var(--app-font-base, 14px);
+  font-family: var(--app-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif);
+  font-size: var(--app-font-base, 16px);
+  font-weight: var(--app-font-weight, 400);
 }
 
 body {
+  font-family: var(--app-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif);
+  font-weight: var(--app-font-weight, 400);
   background-color: var(--app-bg-main, var(--bg-app));
   color: var(--app-text-primary, var(--text-primary));
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   transition: background-color var(--app-animation-speed, 0.25s) ease, color var(--app-animation-speed, 0.25s) ease;
+}
+
+/* Inherit typography across standard elements */
+button, input, select, textarea, table, th, td, p, span, h1, h2, h3, h4, h5, h6, label {
+  font-family: inherit;
+}
+
+/* Technical Monospace & Code Block Protection */
+code, pre, kbd, samp, .font-mono, [data-mono="true"] {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
 }
 
 label {

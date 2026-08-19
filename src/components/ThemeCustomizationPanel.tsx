@@ -53,6 +53,7 @@ import {
   importThemeJSON,
   applyThemeToDocument
 } from '../lib/themeEngine';
+import TypographySettingsPanel from './typography/TypographySettingsPanel';
 
 interface ThemeCustomizationPanelProps {
   settings: SystemSettings;
@@ -73,6 +74,10 @@ export default function ThemeCustomizationPanel({
   const customization: ThemeCustomization = {
     ...DEFAULT_THEME_CUSTOMIZATION,
     ...(settings.themeCustomization || {}),
+    typography: {
+      ...DEFAULT_THEME_CUSTOMIZATION.typography,
+      ...(settings.themeCustomization?.typography || {})
+    },
     tablePrefs: {
       ...DEFAULT_THEME_CUSTOMIZATION.tablePrefs,
       ...(settings.themeCustomization?.tablePrefs || {})
@@ -83,7 +88,7 @@ export default function ThemeCustomizationPanel({
     }
   };
 
-  const [activeTab, setActiveTab] = useState<'presets' | 'layout' | 'tables' | 'animations' | 'accessibility' | 'import-export'>('presets');
+  const [activeTab, setActiveTab] = useState<'presets' | 'typography' | 'layout' | 'tables' | 'animations' | 'accessibility' | 'import-export'>('presets');
   const [testActive, setTestActive] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importJsonText, setImportJsonText] = useState('');
@@ -312,7 +317,8 @@ export default function ThemeCustomizationPanel({
         <div className="flex items-center gap-1 overflow-x-auto pb-2 border-b border-slate-800/10">
           {[
             { id: 'presets', label: 'Presets & Color Accents', icon: Palette },
-            { id: 'layout', label: 'Typography & Layout Density', icon: Layout },
+            { id: 'typography', label: 'Typography & Fonts', icon: Type },
+            { id: 'layout', label: 'Layout Density & Sizing', icon: Layout },
             { id: 'tables', label: 'Data Tables & Cards', icon: Table },
             { id: 'animations', label: 'Animations & Motion', icon: Zap },
             { id: 'accessibility', label: 'Accessibility', icon: Shield },
@@ -322,6 +328,7 @@ export default function ThemeCustomizationPanel({
             return (
               <button
                 key={tab.id}
+                id={`theme-tab-${tab.id}`}
                 type="button"
                 onClick={() => setActiveTab(tab.id as any)}
                 className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 cursor-pointer ${
@@ -461,6 +468,16 @@ export default function ThemeCustomizationPanel({
             </div>
 
           </div>
+        )}
+
+        {/* TAB 2: TYPOGRAPHY & FONTS CUSTOMIZATION */}
+        {activeTab === 'typography' && (
+          <TypographySettingsPanel
+            typography={customization.typography}
+            onUpdateTypography={(updatedTypo) => updateCustomization({ typography: updatedTypo })}
+            isDarkMode={isDarkMode}
+            onShowToast={showToast}
+          />
         )}
 
         {/* TAB 2: TYPOGRAPHY, CONTRAST & DENSITY */}

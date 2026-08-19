@@ -291,6 +291,31 @@ export type SidebarWidthOption = 'default' | 'compact' | 'expanded';
 export type AnimationSpeed = 'minimal' | 'normal' | 'enhanced' | 'disabled';
 export type DashboardCardStyle = 'flat' | 'elevated' | 'outlined' | 'glass';
 
+export type TypographyFontFamily =
+  | 'system-default'
+  | 'arial'
+  | 'helvetica'
+  | 'times-new-roman'
+  | 'georgia'
+  | 'verdana'
+  | 'tahoma'
+  | 'trebuchet-ms'
+  | 'courier-new'
+  | 'inter'
+  | 'roboto'
+  | 'open-sans'
+  | 'poppins'
+  | 'montserrat';
+
+export type TypographyFontSize = 'small' | 'medium' | 'large' | 'extra-large';
+export type TypographyFontWeight = 'regular' | 'medium' | 'semibold' | 'bold';
+
+export interface TypographySettings {
+  fontFamily: TypographyFontFamily | string;
+  fontSize: TypographyFontSize;
+  fontWeight: TypographyFontWeight;
+}
+
 export interface DataTablePreferences {
   stripedRows: boolean;
   hoverHighlight: boolean;
@@ -320,6 +345,7 @@ export interface ThemeCustomization {
   cardStyle: DashboardCardStyle;
   followSystemTheme: boolean;
   accessibility: AccessibilitySettings;
+  typography?: TypographySettings;
   customColors?: {
     bgMain?: string;
     bgSidebar?: string;
