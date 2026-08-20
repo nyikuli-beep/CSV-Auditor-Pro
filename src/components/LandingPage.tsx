@@ -26,6 +26,7 @@ import {
 import { FAQ_ITEMS } from '../sampleData';
 import { FOOTER_DOCS } from '../data/footerDocs';
 import { AboutFounder } from './AboutFounder';
+import { SocialLinksGroup } from './SocialLinks';
 
 const VALUE_BLOCKS = [
   {
@@ -626,10 +627,8 @@ export default function LandingPage({
 
         <div className={`max-w-7xl mx-auto px-6 mt-12 pt-6 border-t flex flex-col sm:flex-row items-center justify-between text-xs ${isDarkMode ? 'border-[#334155]' : 'border-[#E2E8F0]'}`}>
           <span>&copy; {new Date().getFullYear()} CSV Auditor Pro. All rights reserved.</span>
-          <div className="flex gap-6 mt-4 sm:mt-0">
-            <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="hover:text-[#2563EB] transition-colors">Twitter</a>
-            <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="hover:text-[#2563EB] transition-colors">GitHub</a>
-            <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="hover:text-[#2563EB] transition-colors">LinkedIn</a>
+          <div className="mt-4 sm:mt-0">
+            <SocialLinksGroup isDarkMode={isDarkMode} iconSize={18} />
           </div>
         </div>
       </footer>

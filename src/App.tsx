@@ -78,6 +78,7 @@ import OnboardingTourModal from './components/OnboardingTourModal';
 import UpgradeModal from './components/UpgradeModal';
 import EnterpriseContactModal from './components/EnterpriseContactModal';
 import TrialExpirationBanner from './components/TrialExpirationBanner';
+import { SocialLinksGroup } from './components/SocialLinks';
 import { runTrialExpirationCheck, dismissTrialAlert, TrialAlert } from './utils/trialChecker';
 import { openPaddleCheckout } from './lib/paddle';
 
@@ -3206,10 +3207,8 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
             <footer className={`mt-auto border-t px-3 sm:px-6 py-3.5 flex items-center justify-between text-[9px] font-bold uppercase tracking-widest shrink-0 max-w-full overflow-x-hidden ${isDarkMode ? 'bg-[#0f172a] border-slate-800 text-slate-500' : 'bg-white border-slate-200 text-slate-400'}`}>
               <div>&copy; 2026 CSV Auditor Pro Inc.</div>
               <div className="flex items-center gap-4 sm:gap-6">
-                <div className="flex gap-3 sm:gap-4 border-r border-slate-300 dark:border-slate-800 pr-4 sm:pr-6">
-                  <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="hover:text-blue-500 transition-colors">Twitter</a>
-                  <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="hover:text-blue-500 transition-colors">GitHub</a>
-                  <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="hover:text-blue-500 transition-colors">LinkedIn</a>
+                <div className="border-r border-slate-300 dark:border-slate-800 pr-3 sm:pr-4">
+                  <SocialLinksGroup isDarkMode={isDarkMode} iconSize={15} className="flex items-center gap-1.5 sm:gap-2.5" />
                 </div>
                 <div className="flex gap-4 sm:gap-6">
                   <button onClick={() => setActiveTab('settings')} className="hover:text-blue-500 transition-colors uppercase cursor-pointer">API Documentation</button>
