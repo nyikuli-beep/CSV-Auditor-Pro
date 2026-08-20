@@ -48,6 +48,7 @@ import { auth } from '../firebase/firebase';
 import BillingDashboard from './BillingDashboard';
 import AdminBillingDashboard from './AdminBillingDashboard';
 import ThemeCustomizationPanel from './ThemeCustomizationPanel';
+import SettingsTypographyCard from './typography/SettingsTypographyCard';
 
 
 interface SettingsViewProps {
@@ -609,6 +610,14 @@ export default function SettingsView({
             isDarkMode={isDarkMode}
             toggleTheme={toggleTheme}
             accentClass={accentClass}
+          />
+
+          {/* Quick-Access Font Family & Typography Customizer */}
+          <SettingsTypographyCard
+            settings={settings}
+            onUpdateSettings={onUpdateSettings}
+            isDarkMode={isDarkMode}
+            onShowToast={(msg) => setSuccessMsg(msg)}
           />
 
           {/* Locale & Language settings */}

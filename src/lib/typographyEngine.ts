@@ -300,6 +300,13 @@ export function applyTypographyToDocument(typography?: TypographySettings): void
   root.style.setProperty('--app-font-weight', String(weightOption.weight));
   root.style.setProperty('--app-font-base', sizeOption.px);
 
+  // Directly assign styles to document element and body for instantaneous visual update
+  root.style.fontFamily = fontDetails.fontStack;
+  if (document.body) {
+    document.body.style.fontFamily = fontDetails.fontStack;
+    document.body.style.fontWeight = String(weightOption.weight);
+  }
+
   // Set attributes for CSS selectors & diagnostic inspection
   root.setAttribute('data-font-family', fontDetails.id);
   root.setAttribute('data-font-size', settings.fontSize);
