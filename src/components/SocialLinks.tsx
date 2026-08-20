@@ -9,29 +9,38 @@ interface SocialLinkProps {
 
 // Official brand colors (no gradients, strict hex colors)
 export const BRAND_COLORS = {
+  xDark: '#000000',
+  xLight: '#FFFFFF',
   twitter: '#1DA1F2',
   githubDark: '#24292F',
-  githubLight: '#FFFFFF',
+  githubLight: '#F0F6FC',
   linkedin: '#0A66C2'
 };
 
-export const TwitterIcon: React.FC<{ size?: number; className?: string; color?: string }> = ({ 
+export const XIcon: React.FC<{ size?: number; className?: string; isDarkMode?: boolean; color?: string }> = ({ 
   size = 18, 
   className = "",
-  color = BRAND_COLORS.twitter
-}) => (
-  <svg 
-    width={size} 
-    height={size} 
-    viewBox="0 0 24 24" 
-    fill={color}
-    className={`shrink-0 transition-transform duration-200 hover:scale-110 ${className}`}
-    xmlns="http://www.w3.org/2000/svg"
-    aria-hidden="true"
-  >
-    <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.936 9.936 0 0024 4.59z" />
-  </svg>
-);
+  isDarkMode = false,
+  color
+}) => {
+  const fillColor = color || (isDarkMode ? BRAND_COLORS.xLight : BRAND_COLORS.xDark);
+  return (
+    <svg 
+      width={size} 
+      height={size} 
+      viewBox="0 0 24 24" 
+      fill={fillColor}
+      className={`shrink-0 transition-transform duration-200 hover:scale-110 ${className}`}
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  );
+};
+
+// Backwards compatibility alias
+export const TwitterIcon = XIcon;
 
 export const GitHubIcon: React.FC<{ size?: number; className?: string; isDarkMode?: boolean; color?: string }> = ({ 
   size = 18, 
@@ -85,22 +94,26 @@ export const SocialLinksGroup: React.FC<SocialLinkProps> = ({
 }) => {
   return (
     <div className={className} id="footer-social-links">
-      {/* Twitter / X */}
+      {/* X (formerly Twitter) */}
       <a 
-        href="https://twitter.com" 
+        href="https://x.com" 
         target="_blank" 
         rel="noopener noreferrer" 
-        id="footer-social-twitter"
-        aria-label="Follow CSV Auditor Pro on Twitter"
-        title="Twitter / X (@CSVAuditorPro)"
+        id="footer-social-x"
+        aria-label="Follow CSV Auditor Pro on X"
+        title="X (@CSVAuditorPro)"
         className={`inline-flex items-center gap-1.5 p-1.5 rounded-lg transition-all duration-200 cursor-pointer ${
           isDarkMode 
             ? 'hover:bg-[#1E293B] text-slate-300' 
-            : 'hover:bg-[#EFF6FF] text-slate-700'
+            : 'hover:bg-[#F1F5F9] text-slate-700'
         }`}
       >
-        <TwitterIcon size={iconSize} />
-        {showLabels && <span className="text-xs font-semibold" style={{ color: BRAND_COLORS.twitter }}>Twitter</span>}
+        <XIcon size={iconSize} isDarkMode={isDarkMode} />
+        {showLabels && (
+          <span className={`text-xs font-semibold ${isDarkMode ? 'text-white' : 'text-black'}`}>
+            X
+          </span>
+        )}
       </a>
 
       {/* GitHub */}
