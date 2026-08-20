@@ -15,6 +15,7 @@ import {
   runTransaction
 } from 'firebase/firestore';
 import { db } from '../firebase/firebase';
+import { broadcastSystemChatMessage, removeUserPresence } from './chatClient';
 import { 
   Organization, 
   OrganizationMember, 
@@ -901,6 +902,12 @@ export async function createOrganizationInvitation(params: {
       metadata: { role, expiresAt: expiresIso }
     }).catch(() => {});
 
+    // Broadcast live chat system announcement
+    broadcastSystemChatMessage({
+      tenantId: orgId,
+      text: `${inviterName || inviterEmail.split('@')[0]} dispatched an enterprise invitation to ${targetEmail} (${role}).`
+    }).catch(() => {});
+
     return { success: true, invitation };
   } catch (err: any) {
     console.error('Firestore createOrganizationInvitation error:', err);
@@ -1185,6 +1192,12 @@ export async function acceptOrganizationInvitation(params: {
       metadata: { role: invitation.role, inviteId: invitation.id }
     }).catch(() => {});
 
+    // Broadcast live chat system announcement
+    broadcastSystemChatMessage({
+      tenantId: orgId,
+      text: `${newMember.displayName || newMember.email.split('@')[0]} accepted the team invitation and joined as ${newMember.role}.`
+    }).catch(() => {});
+
     return { success: true, member: newMember };
   } catch (err: any) {
     console.warn('Firestore acceptOrganizationInvitation error:', err);
@@ -1264,6 +1277,15 @@ export async function removeOrganizationMember(params: {
       }).catch(() => {});
     }
 
+    // Clean up revoked member presence in real time
+    removeUserPresence(memberUid).catch(() => {});
+
+    // Broadcast live chat system announcement
+    broadcastSystemChatMessage({
+      tenantId: orgId,
+      text: `${actorName || actorEmail?.split('@')[0] || 'Admin'} revoked workspace access for ${memberName || memberEmail || 'team collaborator'}.`
+    }).catch(() => {});
+
     return { success: true };
   } catch (err: any) {
     console.error('Firestore removeOrganizationMember error:', err);
@@ -1333,6 +1355,12 @@ export async function updateOrganizationMemberRole(params: {
         metadata: { oldRole, newRole }
       }).catch(() => {});
     }
+
+    // Broadcast live chat system announcement
+    broadcastSystemChatMessage({
+      tenantId: orgId,
+      text: `${actorName || actorEmail?.split('@')[0] || 'Admin'} updated ${memberName || memberEmail || 'member'}'s role to ${newRole}.`
+    }).catch(() => {});
 
     return { success: true };
   } catch (err: any) {

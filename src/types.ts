@@ -175,7 +175,7 @@ export interface TeamMember {
   id: string;
   name: string;
   email: string;
-  role: 'Owner' | 'Admin' | 'Editor' | 'Viewer';
+  role: 'Owner' | 'Admin' | 'Editor' | 'Viewer' | 'Member' | string;
   avatar?: string;
   status: 'active' | 'invited' | 'denied';
   accessDenied?: boolean;

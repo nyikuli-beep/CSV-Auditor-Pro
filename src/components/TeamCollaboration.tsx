@@ -303,6 +303,20 @@ export default function TeamCollaboration({
     return list;
   }, [orgMembers, organization, members]);
 
+  // Dynamically mapped active workspace members for live collaboration chat synchronization
+  const liveChatMembers: TeamMember[] = useMemo(() => {
+    return combinedMembers
+      .filter(m => m.status === 'active')
+      .map(m => ({
+        id: m.uid,
+        name: m.displayName || m.email.split('@')[0],
+        email: m.email,
+        role: m.role,
+        status: 'active' as const,
+        avatar: m.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(m.displayName || m.email)}&backgroundColor=3b82f6`
+      }));
+  }, [combinedMembers]);
+
   // STEP 7: Seat Metrics Calculation
   const seatMetrics = useMemo(() => {
     return calculateSeatMetrics(organization, combinedMembers, orgInvitations);
@@ -1689,7 +1703,7 @@ export default function TeamCollaboration({
               activeFileName={activeFileName}
               currentUserEmail={effectiveEmail}
               currentUserRole={currentRole}
-              members={members}
+              members={liveChatMembers}
               isDarkMode={isDarkMode}
               accentClass={accentClass}
             />
@@ -1752,6 +1766,14 @@ export default function TeamCollaboration({
         onJoined={(newMember) => {
           showToast('success', `Joined ${organization?.name || 'Enterprise Workspace'} as ${newMember.role}!`);
           setOrgMembers(prev => [newMember, ...prev.filter(m => m.uid !== newMember.uid)]);
+          onInviteMember?.({
+            id: newMember.uid,
+            name: newMember.displayName || newMember.email.split('@')[0],
+            email: newMember.email,
+            role: newMember.role,
+            status: 'active',
+            avatar: newMember.avatar || ''
+          });
         }}
       />
 

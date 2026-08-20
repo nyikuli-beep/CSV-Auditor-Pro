@@ -75,6 +75,19 @@ export default function CollaborationChat({
     return `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(seed)}&backgroundColor=3b82f6`;
   }, []);
 
+  // Check if current user's workspace tenancy has been revoked
+  const isCurrentMemberRevoked = useMemo(() => {
+    if (!currentUserEmail) return false;
+    const emailLower = currentUserEmail.toLowerCase().trim();
+    // Primary enterprise owner is never revoked
+    if (emailLower === 'nyikulibramwel@gmail.com') return false;
+    if (members.length === 0) return false;
+    const found = members.find(m => m.email.toLowerCase().trim() === emailLower || m.id === auth.currentUser?.uid);
+    if (!found) return true; // Collaborator was revoked or removed from workspace
+    if (found.status === 'denied' || (found as any).accessDenied) return true;
+    return false;
+  }, [members, currentUserEmail]);
+
   // UI State
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     try {
@@ -400,7 +413,7 @@ export default function CollaborationChat({
           >
             <Users className="w-3.5 h-3.5 text-blue-400" />
             <span className="text-[11px] font-bold font-mono">
-              {presenceUsers.filter(u => u.online).length || members.length} Online
+              {presenceUsers.filter(u => u.online && members.some(m => m.id === u.userId || m.email.toLowerCase().trim() === u.userEmail.toLowerCase().trim())).length || (members.length > 0 ? 1 : 0)} Online
             </span>
           </button>
 
@@ -513,6 +526,20 @@ export default function CollaborationChat({
               </div>
 
               {groupedMessages[dateHeader].map((msg) => {
+                if (msg.isSystemNotice || msg.userId === 'system' || msg.userRole === 'System') {
+                  return (
+                    <div key={msg.id} className="flex justify-center my-2">
+                      <div className={`px-3.5 py-1.5 rounded-xl border text-[11px] font-medium flex items-center gap-2 max-w-[92%] shadow-2xs ${
+                        isDarkMode ? 'bg-slate-800/90 border-slate-700/80 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-700'
+                      }`}>
+                        <ShieldCheck className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                        <span className="leading-snug">{msg.text}</span>
+                        <span className="text-[9px] font-mono text-slate-400 ml-auto shrink-0">{msg.timeFormatted}</span>
+                      </div>
+                    </div>
+                  );
+                }
+
                 const mine = isMe(msg);
                 const isEditingThis = editingMsgId === msg.id;
 
@@ -820,60 +847,71 @@ export default function CollaborationChat({
         </div>
       )}
 
-      {/* Message Input Footer */}
-      <form onSubmit={handleSendMessage} className={`p-3 border-t flex items-center gap-2 ${
-        isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'
-      }`}>
-        {/* Cell Reference Tag Toggle */}
-        <button
-          type="button"
-          onClick={() => setShowCellRefInput(prev => !prev)}
-          className={`p-2 rounded-xl transition-all cursor-pointer border ${
-            showCellRefInput || cellRef
-              ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-              : isDarkMode ? 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200' : 'bg-white text-slate-600 border-slate-200'
-          }`}
-          title="Attach CSV cell or row reference tag"
-        >
-          <Tag className="w-4 h-4" />
-        </button>
+      {/* Message Input Footer or Access Revoked Alert */}
+      {isCurrentMemberRevoked ? (
+        <div className={`p-3.5 border-t flex items-center gap-3 ${
+          isDarkMode ? 'bg-rose-950/40 border-rose-900/50 text-rose-300' : 'bg-rose-50 border-rose-200 text-rose-700'
+        }`}>
+          <AlertTriangle className="w-4.5 h-4.5 shrink-0 text-rose-400" />
+          <div className="text-xs">
+            <span className="font-bold">Workspace Access Revoked:</span> You are no longer an active collaborator in this organization tenancy. Messaging and real-time collaboration have been disabled.
+          </div>
+        </div>
+      ) : (
+        <form onSubmit={handleSendMessage} className={`p-3 border-t flex items-center gap-2 ${
+          isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'
+        }`}>
+          {/* Cell Reference Tag Toggle */}
+          <button
+            type="button"
+            onClick={() => setShowCellRefInput(prev => !prev)}
+            className={`p-2 rounded-xl transition-all cursor-pointer border ${
+              showCellRefInput || cellRef
+                ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                : isDarkMode ? 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200' : 'bg-white text-slate-600 border-slate-200'
+            }`}
+            title="Attach CSV cell or row reference tag"
+          >
+            <Tag className="w-4 h-4" />
+          </button>
 
-        {/* Emoji Selector Toggle */}
-        <button
-          type="button"
-          onClick={() => setShowEmojiPicker(prev => !prev)}
-          className={`p-2 rounded-xl transition-all cursor-pointer border ${
-            showEmojiPicker
-              ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-              : isDarkMode ? 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200' : 'bg-white text-slate-600 border-slate-200'
-          }`}
-          title="Insert emoji"
-        >
-          <Smile className="w-4 h-4" />
-        </button>
+          {/* Emoji Selector Toggle */}
+          <button
+            type="button"
+            onClick={() => setShowEmojiPicker(prev => !prev)}
+            className={`p-2 rounded-xl transition-all cursor-pointer border ${
+              showEmojiPicker
+                ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                : isDarkMode ? 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200' : 'bg-white text-slate-600 border-slate-200'
+            }`}
+            title="Insert emoji"
+          >
+            <Smile className="w-4 h-4" />
+          </button>
 
-        <input
-          ref={inputRef}
-          type="text"
-          value={inputText}
-          onChange={handleInputChange}
-          placeholder={`Message workspace team on ${activeFileName}...`}
-          className={`flex-1 text-xs px-3.5 py-2.5 rounded-2xl border focus:outline-none transition-all ${
-            isDarkMode 
-              ? 'bg-slate-900 border-slate-800 text-slate-100 placeholder-slate-500 focus:border-blue-500/60' 
-              : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400 focus:border-blue-500'
-          }`}
-        />
+          <input
+            ref={inputRef}
+            type="text"
+            value={inputText}
+            onChange={handleInputChange}
+            placeholder={`Message workspace team on ${activeFileName}...`}
+            className={`flex-1 text-xs px-3.5 py-2.5 rounded-2xl border focus:outline-none transition-all ${
+              isDarkMode 
+                ? 'bg-slate-900 border-slate-800 text-slate-100 placeholder-slate-500 focus:border-blue-500/60' 
+                : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400 focus:border-blue-500'
+            }`}
+          />
 
-        <button
-          type="submit"
-          disabled={!inputText.trim()}
-          className="p-2.5 rounded-2xl bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 transition-all cursor-pointer shrink-0 shadow-xs flex items-center justify-center"
-          title="Send real-time message"
-        >
-          <Send className="w-4 h-4" />
-        </button>
-      </form>
+          <button
+            type="submit"
+            disabled={!inputText.trim()}
+            className="p-2.5 rounded-2xl bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 transition-all cursor-pointer shrink-0 shadow-xs flex items-center justify-center"
+            title="Send real-time message"
+          >
+            <Send className="w-4 h-4" />
+          </button>
+        </form>
+      )}
 
       {/* Presence Slide-Over Modal */}
       {showPresenceModal && (

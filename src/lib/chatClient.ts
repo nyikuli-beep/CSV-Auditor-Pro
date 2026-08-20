@@ -51,6 +51,7 @@ export interface ChatMessage {
   deleted?: boolean;
   pinned?: boolean;
   pinnedBy?: string;
+  isSystemNotice?: boolean;
 }
 
 export interface TypingUser {
@@ -831,3 +832,73 @@ export class ChatClient {
     this.statusListeners.forEach(cb => cb(status, error));
   }
 }
+
+/**
+ * Cleanly removes a user's active presence document when access is revoked.
+ */
+export async function removeUserPresence(userId: string): Promise<void> {
+  if (!userId) return;
+  const safeUid = userId.replace(/[\.\#\$\/\[\]]/g, '_');
+  if (rtdb) {
+    try {
+      const pRef = ref(rtdb, `presence/${safeUid}`);
+      await remove(pRef);
+    } catch (e) {
+      console.warn('RTDB remove presence error:', e);
+    }
+  }
+  try {
+    await deleteDoc(doc(db, 'presence', safeUid));
+  } catch (e) {
+    // ignore
+  }
+}
+
+/**
+ * Broadcasts an official system announcement to the live tenancy chat room.
+ */
+export async function broadcastSystemChatMessage(params: {
+  tenantId?: string;
+  fileId?: string;
+  text: string;
+}): Promise<void> {
+  const tenantId = params.tenantId || 'default-tenant-01';
+  const fileId = params.fileId || 'master-audit-01';
+  const timestamp = Date.now();
+  const timeFormatted = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const rawRoomId = `tenant_${tenantId}_file_${fileId}`;
+  const roomId = rawRoomId.replace(/[\.\#\$\/\[\]]/g, '_');
+  const msgId = `sys_${timestamp}_${Math.random().toString(36).substring(2, 7)}`;
+
+  const payload: ChatMessage = {
+    id: msgId,
+    tenantId,
+    fileId,
+    userId: 'system',
+    userName: 'Workspace System',
+    userEmail: 'system@auditor.internal',
+    userRole: 'System',
+    userAvatar: '',
+    text: params.text,
+    timestamp,
+    timeFormatted,
+    status: 'delivered',
+    isSystemNotice: true
+  };
+
+  try {
+    if (rtdb) {
+      const msgRef = ref(rtdb, `chatRooms/${roomId}/messages/${msgId}`);
+      await set(msgRef, payload);
+    }
+  } catch (e) {
+    console.warn("[RTDB Chat] System message RTDB error:", e);
+  }
+
+  try {
+    await setDoc(doc(db, 'chat_messages', msgId), payload);
+  } catch (e) {
+    console.warn("[RTDB Chat] System message Firestore error:", e);
+  }
+}
+
