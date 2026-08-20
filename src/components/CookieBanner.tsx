@@ -223,8 +223,10 @@ export default function CookieBanner({
                   <Cookie className="w-5 h-5" />
                 </div>
                 <div className="space-y-1.5 flex-1">
-                  <h4 className="font-extrabold text-xs tracking-tight uppercase">Cookie Privacy Guard</h4>
-                  <p className="text-[11px] leading-relaxed text-slate-400">
+                  <h4 className={`font-extrabold text-xs tracking-tight uppercase ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
+                    Cookie Privacy Guard
+                  </h4>
+                  <p className={`text-[11px] leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                     We use cookies to optimize workspace theme state, persist layout preferences, and stream analytical insights. Decide which standard identifiers you allow.
                   </p>
                 </div>
@@ -245,7 +247,7 @@ export default function CookieBanner({
                     className={`py-1.5 rounded-lg text-center border cursor-pointer transition-all ${
                       isDarkMode 
                         ? 'bg-slate-900 border-slate-800 hover:bg-slate-800 text-slate-300' 
-                        : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'
+                        : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold'
                     }`}
                   >
                     Essential Only
@@ -261,7 +263,7 @@ export default function CookieBanner({
                   className={`py-1.5 w-full rounded-lg text-center cursor-pointer transition-all flex items-center justify-center gap-1.5 border-dashed border ${
                     isDarkMode 
                       ? 'bg-slate-950/40 border-slate-800 hover:bg-slate-900 text-indigo-400' 
-                      : 'bg-white border-slate-300 hover:bg-slate-50 text-indigo-600'
+                      : 'bg-white border-slate-300 hover:bg-slate-50 text-indigo-600 font-semibold'
                   }`}
                 >
                   <Settings className="w-3.5 h-3.5" /> Customize Cookie Preferences
@@ -281,7 +283,7 @@ export default function CookieBanner({
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               className={`w-full max-w-2xl rounded-2xl border shadow-2xl overflow-hidden flex flex-col max-h-[85vh] ${
-                isDarkMode ? 'bg-[#0f172a] border-slate-800' : 'bg-white border-slate-200'
+                isDarkMode ? 'bg-[#0f172a] border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
               }`}
             >
               {/* Modal Header */}
@@ -291,14 +293,20 @@ export default function CookieBanner({
                     <Shield className="w-5 h-5 text-indigo-400" />
                   </div>
                   <div>
-                    <h3 className="font-extrabold text-sm uppercase tracking-wider">Cookie Governance & Preferences</h3>
-                    <p className="text-[10px] text-slate-400">Configure cookies, view active storage, and audit compliance metrics.</p>
+                    <h3 className={`font-extrabold text-sm uppercase tracking-wider ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
+                      Cookie Governance & Preferences
+                    </h3>
+                    <p className={`text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                      Configure cookies, view active storage, and audit compliance metrics.
+                    </p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="p-1.5 hover:bg-slate-800/10 dark:hover:bg-slate-800 rounded-full text-slate-400 cursor-pointer"
+                  className={`p-1.5 rounded-full cursor-pointer transition-colors ${
+                    isDarkMode ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-500'
+                  }`}
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -314,7 +322,7 @@ export default function CookieBanner({
                   className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
                     activeTab === 'preferences' 
                       ? 'bg-indigo-600 text-white' 
-                      : 'text-slate-400 hover:text-indigo-400'
+                      : isDarkMode ? 'text-slate-400 hover:text-indigo-400' : 'text-slate-600 hover:text-indigo-600'
                   }`}
                 >
                   <Settings className="w-3.5 h-3.5" /> Consent Settings
@@ -328,7 +336,7 @@ export default function CookieBanner({
                   className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
                     activeTab === 'inspector' 
                       ? 'bg-indigo-600 text-white' 
-                      : 'text-slate-400 hover:text-indigo-400'
+                      : isDarkMode ? 'text-slate-400 hover:text-indigo-400' : 'text-slate-600 hover:text-indigo-600'
                   }`}
                 >
                   <Eye className="w-3.5 h-3.5" /> Live Cookie Inspector
@@ -339,7 +347,7 @@ export default function CookieBanner({
                   className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
                     activeTab === 'details' 
                       ? 'bg-indigo-600 text-white' 
-                      : 'text-slate-400 hover:text-indigo-400'
+                      : isDarkMode ? 'text-slate-400 hover:text-indigo-400' : 'text-slate-600 hover:text-indigo-600'
                   }`}
                 >
                   <Info className="w-3.5 h-3.5" /> Cookie Policy details
@@ -350,24 +358,32 @@ export default function CookieBanner({
               <div className="p-5 overflow-y-auto space-y-5 flex-1 min-h-0">
                 {activeTab === 'preferences' && (
                   <div className="space-y-4">
-                    <p className="text-[11px] leading-relaxed text-slate-400">
+                    <p className={`text-[11px] leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                       Our system relies on local storage identifiers to customize and persist your CSV cleanup workflow. Choose which categories you authorize:
                     </p>
 
                     <div className="space-y-3">
                       {/* 1. Essential */}
                       <div className={`p-3.5 rounded-xl border flex items-start justify-between gap-4 ${
-                        isDarkMode ? 'bg-slate-950/60 border-slate-850' : 'bg-slate-50 border-slate-200'
+                        isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'
                       }`}>
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-slate-200">1. Essential Operations (Required)</span>
-                            <span className="text-[8px] uppercase tracking-wider bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded-full">Always Active</span>
+                            <span className={`text-xs font-bold ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
+                              1. Essential Operations (Required)
+                            </span>
+                            <span className={`text-[8px] uppercase tracking-wider px-1.5 py-0.5 rounded-full font-bold ${
+                              isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-200 text-slate-700'
+                            }`}>
+                              Always Active
+                            </span>
                           </div>
-                          <p className="text-[10px] text-slate-400 leading-normal">
+                          <p className={`text-[10px] leading-normal ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                             Strictly necessary for security validation, cookie consent preferences management, and session identification. Cannot be disabled.
                           </p>
-                          <span className="text-[9px] font-mono text-indigo-400 block font-bold">Stored cookies: cookie_consent_choice, cookie_consent_preferences</span>
+                          <span className={`text-[9px] font-mono block font-bold ${isDarkMode ? 'text-indigo-400' : 'text-indigo-600'}`}>
+                            Stored cookies: cookie_consent_choice, cookie_consent_preferences
+                          </span>
                         </div>
                         <input
                           type="checkbox"
@@ -380,15 +396,19 @@ export default function CookieBanner({
                       {/* 2. Personalization */}
                       <div className={`p-3.5 rounded-xl border flex items-start justify-between gap-4 transition-all ${
                         prefs.personalization 
-                          ? (isDarkMode ? 'bg-slate-950 border-indigo-500/20' : 'bg-indigo-50/20 border-indigo-200') 
-                          : (isDarkMode ? 'bg-slate-950/40 border-slate-850' : 'bg-white border-slate-200')
+                          ? (isDarkMode ? 'bg-slate-950 border-indigo-500/20' : 'bg-indigo-50/40 border-indigo-200') 
+                          : (isDarkMode ? 'bg-slate-950/40 border-slate-800' : 'bg-white border-slate-200')
                       }`}>
                         <div className="space-y-1">
-                          <span className="text-xs font-bold text-slate-200">2. Theme & Workspace Personalization</span>
-                          <p className="text-[10px] text-slate-400 leading-normal">
+                          <span className={`text-xs font-bold ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
+                            2. Theme & Workspace Personalization
+                          </span>
+                          <p className={`text-[10px] leading-normal ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                             Enables storage of your chosen workspace accent theme, active workspace tab, and dark mode state in the browser. Authorizing this preserves settings across visits.
                           </p>
-                          <span className="text-[9px] font-mono text-indigo-400 block font-bold">Stored cookies: app_theme, app_accent, app_last_tab</span>
+                          <span className={`text-[9px] font-mono block font-bold ${isDarkMode ? 'text-indigo-400' : 'text-indigo-600'}`}>
+                            Stored cookies: app_theme, app_accent, app_last_tab
+                          </span>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer mt-1">
                           <input
@@ -404,15 +424,19 @@ export default function CookieBanner({
                       {/* 3. Analytics */}
                       <div className={`p-3.5 rounded-xl border flex items-start justify-between gap-4 transition-all ${
                         prefs.analytics 
-                          ? (isDarkMode ? 'bg-slate-950 border-indigo-500/20' : 'bg-indigo-50/20 border-indigo-200') 
-                          : (isDarkMode ? 'bg-slate-950/40 border-slate-850' : 'bg-white border-slate-200')
+                          ? (isDarkMode ? 'bg-slate-950 border-indigo-500/20' : 'bg-indigo-50/40 border-indigo-200') 
+                          : (isDarkMode ? 'bg-slate-950/40 border-slate-800' : 'bg-white border-slate-200')
                       }`}>
                         <div className="space-y-1">
-                          <span className="text-xs font-bold text-slate-200">3. Workspace & Pipeline Analytics</span>
-                          <p className="text-[10px] text-slate-400 leading-normal">
+                          <span className={`text-xs font-bold ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
+                            3. Workspace & Pipeline Analytics
+                          </span>
+                          <p className={`text-[10px] leading-normal ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                             Allows logging of audit speeds, ingest capacities, and clean activity counts inside the secure PostgreSQL Cloud SQL database. This details your metrics.
                           </p>
-                          <span className="text-[9px] font-mono text-indigo-400 block font-bold">Stored cookies: analytics_client_id, session_event_counter</span>
+                          <span className={`text-[9px] font-mono block font-bold ${isDarkMode ? 'text-indigo-400' : 'text-indigo-600'}`}>
+                            Stored cookies: analytics_client_id, session_event_counter
+                          </span>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer mt-1">
                           <input
@@ -428,15 +452,19 @@ export default function CookieBanner({
                       {/* 4. Marketing */}
                       <div className={`p-3.5 rounded-xl border flex items-start justify-between gap-4 transition-all ${
                         prefs.marketing 
-                          ? (isDarkMode ? 'bg-slate-950 border-indigo-500/20' : 'bg-indigo-50/20 border-indigo-200') 
-                          : (isDarkMode ? 'bg-slate-950/40 border-slate-850' : 'bg-white border-slate-200')
+                          ? (isDarkMode ? 'bg-slate-950 border-indigo-500/20' : 'bg-indigo-50/40 border-indigo-200') 
+                          : (isDarkMode ? 'bg-slate-950/40 border-slate-800' : 'bg-white border-slate-200')
                       }`}>
                         <div className="space-y-1">
-                          <span className="text-xs font-bold text-slate-200">4. Marketing & Integration Feeds</span>
-                          <p className="text-[10px] text-slate-400 leading-normal">
+                          <span className={`text-xs font-bold ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
+                            4. Marketing & Integration Feeds
+                          </span>
+                          <p className={`text-[10px] leading-normal ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                             Supports GSC dynamic verification feeds, real-time Slack and email notification triggers, and specialized integrations.
                           </p>
-                          <span className="text-[9px] font-mono text-indigo-400 block font-bold">Stored cookies: marketing_integration_token</span>
+                          <span className={`text-[9px] font-mono block font-bold ${isDarkMode ? 'text-indigo-400' : 'text-indigo-600'}`}>
+                            Stored cookies: marketing_integration_token
+                          </span>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer mt-1">
                           <input
@@ -455,21 +483,25 @@ export default function CookieBanner({
                 {activeTab === 'inspector' && (
                   <div className="space-y-4">
                     <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+                      <span className={`text-[10px] font-extrabold uppercase tracking-widest flex items-center gap-1.5 ${
+                        isDarkMode ? 'text-slate-300' : 'text-slate-700'
+                      }`}>
                         <Database className="w-3.5 h-3.5 text-indigo-400 animate-pulse" /> Live Client Browser Cookies Audit ({activeCookies.length})
                       </span>
                       <button
                         type="button"
                         onClick={refreshCookiesList}
-                        className="text-[9px] font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 cursor-pointer"
+                        className={`text-[9px] font-bold flex items-center gap-1 cursor-pointer transition-colors ${
+                          isDarkMode ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-700'
+                        }`}
                       >
-                        <RefreshCw className="w-3 h-3 text-indigo-400" /> Refresh Table
+                        <RefreshCw className="w-3 h-3" /> Refresh Table
                       </button>
                     </div>
 
                     {inspectorSuccessMsg && (
-                      <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] flex items-center gap-1.5">
-                        <Check className="w-3.5 h-3.5 text-emerald-500 animate-bounce" />
+                      <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[10px] flex items-center gap-1.5 font-semibold">
+                        <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                         <span>{inspectorSuccessMsg}</span>
                       </div>
                     )}
@@ -480,8 +512,8 @@ export default function CookieBanner({
                     }`}>
                       <table className="w-full text-left text-[11px] font-semibold border-collapse">
                         <thead>
-                          <tr className={`border-b text-[9px] font-extrabold uppercase tracking-wider text-slate-400 ${
-                            isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'
+                          <tr className={`border-b text-[9px] font-extrabold uppercase tracking-wider ${
+                            isDarkMode ? 'bg-slate-950/60 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'
                           }`}>
                             <th className="p-2.5">Key Name</th>
                             <th className="p-2.5">Stored Value String</th>
@@ -500,10 +532,10 @@ export default function CookieBanner({
                               <tr 
                                 key={idx}
                                 className={`border-b transition-colors ${
-                                  isDarkMode ? 'border-slate-850 hover:bg-slate-950/40 text-slate-200' : 'border-slate-100 hover:bg-slate-50 text-slate-800'
+                                  isDarkMode ? 'border-slate-800/80 hover:bg-slate-950/40 text-slate-200' : 'border-slate-100 hover:bg-slate-50 text-slate-800'
                                 }`}
                               >
-                                <td className="p-2.5 font-mono text-indigo-400 font-bold">{cookie.name}</td>
+                                <td className={`p-2.5 font-mono font-bold ${isDarkMode ? 'text-indigo-400' : 'text-indigo-600'}`}>{cookie.name}</td>
                                 <td className="p-2.5 font-mono max-w-xs truncate" title={cookie.value}>
                                   {cookie.value}
                                 </td>
@@ -526,12 +558,14 @@ export default function CookieBanner({
 
                     {/* Manual Cookie Creator Box */}
                     <form onSubmit={handleCreateCustomCookie} className={`p-4 rounded-xl border space-y-3 ${
-                      isDarkMode ? 'bg-slate-950/60 border-slate-850' : 'bg-slate-50 border-slate-200'
+                      isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'
                     }`}>
-                      <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest block">Cookie Testing Sandbox</span>
+                      <span className={`text-[9px] font-extrabold uppercase tracking-widest block ${
+                        isDarkMode ? 'text-slate-300' : 'text-slate-700'
+                      }`}>Cookie Testing Sandbox</span>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-400 uppercase">Cookie Key</label>
+                          <label className={`text-[9px] font-bold uppercase ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Cookie Key</label>
                           <input
                             type="text"
                             required
@@ -539,12 +573,12 @@ export default function CookieBanner({
                             value={newCookieName}
                             onChange={(e) => setNewCookieName(e.target.value)}
                             className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none ${
-                              isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-950 border'
+                              isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-200 border' : 'bg-white border-slate-200 text-slate-950 border'
                             }`}
                           />
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-400 uppercase">Cookie Value</label>
+                          <label className={`text-[9px] font-bold uppercase ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Cookie Value</label>
                           <input
                             type="text"
                             required
@@ -552,7 +586,7 @@ export default function CookieBanner({
                             value={newCookieValue}
                             onChange={(e) => setNewCookieValue(e.target.value)}
                             className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none ${
-                              isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-950 border'
+                              isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-200 border' : 'bg-white border-slate-200 text-slate-950 border'
                             }`}
                           />
                         </div>
@@ -562,7 +596,7 @@ export default function CookieBanner({
                         <button
                           type="button"
                           onClick={handleClearAllCookies}
-                          className="px-3 py-1.5 rounded-lg text-[10px] font-bold border border-rose-500/20 text-rose-400 hover:bg-rose-500/10 cursor-pointer transition-all flex items-center gap-1"
+                          className="px-3 py-1.5 rounded-lg text-[10px] font-bold border border-rose-500/20 text-rose-500 hover:bg-rose-500/10 cursor-pointer transition-all flex items-center gap-1"
                         >
                           <Trash2 className="w-3.5 h-3.5" /> Wipe All Cookies
                         </button>
@@ -579,25 +613,27 @@ export default function CookieBanner({
 
                 {activeTab === 'details' && (
                   <div className="space-y-4">
-                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 block">Detailed Cookie Disclosure Policy</span>
+                    <span className={`text-[10px] font-extrabold uppercase tracking-widest block ${
+                      isDarkMode ? 'text-slate-300' : 'text-slate-700'
+                    }`}>Detailed Cookie Disclosure Policy</span>
                     
-                    <div className="space-y-3 text-[11px] leading-relaxed text-slate-400">
-                      <div className={`p-3 rounded-lg border ${isDarkMode ? 'bg-slate-950/40 border-slate-850' : 'bg-slate-50 border-slate-100'}`}>
-                        <span className="font-bold text-slate-300 block mb-1">What are cookies?</span>
+                    <div className={`space-y-3 text-[11px] leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                      <div className={`p-3 rounded-lg border ${isDarkMode ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                        <span className={`font-bold block mb-1 ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>What are cookies?</span>
                         <p>
                           Cookies are small text files downloaded by your browser to record settings, session IDs, and active preferences. They ensure a fluid, secure user experience.
                         </p>
                       </div>
 
-                      <div className={`p-3 rounded-lg border ${isDarkMode ? 'bg-slate-950/40 border-slate-850' : 'bg-slate-50 border-slate-100'}`}>
-                        <span className="font-bold text-slate-300 block mb-1">How can you opt out?</span>
+                      <div className={`p-3 rounded-lg border ${isDarkMode ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                        <span className={`font-bold block mb-1 ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>How can you opt out?</span>
                         <p>
                           You can edit your preferences at any time under settings. Disabling personalization or analytics will cause the application to utilize fallback single-session states only.
                         </p>
                       </div>
 
-                      <div className={`p-3 rounded-lg border ${isDarkMode ? 'bg-slate-950/40 border-slate-850' : 'bg-slate-50 border-slate-100'}`}>
-                        <span className="font-bold text-slate-300 block mb-1">Do we share cookie details?</span>
+                      <div className={`p-3 rounded-lg border ${isDarkMode ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                        <span className={`font-bold block mb-1 ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Do we share cookie details?</span>
                         <p>
                           No. All analytical data is retained inside our secure, direct-linked Cloud SQL PostgreSQL database. No marketing metrics are distributed to third-party brokers.
                         </p>
@@ -622,8 +658,8 @@ export default function CookieBanner({
                     onClick={handleDeclineAll}
                     className={`px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                       isDarkMode 
-                        ? 'bg-slate-900 border-slate-800 hover:bg-slate-850 text-slate-400' 
-                        : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-600'
+                        ? 'bg-slate-900 border-slate-800 hover:bg-slate-850 text-slate-300' 
+                        : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700'
                     }`}
                   >
                     Reject Optional
@@ -636,8 +672,8 @@ export default function CookieBanner({
                     onClick={() => setShowModal(false)}
                     className={`px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                       isDarkMode 
-                        ? 'bg-slate-900 border-slate-800 hover:bg-slate-850 text-slate-400' 
-                        : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-600'
+                        ? 'bg-slate-900 border-slate-800 hover:bg-slate-850 text-slate-300' 
+                        : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700'
                     }`}
                   >
                     Cancel
