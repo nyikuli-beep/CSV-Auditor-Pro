@@ -483,26 +483,64 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
   const getSeverityBadge = (severity: Severity) => {
     switch (severity) {
       case 'critical':
-        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 uppercase flex items-center gap-1 shrink-0"><ShieldAlert className="w-3 h-3" /> Critical</span>;
+        return (
+          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase flex items-center gap-1 shrink-0 ${
+            isDarkMode ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 'bg-rose-100 text-rose-800 border border-rose-300'
+          }`}>
+            <ShieldAlert className="w-3 h-3" /> Critical
+          </span>
+        );
       case 'warning':
-        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 uppercase flex items-center gap-1 shrink-0"><AlertTriangle className="w-3 h-3" /> Warning</span>;
+        return (
+          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase flex items-center gap-1 shrink-0 ${
+            isDarkMode ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-amber-100 text-amber-900 border border-amber-300'
+          }`}>
+            <AlertTriangle className="w-3 h-3" /> Warning
+          </span>
+        );
       case 'info':
-        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20 uppercase flex items-center gap-1 shrink-0"><Info className="w-3 h-3" /> Info</span>;
+        return (
+          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase flex items-center gap-1 shrink-0 ${
+            isDarkMode ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-blue-100 text-blue-800 border border-blue-300'
+          }`}>
+            <Info className="w-3 h-3" /> Info
+          </span>
+        );
     }
   };
 
   const getIssueIcon = (type: IssueType) => {
     switch (type) {
       case 'duplicate':
-        return <span className="p-2 bg-rose-500/10 text-rose-400 rounded-lg"><AlertCircle className="w-4 h-4" /></span>;
+        return (
+          <span className={`p-2 rounded-lg ${isDarkMode ? 'bg-rose-500/10 text-rose-400' : 'bg-rose-100 text-rose-700'}`}>
+            <AlertCircle className="w-4 h-4" />
+          </span>
+        );
       case 'missing_value':
-        return <span className="p-2 bg-amber-500/10 text-amber-400 rounded-lg"><AlertTriangle className="w-4 h-4" /></span>;
+        return (
+          <span className={`p-2 rounded-lg ${isDarkMode ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-100 text-amber-800'}`}>
+            <AlertTriangle className="w-4 h-4" />
+          </span>
+        );
       case 'invalid_format':
-        return <span className="p-2 bg-blue-500/10 text-blue-400 rounded-lg"><Info className="w-4 h-4" /></span>;
+        return (
+          <span className={`p-2 rounded-lg ${isDarkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
+            <Info className="w-4 h-4" />
+          </span>
+        );
       case 'outlier':
-        return <span className="p-2 bg-violet-500/10 text-violet-400 rounded-lg"><Sparkles className="w-4 h-4" /></span>;
+        return (
+          <span className={`p-2 rounded-lg ${isDarkMode ? 'bg-violet-500/10 text-violet-400' : 'bg-violet-100 text-violet-800'}`}>
+            <Sparkles className="w-4 h-4" />
+          </span>
+        );
       case 'column_inconsistency':
-        return <span className="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg"><CheckCircle2 className="w-4 h-4" /></span>;
+        return (
+          <span className={`p-2 rounded-lg ${isDarkMode ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-100 text-emerald-800'}`}>
+            <CheckCircle2 className="w-4 h-4" />
+          </span>
+        );
     }
   };
 
@@ -767,7 +805,7 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
       <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
         {/* SVG Quality Score Meter Dial */}
         <div className={`md:col-span-5 p-6 rounded-2xl border flex flex-col items-center justify-center text-center ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
-          <h3 className="font-bold text-xs uppercase tracking-wider text-slate-400 mb-6">Data Quality Score</h3>
+          <h3 className={`font-bold text-xs uppercase tracking-wider mb-6 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Data Quality Score</h3>
           
           <div className="relative w-44 h-44 flex items-center justify-center">
             {/* SVG circle track */}
@@ -842,69 +880,69 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
           {/* Smart Format Profiler */}
           {activeFile.detectedMetadata && (
             <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/40 border-slate-800/80' : 'bg-white border-slate-200 shadow-xs'}`}>
-              <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-800/30">
-                <h4 className="text-xs font-bold text-blue-400 uppercase tracking-widest flex items-center gap-1.5">
+              <div className={`flex items-center justify-between mb-4 pb-2 border-b ${isDarkMode ? 'border-slate-800/30' : 'border-slate-200'}`}>
+                <h4 className={`text-xs font-bold uppercase tracking-widest flex items-center gap-1.5 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
                   <Sparkles className="w-3.5 h-3.5 text-yellow-500" /> Ingestion Format Profile
                 </h4>
-                <span className="text-[9px] bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded font-bold font-mono">Auto-Detected</span>
+                <span className={`text-[9px] px-2 py-0.5 rounded font-bold font-mono ${isDarkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>Auto-Detected</span>
               </div>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Date Formats */}
                 <div className="space-y-2">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Detected Date Columns</span>
+                  <span className={`text-[10px] font-bold uppercase tracking-wider block ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Detected Date Columns</span>
                   {Object.keys(activeFile.detectedMetadata.dateFormats).length > 0 ? (
                     <div className="space-y-1.5 max-h-[120px] overflow-y-auto pr-1">
                       {Object.entries(activeFile.detectedMetadata.dateFormats).map(([col, fmt]) => (
                         <div key={col} className={`flex justify-between items-center text-xs px-2.5 py-1.5 rounded border ${isDarkMode ? 'bg-slate-950/40 border-slate-800/40' : 'bg-slate-50 border-slate-200'}`}>
-                          <span className="font-medium text-slate-300 truncate max-w-[120px]" title={col}>{col}</span>
-                          <span className="font-mono text-[9px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded font-bold">{fmt}</span>
+                          <span className={`font-medium truncate max-w-[120px] ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`} title={col}>{col}</span>
+                          <span className={`font-mono text-[9px] px-1.5 py-0.5 rounded font-bold ${isDarkMode ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>{fmt}</span>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <span className="text-xs text-slate-500 italic block">No standard date columns detected.</span>
+                    <span className={`text-xs italic block ${isDarkMode ? 'text-slate-500' : 'text-slate-600'}`}>No standard date columns detected.</span>
                   )}
                 </div>
 
                 {/* Currency settings */}
                 <div className="space-y-2">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Detected Currency Columns</span>
+                  <span className={`text-[10px] font-bold uppercase tracking-wider block ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Detected Currency Columns</span>
                   {activeFile.detectedMetadata.currencySettings.length > 0 ? (
                     <div className="space-y-1.5 max-h-[120px] overflow-y-auto pr-1">
                       {activeFile.detectedMetadata.currencySettings.map((set) => (
                         <div key={set.column} className={`text-xs p-2 rounded border ${isDarkMode ? 'bg-slate-950/40 border-slate-800/40' : 'bg-slate-50 border-slate-200'} space-y-1`}>
                           <div className="flex justify-between items-center">
-                            <span className="font-medium text-slate-300 truncate max-w-[120px]" title={set.column}>{set.column}</span>
-                            <span className="font-mono text-[9px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-bold">
+                            <span className={`font-medium truncate max-w-[120px] ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`} title={set.column}>{set.column}</span>
+                            <span className={`font-mono text-[9px] px-1.5 py-0.5 rounded font-bold ${isDarkMode ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-800'}`}>
                               Symbol: {set.symbol || '$'}
                             </span>
                           </div>
-                          <div className="flex justify-between text-[9px] text-slate-400 font-mono">
-                            <span>Decimals: <strong className="text-slate-200">{set.decimalSeparator || '.'}</strong></span>
-                            <span>Thousands: <strong className="text-slate-200">{set.thousandSeparator || ','}</strong></span>
+                          <div className={`flex justify-between text-[9px] font-mono ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                            <span>Decimals: <strong className={isDarkMode ? 'text-slate-200' : 'text-slate-800'}>{set.decimalSeparator || '.'}</strong></span>
+                            <span>Thousands: <strong className={isDarkMode ? 'text-slate-200' : 'text-slate-800'}>{set.thousandSeparator || ','}</strong></span>
                           </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <span className="text-xs text-slate-500 italic block">No standard financial columns detected.</span>
+                    <span className={`text-xs italic block ${isDarkMode ? 'text-slate-500' : 'text-slate-600'}`}>No standard financial columns detected.</span>
                   )}
                 </div>
               </div>
 
               {activeFile.headerMappings && Object.keys(activeFile.headerMappings).some(k => activeFile.headerMappings?.[k] !== 'None') && (
-                <div className="space-y-2 mt-4 pt-4 border-t border-slate-800/20">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">AI Canonical Column Mappings</span>
+                <div className={`space-y-2 mt-4 pt-4 border-t ${isDarkMode ? 'border-slate-800/20' : 'border-slate-200'}`}>
+                  <span className={`text-[10px] font-bold uppercase tracking-wider block ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>AI Canonical Column Mappings</span>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                     {Object.entries(activeFile.headerMappings).map(([col, canonical]) => {
                       if (canonical === 'None') return null;
                       return (
                         <div key={col} className={`flex justify-between items-center text-xs px-2.5 py-1.5 rounded border ${isDarkMode ? 'bg-slate-950/40 border-slate-800/40' : 'bg-slate-50 border-slate-200'}`}>
-                          <span className={`font-semibold truncate max-w-[120px] ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`} title={col}>{col}</span>
+                          <span className={`font-semibold truncate max-w-[120px] ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`} title={col}>{col}</span>
                           <div className="flex items-center gap-1.5 min-w-0">
-                            <span className="text-[9px] text-slate-500 font-mono">→</span>
-                            <span className="font-mono text-[9px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded font-bold truncate" title={canonical}>{canonical}</span>
+                            <span className={`text-[9px] font-mono ${isDarkMode ? 'text-slate-500' : 'text-slate-600'}`}>→</span>
+                            <span className={`font-mono text-[9px] px-1.5 py-0.5 rounded font-bold truncate ${isDarkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-100 text-blue-700'}`} title={canonical}>{canonical}</span>
                           </div>
                         </div>
                       );
@@ -926,19 +964,19 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
 
       {/* Filter and Issues Feed */}
       <div className={`p-6 rounded-3xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-5 mb-6 border-slate-800/80">
-          <h3 className="font-bold text-base flex items-center gap-2"><Filter className="w-4 h-4 text-blue-500" /> Compliance Findings ({filteredIssues.length})</h3>
+        <div className={`flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-5 mb-6 ${isDarkMode ? 'border-slate-800/80' : 'border-slate-200'}`}>
+          <h3 className={`font-bold text-base flex items-center gap-2 ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}><Filter className="w-4 h-4 text-blue-500" /> Compliance Findings ({filteredIssues.length})</h3>
           
           <div className="flex flex-wrap gap-2 text-xs items-center">
             {/* Search Input */}
             <div className="relative flex-1 sm:flex-none min-w-[160px]">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400 pointer-events-none" />
+              <Search className={`w-3.5 h-3.5 absolute left-3 top-2.5 pointer-events-none ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search issues, columns, rows..."
-                className={`w-full pl-8 pr-3 py-1.5 rounded-lg border text-xs focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200 placeholder-slate-500' : 'bg-white border-slate-200 text-slate-700 placeholder-slate-400'}`}
+                className={`w-full pl-8 pr-3 py-1.5 rounded-lg border text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200 placeholder-slate-500' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'}`}
               />
             </div>
 
@@ -946,7 +984,7 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
             <select 
               value={severityFilter} 
               onChange={(e) => setSeverityFilter(e.target.value as any)}
-              className={`px-3 py-1.5 rounded-lg border focus:outline-none cursor-pointer ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
+              className={`px-3 py-1.5 rounded-lg border focus:outline-none cursor-pointer ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-300 text-slate-900'}`}
             >
               <option value="all">All Severities</option>
               <option value="critical">Critical</option>
@@ -958,7 +996,7 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
             <select 
               value={typeFilter} 
               onChange={(e) => setTypeFilter(e.target.value as any)}
-              className={`px-3 py-1.5 rounded-lg border focus:outline-none cursor-pointer ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
+              className={`px-3 py-1.5 rounded-lg border focus:outline-none cursor-pointer ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-300 text-slate-900'}`}
             >
               <option value="all">All Issue Types</option>
               <option value="duplicate">Duplicates</option>
@@ -971,7 +1009,7 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
             <select 
               value={sortColumn} 
               onChange={(e) => setSortColumn(e.target.value as SortField)}
-              className={`px-3 py-1.5 rounded-lg border focus:outline-none font-bold cursor-pointer ${isDarkMode ? 'bg-slate-950 border-slate-800 text-blue-400' : 'bg-white border-slate-200 text-blue-600'}`}
+              className={`px-3 py-1.5 rounded-lg border focus:outline-none font-bold cursor-pointer ${isDarkMode ? 'bg-slate-950 border-slate-800 text-blue-400' : 'bg-white border-slate-300 text-blue-600'}`}
               title="Sort table by selected column"
             >
               <option value="row">Sort by Row #</option>
@@ -990,7 +1028,7 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
               className={`px-2.5 py-1.5 rounded-lg border font-bold flex items-center gap-1 cursor-pointer transition-all ${
                 isDarkMode 
                   ? 'bg-slate-950 border-slate-800 text-slate-200 hover:bg-slate-900 hover:border-slate-700' 
-                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                  : 'bg-white border-slate-300 text-slate-800 hover:bg-slate-100'
               }`}
               title={`Toggle sort direction (Currently ${sortDirection.toUpperCase()})`}
             >
@@ -999,7 +1037,7 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
             </button>
 
             {/* View Mode Toggle: Virtualized vs Paginated */}
-            <div className={`flex items-center rounded-lg border p-0.5 ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
+            <div className={`flex items-center rounded-lg border p-0.5 ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-300'}`}>
               <button
                 type="button"
                 id="audit-results-view-virtualized-btn"
@@ -1007,7 +1045,7 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                 className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
                   viewMode === 'virtualized'
                     ? 'bg-blue-600 text-white shadow-xs'
-                    : isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'
+                    : isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-700 hover:text-slate-950'
                 }`}
                 title="Virtualized List Rendering with react-window for maximum performance with thousands of rows"
               >
@@ -1021,7 +1059,7 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                 className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
                   viewMode === 'paginated'
                     ? 'bg-blue-600 text-white shadow-xs'
-                    : isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'
+                    : isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-700 hover:text-slate-950'
                 }`}
                 title="Paginated Cards View"
               >
@@ -1038,7 +1076,7 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
               className={`px-3 py-1.5 rounded-lg border font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
                 isDarkMode 
                   ? 'bg-rose-500/10 border-rose-500/20 hover:border-rose-500/40 text-rose-400 hover:bg-rose-500/20 hover:text-rose-200' 
-                  : 'bg-rose-50 border-rose-100 text-rose-700 hover:bg-rose-100 hover:text-rose-900 hover:border-rose-300'
+                  : 'bg-rose-50 border-rose-300 text-rose-800 hover:bg-rose-100 hover:text-rose-900 hover:border-rose-400 shadow-xs'
               }`}
               title="Download only rows that have compliance issues for offline review"
             >
@@ -1054,7 +1092,7 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
               className={`px-3 py-1.5 rounded-lg border font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
                 isDarkMode 
                   ? 'bg-emerald-500/10 border-emerald-500/30 hover:border-emerald-500/60 text-emerald-400 hover:bg-emerald-500/20' 
-                  : 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100 hover:border-emerald-300 shadow-xs'
+                  : 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 hover:border-emerald-400 shadow-xs'
               }`}
               title="Export complete cleaned dataset and issue findings into structured Excel (.xlsx) workbook"
             >
@@ -1074,12 +1112,12 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                 className={`px-3 py-1.5 rounded-lg border font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
                   isDarkMode 
                     ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-900 hover:border-slate-700' 
-                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:shadow-xs'
+                    : 'bg-white border-slate-300 text-slate-800 hover:bg-slate-100 shadow-xs'
                 }`}
               >
                 <Download className="w-3.5 h-3.5 text-blue-500" />
                 <span>Export Data</span>
-                <ChevronDown className="w-3 h-3 ml-0.5 text-slate-500" />
+                <ChevronDown className={`w-3 h-3 ml-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} />
               </button>
 
               {exportDropdownOpen && (
@@ -1094,9 +1132,9 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                   <div className={`absolute right-0 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-xl border shadow-2xl z-30 py-2 animate-fadeIn ${
                     isDarkMode 
                       ? 'bg-slate-950 border-slate-800 text-slate-200' 
-                      : 'bg-white border-slate-200 text-slate-800'
+                      : 'bg-white border-slate-300 text-slate-900 shadow-xl'
                   }`}>
-                    <div className="px-3 py-1.5 border-b border-slate-800/40 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    <div className={`px-3 py-1.5 border-b text-[10px] font-bold uppercase tracking-widest ${isDarkMode ? 'border-slate-800/40 text-slate-400' : 'border-slate-200 text-slate-600'}`}>
                       Export Configurations
                     </div>
 
@@ -1114,16 +1152,16 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                     >
                       <FileSpreadsheet className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
                       <div>
-                        <span className="font-bold text-xs block text-emerald-400 flex items-center gap-1">
-                          Excel Workbook (.xlsx) <span className="px-1.5 py-0.2 rounded text-[9px] bg-emerald-500/20 uppercase font-mono">Multi-Tab</span>
+                        <span className={`font-bold text-xs block flex items-center gap-1 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-700'}`}>
+                          Excel Workbook (.xlsx) <span className={`px-1.5 py-0.2 rounded text-[9px] uppercase font-mono ${isDarkMode ? 'bg-emerald-500/20 text-emerald-300' : 'bg-emerald-100 text-emerald-800'}`}>Multi-Tab</span>
                         </span>
-                        <span className="text-[10px] text-slate-400 block mt-0.5">
+                        <span className={`text-[10px] block mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                           Multi-tab workbook with Cleaned Data, Findings Log, Issue Flags, and Executive Summary.
                         </span>
                       </div>
                     </button>
                     
-                    <div className="border-t border-slate-800/40 my-1"></div>
+                    <div className={`border-t my-1 ${isDarkMode ? 'border-slate-800/40' : 'border-slate-200'}`}></div>
                     
                     {/* Option 1: Full Cleaned/Audited CSV */}
                     <button
@@ -1131,13 +1169,13 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                       id="export-option-full"
                       onClick={exportFullDataset}
                       className={`w-full px-3 py-2 text-left transition-colors flex items-start gap-2.5 cursor-pointer ${
-                        isDarkMode ? 'hover:bg-slate-900' : 'hover:bg-slate-50'
+                        isDarkMode ? 'hover:bg-slate-900' : 'hover:bg-slate-100'
                       }`}
                     >
                       <FileSpreadsheet className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
                       <div>
-                        <span className="font-bold text-xs block">Full Dataset ({activeFile.cleanedRows ? 'Cleaned' : 'Audited'})</span>
-                        <span className="text-[10px] text-slate-400 block mt-0.5">
+                        <span className={`font-bold text-xs block ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Full Dataset ({activeFile.cleanedRows ? 'Cleaned' : 'Audited'})</span>
+                        <span className={`text-[10px] block mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                           Download all {activeFile.cleanedRows ? activeFile.cleanedRows.length : activeFile.rows.length} rows as a new CSV file.
                         </span>
                       </div>
@@ -1152,13 +1190,13 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                       className={`w-full px-3 py-2 text-left transition-colors flex items-start gap-2.5 cursor-pointer ${
                         severityFilter === 'all' && typeFilter === 'all'
                           ? 'opacity-40 cursor-not-allowed'
-                          : isDarkMode ? 'hover:bg-slate-900' : 'hover:bg-slate-50'
+                          : isDarkMode ? 'hover:bg-slate-900' : 'hover:bg-slate-100'
                       }`}
                     >
                       <Filter className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
                       <div>
-                        <span className="font-bold text-xs block">Filtered Rows Only</span>
-                        <span className="text-[10px] text-slate-400 block mt-0.5">
+                        <span className={`font-bold text-xs block ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Filtered Rows Only</span>
+                        <span className={`text-[10px] block mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                           {severityFilter === 'all' && typeFilter === 'all'
                             ? 'Select a severity or type filter to export subset.'
                             : `Download only the ${affectedRowsCount} rows matching active filters.`}
@@ -1172,19 +1210,19 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                       id="export-option-issues-only"
                       onClick={exportIssuesOnlyRows}
                       className={`w-full px-3 py-2 text-left transition-colors flex items-start gap-2.5 cursor-pointer ${
-                        isDarkMode ? 'hover:bg-slate-900' : 'hover:bg-slate-50'
+                        isDarkMode ? 'hover:bg-slate-900' : 'hover:bg-slate-100'
                       }`}
                     >
                       <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
                       <div>
-                        <span className="font-bold text-xs block">Rows with Issues Only</span>
-                        <span className="text-[10px] text-slate-400 block mt-0.5">
+                        <span className={`font-bold text-xs block ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Rows with Issues Only</span>
+                        <span className={`text-[10px] block mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                           Download only the rows currently identified as having quality issues.
                         </span>
                       </div>
                     </button>
 
-                    <div className="border-t border-slate-800/40 my-1"></div>
+                    <div className={`border-t my-1 ${isDarkMode ? 'border-slate-800/40' : 'border-slate-200'}`}></div>
 
                     {/* Option 3: Audit Report */}
                     <button
@@ -1192,13 +1230,13 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                       id="export-option-report"
                       onClick={exportFindingsReport}
                       className={`w-full px-3 py-2 text-left transition-colors flex items-start gap-2.5 cursor-pointer ${
-                        isDarkMode ? 'hover:bg-slate-900' : 'hover:bg-slate-50'
+                        isDarkMode ? 'hover:bg-slate-900' : 'hover:bg-slate-100'
                       }`}
                     >
                       <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                       <div>
-                        <span className="font-bold text-xs block">Compliance Issues List</span>
-                        <span className="text-[10px] text-slate-400 block mt-0.5">
+                        <span className={`font-bold text-xs block ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Compliance Issues List</span>
+                        <span className={`text-[10px] block mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                           Download a spreadsheet of the {filteredIssues.length} found compliance issues.
                         </span>
                       </div>
@@ -1212,12 +1250,12 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
 
         {/* Smart Outlier Dashboard Panel */}
         <div className={`mb-6 p-5 rounded-2xl border ${isDarkMode ? 'bg-[#1e293b]/30 border-slate-800' : 'bg-slate-50 border-slate-200'} space-y-4`}>
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800/20 pb-3">
+          <div className={`flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-3 ${isDarkMode ? 'border-slate-800/20' : 'border-slate-200'}`}>
             <div className="flex items-center gap-2.5">
               <span className="p-2 bg-violet-500/10 text-violet-400 rounded-xl"><BrainCircuit className="w-5 h-5 text-violet-500" /></span>
               <div>
-                <h4 className="text-sm font-extrabold tracking-tight">Smart Statistical & AI Outlier Audit</h4>
-                <p className={`text-[11px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Locate financial standard deviations and cognitive variance anomalies in numerical columns.</p>
+                <h4 className={`text-sm font-extrabold tracking-tight ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Smart Statistical & AI Outlier Audit</h4>
+                <p className={`text-[11px] ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Locate financial standard deviations and cognitive variance anomalies in numerical columns.</p>
               </div>
             </div>
 
@@ -1225,7 +1263,13 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
               <button
                 type="button"
                 onClick={() => setAnomalyMode('statistical')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${anomalyMode === 'statistical' ? 'bg-violet-600 text-white shadow' : 'bg-slate-800/40 text-slate-400 hover:text-white'}`}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  anomalyMode === 'statistical' 
+                    ? 'bg-violet-600 text-white shadow' 
+                    : isDarkMode 
+                    ? 'bg-slate-800/40 text-slate-400 hover:text-white' 
+                    : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-950'
+                }`}
               >
                 <BarChart3 className="w-3.5 h-3.5" /> Statistical Model
               </button>
@@ -1237,9 +1281,15 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                     triggerAiAnomalyScan();
                   }
                 }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${anomalyMode === 'ai' ? 'bg-indigo-600 text-white shadow' : 'bg-slate-800/40 text-slate-400 hover:text-white'}`}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  anomalyMode === 'ai' 
+                    ? 'bg-indigo-600 text-white shadow' 
+                    : isDarkMode 
+                    ? 'bg-slate-800/40 text-slate-400 hover:text-white' 
+                    : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-950'
+                }`}
               >
-                <Sparkles className="w-3.5 h-3.5 text-yellow-400" /> AI Anomaly Detection
+                <Sparkles className="w-3.5 h-3.5 text-yellow-500" /> AI Anomaly Detection
               </button>
             </div>
           </div>
@@ -1248,18 +1298,18 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
             <div className="space-y-4">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div className="text-xs">
-                  <span className="font-bold text-slate-400">Statistical Analysis Parameters:</span>
-                  <p className="text-[10px] text-slate-500">Filters values lying outside standard deviation probability tails.</p>
+                  <span className={`font-bold ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>Statistical Analysis Parameters:</span>
+                  <p className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-slate-600'}`}>Filters values lying outside standard deviation probability tails.</p>
                 </div>
                 
                 {/* Slider to adjust standard deviation threshold */}
                 <div className="w-full md:w-72 space-y-1.5 shrink-0">
                   <div className="flex justify-between text-[11px] font-mono">
-                    <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>Outlier Sensitivity</span>
+                    <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>Outlier Sensitivity</span>
                     <span className="text-violet-500 font-extrabold">{outlierThreshold.toFixed(1)} Standard Devs (σ)</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-slate-400">Strict (1.5)</span>
+                    <span className={`text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Strict (1.5)</span>
                     <input
                       type="range"
                       min="1.5"
@@ -1272,7 +1322,7 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                       }}
                       className="flex-1 h-1.5 rounded-lg appearance-none cursor-pointer accent-violet-500 bg-slate-200 dark:bg-slate-800"
                     />
-                    <span className="text-[10px] text-slate-400">Relaxed (4.0)</span>
+                    <span className={`text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Relaxed (4.0)</span>
                   </div>
                 </div>
               </div>
@@ -1281,7 +1331,7 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
               {columnStats.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
                   {columnStats.map((stat) => (
-                    <div key={stat.column} className={`p-3.5 rounded-xl border flex flex-col justify-between ${isDarkMode ? 'bg-[#0f172a]/60 border-slate-800' : 'bg-white border-slate-200'}`}>
+                    <div key={stat.column} className={`p-3.5 rounded-xl border flex flex-col justify-between ${isDarkMode ? 'bg-[#0f172a]/60 border-slate-800' : 'bg-white border-slate-200 shadow-2xs'}`}>
                       <div className="flex justify-between items-start mb-2 gap-2">
                         <span className={`font-extrabold text-xs truncate ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`} title={stat.column}>{stat.column}</span>
                         <span className={`text-[9px] font-mono px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${stat.outliersCount > 0 ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 'bg-emerald-500/10 text-emerald-400'}`}>
@@ -1290,18 +1340,18 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                       </div>
                       <div className={`grid grid-cols-3 gap-2 text-[10px] font-mono border-t pt-2.5 ${isDarkMode ? 'border-slate-800/60' : 'border-slate-100'}`}>
                         <div>
-                          <span className="block text-slate-500 text-[8px] uppercase font-bold tracking-wider mb-0.5">Rows</span>
+                          <span className={`block ${isDarkMode ? 'text-slate-500' : 'text-slate-600'} text-[8px] uppercase font-bold tracking-wider mb-0.5`}>Rows</span>
                           <strong className={isDarkMode ? 'text-slate-300' : 'text-slate-700'}>{stat.count}</strong>
                         </div>
                         <div>
-                          <span className="block text-slate-500 text-[8px] uppercase font-bold tracking-wider mb-0.5">Mean</span>
+                          <span className={`block ${isDarkMode ? 'text-slate-500' : 'text-slate-600'} text-[8px] uppercase font-bold tracking-wider mb-0.5`}>Mean</span>
                           <strong className={isDarkMode ? 'text-slate-300' : 'text-slate-700'}>
                             {stat.column.toLowerCase().includes('quantity') ? '' : '$'}
                             {stat.mean.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                           </strong>
                         </div>
                         <div>
-                          <span className="block text-slate-500 text-[8px] uppercase font-bold tracking-wider mb-0.5">Std Dev (σ)</span>
+                          <span className={`block ${isDarkMode ? 'text-slate-500' : 'text-slate-600'} text-[8px] uppercase font-bold tracking-wider mb-0.5`}>Std Dev (σ)</span>
                           <strong className={isDarkMode ? 'text-slate-300' : 'text-slate-700'}>
                             {stat.column.toLowerCase().includes('quantity') ? '' : '$'}
                             {stat.stdDev.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
@@ -1312,10 +1362,10 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                   ))}
                 </div>
               ) : (
-                <div className={`p-4 rounded-xl border text-center text-xs ${isDarkMode ? 'bg-slate-900/20 border-slate-800 text-slate-400' : 'bg-slate-100/50 border-slate-200 text-slate-500'}`}>
+                <div className={`p-4 rounded-xl border text-center text-xs ${isDarkMode ? 'bg-slate-900/20 border-slate-800 text-slate-400' : 'bg-slate-100/50 border-slate-200 text-slate-600'}`}>
                   <HelpCircle className="w-5 h-5 text-slate-500 mx-auto mb-1.5" />
-                  <p className="font-semibold">No numerical columns mapped or detected</p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Map your headers to "Amount" in the Upload Center or ensure header contains "Amount/Budget/Price" keywords to enable dynamic standard deviation analysis.</p>
+                  <p className={`font-semibold ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>No numerical columns mapped or detected</p>
+                  <p className={`text-[10px] mt-0.5 ${isDarkMode ? 'text-slate-500' : 'text-slate-600'}`}>Map your headers to "Amount" in the Upload Center or ensure header contains "Amount/Budget/Price" keywords to enable dynamic standard deviation analysis.</p>
                 </div>
               )}
             </div>
@@ -1327,27 +1377,27 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                 <div className="flex flex-col items-center justify-center py-10 space-y-4 animate-pulse">
                   <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin" />
                   <div className="text-center">
-                    <h5 className="font-bold text-xs uppercase tracking-wider text-indigo-400">Gemini Anomaly Scanner Running...</h5>
-                    <p className="text-[10px] text-slate-500 mt-1">Inspecting values, scanning probability tails, and computing contextual variance explanations.</p>
+                    <h5 className={`font-bold text-xs uppercase tracking-wider ${isDarkMode ? 'text-indigo-400' : 'text-indigo-600'}`}>Gemini Anomaly Scanner Running...</h5>
+                    <p className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-slate-600'} mt-1`}>Inspecting values, scanning probability tails, and computing contextual variance explanations.</p>
                   </div>
                 </div>
               )}
 
               {!fetchingAiAnomalies && aiAnomaliesLoaded && (
                 <div className="space-y-4">
-                  <div className="flex justify-between items-center bg-indigo-950/25 p-3.5 rounded-xl border border-indigo-500/20">
+                  <div className={`flex justify-between items-center p-3.5 rounded-xl border ${isDarkMode ? 'bg-indigo-950/25 border-indigo-500/20' : 'bg-indigo-50/70 border-indigo-200'}`}>
                     <div className="flex items-center gap-2.5 text-xs">
                       <div className="h-2 w-2 rounded-full bg-indigo-400 animate-ping" />
-                      <span className="font-mono font-bold text-indigo-400 uppercase tracking-wider">Gemini Cognitive Assessment Status: COMPLETE</span>
+                      <span className={`font-mono font-bold uppercase tracking-wider ${isDarkMode ? 'text-indigo-400' : 'text-indigo-800'}`}>Gemini Cognitive Assessment Status: COMPLETE</span>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="text-[10px] bg-indigo-500/10 text-indigo-400 px-2.5 py-0.5 rounded font-mono font-bold border border-indigo-500/20">
+                      <span className={`text-[10px] px-2.5 py-0.5 rounded font-mono font-bold border ${isDarkMode ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'bg-indigo-100 text-indigo-800 border-indigo-300'}`}>
                         {aiAnomalies.length} Flagged Anomalies
                       </span>
                       <button
                         type="button"
                         onClick={triggerAiAnomalyScan}
-                        className="p-1 text-slate-400 hover:text-white transition-all rounded-lg hover:bg-slate-800"
+                        className={`p-1 transition-all rounded-lg cursor-pointer ${isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}
                         title="Rescan file with AI"
                       >
                         <RefreshCw className="w-3.5 h-3.5" />
@@ -1361,26 +1411,26 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                         const anomaliesForCol = aiAnomalies.filter(a => a.column === stat.column);
                         const isHealthy = anomaliesForCol.length === 0;
                         return (
-                          <div key={stat.column} className={`p-3.5 rounded-xl border flex flex-col justify-between ${isDarkMode ? 'bg-[#0f172a]/60 border-slate-800' : 'bg-white border-slate-200'}`}>
+                          <div key={stat.column} className={`p-3.5 rounded-xl border flex flex-col justify-between ${isDarkMode ? 'bg-[#0f172a]/60 border-slate-800' : 'bg-white border-slate-200 shadow-2xs'}`}>
                             <div className="flex justify-between items-start mb-2 gap-2">
                               <span className={`font-extrabold text-xs truncate ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`} title={stat.column}>{stat.column}</span>
-                              <span className={`text-[9px] font-mono px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${!isHealthy ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                              <span className={`text-[9px] font-mono px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${!isHealthy ? (isDarkMode ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' : 'bg-indigo-50 text-indigo-700 border border-indigo-200') : 'bg-emerald-500/10 text-emerald-400'}`}>
                                 {anomaliesForCol.length} AI Flagged
                               </span>
                             </div>
-                            <p className="text-[10px] text-slate-500 mb-2 leading-tight">
+                            <p className={`text-[10px] mb-2 leading-tight ${isDarkMode ? 'text-slate-500' : 'text-slate-600'}`}>
                               {isHealthy 
                                 ? "AI Audit suggests this column is clean of structural outliers." 
                                 : `AI detected ${anomaliesForCol.length} high-risk statistical deviations.`}
                             </p>
                             <div className={`grid grid-cols-2 gap-2 text-[10px] font-mono border-t pt-2.5 ${isDarkMode ? 'border-slate-800/60' : 'border-slate-100'}`}>
                               <div>
-                                <span className="block text-slate-500 text-[8px] uppercase font-bold tracking-wider mb-0.5">Assessed</span>
+                                <span className={`block ${isDarkMode ? 'text-slate-500' : 'text-slate-600'} text-[8px] uppercase font-bold tracking-wider mb-0.5`}>Assessed</span>
                                 <strong className={isDarkMode ? 'text-slate-300' : 'text-slate-700'}>{stat.count} Rows</strong>
                               </div>
                               <div>
-                                <span className="block text-slate-500 text-[8px] uppercase font-bold tracking-wider mb-0.5">Distribution</span>
-                                <strong className={isHealthy ? 'text-emerald-500' : 'text-indigo-400 font-bold'}>
+                                <span className={`block ${isDarkMode ? 'text-slate-500' : 'text-slate-600'} text-[8px] uppercase font-bold tracking-wider mb-0.5`}>Distribution</span>
+                                <strong className={isHealthy ? 'text-emerald-500' : (isDarkMode ? 'text-indigo-400 font-bold' : 'text-indigo-600 font-bold')}>
                                   {isHealthy ? 'Normal (Clean)' : 'Anomalous'}
                                 </strong>
                               </div>
@@ -1390,10 +1440,10 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                       })}
                     </div>
                   ) : (
-                    <div className={`p-4 rounded-xl border text-center text-xs ${isDarkMode ? 'bg-slate-900/20 border-slate-800 text-slate-400' : 'bg-slate-100/50 border-slate-200 text-slate-500'}`}>
+                    <div className={`p-4 rounded-xl border text-center text-xs ${isDarkMode ? 'bg-slate-900/20 border-slate-800 text-slate-400' : 'bg-slate-100/50 border-slate-200 text-slate-600'}`}>
                       <HelpCircle className="w-5 h-5 text-slate-500 mx-auto mb-1.5" />
-                      <p className="font-semibold">No numerical columns mapped or detected</p>
-                      <p className="text-[10px] text-slate-500 mt-0.5">Map your headers to "Amount" in the Upload Center or ensure header contains "Amount/Budget/Price" keywords to enable dynamic standard deviation analysis.</p>
+                      <p className={`font-semibold ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>No numerical columns mapped or detected</p>
+                      <p className={`text-[10px] mt-0.5 ${isDarkMode ? 'text-slate-500' : 'text-slate-600'}`}>Map your headers to "Amount" in the Upload Center or ensure header contains "Amount/Budget/Price" keywords to enable dynamic standard deviation analysis.</p>
                     </div>
                   )}
                 </div>
@@ -1403,8 +1453,8 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                 <div className="text-center py-8 space-y-3">
                   <BrainCircuit className="w-8 h-8 text-indigo-400 mx-auto animate-pulse" />
                   <div>
-                    <h5 className="font-bold text-xs uppercase tracking-wider">AI Anomaly Scanning Pending</h5>
-                    <p className="text-[10px] text-slate-500 mt-1">Start scanning to inspect numerical series using Gemini model reasoning.</p>
+                    <h5 className={`font-bold text-xs uppercase tracking-wider ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>AI Anomaly Scanning Pending</h5>
+                    <p className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-slate-600'} mt-1`}>Start scanning to inspect numerical series using Gemini model reasoning.</p>
                   </div>
                   <button
                     type="button"
@@ -1554,19 +1604,23 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                               {getIssueIcon(issue.type)}
                               <div className="min-w-0 text-left flex-1">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-bold text-xs truncate">{issue.column}</span>
+                                  <span className={`font-bold text-xs truncate ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>{issue.column}</span>
                                   {issue.row && (
-                                    <span className="text-[10px] bg-slate-800/60 px-1.5 py-0.5 rounded text-slate-400 font-mono">
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                                      isDarkMode ? 'bg-slate-800/60 text-slate-400' : 'bg-slate-100 text-slate-700 font-semibold'
+                                    }`}>
                                       Row {issue.row}
                                     </span>
                                   )}
                                   {issue.value !== '' && issue.value !== undefined && (
-                                    <span className="text-[10px] bg-slate-800/30 px-1.5 py-0.5 rounded text-slate-500 truncate max-w-[120px]" title={String(issue.value)}>
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded truncate max-w-[120px] ${
+                                      isDarkMode ? 'bg-slate-800/30 text-slate-400' : 'bg-slate-100 text-slate-600 font-medium'
+                                    }`} title={String(issue.value)}>
                                       Value: {issue.value}
                                     </span>
                                   )}
                                 </div>
-                                <p className={`text-xs mt-0.5 truncate ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                                <p className={`text-xs mt-0.5 truncate ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
                                   {issue.description}
                                 </p>
                               </div>
@@ -1587,24 +1641,28 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                                   <span className="sm:hidden">Fix</span>
                                 </button>
                               ) : (
-                                <span className="px-2.5 py-1 text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg flex items-center gap-1.5">
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                                <span className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg flex items-center gap-1.5 ${
+                                  isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                }`}>
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
                                   <span className="hidden sm:inline">Fixed</span>
                                 </span>
                               )}
                               {getSeverityBadge(issue.severity)}
-                              {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />}
+                              {isExpanded ? <ChevronUp className={`w-4 h-4 shrink-0 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} /> : <ChevronDown className={`w-4 h-4 shrink-0 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} />}
                             </div>
                           </div>
 
                           {/* Accordion Content */}
                           {isExpanded && (
-                            <div className={`p-4 border-t border-dashed bg-slate-900/10 ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+                            <div className={`p-4 border-t border-dashed ${isDarkMode ? 'bg-slate-900/10 border-slate-800' : 'bg-slate-50/50 border-slate-200'}`}>
                               <div className="space-y-3">
-                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-950/20 p-3 rounded-xl border border-slate-800/40">
+                                <div className={`flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 p-3 rounded-xl border ${
+                                  isDarkMode ? 'bg-slate-950/20 border-slate-800/40' : 'bg-white border-slate-200 shadow-2xs'
+                                }`}>
                                   <div className="text-xs text-left">
-                                    <span className="font-bold uppercase tracking-widest text-slate-400 block mb-0.5">Recommended Solution:</span>
-                                    <p className={isDarkMode ? 'text-slate-200 font-semibold' : 'text-slate-700 font-semibold'}>{issue.suggestion}</p>
+                                    <span className={`font-bold uppercase tracking-widest block mb-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Recommended Solution:</span>
+                                    <p className={isDarkMode ? 'text-slate-200 font-semibold' : 'text-slate-800 font-semibold'}>{issue.suggestion}</p>
                                   </div>
                                   {issue.status === 'open' && (
                                     <button
@@ -1639,7 +1697,7 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                                   </div>
 
                                   {(aiExplanations[issue.id] || issue.explanation) && (
-                                    <div className={`p-3 rounded-xl border text-xs leading-relaxed ${isDarkMode ? 'bg-indigo-950/20 border-indigo-950/50 text-indigo-300' : 'bg-indigo-50/50 border-indigo-100 text-indigo-955'}`}>
+                                    <div className={`p-3 rounded-xl border text-xs leading-relaxed ${isDarkMode ? 'bg-indigo-950/20 border-indigo-950/50 text-indigo-300' : 'bg-indigo-50 border-indigo-200 text-indigo-950 font-medium'}`}>
                                       {aiExplanations[issue.id] || issue.explanation}
                                     </div>
                                   )}
@@ -1664,7 +1722,7 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                 return (
                   <div 
                     key={issue.id}
-                    className={`border rounded-xl transition-all overflow-hidden ${isDarkMode ? 'bg-slate-950/40 border-slate-800/60 hover:bg-slate-950/80' : 'bg-white border-slate-100 hover:bg-slate-50/50'}`}
+                    className={`border rounded-xl transition-all overflow-hidden ${isDarkMode ? 'bg-slate-950/40 border-slate-800/60 hover:bg-slate-950/80' : 'bg-white border-slate-200 hover:bg-slate-50/50 shadow-2xs'}`}
                   >
                     {/* Accordion Trigger */}
                     <div 
@@ -1675,11 +1733,23 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                         {getIssueIcon(issue.type)}
                         <div className="min-w-0 text-left">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-bold text-xs truncate">{issue.column}</span>
-                            {issue.row && <span className="text-[10px] bg-slate-800/60 px-1.5 py-0.5 rounded text-slate-400 font-mono">Row {issue.row}</span>}
-                            {issue.value !== '' && issue.value !== undefined && <span className="text-[10px] bg-slate-800/30 px-1.5 py-0.5 rounded text-slate-500 truncate max-w-[120px]">Value: {issue.value}</span>}
+                            <span className={`font-bold text-xs truncate ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>{issue.column}</span>
+                            {issue.row && (
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                                isDarkMode ? 'bg-slate-800/60 text-slate-400' : 'bg-slate-100 text-slate-700 font-semibold'
+                              }`}>
+                                Row {issue.row}
+                              </span>
+                            )}
+                            {issue.value !== '' && issue.value !== undefined && (
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded truncate max-w-[120px] ${
+                                isDarkMode ? 'bg-slate-800/30 text-slate-400' : 'bg-slate-100 text-slate-600 font-medium'
+                              }`} title={String(issue.value)}>
+                                Value: {issue.value}
+                              </span>
+                            )}
                           </div>
-                          <p className={`text-xs mt-1 truncate ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>{issue.description}</p>
+                          <p className={`text-xs mt-1 truncate ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>{issue.description}</p>
                         </div>
                       </div>
 
@@ -1697,25 +1767,29 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                             <span>One-Click Fix</span>
                           </button>
                         ) : (
-                          <span className="px-2.5 py-1 text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg flex items-center gap-1.5">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          <span className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg flex items-center gap-1.5 ${
+                            isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                          }`}>
+                            <CheckCircle2 className="w-3.5 h-3.5" />
                             <span>Fixed</span>
                           </span>
                         )}
                         {getSeverityBadge(issue.severity)}
-                        {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />}
+                        {isExpanded ? <ChevronUp className={`w-4 h-4 shrink-0 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} /> : <ChevronDown className={`w-4 h-4 shrink-0 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} />}
                       </div>
                     </div>
 
                     {/* Accordion Content */}
                     {isExpanded && (
-                      <div className={`p-5 border-t border-dashed bg-slate-900/10 ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
+                      <div className={`p-5 border-t border-dashed ${isDarkMode ? 'bg-slate-900/10 border-slate-800' : 'bg-slate-50/50 border-slate-200'}`}>
                         <div className="space-y-4">
                           {/* Suggestion block */}
-                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-950/20 p-3.5 rounded-xl border border-slate-800/40">
+                          <div className={`flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-3.5 rounded-xl border ${
+                            isDarkMode ? 'bg-slate-950/20 border-slate-800/40' : 'bg-white border-slate-200 shadow-2xs'
+                          }`}>
                             <div className="text-xs text-left">
-                              <span className="font-bold uppercase tracking-widest text-slate-400 block mb-1">Recommended Solution:</span>
-                              <p className={isDarkMode ? 'text-slate-200 font-semibold' : 'text-slate-700 font-semibold'}>{issue.suggestion}</p>
+                              <span className={`font-bold uppercase tracking-widest block mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Recommended Solution:</span>
+                              <p className={isDarkMode ? 'text-slate-200 font-semibold' : 'text-slate-800 font-semibold'}>{issue.suggestion}</p>
                             </div>
                             {issue.status === 'open' && (
                               <button
@@ -1751,7 +1825,7 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                             </div>
 
                             {(aiExplanations[issue.id] || issue.explanation) && (
-                              <div className={`p-4 rounded-xl border text-xs leading-relaxed ${isDarkMode ? 'bg-indigo-950/20 border-indigo-950/50 text-indigo-300' : 'bg-indigo-50/50 border-indigo-100 text-indigo-955'}`}>
+                              <div className={`p-4 rounded-xl border text-xs leading-relaxed ${isDarkMode ? 'bg-indigo-950/20 border-indigo-950/50 text-indigo-300' : 'bg-indigo-50 border-indigo-200 text-indigo-950 font-medium'}`}>
                                 {aiExplanations[issue.id] || issue.explanation}
                               </div>
                             )}
@@ -1766,16 +1840,18 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
 
             {/* Issues Pagination Controls */}
             {filteredIssues.length > 0 && (
-              <div className="mt-6 flex flex-col md:flex-row items-center justify-between gap-4 text-xs border-t border-slate-800/30 pt-4">
+              <div className={`mt-6 flex flex-col md:flex-row items-center justify-between gap-4 text-xs border-t pt-4 ${
+                isDarkMode ? 'border-slate-800/40' : 'border-slate-200'
+              }`}>
                 <div className="flex flex-wrap items-center gap-4">
-                  <span className="text-slate-400 font-medium">
+                  <span className={`font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
                     Showing <span className="font-mono text-blue-500 font-bold">{Math.min(filteredIssues.length, (issuesPage - 1) * issuesPageSize + 1)}</span> to{' '}
                     <span className="font-mono text-blue-500 font-bold">{Math.min(filteredIssues.length, issuesPage * issuesPageSize)}</span> of{' '}
                     <span className="font-mono text-blue-500 font-bold">{filteredIssues.length}</span> compliance findings
                   </span>
 
                   {/* Per page size selector */}
-                  <div className={`flex items-center gap-1.5 font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                  <div className={`flex items-center gap-1.5 font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
                     <span>Per page:</span>
                     <select
                       value={issuesPageSize}
@@ -1783,7 +1859,7 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                         setIssuesPageSize(Number(e.target.value));
                         setIssuesPage(1);
                       }}
-                      className={`px-2 py-1 rounded-lg border text-xs font-bold font-mono focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'}`}
+                      className={`px-2 py-1 rounded-lg border text-xs font-bold font-mono focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-300 text-slate-800 shadow-2xs'}`}
                     >
                       <option value={10}>10</option>
                       <option value={25}>25</option>
@@ -1795,12 +1871,12 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
 
                 <div className="flex flex-wrap items-center gap-2">
                   {/* Page jump selector */}
-                  <div className={`flex items-center gap-1.5 font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                  <div className={`flex items-center gap-1.5 font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
                     <span>Jump to:</span>
                     <select
                       value={issuesPage}
                       onChange={(e) => setIssuesPage(Number(e.target.value))}
-                      className={`px-2 py-1 rounded-lg border text-xs font-bold font-mono focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'}`}
+                      className={`px-2 py-1 rounded-lg border text-xs font-bold font-mono focus:outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-300 text-slate-800 shadow-2xs'}`}
                     >
                       {Array.from({ length: Math.ceil(filteredIssues.length / issuesPageSize) || 1 }, (_, i) => i + 1).map(p => (
                         <option key={p} value={p}>
@@ -1816,7 +1892,7 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                       disabled={issuesPage === 1}
                       onClick={() => setIssuesPage(1)}
                       className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all disabled:opacity-30 disabled:pointer-events-none cursor-pointer ${
-                        isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-900' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                        isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-900' : 'bg-white border-slate-300 text-slate-800 hover:bg-slate-100 shadow-2xs'
                       }`}
                       title="First Page"
                     >
@@ -1827,14 +1903,14 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                       disabled={issuesPage === 1}
                       onClick={() => setIssuesPage(prev => Math.max(1, prev - 1))}
                       className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all disabled:opacity-30 disabled:pointer-events-none cursor-pointer ${
-                        isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-900' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                        isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-900' : 'bg-white border-slate-300 text-slate-800 hover:bg-slate-100 shadow-2xs'
                       }`}
                       title="Previous Page"
                     >
                       ‹ Prev
                     </button>
                     <span className={`px-2.5 py-1.5 rounded-lg border font-bold font-mono text-[10px] ${
-                      isDarkMode ? 'bg-blue-600/10 border-blue-500/20 text-blue-400' : 'bg-blue-50 border-blue-200 text-blue-700'
+                      isDarkMode ? 'bg-blue-600/10 border-blue-500/20 text-blue-400' : 'bg-blue-100 border-blue-300 text-blue-800'
                     }`}>
                       {issuesPage} / {Math.ceil(filteredIssues.length / issuesPageSize) || 1}
                     </span>
@@ -1843,7 +1919,7 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                       disabled={issuesPage >= Math.ceil(filteredIssues.length / issuesPageSize)}
                       onClick={() => setIssuesPage(prev => Math.min(Math.ceil(filteredIssues.length / issuesPageSize), prev + 1))}
                       className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all disabled:opacity-30 disabled:pointer-events-none cursor-pointer ${
-                        isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-900' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                        isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-900' : 'bg-white border-slate-300 text-slate-800 hover:bg-slate-100 shadow-2xs'
                       }`}
                       title="Next Page"
                     >
@@ -1854,7 +1930,7 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
                       disabled={issuesPage >= Math.ceil(filteredIssues.length / issuesPageSize)}
                       onClick={() => setIssuesPage(Math.ceil(filteredIssues.length / issuesPageSize))}
                       className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all disabled:opacity-30 disabled:pointer-events-none cursor-pointer ${
-                        isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-900' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                        isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-900' : 'bg-white border-slate-300 text-slate-800 hover:bg-slate-100 shadow-2xs'
                       }`}
                       title="Last Page"
                     >
