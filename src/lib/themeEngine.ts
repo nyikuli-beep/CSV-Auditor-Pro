@@ -288,11 +288,11 @@ export const ACCENT_COLORS: Record<AccentColor, AccentColorDetails> = {
  * Helper to get active preset details based on mode and customization
  */
 export function getActivePreset(customization: ThemeCustomization, isDarkMode: boolean): ThemePresetDetails {
-  let activePresetKey: ThemePreset = customization.preset || (isDarkMode ? 'default-dark' : 'light-corporate');
-  if (!isDarkMode && activePresetKey !== 'light-corporate') {
-    activePresetKey = 'light-corporate';
+  if (customization?.preset && THEME_PRESETS[customization.preset]) {
+    return THEME_PRESETS[customization.preset];
   }
-  return THEME_PRESETS[activePresetKey] || THEME_PRESETS['default-dark'];
+  const fallbackKey: ThemePreset = isDarkMode ? 'default-dark' : 'light-corporate';
+  return THEME_PRESETS[fallbackKey] || THEME_PRESETS['default-dark'];
 }
 
 /**
@@ -307,6 +307,13 @@ export function applyThemeToDocument(customization: ThemeCustomization, isDarkMo
   const preset = getActivePreset(customization, isDarkMode);
   const activePresetKey = preset.id;
   const accent = ACCENT_COLORS[customization.accentColor] || ACCENT_COLORS.blue;
+
+  // Sync background color directly to document element and body
+  root.style.backgroundColor = preset.bgMain;
+  if (document.body) {
+    document.body.style.backgroundColor = preset.bgMain;
+    document.body.style.color = preset.textPrimary;
+  }
 
   // Set CSS Variables
   root.style.setProperty('--app-bg-main', preset.bgMain);
@@ -331,8 +338,12 @@ export function applyThemeToDocument(customization: ThemeCustomization, isDarkMo
   root.style.setProperty('--app-accent', accent.hex);
   root.style.setProperty('--app-accent-hover', accent.hoverHex);
   root.style.setProperty('--app-accent-bg-light', accent.bgLight);
+  root.style.setProperty('--app-accent-border-light', accent.borderLight);
   root.style.setProperty('--primary-blue', accent.hex);
   root.style.setProperty('--link-color', accent.hex);
+  root.style.setProperty('--accent-color', accent.hex);
+  root.style.setProperty('--btn-primary-bg', accent.hex);
+  root.style.setProperty('--btn-primary-hover', accent.hoverHex);
 
   // Font size scale
   const fontSizeMap: Record<string, string> = {

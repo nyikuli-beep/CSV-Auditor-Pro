@@ -125,19 +125,51 @@ export default function ThemeCustomizationPanel({
   // Update preset
   const handleSelectPreset = (presetKey: ThemePreset) => {
     const presetObj = THEME_PRESETS[presetKey];
-    updateCustomization({
+    if (!presetObj) return;
+
+    const isTargetLight = presetKey === 'light-corporate';
+    if (isTargetLight && isDarkMode) {
+      toggleTheme();
+    } else if (!isTargetLight && !isDarkMode) {
+      toggleTheme();
+    }
+
+    const nextCustomization: ThemeCustomization = {
+      ...customization,
       preset: presetKey
+    };
+
+    applyThemeToDocument(nextCustomization, !isTargetLight);
+
+    onUpdateSettings({
+      ...settings,
+      theme: isTargetLight ? 'light' : 'dark',
+      themeCustomization: nextCustomization,
+      accentColor: nextCustomization.accentColor || settings.accentColor
     });
+
     showToast(`Theme preset set to "${presetObj.name}"`);
   };
 
   // Update accent color
   const handleSelectAccent = (accentKey: AccentColor) => {
     const accentObj = ACCENT_COLORS[accentKey];
-    updateCustomization({
+    if (!accentObj) return;
+
+    const nextCustomization: ThemeCustomization = {
+      ...customization,
       accentColor: accentKey
+    };
+
+    applyThemeToDocument(nextCustomization, isDarkMode);
+
+    onUpdateSettings({
+      ...settings,
+      accentColor: accentKey,
+      themeCustomization: nextCustomization
     });
-    showToast(`Accent color updated to ${accentObj.name}`);
+
+    showToast(`Accent color updated to ${accentObj.name} (${accentObj.hex})`);
   };
 
   // Reset theme to defaults
@@ -412,8 +444,8 @@ export default function ThemeCustomizationPanel({
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5">
-                {Object.values(ACCENT_COLORS).slice(0, 7).map((accent) => {
+              <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2.5">
+                {Object.values(ACCENT_COLORS).map((accent) => {
                   const isSelected = customization.accentColor === accent.id;
                   return (
                     <button

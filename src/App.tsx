@@ -56,7 +56,7 @@ import { WorkspaceHeader } from './components/WorkspaceHeader';
 import { applyThemeToDocument, getActivePreset, DEFAULT_THEME_CUSTOMIZATION } from './lib/themeEngine';
 
 // Import Types
-import { CSVFile, TeamMember, AuditActivity, ChatMessage, SystemSettings, SlotRequest } from './types';
+import { CSVFile, TeamMember, AuditActivity, ChatMessage, SystemSettings, SlotRequest, ThemeCustomization } from './types';
 import { CSVProfilingEngine, AnalysisRouter } from './lib/ai';
 
 // Import File Storage persistence engine
@@ -740,12 +740,16 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     }
 
     // Apply enterprise custom theme design tokens & active preset background
-    const tc = settings.themeCustomization || DEFAULT_THEME_CUSTOMIZATION;
+    const tc: ThemeCustomization = {
+      ...DEFAULT_THEME_CUSTOMIZATION,
+      ...(settings.themeCustomization || {}),
+      accentColor: settings.accentColor || settings.themeCustomization?.accentColor || 'blue'
+    };
     applyThemeToDocument(tc, isDarkMode);
     const activePreset = getActivePreset(tc, isDarkMode);
     document.documentElement.style.backgroundColor = activePreset.bgMain;
     document.body.style.backgroundColor = activePreset.bgMain;
-  }, [isDarkMode, settings.themeCustomization]);
+  }, [isDarkMode, settings.themeCustomization, settings.accentColor]);
 
   // Automated background scheduler for CSV retention policies
   useEffect(() => {

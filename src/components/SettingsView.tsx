@@ -49,6 +49,7 @@ import BillingDashboard from './BillingDashboard';
 import AdminBillingDashboard from './AdminBillingDashboard';
 import ThemeCustomizationPanel from './ThemeCustomizationPanel';
 import SettingsTypographyCard from './typography/SettingsTypographyCard';
+import SettingsPresetsAndAccentsCard from './SettingsPresetsAndAccentsCard';
 
 
 interface SettingsViewProps {
@@ -610,6 +611,22 @@ export default function SettingsView({
             isDarkMode={isDarkMode}
             toggleTheme={toggleTheme}
             accentClass={accentClass}
+          />
+
+          {/* Quick-Access Theme Presets & Color Accents Customizer */}
+          <SettingsPresetsAndAccentsCard
+            settings={settings}
+            onUpdateSettings={onUpdateSettings}
+            isDarkMode={isDarkMode}
+            toggleTheme={toggleTheme}
+            onShowToast={(msg) => {
+              setSuccessMsg(msg);
+              setSaveSuccess(true);
+              setTimeout(() => {
+                setSaveSuccess(false);
+                setSuccessMsg('');
+              }, 4000);
+            }}
           />
 
           {/* Quick-Access Font Family & Typography Customizer */}
