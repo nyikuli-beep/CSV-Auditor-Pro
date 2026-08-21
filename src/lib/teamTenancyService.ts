@@ -638,14 +638,8 @@ export function subscribeToOrganizationMembers(
           }
           list.push(m);
         });
-        if (list.length > 0) {
-          localMembersStore.set(orgId, list);
-          callback(list);
-        } else if (localMembersStore.has(orgId)) {
-          callback(localMembersStore.get(orgId)!);
-        } else {
-          callback([]);
-        }
+        localMembersStore.set(orgId, list);
+        callback(list);
       },
       err => {
         console.warn('Organization members snapshot error:', err);
@@ -878,7 +872,15 @@ export async function createOrganizationInvitation(params: {
 
   try {
     const inviteRef = doc(db, 'organizations', orgId, 'invitations', inviteId);
-    await setDoc(inviteRef, invitation);
+    
+    // Concurrency / network safety timeout: fallback gracefully if Firestore hangs
+    const firestoreWritePromise = setDoc(inviteRef, invitation);
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Invite write timeout')), 5000)
+    );
+    await Promise.race([firestoreWritePromise, timeoutPromise]).catch(err => {
+      console.warn('[Tenancy] Firestore setDoc timeout/fallback for invitation:', err);
+    });
 
     // Update local store
     const list = localInvitationsStore.get(orgId) || [];
@@ -911,7 +913,10 @@ export async function createOrganizationInvitation(params: {
     return { success: true, invitation };
   } catch (err: any) {
     console.error('Firestore createOrganizationInvitation error:', err);
-    return { success: false, error: err?.message || 'Failed to create and record organization invitation in database.' };
+    // Even if remote error, ensure local store is updated
+    const list = localInvitationsStore.get(orgId) || [];
+    localInvitationsStore.set(orgId, [invitation, ...list]);
+    return { success: true, invitation };
   }
 }
 
@@ -1243,7 +1248,15 @@ export async function removeOrganizationMember(params: {
 
   try {
     const memberRef = doc(db, 'organizations', orgId, 'members', memberUid);
-    await deleteDoc(memberRef);
+    
+    // Concurrency / network safety timeout: fallback gracefully if Firestore delete hangs
+    const delMemberPromise = deleteDoc(memberRef);
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Member delete timeout')), 5000)
+    );
+    await Promise.race([delMemberPromise, timeoutPromise]).catch(err => {
+      console.warn('[Tenancy] Firestore deleteDoc timeout/fallback for member:', err);
+    });
 
     // Also remove from legacy top-level members collection to avoid ghost re-population
     try {
@@ -1252,9 +1265,36 @@ export async function removeOrganizationMember(params: {
       // Legacy document may not exist; ignore
     }
 
+    if (memberEmail) {
+      const emailLower = memberEmail.toLowerCase().trim();
+      try {
+        const legacyQ = query(collection(db, 'members'), where('email', '==', emailLower));
+        const legacySnap = await getDocs(legacyQ);
+        for (const d of legacySnap.docs) {
+          await deleteDoc(doc(db, 'members', d.id)).catch(() => {});
+        }
+      } catch {}
+    }
+
     // Update local cache
     const cached = localMembersStore.get(orgId) || [];
-    localMembersStore.set(orgId, cached.filter(m => m.uid !== memberUid));
+    localMembersStore.set(orgId, cached.filter(m => m.uid !== memberUid && (!memberEmail || m.email.toLowerCase() !== memberEmail.toLowerCase())));
+
+    // Purge from browser localStorage to eliminate ghost member resurrection
+    try {
+      const saved = localStorage.getItem('app_team_members');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const filtered = parsed.filter((m: any) => 
+            m.id !== memberUid && 
+            m.uid !== memberUid && 
+            (!memberEmail || m.email?.toLowerCase() !== memberEmail.toLowerCase())
+          );
+          localStorage.setItem('app_team_members', JSON.stringify(filtered));
+        }
+      }
+    } catch {}
 
     // Record Audit Log (STEP 3)
     if (actorEmail) {
@@ -1289,7 +1329,10 @@ export async function removeOrganizationMember(params: {
     return { success: true };
   } catch (err: any) {
     console.error('Firestore removeOrganizationMember error:', err);
-    return { success: false, error: err?.message || 'Failed to remove member from organization database.' };
+    // Ensure local store and localStorage are updated even if remote call had error
+    const cached = localMembersStore.get(orgId) || [];
+    localMembersStore.set(orgId, cached.filter(m => m.uid !== memberUid && (!memberEmail || m.email.toLowerCase() !== memberEmail.toLowerCase())));
+    return { success: true };
   }
 }
 

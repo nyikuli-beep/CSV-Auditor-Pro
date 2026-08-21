@@ -222,9 +222,7 @@ export default function TeamCollaboration({
     });
 
     const unsubMembers = subscribeToOrganizationMembers(DEFAULT_ORG_ID, (mList) => {
-      if (mList && mList.length > 0) {
-        setOrgMembers(mList);
-      }
+      setOrgMembers(mList || []);
     });
 
     const unsubInvites = subscribeToOrganizationInvitations(DEFAULT_ORG_ID, (iList) => {
@@ -260,7 +258,7 @@ export default function TeamCollaboration({
 
   const isOwnerOrAdmin = isOrganizationAdmin(currentRole) || isPrimaryEnterpriseOwner;
 
-  // Resolve combined member list (merging Firestore org members & active session members)
+  // Resolve combined member list from authoritative Firestore org members
   const combinedMembers: OrganizationMember[] = useMemo(() => {
     const list: OrganizationMember[] = [...orgMembers];
     
@@ -279,29 +277,8 @@ export default function TeamCollaboration({
       });
     }
 
-    // Only populate from legacy fallback if Firestore orgMembers is completely uninitialized
-    if (orgMembers.length === 0) {
-      members.forEach((legacyMember) => {
-        const email = (legacyMember.email || '').toLowerCase().trim();
-        if (!list.some(m => m.email.toLowerCase() === email)) {
-          const mappedRole: OrganizationRole = legacyMember.role === 'Owner' ? 'Owner' : legacyMember.role === 'Admin' ? 'Admin' : 'Member';
-          list.push({
-            uid: legacyMember.id || `usr-${email.replace(/[^a-zA-Z0-9]/g, '_')}`,
-            organizationId: DEFAULT_ORG_ID,
-            email: legacyMember.email,
-            displayName: legacyMember.name,
-            role: mappedRole,
-            status: legacyMember.status === 'denied' || legacyMember.accessDenied ? 'suspended' : 'active',
-            joinedAt: new Date().toISOString(),
-            lastActive: 'Session active',
-            avatar: legacyMember.avatar
-          });
-        }
-      });
-    }
-
     return list;
-  }, [orgMembers, organization, members]);
+  }, [orgMembers, organization]);
 
   // Dynamically mapped active workspace members for live collaboration chat synchronization
   const liveChatMembers: TeamMember[] = useMemo(() => {

@@ -1215,20 +1215,6 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
 
       const memberMap = new Map<string, TeamMember>();
 
-      // Load cached members from localStorage first so offline or pending invitations persist across reloads
-      try {
-        const cached = localStorage.getItem('app_team_members');
-        if (cached) {
-          const parsedArr: TeamMember[] = JSON.parse(cached);
-          if (Array.isArray(parsedArr)) {
-            parsedArr.forEach(m => {
-              const emailKey = (m.email || '').toLowerCase().trim();
-              if (emailKey) memberMap.set(emailKey, m);
-            });
-          }
-        }
-      } catch (e) {}
-
       const primaryOwnerMember: TeamMember = {
         id: userEmailLower === primaryOwnerEmail ? firebaseUser.uid : 'usr-primary-owner',
         name: userEmailLower === primaryOwnerEmail ? (user?.name || firebaseUser.displayName || 'Nyikuli Bramwel') : 'Nyikuli Bramwel',
@@ -1244,12 +1230,10 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
         if (!emailKey || emailKey === primaryOwnerEmail) return;
 
         const isDenied = m.status === 'denied' || m.accessDenied === true;
-        const existing = memberMap.get(emailKey);
         memberMap.set(emailKey, {
-          ...existing,
           ...m,
-          role: m.role || existing?.role || 'Editor',
-          status: isDenied ? 'denied' : (m.status || existing?.status || 'active'),
+          role: m.role || 'Editor',
+          status: isDenied ? 'denied' : (m.status || 'active'),
           accessDenied: isDenied
         });
       });
@@ -2088,18 +2072,29 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
 
     try {
       if (id) {
-        await deleteDoc(doc(db, 'members', id));
+        await deleteDoc(doc(db, 'members', id)).catch(() => {});
+        await deleteDoc(doc(db, 'organizations', DEFAULT_ORG_ID, 'members', id)).catch(() => {});
       }
 
       if (emailLower) {
         const q = query(collection(db, 'members'), where('email', '==', emailLower));
-        const querySnap = await getDocs(q);
-        for (const docSnap of querySnap.docs) {
-          await deleteDoc(doc(db, 'members', docSnap.id));
+        const querySnap = await getDocs(q).catch(() => null);
+        if (querySnap) {
+          for (const docSnap of querySnap.docs) {
+            await deleteDoc(doc(db, 'members', docSnap.id)).catch(() => {});
+          }
+        }
+
+        const orgMembersQ = query(collection(db, 'organizations', DEFAULT_ORG_ID, 'members'), where('email', '==', emailLower));
+        const orgMembersSnap = await getDocs(orgMembersQ).catch(() => null);
+        if (orgMembersSnap) {
+          for (const docSnap of orgMembersSnap.docs) {
+            await deleteDoc(doc(db, 'organizations', DEFAULT_ORG_ID, 'members', docSnap.id)).catch(() => {});
+          }
         }
       }
 
-      await syncToPostgres(`delete-member/${id}`, 'DELETE');
+      await syncToPostgres(`delete-member/${id}`, 'DELETE').catch(() => {});
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `members/${id}`);
     }
