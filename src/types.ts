@@ -447,4 +447,49 @@ export interface PlanEntitlements {
   allowDeveloperApi: boolean;
 }
 
+// --- Multi-Tenant & Non-Owner Notification Types ---
+export type NotificationType = 
+  | 'team_invite' 
+  | 'subscription_deplete' 
+  | 'quota_deplete' 
+  | 'role_change' 
+  | 'permission_update'
+  | 'slot_request_status' 
+  | 'member_joined' 
+  | 'security_alert' 
+  | 'retention_warning' 
+  | 'audit_completed'
+  | 'cell_annotation'
+  | 'system_update';
+
+export type NotificationCategory = 'all' | 'team' | 'subscription' | 'security' | 'activity';
+
+export type NotificationPriority = 'urgent' | 'warning' | 'info' | 'success';
+
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  category: NotificationCategory;
+  priority: NotificationPriority;
+  title: string;
+  message: string;
+  timestamp: string; // ISO string
+  read: boolean;
+  dismissed?: boolean;
+  actionLabel?: string;
+  actionType?: 'accept_invite' | 'view_subscription' | 'view_team' | 'view_audit' | 'view_security' | 'open_modal' | 'navigate';
+  actionPayload?: {
+    tab?: string;
+    inviteToken?: string;
+    inviteId?: string;
+    orgId?: string;
+    orgName?: string;
+    role?: string;
+    fileId?: string;
+    plan?: string;
+    targetUrl?: string;
+    [key: string]: any;
+  };
+}
+
 

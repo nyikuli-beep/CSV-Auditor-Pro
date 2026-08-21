@@ -53,11 +53,23 @@ import {
 
 import { ThemeInspector } from './components/ThemeInspector';
 import { WorkspaceHeader } from './components/WorkspaceHeader';
+import AcceptInviteModal from './components/AcceptInviteModal';
 import { applyThemeToDocument, getActivePreset, DEFAULT_THEME_CUSTOMIZATION } from './lib/themeEngine';
 
 // Import Types
-import { CSVFile, TeamMember, AuditActivity, ChatMessage, SystemSettings, SlotRequest, ThemeCustomization } from './types';
+import { CSVFile, TeamMember, AuditActivity, ChatMessage, SystemSettings, SlotRequest, ThemeCustomization, AppNotification, OrganizationInvitation } from './types';
 import { CSVProfilingEngine, AnalysisRouter } from './lib/ai';
+
+// Import Notification Service & Billing Context
+import {
+  computeUserNotifications,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+  dismissNotification,
+  clearAllNotifications
+} from './lib/notificationService';
+import { subscribeToOrganizationInvitations, DEFAULT_ORG_ID } from './lib/teamTenancyService';
+import { useBilling } from './context/BillingContext';
 
 // Import File Storage persistence engine
 import { 
@@ -78,6 +90,7 @@ import OnboardingTourModal from './components/OnboardingTourModal';
 import UpgradeModal from './components/UpgradeModal';
 import EnterpriseContactModal from './components/EnterpriseContactModal';
 import TrialExpirationBanner from './components/TrialExpirationBanner';
+import TeamInviteBanner from './components/TeamInviteBanner';
 import { SocialLinksGroup } from './components/SocialLinks';
 import { runTrialExpirationCheck, dismissTrialAlert, TrialAlert } from './utils/trialChecker';
 import { openPaddleCheckout } from './lib/paddle';
@@ -239,6 +252,26 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   const [showNotificationsDropdown, setShowNotificationsDropdown] = useState<boolean>(false);
   const [trialAlert, setTrialAlert] = useState<TrialAlert | null>(null);
 
+  // Billing Context for quota and subscription depletion tracking
+  const { billing, usage: billingUsage } = useBilling();
+
+  // Multi-Tenant Invitations & Accept Modal State
+  const [workspaceInvitations, setWorkspaceInvitations] = useState<OrganizationInvitation[]>([]);
+  const [acceptInviteModalState, setAcceptInviteModalState] = useState<{ isOpen: boolean; prefilledToken: string }>({
+    isOpen: false,
+    prefilledToken: ''
+  });
+  const [notificationTick, setNotificationTick] = useState<number>(0);
+  const [dismissedInviteIds, setDismissedInviteIds] = useState<Set<string>>(new Set());
+
+  // Subscribe to organization invitations globally across workspace
+  useEffect(() => {
+    const unsub = subscribeToOrganizationInvitations(DEFAULT_ORG_ID, (list) => {
+      setWorkspaceInvitations(list);
+    });
+    return () => unsub();
+  }, []);
+
   // Background check utility upon user login to verify if a trial is within 7, 3, or 1 day(s) of expiry
   useEffect(() => {
     if (user?.email) {
@@ -371,6 +404,97 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
       saveActiveFileIdToStorage(activeFileId);
     }
   }, [activeFileId]);
+
+  const isUserOwner = user?.email?.toLowerCase() === 'nyikulibramwel@gmail.com' || user?.role?.toLowerCase() === 'owner' || user?.role?.toLowerCase() === 'admin';
+
+  // Compute unified user notifications across invites, billing, quota, security, and tenancy
+  const userNotifications = React.useMemo<AppNotification[]>(() => {
+    if (!user?.email) return [];
+    return computeUserNotifications({
+      userEmail: user.email,
+      userRole: user.role,
+      userName: user.name,
+      invitations: workspaceInvitations,
+      billing: billing,
+      usageMetrics: billingUsage,
+      files: files,
+      slotRequests: slotRequests,
+      orgName: 'Enterprise Data Workspace',
+      isOwner: isUserOwner
+    });
+  }, [user?.email, user?.role, user?.name, workspaceInvitations, billing, billingUsage, files, slotRequests, isUserOwner, notificationTick]);
+
+  const unreadNotificationCount = React.useMemo(() => {
+    return userNotifications.filter(n => !n.read).length;
+  }, [userNotifications]);
+
+  const handleMarkNotificationAsRead = (id: string) => {
+    if (!user?.email) return;
+    markNotificationAsRead(user.email, id);
+    setNotificationTick(t => t + 1);
+  };
+
+  const handleMarkAllNotificationsAsRead = () => {
+    if (!user?.email) return;
+    markAllNotificationsAsRead(user.email, userNotifications.map(n => n.id));
+    setNotificationTick(t => t + 1);
+  };
+
+  const handleDismissNotification = (id: string) => {
+    if (!user?.email) return;
+    dismissNotification(user.email, id);
+    setNotificationTick(t => t + 1);
+  };
+
+  const handleClearAllNotifications = () => {
+    if (!user?.email) return;
+    clearAllNotifications(user.email, userNotifications.map(n => n.id));
+    setNotificationTick(t => t + 1);
+  };
+
+  const handleNotificationAction = (notification: AppNotification) => {
+    if (notification.actionType === 'accept_invite') {
+      setAcceptInviteModalState({
+        isOpen: true,
+        prefilledToken: notification.actionPayload?.inviteToken || ''
+      });
+    } else if (notification.actionType === 'view_subscription') {
+      if (isUserOwner) {
+        openPaddleCheckout('pro', user?.email || undefined);
+      } else {
+        handleNavigateTab('settings');
+      }
+    } else if (notification.actionType === 'view_team') {
+      handleNavigateTab('team');
+    } else if (notification.actionType === 'view_audit') {
+      if (notification.actionPayload?.fileId) {
+        setActiveFileId(notification.actionPayload.fileId);
+      }
+      handleNavigateTab('results');
+    } else if (notification.actionType === 'view_security') {
+      if (notification.actionPayload?.fileId) {
+        setActiveFileId(notification.actionPayload.fileId);
+      }
+      handleNavigateTab('schema');
+    } else if (notification.actionType === 'navigate' && notification.actionPayload?.tab) {
+      if (notification.actionPayload?.fileId) {
+        setActiveFileId(notification.actionPayload.fileId);
+      }
+      handleNavigateTab(notification.actionPayload.tab);
+    }
+  };
+
+  // Pending invitation specifically targeting the active user
+  const pendingUserInvite = React.useMemo(() => {
+    if (!user?.email) return null;
+    const userLower = user.email.toLowerCase().trim();
+    return workspaceInvitations.find(
+      inv => inv.email.toLowerCase().trim() === userLower &&
+             inv.status === 'pending' &&
+             !dismissedInviteIds.has(inv.id) &&
+             new Date(inv.expiresAt).getTime() > Date.now()
+    ) || null;
+  }, [user?.email, workspaceInvitations, dismissedInviteIds]);
 
   // Collaboration registry (with persistence from localStorage)
   const [members, setMembers] = useState<TeamMember[]>(() => {
@@ -3002,6 +3126,23 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
               />
             )}
 
+            {/* Non-Owner Team Invitation Alert Banner */}
+            {pendingUserInvite && (
+              <TeamInviteBanner
+                invitation={pendingUserInvite}
+                isDarkMode={isDarkMode}
+                onAccept={(inv) => {
+                  setAcceptInviteModalState({
+                    isOpen: true,
+                    prefilledToken: inv.token
+                  });
+                }}
+                onDismiss={() => {
+                  setDismissedInviteIds(prev => new Set([...prev, pendingUserInvite.id]));
+                }}
+              />
+            )}
+
             {/* Top Workspace Header */}
             <WorkspaceHeader
               activeTab={activeTab}
@@ -3021,6 +3162,14 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
               onApproveSlotRequest={handleApproveSlotRequest}
               onDeclineSlotRequest={handleDeclineSlotRequest}
               user={user}
+              notifications={userNotifications}
+              unreadNotificationCount={unreadNotificationCount}
+              onMarkNotificationAsRead={handleMarkNotificationAsRead}
+              onMarkAllNotificationsAsRead={handleMarkAllNotificationsAsRead}
+              onDismissNotification={handleDismissNotification}
+              onClearAllNotifications={handleClearAllNotifications}
+              onNotificationAction={handleNotificationAction}
+              onOpenAcceptInviteModal={(prefilledToken) => setAcceptInviteModalState({ isOpen: true, prefilledToken: prefilledToken || '' })}
             />
 
             {/* Container for active view tabs */}
@@ -3338,6 +3487,22 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
           </div>
         )}
       </AnimatePresence>
+
+      {/* Multi-Tenant Accept Invite Modal */}
+      {acceptInviteModalState.isOpen && (
+        <AcceptInviteModal
+          isOpen={acceptInviteModalState.isOpen}
+          onClose={() => setAcceptInviteModalState({ isOpen: false, prefilledToken: '' })}
+          orgId={DEFAULT_ORG_ID}
+          user={firebaseUser}
+          isDarkMode={isDarkMode}
+          prefilledToken={acceptInviteModalState.prefilledToken}
+          onJoined={(member) => {
+            triggerShortcutToast(`Joined organization as ${member.role}!`, 'Tenancy Success');
+            handleNavigateTab('team');
+          }}
+        />
+      )}
 
       {/* Global Floating AI Assistant */}
       <FloatingAssistant
