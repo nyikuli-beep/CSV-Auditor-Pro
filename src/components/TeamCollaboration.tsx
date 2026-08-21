@@ -620,14 +620,14 @@ export default function TeamCollaboration({
     switch (role) {
       case 'Owner':
         return (
-          <span className="px-2.5 py-1 rounded-md text-[10px] font-bold font-mono tracking-wider uppercase bg-violet-500/10 text-violet-400 border border-violet-500/20 flex items-center gap-1 shrink-0">
+          <span className="px-2.5 py-1 rounded-md text-[10px] font-bold font-mono tracking-wider uppercase bg-violet-50 text-violet-700 border border-violet-200 dark:bg-violet-500/10 dark:text-violet-400 dark:border-violet-500/20 flex items-center gap-1 shrink-0">
             <ShieldCheck className="w-3 h-3" />
             <span>Owner</span>
           </span>
         );
       case 'Admin':
         return (
-          <span className="px-2.5 py-1 rounded-md text-[10px] font-bold font-mono tracking-wider uppercase bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center gap-1 shrink-0">
+          <span className="px-2.5 py-1 rounded-md text-[10px] font-bold font-mono tracking-wider uppercase bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20 flex items-center gap-1 shrink-0">
             <Shield className="w-3 h-3" />
             <span>Admin</span>
           </span>
@@ -635,7 +635,7 @@ export default function TeamCollaboration({
       case 'Member':
       default:
         return (
-          <span className="px-2.5 py-1 rounded-md text-[10px] font-bold font-mono tracking-wider uppercase bg-slate-500/10 text-slate-400 border border-slate-700 flex items-center gap-1 shrink-0">
+          <span className="px-2.5 py-1 rounded-md text-[10px] font-bold font-mono tracking-wider uppercase bg-slate-100 text-slate-700 border border-slate-300 dark:bg-slate-500/10 dark:text-slate-300 dark:border-slate-700 flex items-center gap-1 shrink-0">
             <Users className="w-3 h-3" />
             <span>Member</span>
           </span>
@@ -647,7 +647,7 @@ export default function TeamCollaboration({
   const renderStatusBadge = (status: string) => {
     if (status === 'suspended') {
       return (
-        <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center gap-1 shrink-0">
+        <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20 flex items-center gap-1 shrink-0">
           <UserX className="w-3 h-3" />
           <span>Suspended</span>
         </span>
@@ -655,7 +655,7 @@ export default function TeamCollaboration({
     }
     if (status === 'invited' || status === 'pending') {
       return (
-        <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-sky-500/10 text-sky-400 border border-sky-500/20 flex items-center gap-1 shrink-0">
+        <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-sky-50 text-sky-700 border border-sky-200 dark:bg-sky-500/10 dark:text-sky-400 dark:border-sky-500/20 flex items-center gap-1 shrink-0">
           <Mail className="w-3 h-3" />
           <span>Pending</span>
         </span>
@@ -663,7 +663,7 @@ export default function TeamCollaboration({
     }
     if (status === 'accepted') {
       return (
-        <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1 shrink-0">
+        <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20 flex items-center gap-1 shrink-0">
           <CheckCircle2 className="w-3 h-3" />
           <span>Accepted</span>
         </span>
@@ -671,7 +671,7 @@ export default function TeamCollaboration({
     }
     if (status === 'cancelled') {
       return (
-        <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-slate-500/10 text-slate-400 border border-slate-700 flex items-center gap-1 shrink-0">
+        <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-slate-100 text-slate-700 border border-slate-300 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-700 flex items-center gap-1 shrink-0">
           <Ban className="w-3 h-3" />
           <span>Cancelled</span>
         </span>
@@ -679,14 +679,14 @@ export default function TeamCollaboration({
     }
     if (status === 'expired') {
       return (
-        <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1 shrink-0">
+        <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20 flex items-center gap-1 shrink-0">
           <Clock className="w-3 h-3" />
           <span>Expired</span>
         </span>
       );
     }
     return (
-      <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1 shrink-0">
+      <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20 flex items-center gap-1 shrink-0">
         <CheckCircle2 className="w-3 h-3" />
         <span>Active</span>
       </span>
@@ -787,14 +787,14 @@ export default function TeamCollaboration({
       <div className={`p-6 rounded-2xl border transition-all ${
         isDarkMode ? 'bg-[#1E293B] border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 shadow-sm'
       }`}>
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-slate-800/40">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-slate-200 dark:border-slate-800/40">
           <div className="space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center gap-1">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20 flex items-center gap-1">
                 <Building2 className="w-3 h-3" />
                 <span>Enterprise Team Tenancy</span>
               </span>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20 flex items-center gap-1">
                 <BadgeCheck className="w-3 h-3" />
                 <span>Enterprise Active</span>
               </span>
@@ -843,7 +843,7 @@ export default function TeamCollaboration({
                 isDarkMode ? 'border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800' : 'border-slate-300 bg-slate-50 text-slate-700 hover:bg-slate-100'
               }`}
             >
-              <KeyRound className="w-4 h-4 text-blue-400" />
+              <KeyRound className="w-4 h-4 text-blue-600 dark:text-blue-400" />
               <span>Redeem Invite Code</span>
             </button>
 
@@ -851,11 +851,11 @@ export default function TeamCollaboration({
               isDarkMode ? 'bg-[#0F172A] border-slate-800' : 'bg-slate-50 border-slate-200'
             }`}>
               <div className="text-left">
-                <span className="block text-[9px] font-mono font-bold text-slate-400 uppercase tracking-wider">
+                <span className="block text-[9px] font-mono font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                   Your Role:
                 </span>
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="text-xs font-bold font-mono truncate max-w-[120px]">
+                  <span className="text-xs font-bold font-mono truncate max-w-[120px] text-slate-900 dark:text-slate-100">
                     {effectiveEmail}
                   </span>
                   {renderRoleBadge(currentRole)}
@@ -871,20 +871,20 @@ export default function TeamCollaboration({
             isDarkMode ? 'bg-[#0F172A] border-slate-700' : 'bg-slate-50 border-slate-300'
           }`}>
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold font-mono uppercase text-blue-400 flex items-center gap-1.5">
+              <span className="text-xs font-bold font-mono uppercase text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
                 <Edit3 className="w-3.5 h-3.5" /> Edit Organization Details
               </span>
               <button
                 type="button"
                 onClick={() => setIsEditingOrg(false)}
-                className="p-1 rounded text-slate-400 hover:text-slate-200"
+                className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
               <div className="md:col-span-6">
-                <label className="block text-[10px] font-bold uppercase font-mono text-slate-400 mb-1">
+                <label className="block text-[10px] font-bold uppercase font-mono text-slate-700 dark:text-slate-300 mb-1">
                   Organization Name
                 </label>
                 <input
@@ -898,7 +898,7 @@ export default function TeamCollaboration({
                 />
               </div>
               <div className="md:col-span-6">
-                <label className="block text-[10px] font-bold uppercase font-mono text-slate-400 mb-1">
+                <label className="block text-[10px] font-bold uppercase font-mono text-slate-700 dark:text-slate-300 mb-1">
                   Description / Workspace Scope
                 </label>
                 <input
@@ -940,21 +940,21 @@ export default function TeamCollaboration({
           <div className={`p-4 rounded-xl border ${
             isDarkMode ? 'bg-[#0F172A] border-slate-800' : 'bg-slate-50 border-slate-200'
           }`}>
-            <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block mb-1">
+            <span className="text-[10px] font-mono font-bold uppercase text-slate-600 dark:text-slate-400 block mb-1">
               Total Members
             </span>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-blue-400 shrink-0" />
-                <span className="font-extrabold text-2xl font-mono text-blue-400">
+                <Users className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0" />
+                <span className="font-extrabold text-2xl font-mono text-blue-600 dark:text-blue-400">
                   {combinedMembers.length}
                 </span>
               </div>
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-blue-500/10 text-blue-400 border border-blue-500/20">
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20">
                 {combinedMembers.filter(m => m.status === 'active').length} Active
               </span>
             </div>
-            <span className="text-[10px] font-mono text-slate-400 block mt-2">
+            <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 block mt-2">
               Registered workspace identities
             </span>
           </div>
@@ -963,21 +963,21 @@ export default function TeamCollaboration({
           <div className={`p-4 rounded-xl border ${
             isDarkMode ? 'bg-[#0F172A] border-slate-800' : 'bg-slate-50 border-slate-200'
           }`}>
-            <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block mb-1">
+            <span className="text-[10px] font-mono font-bold uppercase text-slate-600 dark:text-slate-400 block mb-1">
               Pending Invitations
             </span>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Mail className="w-5 h-5 text-sky-400 shrink-0" />
-                <span className="font-extrabold text-2xl font-mono text-sky-400">
+                <Mail className="w-5 h-5 text-sky-600 dark:text-sky-400 shrink-0" />
+                <span className="font-extrabold text-2xl font-mono text-sky-600 dark:text-sky-400">
                   {seatMetrics.pendingSeats}
                 </span>
               </div>
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-sky-500/10 text-sky-400 border border-sky-500/20">
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-sky-50 text-sky-700 border border-sky-200 dark:bg-sky-500/10 dark:text-sky-400 dark:border-sky-500/20">
                 7d Expiration
               </span>
             </div>
-            <span className="text-[10px] font-mono text-slate-400 block mt-2">
+            <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 block mt-2">
               Awaiting recipient sign in
             </span>
           </div>
@@ -986,27 +986,27 @@ export default function TeamCollaboration({
           <div className={`p-4 rounded-xl border ${
             isDarkMode ? 'bg-[#0F172A] border-slate-800' : 'bg-slate-50 border-slate-200'
           }`}>
-            <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block mb-1">
+            <span className="text-[10px] font-mono font-bold uppercase text-slate-600 dark:text-slate-400 block mb-1">
               Seats Used
             </span>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-violet-400 shrink-0" />
-                <span className="font-extrabold text-2xl font-mono text-violet-400">
+                <ShieldCheck className="w-5 h-5 text-violet-600 dark:text-violet-400 shrink-0" />
+                <span className="font-extrabold text-2xl font-mono text-violet-600 dark:text-violet-400">
                   {seatMetrics.usedSeats + seatMetrics.pendingSeats}
                 </span>
-                <span className="text-xs text-slate-400 font-mono">
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
                   / {seatMetrics.maxSeats} Total
                 </span>
               </div>
-              <span className="text-xs font-mono font-bold text-violet-400">
+              <span className="text-xs font-mono font-bold text-violet-600 dark:text-violet-400">
                 {seatMetrics.utilizationPercent}%
               </span>
             </div>
             {/* Visual Progress Bar */}
-            <div className="w-full bg-slate-700/40 rounded-full h-1.5 mt-2.5 overflow-hidden">
+            <div className="w-full bg-slate-200 dark:bg-slate-700/40 rounded-full h-1.5 mt-2.5 overflow-hidden">
               <div 
-                className="bg-violet-500 h-1.5 rounded-full transition-all duration-500" 
+                className="bg-violet-600 dark:bg-violet-500 h-1.5 rounded-full transition-all duration-500" 
                 style={{ width: `${seatMetrics.utilizationPercent}%` }}
               />
             </div>
@@ -1016,25 +1016,25 @@ export default function TeamCollaboration({
           <div className={`p-4 rounded-xl border ${
             isDarkMode ? 'bg-[#0F172A] border-slate-800' : 'bg-slate-50 border-slate-200'
           }`}>
-            <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block mb-1">
+            <span className="text-[10px] font-mono font-bold uppercase text-slate-600 dark:text-slate-400 block mb-1">
               Seats Available
             </span>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <UserCheck className={`w-5 h-5 shrink-0 ${seatMetrics.availableSeats > 0 ? 'text-emerald-400' : 'text-rose-400'}`} />
-                <span className={`font-extrabold text-2xl font-mono ${seatMetrics.availableSeats > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                <UserCheck className={`w-5 h-5 shrink-0 ${seatMetrics.availableSeats > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`} />
+                <span className={`font-extrabold text-2xl font-mono ${seatMetrics.availableSeats > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                   {seatMetrics.availableSeats}
                 </span>
               </div>
               <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono ${
                 seatMetrics.availableSeats > 0 
-                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
-                  : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' 
+                  : 'bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20'
               }`}>
                 {seatMetrics.availableSeats > 0 ? 'Ready' : 'Limit Reached'}
               </span>
             </div>
-            <span className={`text-[10px] font-mono block mt-2 ${seatMetrics.availableSeats > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+            <span className={`text-[10px] font-mono block mt-2 ${seatMetrics.availableSeats > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
               {seatMetrics.availableSeats > 0 ? `${seatMetrics.availableSeats} remaining for new invites` : 'Upgrade seats to expand team'}
             </span>
           </div>
@@ -1054,13 +1054,15 @@ export default function TeamCollaboration({
           className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
             activeSection === 'members'
               ? 'bg-blue-600 text-white shadow-sm'
-              : isDarkMode ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'
+              : isDarkMode ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-700 hover:bg-slate-100'
           }`}
         >
           <Users className="w-3.5 h-3.5" />
           <span>Members Directory</span>
           <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono ${
-            activeSection === 'members' ? 'bg-blue-700 text-white' : 'bg-slate-700/40 text-slate-400'
+            activeSection === 'members' 
+              ? 'bg-blue-700 text-white' 
+              : isDarkMode ? 'bg-slate-700/40 text-slate-400' : 'bg-slate-200 text-slate-700'
           }`}>
             {combinedMembers.length}
           </span>
@@ -1073,13 +1075,15 @@ export default function TeamCollaboration({
           className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
             activeSection === 'invitations'
               ? 'bg-blue-600 text-white shadow-sm'
-              : isDarkMode ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'
+              : isDarkMode ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-700 hover:bg-slate-100'
           }`}
         >
           <Mail className="w-3.5 h-3.5" />
           <span>Invitations</span>
           <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono ${
-            activeSection === 'invitations' ? 'bg-blue-700 text-white' : 'bg-slate-700/40 text-slate-400'
+            activeSection === 'invitations' 
+              ? 'bg-blue-700 text-white' 
+              : isDarkMode ? 'bg-slate-700/40 text-slate-400' : 'bg-slate-200 text-slate-700'
           }`}>
             {orgInvitations.length}
           </span>
@@ -1095,13 +1099,15 @@ export default function TeamCollaboration({
           className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
             activeSection === 'activity'
               ? 'bg-blue-600 text-white shadow-sm'
-              : isDarkMode ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'
+              : isDarkMode ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-700 hover:bg-slate-100'
           }`}
         >
           <Activity className="w-3.5 h-3.5" />
           <span>Audit Trail</span>
           <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono ${
-            activeSection === 'activity' ? 'bg-blue-700 text-white' : 'bg-slate-700/40 text-slate-400'
+            activeSection === 'activity' 
+              ? 'bg-blue-700 text-white' 
+              : isDarkMode ? 'bg-slate-700/40 text-slate-400' : 'bg-slate-200 text-slate-700'
           }`}>
             {orgAuditLogs.length}
           </span>
@@ -1114,7 +1120,7 @@ export default function TeamCollaboration({
           className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
             activeSection === 'chat'
               ? 'bg-blue-600 text-white shadow-sm'
-              : isDarkMode ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'
+              : isDarkMode ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-700 hover:bg-slate-100'
           }`}
         >
           <MessageSquare className="w-3.5 h-3.5" />
@@ -1131,10 +1137,10 @@ export default function TeamCollaboration({
           isDarkMode ? 'bg-[#1E293B] border-slate-800' : 'bg-white border-slate-200 shadow-sm'
         }`}>
           {/* Header & Filter Controls */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/40">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800/40">
             <div>
               <h3 className="font-extrabold text-base flex items-center gap-2">
-                <UserCheck className="w-4 h-4 text-blue-400" />
+                <UserCheck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                 <span>Organization Members Directory</span>
               </h3>
               <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
@@ -1153,7 +1159,7 @@ export default function TeamCollaboration({
                   className={`px-2.5 py-1 rounded-lg text-[10px] font-bold font-mono transition-all cursor-pointer ${
                     memberFilter === 'all' 
                       ? 'bg-blue-600 text-white shadow-xs' 
-                      : isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'
+                      : isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-700 hover:text-slate-900'
                   }`}
                 >
                   All ({combinedMembers.length})
@@ -1164,7 +1170,7 @@ export default function TeamCollaboration({
                   className={`px-2.5 py-1 rounded-lg text-[10px] font-bold font-mono transition-all cursor-pointer ${
                     memberFilter === 'active' 
                       ? 'bg-emerald-600 text-white shadow-xs' 
-                      : isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'
+                      : isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-700 hover:text-slate-900'
                   }`}
                 >
                   Active ({combinedMembers.filter(m => m.status === 'active').length})
@@ -1175,7 +1181,7 @@ export default function TeamCollaboration({
                   className={`px-2.5 py-1 rounded-lg text-[10px] font-bold font-mono transition-all cursor-pointer ${
                     memberFilter === 'suspended' 
                       ? 'bg-rose-600 text-white shadow-xs' 
-                      : isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'
+                      : isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-700 hover:text-slate-900'
                   }`}
                 >
                   Suspended ({combinedMembers.filter(m => m.status === 'suspended').length})
@@ -1200,7 +1206,7 @@ export default function TeamCollaboration({
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className={`border-b text-[10px] font-bold font-mono uppercase tracking-wider ${
-                  isDarkMode ? 'border-slate-800 text-slate-400 bg-[#0F172A]' : 'border-slate-200 text-slate-600 bg-slate-50'
+                  isDarkMode ? 'border-slate-800 text-slate-300 bg-[#0F172A]' : 'border-slate-200 text-slate-700 bg-slate-100'
                 }`}>
                   <th className="py-3 px-4 rounded-l-xl">Member & Identity</th>
                   <th className="py-3 px-3">Firebase UID</th>
@@ -1229,21 +1235,21 @@ export default function TeamCollaboration({
                           <img
                             src={member.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(member.displayName || member.email)}&backgroundColor=3b82f6`}
                             alt={member.displayName}
-                            className="w-8 h-8 rounded-full object-cover border border-slate-700 shrink-0"
+                            className="w-8 h-8 rounded-full object-cover border border-slate-300 dark:border-slate-700 shrink-0"
                             onError={(e) => {
                               (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/initials/svg?seed=User&backgroundColor=3b82f6`;
                             }}
                           />
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
-                              <span className="font-bold truncate">{member.displayName || 'Enterprise User'}</span>
+                              <span className="font-bold truncate text-slate-900 dark:text-slate-100">{member.displayName || 'Enterprise User'}</span>
                               {isOwner && (
-                                <span className="px-1.5 py-0.2 rounded text-[9px] font-bold font-mono bg-violet-500/10 text-violet-400 border border-violet-500/20 shrink-0">
+                                <span className="px-1.5 py-0.2 rounded text-[9px] font-bold font-mono bg-violet-50 text-violet-700 border border-violet-200 dark:bg-violet-500/10 dark:text-violet-400 dark:border-violet-500/20 shrink-0">
                                   Owner
                                 </span>
                               )}
                               {isSelf && (
-                                <span className="px-1.5 py-0.2 rounded text-[9px] font-bold font-mono bg-blue-500/10 text-blue-400 border border-blue-500/20 shrink-0">
+                                <span className="px-1.5 py-0.2 rounded text-[9px] font-bold font-mono bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20 shrink-0">
                                   You
                                 </span>
                               )}
@@ -1258,7 +1264,7 @@ export default function TeamCollaboration({
                       {/* Firebase UID */}
                       <td className="py-3.5 px-3 font-mono text-[10px]">
                         <span className={`px-2 py-1 rounded border inline-block max-w-[130px] truncate ${
-                          isDarkMode ? 'bg-[#0F172A] border-slate-800 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-600'
+                          isDarkMode ? 'bg-[#0F172A] border-slate-800 text-slate-300' : 'bg-slate-100 border-slate-300 text-slate-700'
                         }`} title={member.uid}>
                           {member.uid}
                         </span>
@@ -1272,7 +1278,7 @@ export default function TeamCollaboration({
                       {/* Permissions (Granular Phase 3) */}
                       <td className="py-3.5 px-3">
                         {isOwner ? (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-violet-500/10 text-violet-400 border border-violet-500/20 inline-flex items-center gap-1">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-violet-50 text-violet-700 border border-violet-200 dark:bg-violet-500/10 dark:text-violet-400 dark:border-violet-500/20 inline-flex items-center gap-1">
                             <ShieldCheck className="w-3 h-3" /> Full Access
                           </span>
                         ) : isOwnerOrAdmin && canManageThisMember ? (
@@ -1286,12 +1292,12 @@ export default function TeamCollaboration({
                             }`}
                             title="Click to customize operational permissions"
                           >
-                            <Shield className="w-3 h-3 text-blue-400" />
+                            <Shield className="w-3 h-3 text-blue-600 dark:text-blue-400" />
                             <span>{memberPerms.length} Active</span>
                           </button>
                         ) : (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-800/50 text-slate-400 border border-slate-700 inline-flex items-center gap-1">
-                            <Shield className="w-3 h-3 text-slate-400" /> {memberPerms.length} Active
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-300 dark:bg-slate-800/50 dark:text-slate-400 dark:border-slate-700 inline-flex items-center gap-1">
+                            <Shield className="w-3 h-3 text-slate-500 dark:text-slate-400" /> {memberPerms.length} Active
                           </span>
                         )}
                       </td>
@@ -1302,13 +1308,13 @@ export default function TeamCollaboration({
                       </td>
 
                       {/* Joined Date */}
-                      <td className="py-3.5 px-3 font-mono text-[10px] text-slate-400">
+                      <td className="py-3.5 px-3 font-mono text-[10px] text-slate-600 dark:text-slate-400">
                         {member.joinedAt ? new Date(member.joinedAt).toLocaleDateString() : 'N/A'}
                       </td>
 
                       {/* Last Active */}
                       <td className="py-3.5 px-3 font-mono text-[10px]">
-                        <div className="flex items-center gap-1.5 text-cyan-400">
+                        <div className="flex items-center gap-1.5 text-cyan-700 dark:text-cyan-400">
                           <Clock className="w-3 h-3 shrink-0" />
                           <span>{member.lastActive || 'Active now'}</span>
                         </div>
@@ -1323,7 +1329,7 @@ export default function TeamCollaboration({
                               <button
                                 type="button"
                                 onClick={() => setPermissionsMemberToEdit(member)}
-                                className="px-2 py-1 rounded-lg text-[10px] font-bold font-mono border border-purple-500/20 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors flex items-center gap-1 cursor-pointer"
+                                className="px-2 py-1 rounded-lg text-[10px] font-bold font-mono border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 dark:border-purple-500/20 dark:bg-purple-500/10 dark:text-purple-400 dark:hover:bg-purple-500/20 transition-colors flex items-center gap-1 cursor-pointer"
                                 title="Configure Granular Permissions"
                               >
                                 <Shield className="w-3 h-3" />
@@ -1338,7 +1344,7 @@ export default function TeamCollaboration({
                                 className={`px-2 py-1 rounded-lg text-[10px] font-bold font-mono border transition-colors flex items-center gap-1 cursor-pointer ${
                                   member.role === 'Admin'
                                     ? isDarkMode ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
-                                    : 'border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'
+                                    : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20'
                                 }`}
                                 title={member.role === 'Admin' ? 'Demote to Member' : 'Promote to Admin'}
                               >
@@ -1350,7 +1356,7 @@ export default function TeamCollaboration({
                               <button
                                 type="button"
                                 onClick={() => setMemberToRemove(member)}
-                                className="p-1 rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-colors cursor-pointer"
+                                className="p-1 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-400 dark:hover:bg-rose-500/20 transition-colors cursor-pointer"
                                 title="Revoke Organization Access"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -1380,10 +1386,10 @@ export default function TeamCollaboration({
           isDarkMode ? 'bg-[#1E293B] border-slate-800' : 'bg-white border-slate-200 shadow-sm'
         }`}>
           {/* Header & Controls */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/40">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800/40">
             <div>
               <h3 className="font-extrabold text-base flex items-center gap-2">
-                <Mail className="w-4 h-4 text-sky-400" />
+                <Mail className="w-4 h-4 text-sky-600 dark:text-sky-400" />
                 <span>Organization Invitations</span>
               </h3>
               <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
@@ -1402,7 +1408,7 @@ export default function TeamCollaboration({
                   className={`px-2.5 py-1 rounded-lg text-[10px] font-bold font-mono transition-all cursor-pointer ${
                     inviteFilter === 'all' 
                       ? 'bg-blue-600 text-white shadow-xs' 
-                      : isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'
+                      : isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-700 hover:text-slate-900'
                   }`}
                 >
                   All ({orgInvitations.length})
@@ -1413,7 +1419,7 @@ export default function TeamCollaboration({
                   className={`px-2.5 py-1 rounded-lg text-[10px] font-bold font-mono transition-all cursor-pointer ${
                     inviteFilter === 'pending' 
                       ? 'bg-sky-600 text-white shadow-xs' 
-                      : isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'
+                      : isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-700 hover:text-slate-900'
                   }`}
                 >
                   Pending ({seatMetrics.pendingSeats})
@@ -1424,7 +1430,7 @@ export default function TeamCollaboration({
                   className={`px-2.5 py-1 rounded-lg text-[10px] font-bold font-mono transition-all cursor-pointer ${
                     inviteFilter === 'accepted' 
                       ? 'bg-emerald-600 text-white shadow-xs' 
-                      : isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'
+                      : isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-700 hover:text-slate-900'
                   }`}
                 >
                   Accepted ({orgInvitations.filter(i => i.status === 'accepted').length})
@@ -1435,7 +1441,7 @@ export default function TeamCollaboration({
                   className={`px-2.5 py-1 rounded-lg text-[10px] font-bold font-mono transition-all cursor-pointer ${
                     inviteFilter === 'cancelled_expired' 
                       ? 'bg-slate-600 text-white shadow-xs' 
-                      : isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'
+                      : isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-700 hover:text-slate-900'
                   }`}
                 >
                   History
@@ -1461,7 +1467,7 @@ export default function TeamCollaboration({
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className={`border-b text-[10px] font-bold font-mono uppercase tracking-wider ${
-                    isDarkMode ? 'border-slate-800 text-slate-400 bg-[#0F172A]' : 'border-slate-200 text-slate-600 bg-slate-50'
+                    isDarkMode ? 'border-slate-800 text-slate-300 bg-[#0F172A]' : 'border-slate-200 text-slate-700 bg-slate-100'
                   }`}>
                     <th className="py-3 px-4 rounded-l-xl">Invited Email</th>
                     <th className="py-3 px-3">Assigned Role</th>
@@ -1485,12 +1491,12 @@ export default function TeamCollaboration({
                         {/* Email & Token */}
                         <td className="py-3.5 px-4">
                           <div className="flex items-center gap-2.5">
-                            <div className="p-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 shrink-0">
+                            <div className="p-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-500/10 dark:border-blue-500/20 dark:text-blue-400 shrink-0">
                               <Mail className="w-4 h-4" />
                             </div>
                             <div className="min-w-0">
-                              <span className="font-bold block truncate">{inv.email}</span>
-                              <span className="text-[10px] font-mono text-slate-400 truncate block">
+                              <span className="font-bold block truncate text-slate-900 dark:text-slate-100">{inv.email}</span>
+                              <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 truncate block">
                                 Token: {inv.token.substring(0, 10)}...
                               </span>
                             </div>
@@ -1503,18 +1509,18 @@ export default function TeamCollaboration({
                         </td>
 
                         {/* Invited By */}
-                        <td className="py-3.5 px-3 font-mono text-[10px] text-slate-400">
+                        <td className="py-3.5 px-3 font-mono text-[10px] text-slate-600 dark:text-slate-400">
                           <span className="truncate block max-w-[130px]">{inv.invitedByName || inv.invitedByEmail}</span>
                         </td>
 
                         {/* Created Date */}
-                        <td className="py-3.5 px-3 font-mono text-[10px] text-slate-400">
+                        <td className="py-3.5 px-3 font-mono text-[10px] text-slate-600 dark:text-slate-400">
                           {new Date(inv.createdAt).toLocaleDateString()}
                         </td>
 
                         {/* Expiration Date */}
                         <td className="py-3.5 px-3 font-mono text-[10px]">
-                          <span className={isExpired ? 'text-rose-400 font-bold' : 'text-slate-400'}>
+                          <span className={isExpired ? 'text-rose-600 dark:text-rose-400 font-bold' : 'text-slate-600 dark:text-slate-400'}>
                             {new Date(inv.expiresAt).toLocaleDateString()}
                           </span>
                         </td>
@@ -1531,10 +1537,10 @@ export default function TeamCollaboration({
                             <button
                               type="button"
                               onClick={() => handleCopyInviteToken(inv.token, inv.id)}
-                              className="p-1.5 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors cursor-pointer"
+                              className="p-1.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                               title="Copy Token"
                             >
-                              {copiedTokenId === inv.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                              {copiedTokenId === inv.id ? <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                             </button>
 
                             {isOwnerOrAdmin && isPending && (
@@ -1544,7 +1550,7 @@ export default function TeamCollaboration({
                                   type="button"
                                   onClick={() => handleResendInvite(inv)}
                                   disabled={actionLoadingUid === inv.id}
-                                  className="px-2.5 py-1 rounded-lg text-[10px] font-bold font-mono border border-blue-500/20 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors flex items-center gap-1 cursor-pointer"
+                                  className="px-2.5 py-1 rounded-lg text-[10px] font-bold font-mono border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20 transition-colors flex items-center gap-1 cursor-pointer"
                                   title="Renew invitation for 7 days"
                                 >
                                   <RotateCw className="w-3 h-3" />
@@ -1556,7 +1562,7 @@ export default function TeamCollaboration({
                                   type="button"
                                   onClick={() => handleCancelInvite(inv)}
                                   disabled={actionLoadingUid === inv.id}
-                                  className="px-2.5 py-1 rounded-lg text-[10px] font-bold font-mono border border-rose-500/20 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-colors flex items-center gap-1 cursor-pointer"
+                                  className="px-2.5 py-1 rounded-lg text-[10px] font-bold font-mono border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-400 dark:hover:bg-rose-500/20 transition-colors flex items-center gap-1 cursor-pointer"
                                   title="Cancel invitation"
                                 >
                                   <Ban className="w-3 h-3" />
@@ -1570,7 +1576,7 @@ export default function TeamCollaboration({
                                 type="button"
                                 onClick={() => handleResendInvite(inv)}
                                 disabled={actionLoadingUid === inv.id}
-                                className="px-2.5 py-1 rounded-lg text-[10px] font-bold font-mono border border-blue-500/20 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors flex items-center gap-1 cursor-pointer"
+                                className="px-2.5 py-1 rounded-lg text-[10px] font-bold font-mono border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20 transition-colors flex items-center gap-1 cursor-pointer"
                                 title="Re-activate invitation"
                               >
                                 <RotateCw className="w-3 h-3" />
@@ -1587,11 +1593,11 @@ export default function TeamCollaboration({
             </div>
           ) : (
             <div className="p-10 text-center space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-slate-800/40 text-slate-400 mx-auto flex items-center justify-center">
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 mx-auto flex items-center justify-center">
                 <Mail className="w-6 h-6" />
               </div>
               <h4 className="font-bold text-sm">No Invitations in this View</h4>
-              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+              <p className="text-xs text-slate-600 dark:text-slate-400 max-w-sm mx-auto">
                 {isOwnerOrAdmin ? 'Click "Send Invite" to invite team members and assign roles to your workspace.' : 'No invitations currently pending.'}
               </p>
             </div>
@@ -1621,13 +1627,13 @@ export default function TeamCollaboration({
           <div className={`lg:col-span-6 p-6 rounded-2xl border space-y-4 ${
             isDarkMode ? 'bg-[#1E293B] border-slate-800' : 'bg-white border-slate-200 shadow-sm'
           }`}>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800/40">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800/40">
               <div className="flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-blue-400" />
+                <MessageSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                 <h3 className="font-bold text-sm">Real-Time Cell Annotations</h3>
               </div>
-              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
                 Live Broadcast
               </span>
             </div>
@@ -1639,7 +1645,7 @@ export default function TeamCollaboration({
                   value={selectedTag}
                   onChange={(e) => setSelectedTag(e.target.value)}
                   className={`text-xs px-2.5 py-2 rounded-xl border focus:outline-none ${
-                    isDarkMode ? 'bg-[#0F172A] border-slate-700 text-slate-200' : 'bg-slate-100 border-slate-300 text-slate-900'
+                    isDarkMode ? 'bg-[#0F172A] border-slate-700 text-slate-200' : 'bg-white border-slate-300 text-slate-900'
                   }`}
                 >
                   <option value="Row 14">Row 14</option>
@@ -1653,12 +1659,12 @@ export default function TeamCollaboration({
                   onChange={(e) => setNewCommentText(e.target.value)}
                   placeholder="Annotate anomaly or cell note..."
                   className={`flex-1 px-3.5 py-2 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                    isDarkMode ? 'bg-[#0F172A] border-slate-700 text-slate-200' : 'bg-white border-slate-300 text-slate-900'
+                    isDarkMode ? 'bg-[#0F172A] border-slate-700 text-slate-200' : 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400'
                   }`}
                 />
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-colors flex items-center gap-1 cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-colors flex items-center gap-1 cursor-pointer shadow-xs"
                 >
                   <Send className="w-3.5 h-3.5" /> Post
                 </button>
@@ -1676,16 +1682,16 @@ export default function TeamCollaboration({
                       <img
                         src={comment.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(comment.author)}&backgroundColor=3b82f6`}
                         alt={comment.author}
-                        className="w-6 h-6 rounded-full object-cover border border-slate-700"
+                        className="w-6 h-6 rounded-full object-cover border border-slate-300 dark:border-slate-700"
                       />
-                      <span className="font-bold text-xs">{comment.author}</span>
+                      <span className="font-bold text-xs text-slate-900 dark:text-slate-100">{comment.author}</span>
                       {comment.cellRef && (
-                        <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20">
                           {comment.cellRef}
                         </span>
                       )}
                     </div>
-                    <span className="text-[10px] text-slate-400 font-mono">{comment.time}</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">{comment.time}</span>
                   </div>
                   <p className={`pl-8 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
                     {comment.text}
