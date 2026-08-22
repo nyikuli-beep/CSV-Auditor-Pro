@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase/firebase';
 import { broadcastSystemChatMessage, removeUserPresence } from './chatClient';
+import { dispatchInAppNotification } from './notificationService';
 import { 
   Organization, 
   OrganizationMember, 
@@ -431,6 +432,35 @@ export function subscribeToOrganizationAuditLogs(
 // ==========================================
 // In-Memory Fallback Stores & Cache
 // ==========================================
+
+const INVITATIONS_STORAGE_PREFIX = 'app_org_invitations_v3_';
+
+export function getPersistedInvitations(orgId: string): OrganizationInvitation[] {
+  try {
+    const raw = localStorage.getItem(`${INVITATIONS_STORAGE_PREFIX}${orgId}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+    const legacy = localStorage.getItem('app_workspace_invitations');
+    if (legacy) {
+      const parsed = JSON.parse(legacy);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {
+    console.warn('Failed to parse persisted invitations:', e);
+  }
+  return [];
+}
+
+export function savePersistedInvitations(orgId: string, invitations: OrganizationInvitation[]): void {
+  try {
+    localStorage.setItem(`${INVITATIONS_STORAGE_PREFIX}${orgId}`, JSON.stringify(invitations));
+    localStorage.setItem('app_workspace_invitations', JSON.stringify(invitations));
+  } catch (e) {
+    console.warn('Failed to save persisted invitations:', e);
+  }
+}
 
 const localOrganizationsStore = new Map<string, Organization>();
 const localMembersStore = new Map<string, OrganizationMember[]>();
@@ -872,19 +902,40 @@ export async function createOrganizationInvitation(params: {
 
   try {
     const inviteRef = doc(db, 'organizations', orgId, 'invitations', inviteId);
+    const topLevelRef = doc(db, 'invitations', inviteId);
     
-    // Concurrency / network safety timeout: fallback gracefully if Firestore hangs
-    const firestoreWritePromise = setDoc(inviteRef, invitation);
+    const p1 = setDoc(inviteRef, invitation);
+    const p2 = setDoc(topLevelRef, invitation).catch(() => {});
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error('Invite write timeout')), 5000)
     );
-    await Promise.race([firestoreWritePromise, timeoutPromise]).catch(err => {
+    await Promise.race([Promise.all([p1, p2]), timeoutPromise]).catch(err => {
       console.warn('[Tenancy] Firestore setDoc timeout/fallback for invitation:', err);
     });
 
-    // Update local store
-    const list = localInvitationsStore.get(orgId) || [];
-    localInvitationsStore.set(orgId, [invitation, ...list]);
+    // Update in-memory store and persistent local storage
+    const list = localInvitationsStore.get(orgId) || getPersistedInvitations(orgId);
+    const updatedList = [invitation, ...list.filter(i => i.id !== inviteId)];
+    localInvitationsStore.set(orgId, updatedList);
+    savePersistedInvitations(orgId, updatedList);
+
+    // CRITICAL: Dispatch In-App Notification directly to the invited member end
+    dispatchInAppNotification(targetEmail, {
+      type: 'team_invite',
+      category: 'team',
+      priority: 'urgent',
+      title: 'Team Workspace Invitation',
+      message: `${inviterName || inviterEmail} invited you to join "${orgName}" as an ${role}.`,
+      actionLabel: 'Accept & Join',
+      actionType: 'accept_invite',
+      actionPayload: {
+        inviteToken: token,
+        inviteId: inviteId,
+        orgId: orgId,
+        orgName: orgName,
+        role: role
+      }
+    });
 
     // Record immutable audit log (STEP 3)
     recordOrganizationAuditLog({
@@ -913,9 +964,10 @@ export async function createOrganizationInvitation(params: {
     return { success: true, invitation };
   } catch (err: any) {
     console.error('Firestore createOrganizationInvitation error:', err);
-    // Even if remote error, ensure local store is updated
-    const list = localInvitationsStore.get(orgId) || [];
-    localInvitationsStore.set(orgId, [invitation, ...list]);
+    const list = localInvitationsStore.get(orgId) || getPersistedInvitations(orgId);
+    const updatedList = [invitation, ...list.filter(i => i.id !== inviteId)];
+    localInvitationsStore.set(orgId, updatedList);
+    savePersistedInvitations(orgId, updatedList);
     return { success: true, invitation };
   }
 }
@@ -927,6 +979,13 @@ export function subscribeToOrganizationInvitations(
   orgId: string,
   callback: (invitations: OrganizationInvitation[]) => void
 ): () => void {
+  // Immediately serve persisted / in-memory invitations so page refresh never reads 0
+  const initial = localInvitationsStore.get(orgId) || getPersistedInvitations(orgId);
+  if (initial.length > 0) {
+    localInvitationsStore.set(orgId, initial);
+    callback(initial);
+  }
+
   try {
     const invitesRef = collection(db, 'organizations', orgId, 'invitations');
     const unsubscribe = onSnapshot(
@@ -943,20 +1002,29 @@ export function subscribeToOrganizationInvitations(
           list.push(data);
         });
 
-        // Sort descending by creation date
-        list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        localInvitationsStore.set(orgId, list);
-        callback(list);
+        // Merge snapshot with existing persistent invitations to prevent race resets
+        const persisted = getPersistedInvitations(orgId);
+        const map = new Map<string, OrganizationInvitation>();
+        persisted.forEach(inv => map.set(inv.id, inv));
+        list.forEach(inv => map.set(inv.id, inv));
+        const merged = Array.from(map.values()).sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+
+        localInvitationsStore.set(orgId, merged);
+        savePersistedInvitations(orgId, merged);
+        callback(merged);
       },
       err => {
-        console.warn('Invitations snapshot error:', err);
-        const cached = localInvitationsStore.get(orgId) || [];
+        console.warn('Invitations snapshot error / offline fallback:', err);
+        const cached = localInvitationsStore.get(orgId) || getPersistedInvitations(orgId);
         callback(cached);
       }
     );
     return unsubscribe;
   } catch (e) {
-    callback(localInvitationsStore.get(orgId) || []);
+    const cached = localInvitationsStore.get(orgId) || getPersistedInvitations(orgId);
+    callback(cached);
     return () => {};
   }
 }
@@ -988,7 +1056,7 @@ export async function resendOrganizationInvitation(
       updatedAt: nowIso
     });
 
-    const cached = localInvitationsStore.get(orgId) || [];
+    const cached = localInvitationsStore.get(orgId) || getPersistedInvitations(orgId);
     const updated = cached.map(inv => {
       if (inv.id === invitationId) {
         return { ...inv, status: 'pending' as InvitationStatus, expiresAt: expiresIso };
@@ -996,6 +1064,7 @@ export async function resendOrganizationInvitation(
       return inv;
     });
     localInvitationsStore.set(orgId, updated);
+    savePersistedInvitations(orgId, updated);
 
     // Record audit log
     if (actorUid && actorEmail) {
@@ -1042,7 +1111,7 @@ export async function cancelOrganizationInvitation(
       updatedAt: new Date().toISOString()
     });
 
-    const cached = localInvitationsStore.get(orgId) || [];
+    const cached = localInvitationsStore.get(orgId) || getPersistedInvitations(orgId);
     const updated = cached.map(inv => {
       if (inv.id === invitationId) {
         return { ...inv, status: 'cancelled' as InvitationStatus };
@@ -1050,6 +1119,7 @@ export async function cancelOrganizationInvitation(
       return inv;
     });
     localInvitationsStore.set(orgId, updated);
+    savePersistedInvitations(orgId, updated);
 
     // Record audit log
     if (actorUid && actorEmail) {
@@ -1174,8 +1244,10 @@ export async function acceptOrganizationInvitation(params: {
     const cachedMembers = localMembersStore.get(orgId) || [];
     localMembersStore.set(orgId, [newMember, ...cachedMembers.filter(m => m.uid !== user.uid)]);
 
-    const cachedInvites = localInvitationsStore.get(orgId) || [];
-    localInvitationsStore.set(orgId, cachedInvites.map(i => i.id === invitation.id ? { ...i, status: 'accepted', acceptedAt: nowIso, acceptedByUid: user.uid } : i));
+    const cachedInvites = localInvitationsStore.get(orgId) || getPersistedInvitations(orgId);
+    const updatedInvites = cachedInvites.map(i => i.id === invitation.id ? { ...i, status: 'accepted' as const, acceptedAt: nowIso, acceptedByUid: user.uid } : i);
+    localInvitationsStore.set(orgId, updatedInvites);
+    savePersistedInvitations(orgId, updatedInvites);
 
     // Record Audit Log (STEP 3)
     recordOrganizationAuditLog({

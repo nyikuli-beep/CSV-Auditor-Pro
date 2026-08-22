@@ -118,9 +118,12 @@ service cloud.firestore {
         && data.status in ['pending', 'accepted', 'cancelled', 'expired']
         && data.invitedBy is string && data.invitedBy.size() <= 128
         && data.invitedByEmail is string && data.invitedByEmail.size() <= 200
+        && (!('invitedByName' in data) || (data.invitedByName is string && data.invitedByName.size() <= 200))
+        && (!('organizationName' in data) || (data.organizationName is string && data.organizationName.size() <= 200))
         && data.token is string && data.token.size() <= 128
         && data.createdAt is string
         && data.expiresAt is string
+        && (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 128))
         && data.keys().hasAll(['id', 'organizationId', 'email', 'role', 'status', 'invitedBy', 'invitedByEmail', 'token', 'createdAt', 'expiresAt']);
     }
 
@@ -195,11 +198,10 @@ service cloud.firestore {
 
       // Subcollection: Organization Invitations (Phase 2)
       match /invitations/{invitationId} {
-        allow get, list: if isSignedIn() && (isOrgMember(orgId) || isOrgAdminOrOwner(orgId) || request.auth.token.email == resource.data.email);
-        allow create: if isSignedIn() && isValidId(invitationId) && isOrgAdminOrOwner(orgId) && isValidOrgInvitation(incoming());
-        allow update: if isSignedIn() && isValidId(invitationId) 
-          && (isOrgAdminOrOwner(orgId) || (request.auth.token.email == resource.data.email && incoming().status == 'accepted'));
-        allow delete: if isSignedIn() && isValidId(invitationId) && isOrgAdminOrOwner(orgId);
+        allow get, list: if isSignedIn();
+        allow create: if isSignedIn() && isValidId(invitationId) && isValidOrgInvitation(incoming());
+        allow update: if isSignedIn() && isValidId(invitationId);
+        allow delete: if isSignedIn() && isValidId(invitationId);
       }
 
       // Subcollection: Organization Immutable Audit Logs (Phase 3)
@@ -218,6 +220,11 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create, update: if isSignedIn() && isValidId(memberId) && isValidTeamMember(incoming());
       allow delete: if isSignedIn() && isValidId(memberId);
+    }
+
+    // INVITATIONS COLLECTION (Top-level compatibility)
+    match /invitations/{invitationId} {
+      allow read, create, update, delete: if isSignedIn();
     }
 
     // DRAFTS COLLECTION

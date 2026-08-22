@@ -199,9 +199,6 @@ export default function TeamCollaboration({
   useEffect(() => {
     if (!accessCheck.authorized) return;
 
-    // Reset cached state cleanly on user account switch
-    clearTenancyState();
-
     const currentUid = user?.uid || 'usr-root-owner';
     const currentEmail = user?.email || currentUserEmail || 'nyikulibramwel@gmail.com';
     const currentName = user?.displayName || (currentEmail.split('@')[0]) || 'Enterprise Admin';
