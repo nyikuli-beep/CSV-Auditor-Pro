@@ -39,13 +39,15 @@ import {
   Flame,
   Camera,
   Sun,
-  Moon
+  Moon,
+  FileText
 } from 'lucide-react';
 import { SystemSettings, CSVFile, AuditActivity, ChatMessage } from '../types';
 import { useBilling } from '../context/BillingContext';
 import PlanFeatureLock from './PlanFeatureLock';
 import { auth } from '../firebase/firebase';
 import BillingDashboard from './BillingDashboard';
+import SettingsBillingSection from './SettingsBillingSection';
 import AdminBillingDashboard from './AdminBillingDashboard';
 import ThemeCustomizationPanel from './ThemeCustomizationPanel';
 import SettingsTypographyCard from './typography/SettingsTypographyCard';
@@ -114,6 +116,9 @@ export default function SettingsView({
   const isOwner = currentUser?.role === 'Owner' || (activeEmail
     ? AUTHORIZED_OWNER_EMAILS.some(e => e.toLowerCase() === activeEmail.toLowerCase().trim())
     : false);
+
+  // Top-Level Settings Tab Navigation State
+  const [activeSettingsTab, setActiveSettingsTab] = useState<'all' | 'billing' | 'profile' | 'appearance' | 'api' | 'security' | 'storage' | 'legal'>('all');
 
   // Restricted Features & Access Security Policy State
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -540,7 +545,143 @@ export default function SettingsView({
         </div>
       )}
 
-      {/* Main Grid */}
+      {/* Settings Navigation Tabs Bar */}
+      <div className={`p-1.5 rounded-xl border flex items-center gap-1.5 overflow-x-auto ${
+        isDarkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-slate-100 border-slate-200'
+      }`}>
+        <button
+          type="button"
+          onClick={() => setActiveSettingsTab('all')}
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+            activeSettingsTab === 'all'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <Settings className="w-3.5 h-3.5" />
+          <span>All Settings</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSettingsTab('billing')}
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+            activeSettingsTab === 'billing'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <CreditCard className="w-3.5 h-3.5 text-amber-400" />
+          <span>Billing & Quotas</span>
+          <span className={`text-[10px] font-mono font-extrabold uppercase px-1.5 py-0.5 rounded border ${
+            plan === 'enterprise' ? 'bg-indigo-950/80 text-indigo-300 border-indigo-700/60' :
+            plan === 'pro' ? 'bg-blue-950/80 text-blue-300 border-blue-700/60' :
+            'bg-slate-800 text-slate-400 border-slate-700'
+          }`}>
+            {plan}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSettingsTab('profile')}
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+            activeSettingsTab === 'profile'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <User className="w-3.5 h-3.5" />
+          <span>Profile & Account</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSettingsTab('appearance')}
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+            activeSettingsTab === 'appearance'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <Palette className="w-3.5 h-3.5" />
+          <span>Theme & Styling</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSettingsTab('api')}
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+            activeSettingsTab === 'api'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <Cpu className="w-3.5 h-3.5" />
+          <span>API & AI Models</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSettingsTab('security')}
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+            activeSettingsTab === 'security'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <Shield className="w-3.5 h-3.5" />
+          <span>Security Policies</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSettingsTab('storage')}
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+            activeSettingsTab === 'storage'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <Database className="w-3.5 h-3.5" />
+          <span>Storage & RAM Hub</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSettingsTab('legal')}
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+            activeSettingsTab === 'legal'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <FileText className="w-3.5 h-3.5" />
+          <span>Docs & Terms</span>
+        </button>
+      </div>
+
+      {/* When Billing tab is selected directly */}
+      {activeSettingsTab === 'billing' && (
+        <div className="space-y-6">
+          <SettingsBillingSection
+            isDarkMode={isDarkMode}
+            currentUserEmail={activeEmail || 'nyikulibramwel@gmail.com'}
+            files={files}
+            onOpenUpgradeModal={openProCheckout}
+            onOpenEnterpriseModal={openEnterpriseModal}
+          />
+
+          {isOwner && (
+            <div className="pt-6 border-t border-slate-800/60">
+              <AdminBillingDashboard isDarkMode={isDarkMode} />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Main Grid for All or Filtered Sections */}
+      {activeSettingsTab !== 'billing' && (
       <form onSubmit={saveSettings} className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
         {/* Left Side: General Profile, Theme & Accents */}
@@ -1360,8 +1501,10 @@ export default function SettingsView({
         </div>
 
       </form>
+      )}
 
       {/* Memory Management & Storage Optimization Hub (User Request) */}
+      {(activeSettingsTab === 'all' || activeSettingsTab === 'storage') && (
       <div id="memory-mgmt-hub" className={`p-6 rounded-2xl border transition-all duration-300 ${isDarkMode ? 'bg-slate-900/40 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
         <div className="flex items-start justify-between gap-4 flex-wrap md:flex-nowrap mb-6">
           <div className="space-y-1">
@@ -1656,8 +1799,10 @@ export default function SettingsView({
           </span>
         </div>
       </div>
+      )}
 
       {/* API Reference & Terms of Service */}
+      {(activeSettingsTab === 'all' || activeSettingsTab === 'api') && (
       <div className="space-y-6 pt-6 border-t border-slate-800/20">
         
         {/* Interactive API Documentation Panel */}
@@ -1843,32 +1988,40 @@ export default function SettingsView({
             </button>
           </div>
         </div>
+      </div>
+      )}
 
         {/* Paddle Billing & Subscription Management Section */}
-        <div className="space-y-4 pt-4 border-t border-slate-800/60">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-extrabold tracking-tight flex items-center gap-2">
-                <CreditCard className="w-5 h-5 text-blue-500" /> Subscription & Billing Management
-              </h2>
-              <p className="text-xs text-slate-400">Manage plan tier, usage quotas, invoice receipts, and Paddle customer portal</p>
+        {activeSettingsTab === 'all' && (
+          <div className="space-y-4 pt-4 border-t border-slate-800/60">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-extrabold tracking-tight flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-blue-500" /> Subscription & Billing Management
+                </h2>
+                <p className="text-xs text-slate-400">Manage plan tier, usage quotas, invoice receipts, and Paddle customer portal</p>
+              </div>
             </div>
-          </div>
 
-          <BillingDashboard 
-            isDarkMode={isDarkMode} 
-            currentUserEmail={activeEmail || 'nyikulibramwel@gmail.com'} 
-          />
-        </div>
+            <SettingsBillingSection 
+              isDarkMode={isDarkMode} 
+              currentUserEmail={activeEmail || 'nyikulibramwel@gmail.com'}
+              files={files}
+              onOpenUpgradeModal={openProCheckout}
+              onOpenEnterpriseModal={openEnterpriseModal}
+            />
 
-        {/* Admin Revenue Analytics (Owner Only) */}
-        {isOwner && (
-          <div className="space-y-4 pt-6 border-t border-slate-800/60">
-            <AdminBillingDashboard isDarkMode={isDarkMode} />
+            {/* Admin Revenue Analytics (Owner Only) */}
+            {isOwner && (
+              <div className="space-y-4 pt-6 border-t border-slate-800/60">
+                <AdminBillingDashboard isDarkMode={isDarkMode} />
+              </div>
+            )}
           </div>
         )}
 
         {/* Terms of Service & Privacy Policy Panel */}
+        {(activeSettingsTab === 'all' || activeSettingsTab === 'legal') && (
         <div className={`p-6 rounded-2xl border transition-all duration-300 ${isDarkMode ? 'bg-slate-900/40 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
 
           <button
@@ -1960,8 +2113,8 @@ export default function SettingsView({
             </motion.div>
           )}
         </div>
+        )}
 
-      </div>
     </div>
   );
 }

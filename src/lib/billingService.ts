@@ -71,10 +71,29 @@ export function getEntitlements(plan: 'free' | 'pro' | 'enterprise', status: str
   };
 }
 
-// Initialize usage for current month
+// Initialize usage for current month with cross-storage synchronization
 export function getUserUsage(userId: string, plan: string): UsageMetrics {
   const currentMonth = new Date().toISOString().substring(0, 7); // 'YYYY-MM'
-  let usage = userUsageStore.get(userId);
+  const cleanId = (userId || 'freemium_user').toLowerCase().trim();
+  const storageKey = `app_user_usage_${cleanId}_${currentMonth}`;
+  
+  let usage = userUsageStore.get(cleanId);
+
+  // Check localStorage if not in memory (or browser reload)
+  if (!usage && typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const saved = window.localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved) as UsageMetrics;
+        if (parsed && parsed.periodMonth === currentMonth) {
+          usage = parsed;
+          userUsageStore.set(cleanId, usage);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to read usage metrics from localStorage:', e);
+    }
+  }
   
   if (!usage || usage.periodMonth !== currentMonth) {
     usage = {
@@ -85,7 +104,12 @@ export function getUserUsage(userId: string, plan: string): UsageMetrics {
       apiCallsCount: 0,
       periodMonth: currentMonth
     };
-    userUsageStore.set(userId, usage);
+    userUsageStore.set(cleanId, usage);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify(usage));
+      } catch (e) {}
+    }
   }
 
   // Update maxAudits if plan changed
@@ -101,13 +125,54 @@ export function incrementUserUsage(
   bytesAdd = 0, 
   apiCallsAdd = 0
 ): UsageMetrics {
-  const usage = getUserUsage(userId, plan);
+  const cleanId = (userId || 'freemium_user').toLowerCase().trim();
+  const currentMonth = new Date().toISOString().substring(0, 7); // 'YYYY-MM'
+  const storageKey = `app_user_usage_${cleanId}_${currentMonth}`;
+
+  const usage = getUserUsage(cleanId, plan);
   usage.auditCount += auditAdd;
   usage.rowsProcessed += rowsAdd;
   usage.storageUsedBytes += bytesAdd;
   usage.apiCallsCount += apiCallsAdd;
-  userUsageStore.set(userId, usage);
+  userUsageStore.set(cleanId, usage);
+
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(usage));
+    } catch (e) {}
+  }
+
   return usage;
+}
+
+export interface MonthlyResetInfo {
+  currentMonth: string;
+  nextResetDate: string;
+  daysRemaining: number;
+  hoursRemaining: number;
+}
+
+export function getNextMonthlyResetInfo(): MonthlyResetInfo {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const currentMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
+  const nextMonthDate = new Date(year, month + 1, 1, 0, 0, 0, 0);
+  const diffMs = nextMonthDate.getTime() - now.getTime();
+  const daysRemaining = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+  const hoursRemaining = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60)));
+  const nextResetDate = nextMonthDate.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+
+  return {
+    currentMonth,
+    nextResetDate,
+    daysRemaining,
+    hoursRemaining
+  };
 }
 
 // Seed sample invoices and transactions for active accounts

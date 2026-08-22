@@ -63,7 +63,7 @@ export default function BatchValidationPanel({
   accentClass,
   userRole
 }: BatchValidationPanelProps) {
-  const { plan } = useBilling();
+  const { plan, usage, recordUsage, resetInfo, openProCheckout } = useBilling();
   // Selection state for workspace files
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>(() => files.map(f => f.id));
   const [searchFilter, setSearchFilter] = useState('');
@@ -167,6 +167,19 @@ export default function BatchValidationPanel({
     if (totalTargetsCount === 0) {
       setValidationError('Please select at least one workspace CSV file or upload raw files to validate.');
       return;
+    }
+
+    // Freemium 5 uploads monthly limit check for new raw files
+    if (plan === 'free' && queuedRawFiles.length > 0) {
+      const currentUploads = usage?.auditCount || 0;
+      if (currentUploads >= 5) {
+        setValidationError(`Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${currentUploads}/5 used). Upgrade to Pro for unlimited uploads or wait for quota reset on ${resetInfo.nextResetDate}.`);
+        return;
+      }
+      if (currentUploads + queuedRawFiles.length > 5) {
+        setValidationError(`Queueing ${queuedRawFiles.length} new files exceeds your 5 monthly uploads limit (${currentUploads}/5 used). Please reduce files or upgrade to Pro.`);
+        return;
+      }
     }
 
     setIsValidating(true);
@@ -371,6 +384,15 @@ export default function BatchValidationPanel({
       securityThreatsCount: threatCount,
       completedItems: completedResults
     });
+
+    if (queuedRawFiles.length > 0) {
+      const rawCompletedItems = completedResults.filter(item => item.id.startsWith('raw-queued-'));
+      recordUsage({
+        auditAdd: queuedRawFiles.length,
+        rowsAdd: rawCompletedItems.reduce((acc, item) => acc + item.rowsCount, 0),
+        bytesAdd: queuedRawFiles.reduce((acc, f) => acc + f.size, 0)
+      }).catch(err => console.warn('Batch usage record error:', err));
+    }
 
     setIsValidating(false);
     setQueuedRawFiles([]);

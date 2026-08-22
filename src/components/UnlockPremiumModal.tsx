@@ -24,6 +24,9 @@ interface UnlockPremiumModalProps {
   onUpgradePro: () => void;
   onUpgradeEnterprise: () => void;
   isDarkMode?: boolean;
+  currentUsageCount?: number;
+  resetDate?: string;
+  daysRemaining?: number;
 }
 
 export default function UnlockPremiumModal({
@@ -33,11 +36,15 @@ export default function UnlockPremiumModal({
   featureTier = 'pro',
   onUpgradePro,
   onUpgradeEnterprise,
-  isDarkMode = true
+  isDarkMode = true,
+  currentUsageCount = 5,
+  resetDate,
+  daysRemaining
 }: UnlockPremiumModalProps) {
   if (!isOpen) return null;
 
   const isEnterprise = featureTier === 'enterprise';
+  const isMonthlyUploadLimit = featureName.toLowerCase().includes('monthly upload') || featureName.toLowerCase().includes('5 monthly');
 
   const handlePrimaryClick = () => {
     onClose();
@@ -162,15 +169,40 @@ export default function UnlockPremiumModal({
         {/* Modal Body */}
         <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
           {/* Subtitle callout */}
-          <div className={`p-4 rounded-xl border text-xs leading-relaxed ${
-            isDarkMode 
-              ? 'bg-[#1E293B]/60 border-[#334155] text-[#94A3B8]' 
-              : 'bg-[#F8FAFC] border-[#E2E8F0] text-[#475569]'
-          }`}>
-            You selected <strong className={isDarkMode ? 'text-[#FFFFFF]' : 'text-[#0F172A]'}>{featureName}</strong>. 
-            Freemium users have access to basic deduplication, date formatting, and cell fills. 
-            Upgrade your workspace to unlock advanced automation, AI modeling, and security shields.
-          </div>
+          {isMonthlyUploadLimit ? (
+            <div className={`p-4 rounded-xl border text-xs leading-relaxed space-y-2 ${
+              isDarkMode 
+                ? 'bg-[#1E293B]/80 border-[#334155] text-[#94A3B8]' 
+                : 'bg-[#EFF6FF] border-[#BFDBFE] text-[#1E3A8A]'
+            }`}>
+              <div className="flex items-center justify-between">
+                <span className="font-extrabold text-sm text-[#2563EB] dark:text-[#60A5FA]">
+                  Monthly Quota Limit: {currentUsageCount}/5 Uploads Used
+                </span>
+                {resetDate && (
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#2563EB]/10 text-[#2563EB] dark:text-[#60A5FA] border border-[#2563EB]/30">
+                    Resets in {daysRemaining || 1} day{daysRemaining === 1 ? '' : 's'}
+                  </span>
+                )}
+              </div>
+              <p>
+                Freemium tier is restricted to <strong>5 file uploads per calendar month</strong>. You have used all available allocations for the current billing period.
+              </p>
+              <p className="text-[11px] opacity-90">
+                To continue auditing datasets immediately without waiting for the automatic monthly reset on <strong>{resetDate || 'next month'}</strong>, upgrade your account to <strong>Pro Tier</strong> for <strong>unlimited uploads</strong> and advanced AI cleaning.
+              </p>
+            </div>
+          ) : (
+            <div className={`p-4 rounded-xl border text-xs leading-relaxed ${
+              isDarkMode 
+                ? 'bg-[#1E293B]/60 border-[#334155] text-[#94A3B8]' 
+                : 'bg-[#F8FAFC] border-[#E2E8F0] text-[#475569]'
+            }`}>
+              You selected <strong className={isDarkMode ? 'text-[#FFFFFF]' : 'text-[#0F172A]'}>{featureName}</strong>. 
+              Freemium users have access to basic deduplication, date formatting, and cell fills. 
+              Upgrade your workspace to unlock advanced automation, AI modeling, and security shields.
+            </div>
+          )}
 
           {/* Premium Capabilities Grid */}
           <div>

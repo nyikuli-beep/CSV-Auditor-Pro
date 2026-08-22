@@ -435,7 +435,7 @@ export function subscribeToOrganizationAuditLogs(
 
 const INVITATIONS_STORAGE_PREFIX = 'app_org_invitations_v3_';
 
-export function getPersistedInvitations(orgId: string): OrganizationInvitation[] {
+export function getPersistedInvitations(orgId: string = DEFAULT_ORG_ID): OrganizationInvitation[] {
   try {
     const raw = localStorage.getItem(`${INVITATIONS_STORAGE_PREFIX}${orgId}`);
     if (raw) {
@@ -453,10 +453,13 @@ export function getPersistedInvitations(orgId: string): OrganizationInvitation[]
   return [];
 }
 
-export function savePersistedInvitations(orgId: string, invitations: OrganizationInvitation[]): void {
+export function savePersistedInvitations(orgId: string = DEFAULT_ORG_ID, invitations: OrganizationInvitation[]): void {
   try {
     localStorage.setItem(`${INVITATIONS_STORAGE_PREFIX}${orgId}`, JSON.stringify(invitations));
     localStorage.setItem('app_workspace_invitations', JSON.stringify(invitations));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('app_workspace_invitations_updated', { detail: { orgId, invitations } }));
+    }
   } catch (e) {
     console.warn('Failed to save persisted invitations:', e);
   }
@@ -976,7 +979,7 @@ export async function createOrganizationInvitation(params: {
  * Real-time listener for Organization Invitations.
  */
 export function subscribeToOrganizationInvitations(
-  orgId: string,
+  orgId: string = DEFAULT_ORG_ID,
   callback: (invitations: OrganizationInvitation[]) => void
 ): () => void {
   // Immediately serve persisted / in-memory invitations so page refresh never reads 0
@@ -984,6 +987,18 @@ export function subscribeToOrganizationInvitations(
   if (initial.length > 0) {
     localInvitationsStore.set(orgId, initial);
     callback(initial);
+  }
+
+  // Cross-component sync handler
+  const handleCustomSync = (e: any) => {
+    if (e.detail?.invitations) {
+      localInvitationsStore.set(orgId, e.detail.invitations);
+      callback(e.detail.invitations);
+    }
+  };
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('app_workspace_invitations_updated', handleCustomSync);
   }
 
   try {
@@ -1021,11 +1036,20 @@ export function subscribeToOrganizationInvitations(
         callback(cached);
       }
     );
-    return unsubscribe;
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('app_workspace_invitations_updated', handleCustomSync);
+      }
+      unsubscribe();
+    };
   } catch (e) {
     const cached = localInvitationsStore.get(orgId) || getPersistedInvitations(orgId);
     callback(cached);
-    return () => {};
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('app_workspace_invitations_updated', handleCustomSync);
+      }
+    };
   }
 }
 

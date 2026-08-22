@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { UserPlan, UserBillingInfo, PlanEntitlements, UsageMetrics } from '../types';
-import { getEntitlements, getOrCreateUserBilling, getUserUsage } from '../lib/billingService';
+import { getEntitlements, getOrCreateUserBilling, getUserUsage, incrementUserUsage, getNextMonthlyResetInfo, MonthlyResetInfo } from '../lib/billingService';
 import { openPaddleCheckout } from '../lib/paddle';
 import { useAuth } from './AuthProvider';
 
@@ -16,18 +16,25 @@ interface BillingContextType {
   openProCheckout: () => Promise<void>;
   openEnterpriseModal: () => void;
   refreshBilling: () => Promise<void>;
+  recordUsage: (params: {
+    auditAdd?: number;
+    rowsAdd?: number;
+    bytesAdd?: number;
+    apiCallsAdd?: number;
+  }) => Promise<{ allowed: boolean; limitReached?: boolean; usage: UsageMetrics }>;
   checkAuditLimit: () => boolean;
   checkRowLimit: (rowCount: number) => boolean;
   simulatedPlan: 'pro' | 'enterprise';
   showSimulatedPaddleCheckout: boolean;
   setShowSimulatedPaddleCheckout: (show: boolean) => void;
+  resetInfo: MonthlyResetInfo;
 }
 
 const BillingContext = createContext<BillingContextType | undefined>(undefined);
 
 export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
-  const userEmail = user?.email || 'nyikulibramwel@gmail.com';
+  const userEmail = user?.email || (typeof window !== 'undefined' ? localStorage.getItem('user_profile_email') : '') || 'freemium_user';
 
   const [billing, setBilling] = useState<UserBillingInfo | null>(() => {
     return getOrCreateUserBilling(userEmail, userEmail);
@@ -81,6 +88,61 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     fetchBillingData();
   }, [fetchBillingData]);
 
+  const recordUsage = async (params: {
+    auditAdd?: number;
+    rowsAdd?: number;
+    bytesAdd?: number;
+    apiCallsAdd?: number;
+  }): Promise<{ allowed: boolean; limitReached?: boolean; usage: UsageMetrics }> => {
+    const currentPlan = billing?.plan || 'free';
+    const currentUsage = usage || getUserUsage(userEmail, currentPlan);
+    const auditIncrement = params.auditAdd !== undefined ? params.auditAdd : 1;
+
+    // Check Freemium monthly quota limit (max 5 uploads per month)
+    if (currentPlan === 'free' && currentUsage.auditCount >= 5 && auditIncrement > 0) {
+      return {
+        allowed: false,
+        limitReached: true,
+        usage: currentUsage
+      };
+    }
+
+    // Instantly update local state synchronously for instantaneous UI responsiveness
+    const updated = incrementUserUsage(
+      userEmail,
+      currentPlan,
+      auditIncrement,
+      params.rowsAdd || 0,
+      params.bytesAdd || 0,
+      params.apiCallsAdd || 0
+    );
+
+    setUsage({ ...updated });
+
+    // Sync to backend non-blockingly
+    try {
+      fetch('/api/billing/track-usage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: userEmail,
+          auditAdd: auditIncrement,
+          rowsAdd: params.rowsAdd || 0,
+          bytesAdd: params.bytesAdd || 0,
+          apiCallsAdd: params.apiCallsAdd || 0
+        })
+      }).catch(err => console.warn('Background usage sync notice:', err));
+    } catch (err) {
+      console.warn('Usage tracking fetch error:', err);
+    }
+
+    return {
+      allowed: true,
+      limitReached: currentPlan === 'free' && updated.auditCount >= 5,
+      usage: updated
+    };
+  };
+
   const openProCheckout = async () => {
     try {
       const res = await openPaddleCheckout(
@@ -126,6 +188,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const plan = billing?.plan || 'free';
   const subscriptionStatus = billing?.subscriptionStatus || 'active';
+  const resetInfo = getNextMonthlyResetInfo();
 
   return (
     <BillingContext.Provider
@@ -141,11 +204,13 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         openProCheckout,
         openEnterpriseModal,
         refreshBilling: fetchBillingData,
+        recordUsage,
         checkAuditLimit,
         checkRowLimit,
         simulatedPlan,
         showSimulatedPaddleCheckout,
-        setShowSimulatedPaddleCheckout
+        setShowSimulatedPaddleCheckout,
+        resetInfo
       }}
     >
       {children}
@@ -157,9 +222,10 @@ export const useBilling = () => {
   const context = useContext(BillingContext);
   if (!context) {
     // Provide a safe fallback if used outside provider
-    const defaultBilling = getOrCreateUserBilling('nyikulibramwel@gmail.com', 'nyikulibramwel@gmail.com');
+    const defaultBilling = getOrCreateUserBilling('freemium_user', 'freemium_user');
     const defaultEntitlements = getEntitlements(defaultBilling.plan, defaultBilling.subscriptionStatus);
-    const defaultUsage = getUserUsage('nyikulibramwel@gmail.com', defaultBilling.plan);
+    const defaultUsage = getUserUsage('freemium_user', defaultBilling.plan);
+    const resetInfo = getNextMonthlyResetInfo();
     return {
       plan: defaultBilling.plan,
       subscriptionStatus: defaultBilling.subscriptionStatus,
@@ -172,11 +238,13 @@ export const useBilling = () => {
       openProCheckout: async () => {},
       openEnterpriseModal: () => {},
       refreshBilling: async () => {},
+      recordUsage: async () => ({ allowed: true, usage: defaultUsage }),
       checkAuditLimit: () => true,
       checkRowLimit: () => true,
       simulatedPlan: 'pro' as const,
       showSimulatedPaddleCheckout: false,
-      setShowSimulatedPaddleCheckout: () => {}
+      setShowSimulatedPaddleCheckout: () => {},
+      resetInfo
     };
   }
   return context;

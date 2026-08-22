@@ -86,7 +86,8 @@ import {
   getMemberPermissions,
   hasPermission,
   acceptOrganizationInvitation,
-  clearTenancyState
+  clearTenancyState,
+  getPersistedInvitations
 } from '../lib/teamTenancyService';
 
 interface TeamCollaborationProps {
@@ -149,7 +150,7 @@ export default function TeamCollaboration({
   // Organization state & Members state & Invitations state & Audit Logs state
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [orgMembers, setOrgMembers] = useState<OrganizationMember[]>([]);
-  const [orgInvitations, setOrgInvitations] = useState<OrganizationInvitation[]>([]);
+  const [orgInvitations, setOrgInvitations] = useState<OrganizationInvitation[]>(() => getPersistedInvitations(DEFAULT_ORG_ID));
   const [orgAuditLogs, setOrgAuditLogs] = useState<OrganizationAuditLog[]>([]);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
 

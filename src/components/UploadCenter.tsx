@@ -56,7 +56,17 @@ interface UploadCenterProps {
 }
 
 export default function UploadCenter({ onFileUpload, files = [], isDarkMode, accentClass, userRole }: UploadCenterProps) {
-  const { plan, usage, checkAuditLimit, checkRowLimit, openProCheckout, openEnterpriseModal, refreshBilling } = useBilling();
+  const { 
+    plan, 
+    usage, 
+    checkAuditLimit, 
+    checkRowLimit, 
+    openProCheckout, 
+    openEnterpriseModal, 
+    refreshBilling, 
+    recordUsage, 
+    resetInfo 
+  } = useBilling();
   
   // Unlock Modal State for Plan Limits
   const [isUnlockModalOpen, setIsUnlockModalOpen] = useState(false);
@@ -1628,19 +1638,11 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
           setProcessingStageMessage('Completed successfully.');
           setUploadProgress(100);
 
-          // Track & increment usage in billing engine
-          const activeUserEmail = auth?.currentUser?.email || 'nyikulibramwel@gmail.com';
-          fetch('/api/billing/track-usage', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              userId: activeUserEmail,
-              auditAdd: 1,
-              rowsAdd: scanResult.sanitizedRows.length,
-              bytesAdd: file.size
-            })
-          }).then(() => {
-            if (refreshBilling) refreshBilling();
+          // Track & increment usage synchronously in billing engine and update UI immediately
+          recordUsage({
+            auditAdd: 1,
+            rowsAdd: scanResult.sanitizedRows.length,
+            bytesAdd: file.size
           }).catch(err => console.warn('Usage tracking error:', err));
 
           setTimeout(() => {
@@ -1678,7 +1680,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     const currentUploadsCount = usage?.auditCount || 0;
     if (plan === 'free') {
       if (!checkAuditLimit() || currentUploadsCount >= 5) {
-        const msg = `Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${currentUploadsCount}/5 used). Upgrade to Pro for unlimited uploads.`;
+        const msg = `Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${currentUploadsCount}/5 used). Upgrade to Pro for unlimited uploads or wait until quota resets on ${resetInfo.nextResetDate}.`;
         setErrorMsg(msg);
         triggerUnlockModal('5 Monthly Uploads Limit', 'pro');
         return;
@@ -1783,18 +1785,11 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     setIsAnalyzing(false);
 
     if (parsedFiles.length > 0) {
-      const activeUserEmail = auth?.currentUser?.email || 'nyikulibramwel@gmail.com';
-      fetch('/api/billing/track-usage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: activeUserEmail,
-          auditAdd: parsedFiles.length,
-          rowsAdd: parsedFiles.reduce((acc, f) => acc + (f.totalRowsCount || 0), 0),
-          bytesAdd: parsedFiles.reduce((acc, f) => acc + (f.size || 0), 0)
-        })
-      }).then(() => {
-        if (refreshBilling) refreshBilling();
+      // Record batch usage
+      recordUsage({
+        auditAdd: parsedFiles.length,
+        rowsAdd: parsedFiles.reduce((acc, f) => acc + (f.totalRowsCount || 0), 0),
+        bytesAdd: parsedFiles.reduce((acc, f) => acc + (f.size || 0), 0)
       }).catch(err => console.warn('Batch usage tracking error:', err));
 
       setPendingFiles(parsedFiles);
@@ -1810,6 +1805,13 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     e.stopPropagation();
     setDragActive(false);
 
+    if (plan === 'free' && (!checkAuditLimit() || (usage?.auditCount || 0) >= 5)) {
+      const msg = `Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${usage?.auditCount || 0}/5 used). Upgrade to Pro for unlimited uploads or wait until quota resets on ${resetInfo.nextResetDate}.`;
+      setErrorMsg(msg);
+      triggerUnlockModal('5 Monthly Uploads Limit', 'pro');
+      return;
+    }
+
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       if (e.dataTransfer.files.length === 1) {
         initiateFileConfiguration(e.dataTransfer.files[0]);
@@ -1820,6 +1822,13 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
   };
 
   const handleBrowse = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (plan === 'free' && (!checkAuditLimit() || (usage?.auditCount || 0) >= 5)) {
+      const msg = `Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${usage?.auditCount || 0}/5 used). Upgrade to Pro for unlimited uploads or wait until quota resets on ${resetInfo.nextResetDate}.`;
+      setErrorMsg(msg);
+      triggerUnlockModal('5 Monthly Uploads Limit', 'pro');
+      return;
+    }
+
     if (e.target.files && e.target.files.length > 0) {
       if (e.target.files.length === 1) {
         initiateFileConfiguration(e.target.files[0]);
@@ -2650,15 +2659,17 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
               </span>
               <span className="text-slate-300 dark:text-slate-700">&bull;</span>
               <span className="font-semibold">
-                Monthly Uploads: <span className="font-bold text-blue-600 dark:text-blue-400">{plan === 'free' ? `${usage?.auditCount || 0} / 5 used` : 'Unlimited'}</span>
+                Monthly Uploads: <span className={`font-bold ${plan === 'free' && (usage?.auditCount || 0) >= 5 ? 'text-rose-500' : 'text-blue-600 dark:text-blue-400'}`}>
+                  {plan === 'free' ? `${usage?.auditCount || 0} / 5 used` : 'Unlimited'}
+                </span>
               </span>
             </div>
             {plan === 'free' && (
               <button
-                onClick={() => triggerUnlockModal('5MB File Size & 5 Uploads Limit', 'pro')}
+                onClick={() => triggerUnlockModal('5 Monthly Uploads Limit', 'pro')}
                 className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:text-blue-500 hover:underline cursor-pointer flex items-center gap-1 shrink-0"
               >
-                Upgrade to Pro (25MB) / Enterprise (50MB) &rarr;
+                Upgrade to Pro (Unlimited Uploads) &rarr;
               </button>
             )}
             {plan === 'pro' && (
@@ -2670,6 +2681,31 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
               </button>
             )}
           </div>
+
+          {/* Freemium Quota Exceeded Notice Card */}
+          {plan === 'free' && (usage?.auditCount || 0) >= 5 && (
+            <div className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+              isDarkMode ? 'bg-rose-950/30 border-rose-800/60 text-rose-200' : 'bg-rose-50 border-rose-200 text-rose-900 shadow-sm'
+            }`}>
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-lg bg-rose-500/20 text-rose-500 shrink-0 mt-0.5">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-xs">Monthly Upload Limit Reached ({usage?.auditCount || 5}/5 Used)</h4>
+                  <p className="text-[11px] opacity-90 mt-0.5 leading-relaxed">
+                    You have reached the free tier limit of 5 uploads for this billing cycle. Upgrade to Pro for unlimited spreadsheet uploads, or wait for your free upload quota to reset on <strong>{resetInfo.nextResetDate}</strong> (in {resetInfo.daysRemaining} days).
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => triggerUnlockModal('5 Monthly Uploads Limit', 'pro')}
+                className="px-4 py-2 rounded-lg text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-all shrink-0 cursor-pointer text-center"
+              >
+                Upgrade to Pro ($49/mo)
+              </button>
+            </div>
+          )}
 
           <div 
             onDragEnter={handleDrag}
@@ -3132,6 +3168,9 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
         onUpgradePro={openProCheckout}
         onUpgradeEnterprise={openEnterpriseModal}
         isDarkMode={isDarkMode}
+        currentUsageCount={usage?.auditCount || 0}
+        resetDate={resetInfo.nextResetDate}
+        daysRemaining={resetInfo.daysRemaining}
       />
     </div>
   );

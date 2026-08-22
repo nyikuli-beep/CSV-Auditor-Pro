@@ -68,7 +68,7 @@ import {
   dismissNotification,
   clearAllNotifications
 } from './lib/notificationService';
-import { subscribeToOrganizationInvitations, DEFAULT_ORG_ID } from './lib/teamTenancyService';
+import { subscribeToOrganizationInvitations, DEFAULT_ORG_ID, getPersistedInvitations } from './lib/teamTenancyService';
 import { useBilling } from './context/BillingContext';
 
 // Import File Storage persistence engine
@@ -256,7 +256,9 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   const { billing, usage: billingUsage } = useBilling();
 
   // Multi-Tenant Invitations & Accept Modal State
-  const [workspaceInvitations, setWorkspaceInvitations] = useState<OrganizationInvitation[]>([]);
+  const [workspaceInvitations, setWorkspaceInvitations] = useState<OrganizationInvitation[]>(() => {
+    return getPersistedInvitations(DEFAULT_ORG_ID);
+  });
   const [acceptInviteModalState, setAcceptInviteModalState] = useState<{ isOpen: boolean; prefilledToken: string }>({
     isOpen: false,
     prefilledToken: ''

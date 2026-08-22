@@ -11,7 +11,7 @@ import {
   CSVFile,
   SlotRequest
 } from '../types';
-import { DEFAULT_ORG_ID } from './teamTenancyService';
+import { DEFAULT_ORG_ID, getPersistedInvitations } from './teamTenancyService';
 
 const READ_STORAGE_KEY_PREFIX = 'csv_auditor_read_notifs_';
 const DISMISSED_STORAGE_KEY_PREFIX = 'csv_auditor_dismissed_notifs_';
@@ -203,7 +203,8 @@ export function computeUserNotifications(params: ComputeNotificationsParams): Ap
   // =========================================================================
   // 1. TEAM COLLABORATION INVITATIONS (High Priority for Non-Owners / Prospects)
   // =========================================================================
-  const myPendingInvites = invitations.filter(
+  const allInvites = invitations && invitations.length > 0 ? invitations : getPersistedInvitations(DEFAULT_ORG_ID);
+  const myPendingInvites = allInvites.filter(
     inv => inv.email.toLowerCase().trim() === normalizedEmail && 
            inv.status === 'pending' && 
            new Date(inv.expiresAt).getTime() > Date.now()
@@ -518,6 +519,13 @@ export function computeUserNotifications(params: ComputeNotificationsParams): Ap
   // =========================================================================
   const customNotifs = getCustomInAppNotifications(userEmail);
   customNotifs.forEach(cn => {
+    // Avoid duplicate team_invite if already generated from active pending invitation in Section 1
+    if (cn.type === 'team_invite' && cn.actionPayload?.inviteId) {
+      const alreadyHas = notifs.some(
+        n => n.type === 'team_invite' && (n.id.includes(cn.actionPayload.inviteId) || n.actionPayload?.inviteId === cn.actionPayload.inviteId)
+      );
+      if (alreadyHas) return;
+    }
     if (!dismissedIds.has(cn.id)) {
       notifs.push({
         ...cn,
@@ -546,6 +554,26 @@ export function subscribeToUserInvitations(
   }
 
   const normalized = userEmail.toLowerCase().trim();
+  const initial = getPersistedInvitations(orgId).filter(
+    inv => inv.email.toLowerCase().trim() === normalized
+  );
+  if (initial.length > 0) {
+    callback(initial);
+  }
+
+  // Cross-component sync handler
+  const handleCustomSync = (e: any) => {
+    if (e.detail?.invitations) {
+      const userInvites = (e.detail.invitations as OrganizationInvitation[]).filter(
+        inv => inv.email.toLowerCase().trim() === normalized
+      );
+      callback(userInvites);
+    }
+  };
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('app_workspace_invitations_updated', handleCustomSync);
+  }
 
   try {
     const invitesRef = collection(db, 'organizations', orgId, 'invitations');
@@ -559,18 +587,40 @@ export function subscribeToUserInvitations(
           const data = docSnap.data() as OrganizationInvitation;
           list.push(data);
         });
-        callback(list);
+        if (list.length > 0) {
+          callback(list);
+        } else {
+          const fallback = getPersistedInvitations(orgId).filter(
+            inv => inv.email.toLowerCase().trim() === normalized
+          );
+          callback(fallback);
+        }
       },
       err => {
         console.warn('[NotificationService] Invitations subscription fallback:', err);
-        callback([]);
+        const fallback = getPersistedInvitations(orgId).filter(
+          inv => inv.email.toLowerCase().trim() === normalized
+        );
+        callback(fallback);
       }
     );
 
-    return unsubscribe;
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('app_workspace_invitations_updated', handleCustomSync);
+      }
+      unsubscribe();
+    };
   } catch (e) {
     console.warn('[NotificationService] Failed to initialize invitations listener:', e);
-    callback([]);
-    return () => {};
+    const fallback = getPersistedInvitations(orgId).filter(
+      inv => inv.email.toLowerCase().trim() === normalized
+    );
+    callback(fallback);
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('app_workspace_invitations_updated', handleCustomSync);
+      }
+    };
   }
 }
