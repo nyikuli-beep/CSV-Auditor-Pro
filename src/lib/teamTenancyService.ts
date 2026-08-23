@@ -964,6 +964,15 @@ export async function createOrganizationInvitation(params: {
       text: `${inviterName || inviterEmail.split('@')[0]} dispatched an enterprise invitation to ${targetEmail} (${role}).`
     }).catch(() => {});
 
+    // Sync to Node.js / PostgreSQL backend endpoint for instant cross-device pickup
+    if (typeof fetch !== 'undefined') {
+      fetch('/api/workspaces/invitations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(invitation)
+      }).catch(err => console.warn('[Tenancy] Backend invitation sync warning:', err));
+    }
+
     return { success: true, invitation };
   } catch (err: any) {
     console.error('Firestore createOrganizationInvitation error:', err);
@@ -971,12 +980,60 @@ export async function createOrganizationInvitation(params: {
     const updatedList = [invitation, ...list.filter(i => i.id !== inviteId)];
     localInvitationsStore.set(orgId, updatedList);
     savePersistedInvitations(orgId, updatedList);
+
+    if (typeof fetch !== 'undefined') {
+      fetch('/api/workspaces/invitations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(invitation)
+      }).catch(() => {});
+    }
+
     return { success: true, invitation };
   }
 }
 
 /**
- * Real-time listener for Organization Invitations.
+ * Fetches workspace invitations from server-side API endpoint for cross-session consistency.
+ */
+export async function fetchServerWorkspaceInvitations(
+  orgId: string = DEFAULT_ORG_ID,
+  userEmail?: string
+): Promise<OrganizationInvitation[]> {
+  try {
+    const url = new URL('/api/workspaces/invitations', window.location.origin);
+    if (orgId) url.searchParams.set('organizationId', orgId);
+    if (userEmail) url.searchParams.set('email', userEmail);
+
+    const res = await fetch(url.toString(), {
+      headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.success && Array.isArray(data.invitations)) {
+      const serverInvites: OrganizationInvitation[] = data.invitations;
+      
+      // Merge with persisted local invitations
+      const persisted = getPersistedInvitations(orgId);
+      const map = new Map<string, OrganizationInvitation>();
+      persisted.forEach(inv => map.set(inv.id, inv));
+      serverInvites.forEach(inv => map.set(inv.id, inv));
+      const merged = Array.from(map.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+
+      localInvitationsStore.set(orgId, merged);
+      savePersistedInvitations(orgId, merged);
+      return merged;
+    }
+  } catch (err) {
+    console.warn('[Tenancy] Could not query server invitations:', err);
+  }
+  return localInvitationsStore.get(orgId) || getPersistedInvitations(orgId);
+}
+
+/**
+ * Real-time listener for Organization Invitations with multi-session / cross-browser synchronization.
  */
 export function subscribeToOrganizationInvitations(
   orgId: string = DEFAULT_ORG_ID,
@@ -989,7 +1046,16 @@ export function subscribeToOrganizationInvitations(
     callback(initial);
   }
 
-  // Cross-component sync handler
+  // Active sync function to re-fetch from server and notify subscribers
+  const triggerSync = async () => {
+    const fresh = await fetchServerWorkspaceInvitations(orgId);
+    callback(fresh);
+  };
+
+  // 1. Trigger immediate server fetch upon mounting
+  triggerSync();
+
+  // 2. Cross-component & cross-tab sync handlers
   const handleCustomSync = (e: any) => {
     if (e.detail?.invitations) {
       localInvitationsStore.set(orgId, e.detail.invitations);
@@ -997,8 +1063,31 @@ export function subscribeToOrganizationInvitations(
     }
   };
 
+  const handleStorageEvent = (e: StorageEvent) => {
+    if (e.key?.includes(INVITATIONS_STORAGE_PREFIX) || e.key === 'app_workspace_invitations') {
+      const updated = getPersistedInvitations(orgId);
+      localInvitationsStore.set(orgId, updated);
+      callback(updated);
+    }
+  };
+
+  const handleVisibilityOrFocus = () => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+      triggerSync();
+    }
+  };
+
+  // 3. Periodic polling interval (every 12 seconds) to guarantee multi-device / multi-browser updates
+  let pollTimer: any = null;
   if (typeof window !== 'undefined') {
     window.addEventListener('app_workspace_invitations_updated', handleCustomSync);
+    window.addEventListener('storage', handleStorageEvent);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+    pollTimer = setInterval(() => {
+      triggerSync();
+    }, 12000);
   }
 
   try {
@@ -1039,6 +1128,10 @@ export function subscribeToOrganizationInvitations(
     return () => {
       if (typeof window !== 'undefined') {
         window.removeEventListener('app_workspace_invitations_updated', handleCustomSync);
+        window.removeEventListener('storage', handleStorageEvent);
+        window.removeEventListener('focus', handleVisibilityOrFocus);
+        document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+        if (pollTimer) clearInterval(pollTimer);
       }
       unsubscribe();
     };
@@ -1048,6 +1141,10 @@ export function subscribeToOrganizationInvitations(
     return () => {
       if (typeof window !== 'undefined') {
         window.removeEventListener('app_workspace_invitations_updated', handleCustomSync);
+        window.removeEventListener('storage', handleStorageEvent);
+        window.removeEventListener('focus', handleVisibilityOrFocus);
+        document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+        if (pollTimer) clearInterval(pollTimer);
       }
     };
   }
@@ -1298,6 +1395,15 @@ export async function acceptOrganizationInvitation(params: {
       tenantId: orgId,
       text: `${newMember.displayName || newMember.email.split('@')[0]} accepted the team invitation and joined as ${newMember.role}.`
     }).catch(() => {});
+
+    // Sync accept action to backend server endpoint
+    if (typeof fetch !== 'undefined') {
+      fetch(`/api/workspaces/invitations/${invitation.id}/accept`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid: user.uid, userEmail: user.email })
+      }).catch(err => console.warn('[Tenancy] Backend accept sync warning:', err));
+    }
 
     return { success: true, member: newMember };
   } catch (err: any) {

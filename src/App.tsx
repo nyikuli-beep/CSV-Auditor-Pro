@@ -267,13 +267,13 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   const [notificationTick, setNotificationTick] = useState<number>(0);
   const [dismissedInviteIds, setDismissedInviteIds] = useState<Set<string>>(new Set());
 
-  // Subscribe to organization invitations globally across workspace
+  // Subscribe to organization invitations globally across workspace (with user-level refresh)
   useEffect(() => {
     const unsub = subscribeToOrganizationInvitations(DEFAULT_ORG_ID, (list) => {
       setWorkspaceInvitations(list);
     });
     return () => unsub();
-  }, []);
+  }, [user?.email]);
 
   // Background check utility upon user login to verify if a trial is within 7, 3, or 1 day(s) of expiry
   useEffect(() => {

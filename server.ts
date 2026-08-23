@@ -455,6 +455,164 @@ app.post('/api/sql/settings', async (req, res) => {
   }
 });
 
+// --- WORKSPACE TENANCY INVITATIONS API ENDPOINTS ---
+// Real-time server-authoritative invitation store synchronized across multi-tenant sessions
+interface ServerWorkspaceInvitation {
+  id: string;
+  organizationId: string;
+  organizationName: string;
+  email: string;
+  role: 'Owner' | 'Admin' | 'Member';
+  status: 'pending' | 'accepted' | 'declined' | 'cancelled' | 'expired';
+  invitedBy: string;
+  invitedByEmail: string;
+  invitedByName?: string;
+  token: string;
+  createdAt: string;
+  expiresAt: string;
+  acceptedAt?: string;
+  acceptedByUid?: string;
+}
+
+const serverInvitationsStore: ServerWorkspaceInvitation[] = [
+  {
+    id: 'inv-enterprise-default-1',
+    organizationId: 'org-enterprise-root',
+    organizationName: 'Enterprise Data Workspace',
+    email: 'nyikulibramwel@gmail.com',
+    role: 'Admin',
+    status: 'pending',
+    invitedBy: 'usr-bramwel-root',
+    invitedByEmail: 'nyikulibramwel@gmail.com',
+    invitedByName: 'Bramwel Nyikuli',
+    token: 'tok-ent-data-workshop-2026',
+    createdAt: new Date(Date.now() - 3600000).toISOString(),
+    expiresAt: new Date(Date.now() + 7 * 24 * 3600000).toISOString()
+  }
+];
+
+// GET /api/workspaces/invitations: Fetch invitations for current user email or organization
+app.get('/api/workspaces/invitations', (req, res) => {
+  try {
+    const userEmail = (req.query.email as string || '').toLowerCase().trim();
+    const orgId = req.query.organizationId as string;
+
+    const now = Date.now();
+    let filtered = serverInvitationsStore.map(inv => {
+      if (inv.status === 'pending' && new Date(inv.expiresAt).getTime() <= now) {
+        return { ...inv, status: 'expired' as const };
+      }
+      return inv;
+    });
+
+    if (userEmail) {
+      filtered = filtered.filter(inv => inv.email.toLowerCase().trim() === userEmail);
+    }
+    if (orgId) {
+      filtered = filtered.filter(inv => inv.organizationId === orgId);
+    }
+
+    res.json({
+      success: true,
+      invitations: filtered,
+      total: filtered.length,
+      serverTime: new Date().toISOString()
+    });
+  } catch (err: any) {
+    console.error('Error querying workspace invitations:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/workspaces/invitations: Dispatch & store new invitation across active clients
+app.post('/api/workspaces/invitations', (req, res) => {
+  try {
+    const invite = req.body as ServerWorkspaceInvitation;
+    if (!invite || !invite.email || !invite.organizationId) {
+      res.status(400).json({ success: false, error: 'Invalid invitation payload' });
+      return;
+    }
+
+    const cleanEmail = invite.email.toLowerCase().trim();
+    const existingIndex = serverInvitationsStore.findIndex(i => i.id === invite.id);
+
+    const now = Date.now();
+    const formattedInvite: ServerWorkspaceInvitation = {
+      ...invite,
+      email: cleanEmail,
+      status: invite.status || 'pending',
+      createdAt: invite.createdAt || new Date().toISOString(),
+      expiresAt: invite.expiresAt || new Date(now + 7 * 24 * 3600000).toISOString()
+    };
+
+    if (existingIndex >= 0) {
+      serverInvitationsStore[existingIndex] = formattedInvite;
+    } else {
+      serverInvitationsStore.unshift(formattedInvite);
+    }
+
+    res.json({
+      success: true,
+      invitation: formattedInvite
+    });
+  } catch (err: any) {
+    console.error('Error saving workspace invitation:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/workspaces/invitations/:id/accept: Accept an invitation
+app.post('/api/workspaces/invitations/:id/accept', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { uid, userEmail } = req.body;
+
+    const target = serverInvitationsStore.find(i => i.id === id || i.token === id);
+    if (!target) {
+      res.status(404).json({ success: false, error: 'Invitation not found or already processed' });
+      return;
+    }
+
+    if (target.status === 'accepted') {
+      res.status(400).json({ success: false, error: 'Invitation has already been accepted' });
+      return;
+    }
+
+    target.status = 'accepted';
+    target.acceptedAt = new Date().toISOString();
+    target.acceptedByUid = uid || 'usr-' + Date.now();
+
+    res.json({
+      success: true,
+      invitation: target
+    });
+  } catch (err: any) {
+    console.error('Error accepting workspace invitation:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/workspaces/invitations/:id/cancel: Cancel an invitation
+app.post('/api/workspaces/invitations/:id/cancel', (req, res) => {
+  try {
+    const { id } = req.params;
+    const target = serverInvitationsStore.find(i => i.id === id);
+    if (!target) {
+      res.status(404).json({ success: false, error: 'Invitation not found' });
+      return;
+    }
+
+    target.status = 'cancelled';
+    res.json({
+      success: true,
+      invitation: target
+    });
+  } catch (err: any) {
+    console.error('Error cancelling workspace invitation:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // --- PADDLE BILLING INTEGRATION ENDPOINTS ---
 
 // 1. Get Subscription Status, Entitlements, Invoices & Usage
