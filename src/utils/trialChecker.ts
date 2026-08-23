@@ -48,7 +48,7 @@ export async function runTrialExpirationCheck(userEmail: string): Promise<TrialA
     }
 
     // 2. Validate if user is in trial mode
-    const isTrial = billingData.subscriptionStatus === 'trial' || (billingData.plan === 'pro' && billingData.trialEndsAt);
+    const isTrial = billingData.plan === 'pro_trial' || billingData.subscriptionStatus === 'trial' || (billingData.plan === 'pro' && billingData.trialEndsAt);
     if (!isTrial || !billingData.trialEndsAt) {
       return null; // Not in trial or no trial end date specified
     }

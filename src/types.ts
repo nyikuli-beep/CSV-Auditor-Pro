@@ -392,7 +392,7 @@ export interface CustomValidationRule {
   isActive: boolean;
 }
 
-export type UserPlan = 'free' | 'pro' | 'enterprise';
+export type UserPlan = 'free' | 'pro_trial' | 'pro' | 'enterprise';
 export type SubscriptionStatus = 'trial' | 'active' | 'past_due' | 'canceled' | 'expired' | 'paused';
 
 export interface UserBillingInfo {
@@ -402,7 +402,9 @@ export interface UserBillingInfo {
   customerId?: string | null;
   billingCycle: 'monthly' | 'yearly';
   renewalDate?: string | null;
+  trialStartedAt?: string | null;
   trialEndsAt?: string | null;
+  trialUsed: boolean;
 }
 
 export interface BillingInvoice {

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { 
   Lock, 
@@ -9,9 +9,11 @@ import {
   Sparkles, 
   ShieldAlert, 
   Layers,
-  Crown
+  Crown,
+  Check
 } from 'lucide-react';
 import { UserPlan } from '../types';
+import { useBilling } from '../context/BillingContext';
 
 interface PlanFeatureLockProps {
   featureName: string;
@@ -36,7 +38,24 @@ export default function PlanFeatureLock({
   featureBenefits,
   compact = false
 }: PlanFeatureLockProps) {
+  const { trialUsed, startFreeTrial } = useBilling();
+  const [isActivatingTrial, setIsActivatingTrial] = useState(false);
   const isEnterpriseRequired = requiredPlan === 'enterprise';
+
+  const handleProAction = async () => {
+    if (!trialUsed) {
+      setIsActivatingTrial(true);
+      try {
+        await startFreeTrial();
+      } catch (err) {
+        console.error('Trial activation error:', err);
+      } finally {
+        setIsActivatingTrial(false);
+      }
+    } else if (onUpgradePro) {
+      onUpgradePro();
+    }
+  };
 
   const defaultProBenefits = [
     'Unlimited CSV file audits and dataset row processing',
@@ -87,8 +106,9 @@ export default function PlanFeatureLock({
         </div>
 
         <button
-          onClick={isEnterpriseRequired ? onUpgradeEnterprise : onUpgradePro}
-          className={`px-4 py-2 rounded-lg text-xs font-bold text-[#FFFFFF] flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0 ${
+          onClick={isEnterpriseRequired ? onUpgradeEnterprise : handleProAction}
+          disabled={isActivatingTrial}
+          className={`px-4 py-2 rounded-lg text-xs font-bold text-[#FFFFFF] flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0 disabled:opacity-60 ${
             isEnterpriseRequired 
               ? 'bg-[#7C3AED] hover:bg-[#6D28D9]' 
               : 'bg-[#2563EB] hover:bg-[#1D4ED8]'
@@ -98,6 +118,16 @@ export default function PlanFeatureLock({
             <>
               <Building2 className="w-3.5 h-3.5" />
               <span>Contact Enterprise Sales</span>
+            </>
+          ) : isActivatingTrial ? (
+            <>
+              <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <span>Activating Trial...</span>
+            </>
+          ) : !trialUsed ? (
+            <>
+              <Zap className="w-3.5 h-3.5" />
+              <span>Start 14-Day Free Trial</span>
             </>
           ) : (
             <>
@@ -208,18 +238,34 @@ export default function PlanFeatureLock({
             </button>
           ) : (
             <button
-              onClick={onUpgradePro}
-              className="w-full sm:w-auto px-6 py-3 rounded-xl text-xs font-bold text-[#FFFFFF] bg-[#2563EB] hover:bg-[#1D4ED8] flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer"
+              onClick={handleProAction}
+              disabled={isActivatingTrial}
+              className="w-full sm:w-auto px-6 py-3 rounded-xl text-xs font-bold text-[#FFFFFF] bg-[#2563EB] hover:bg-[#1D4ED8] flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer disabled:opacity-60"
             >
-              <Zap className="w-4 h-4" />
-              <span>Upgrade to Pro ($49/mo)</span>
-              <ArrowRight className="w-4 h-4" />
+              {isActivatingTrial ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Activating Free Trial...</span>
+                </>
+              ) : !trialUsed ? (
+                <>
+                  <Zap className="w-4 h-4" />
+                  <span>Start 14-Day Free Trial</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              ) : (
+                <>
+                  <Zap className="w-4 h-4" />
+                  <span>Upgrade to Pro ($49/mo)</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
             </button>
           )}
 
           {currentPlan === 'free' && isEnterpriseRequired && (
             <button
-              onClick={onUpgradePro}
+              onClick={handleProAction}
               className={`w-full sm:w-auto px-5 py-3 rounded-xl text-xs font-bold border transition-colors flex items-center justify-center gap-2 cursor-pointer ${
                 isDarkMode 
                   ? 'border-[#334155] text-[#CBD5E1] hover:bg-[#334155]' 
@@ -227,7 +273,7 @@ export default function PlanFeatureLock({
               }`}
             >
               <Zap className="w-4 h-4 text-[#2563EB]" />
-              <span>Upgrade to Pro First ($49/mo)</span>
+              <span>{!trialUsed ? 'Try Pro 14 Days Free' : 'Upgrade to Pro First ($49/mo)'}</span>
             </button>
           )}
         </div>

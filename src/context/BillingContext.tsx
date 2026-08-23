@@ -11,6 +11,13 @@ interface BillingContextType {
   usage: UsageMetrics | null;
   billing: UserBillingInfo | null;
   isLoading: boolean;
+  isTrialActive: boolean;
+  hasProAccess: boolean;
+  trialDaysRemaining: number;
+  trialStartedAt: string | null;
+  trialEndsAt: string | null;
+  trialUsed: boolean;
+  startFreeTrial: () => Promise<{ success: boolean; message?: string; error?: string }>;
   isEnterpriseModalOpen: boolean;
   setIsEnterpriseModalOpen: (open: boolean) => void;
   openProCheckout: () => Promise<void>;
@@ -65,19 +72,19 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const data = await res.json();
       if (data.success && data.billing) {
         setBilling(data.billing);
-        setEntitlementsState(data.entitlements || getEntitlements(data.billing.plan, data.billing.subscriptionStatus));
+        setEntitlementsState(data.entitlements || getEntitlements(data.billing.plan, data.billing.subscriptionStatus, data.billing.trialEndsAt));
         setUsage(data.usage || getUserUsage(userEmail, data.billing.plan));
       } else {
         const local = getOrCreateUserBilling(userEmail, userEmail);
         setBilling(local);
-        setEntitlementsState(getEntitlements(local.plan, local.subscriptionStatus));
+        setEntitlementsState(getEntitlements(local.plan, local.subscriptionStatus, local.trialEndsAt));
         setUsage(getUserUsage(userEmail, local.plan));
       }
     } catch (e) {
       console.warn('Fallback to local billing engine:', e);
       const local = getOrCreateUserBilling(userEmail, userEmail);
       setBilling(local);
-      setEntitlementsState(getEntitlements(local.plan, local.subscriptionStatus));
+      setEntitlementsState(getEntitlements(local.plan, local.subscriptionStatus, local.trialEndsAt));
       setUsage(getUserUsage(userEmail, local.plan));
     } finally {
       setIsLoading(false);
@@ -87,6 +94,37 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   useEffect(() => {
     fetchBillingData();
   }, [fetchBillingData]);
+
+  // Free Trial Activation Method
+  const startFreeTrial = async (): Promise<{ success: boolean; message?: string; error?: string }> => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/billing/start-trial', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: userEmail,
+          email: userEmail
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (data.billing) {
+          setBilling(data.billing);
+          setEntitlementsState(data.entitlements || getEntitlements(data.billing.plan, data.billing.subscriptionStatus, data.billing.trialEndsAt));
+        }
+        await fetchBillingData();
+        return { success: true, message: data.message || '14-day Pro Free Trial activated!' };
+      } else {
+        return { success: false, error: data.error || 'Failed to start free trial' };
+      }
+    } catch (err: any) {
+      console.error('startFreeTrial error:', err);
+      return { success: false, error: err.message || 'Network error activating free trial' };
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const recordUsage = async (params: {
     auditAdd?: number;
@@ -98,7 +136,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const currentUsage = usage || getUserUsage(userEmail, currentPlan);
     const auditIncrement = params.auditAdd !== undefined ? params.auditAdd : 1;
 
-    // Check Freemium monthly quota limit (max 5 uploads per month)
+    // Check Freemium monthly quota limit (max 5 uploads per month for free plan)
     if (currentPlan === 'free' && currentUsage.auditCount >= 5 && auditIncrement > 0) {
       return {
         allowed: false,
@@ -188,6 +226,22 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const plan = billing?.plan || 'free';
   const subscriptionStatus = billing?.subscriptionStatus || 'active';
+  const trialStartedAt = billing?.trialStartedAt || null;
+  const trialEndsAt = billing?.trialEndsAt || null;
+  const trialUsed = Boolean(billing?.trialUsed);
+
+  // Compute trial status & days remaining
+  let isTrialActive = false;
+  let trialDaysRemaining = 0;
+  if (plan === 'pro_trial' && trialEndsAt) {
+    const msDiff = new Date(trialEndsAt).getTime() - Date.now();
+    if (msDiff > 0) {
+      isTrialActive = true;
+      trialDaysRemaining = Math.max(1, Math.ceil(msDiff / (1000 * 60 * 60 * 24)));
+    }
+  }
+
+  const hasProAccess = plan === 'pro' || plan === 'enterprise' || isTrialActive;
   const resetInfo = getNextMonthlyResetInfo();
 
   return (
@@ -199,6 +253,13 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         usage,
         billing,
         isLoading,
+        isTrialActive,
+        hasProAccess,
+        trialDaysRemaining,
+        trialStartedAt,
+        trialEndsAt,
+        trialUsed,
+        startFreeTrial,
         isEnterpriseModalOpen,
         setIsEnterpriseModalOpen,
         openProCheckout,
@@ -223,7 +284,7 @@ export const useBilling = () => {
   if (!context) {
     // Provide a safe fallback if used outside provider
     const defaultBilling = getOrCreateUserBilling('freemium_user', 'freemium_user');
-    const defaultEntitlements = getEntitlements(defaultBilling.plan, defaultBilling.subscriptionStatus);
+    const defaultEntitlements = getEntitlements(defaultBilling.plan, defaultBilling.subscriptionStatus, defaultBilling.trialEndsAt);
     const defaultUsage = getUserUsage('freemium_user', defaultBilling.plan);
     const resetInfo = getNextMonthlyResetInfo();
     return {
@@ -233,6 +294,13 @@ export const useBilling = () => {
       usage: defaultUsage,
       billing: defaultBilling,
       isLoading: false,
+      isTrialActive: false,
+      hasProAccess: false,
+      trialDaysRemaining: 0,
+      trialStartedAt: null,
+      trialEndsAt: null,
+      trialUsed: false,
+      startFreeTrial: async () => ({ success: false, error: 'Billing provider not mounted' }),
       isEnterpriseModalOpen: false,
       setIsEnterpriseModalOpen: () => {},
       openProCheckout: async () => {},

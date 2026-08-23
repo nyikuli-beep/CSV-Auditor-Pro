@@ -25,6 +25,7 @@ import {
   getSampleInvoices,
   getSampleTransactions,
   sendBillingLifecycleNotification,
+  hasProAccess,
   userSubscriptionsStore,
   userInvoicesStore,
   userTransactionsStore,
@@ -463,7 +464,25 @@ app.get('/api/billing/subscription', (req, res) => {
     const email = (req.query.email as string) || userId;
 
     const billing = getOrCreateUserBilling(userId, email);
-    const entitlements = getEntitlements(billing.plan, billing.subscriptionStatus);
+
+    // Auto-expire pro_trial if trial period elapsed
+    if (billing.plan === 'pro_trial') {
+      if (billing.trialEndsAt) {
+        const endsAt = new Date(billing.trialEndsAt).getTime();
+        if (!isNaN(endsAt) && endsAt <= Date.now()) {
+          billing.plan = 'free';
+          billing.subscriptionStatus = 'expired';
+          billing.trialUsed = true;
+          userSubscriptionsStore.set(userId, billing);
+        }
+      } else {
+        billing.plan = 'free';
+        billing.subscriptionStatus = 'expired';
+        userSubscriptionsStore.set(userId, billing);
+      }
+    }
+
+    const entitlements = getEntitlements(billing.plan, billing.subscriptionStatus, billing.trialEndsAt);
     const usage = getUserUsage(userId, billing.plan);
     const invoicesList = getSampleInvoices(userId, billing.plan);
     const transactionsList = getSampleTransactions(userId, billing.plan);
@@ -480,6 +499,80 @@ app.get('/api/billing/subscription', (req, res) => {
     res.status(500).json({ error: err.message || 'Failed to fetch billing status' });
   }
 });
+
+// 1b. Start 14-Day Free Trial (Backend-Enforced, One-Time Per Account)
+const handleStartTrial = async (req: express.Request, res: express.Response) => {
+  try {
+    const userId = req.body?.userId || (req.query?.userId as string) || 'freemium_user';
+    const email = req.body?.email || (req.query?.email as string) || userId;
+
+    const current = getOrCreateUserBilling(userId, email);
+
+    // Owner check
+    if (email.toLowerCase().trim() === 'nyikulibramwel@gmail.com') {
+      res.json({
+        success: true,
+        billing: current,
+        entitlements: getEntitlements(current.plan, current.subscriptionStatus, current.trialEndsAt),
+        message: 'Owner account is provisioned with permanent Enterprise access.'
+      });
+      return;
+    }
+
+    // Trial eligibility check: trial is available only once per account
+    if (current.trialUsed) {
+      res.status(400).json({
+        error: 'The 14-day Pro Free Trial has already been used for this account. Upgrade to Pro for continued access.',
+        alreadyUsed: true,
+        billing: current
+      });
+      return;
+    }
+
+    // Plan check: if already pro or enterprise
+    if (current.plan === 'pro' || current.plan === 'enterprise') {
+      res.status(400).json({
+        error: 'Account already has active Pro or Enterprise subscription access.',
+        billing: current
+      });
+      return;
+    }
+
+    const now = new Date();
+    const trialStartedAt = now.toISOString();
+    const trialEndsAt = new Date(now.getTime() + 14 * 86400000).toISOString();
+
+    current.plan = 'pro_trial';
+    current.subscriptionStatus = 'trial';
+    current.trialStartedAt = trialStartedAt;
+    current.trialEndsAt = trialEndsAt;
+    current.trialUsed = true;
+
+    userSubscriptionsStore.set(userId, current);
+
+    // Send trial start notification email
+    try {
+      await sendBillingLifecycleNotification('trial_started', email, {
+        planName: 'PRO (14-DAY TRIAL)',
+        trialEndDate: new Date(trialEndsAt).toLocaleDateString()
+      });
+    } catch (emailErr) {
+      console.warn('Failed to send trial start notification email:', emailErr);
+    }
+
+    res.json({
+      success: true,
+      billing: current,
+      entitlements: getEntitlements(current.plan, current.subscriptionStatus, current.trialEndsAt),
+      message: '14-day Pro Free Trial activated successfully! No credit card required.'
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to activate free trial' });
+  }
+};
+
+app.post('/api/billing/start-trial', handleStartTrial);
+app.post('/api/trial/activate', handleStartTrial);
 
 // 2. Upgrade Plan / Activate Subscription
 app.post('/api/billing/upgrade-plan', async (req, res) => {
@@ -605,7 +698,7 @@ app.get('/api/billing/entitlements', (req, res) => {
   const userId = (req.query.userId as string) || 'nyikulibramwel@gmail.com';
   const email = (req.query.email as string) || userId;
   const billing = getOrCreateUserBilling(userId, email);
-  const entitlements = getEntitlements(billing.plan, billing.subscriptionStatus);
+  const entitlements = getEntitlements(billing.plan, billing.subscriptionStatus, billing.trialEndsAt);
   const usage = getUserUsage(userId, billing.plan);
 
   res.json({

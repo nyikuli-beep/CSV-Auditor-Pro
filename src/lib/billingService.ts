@@ -1,4 +1,4 @@
-import { UserBillingInfo, BillingInvoice, BillingTransaction, UsageMetrics, PlanEntitlements } from '../types.ts';
+import { UserBillingInfo, BillingInvoice, BillingTransaction, UsageMetrics, PlanEntitlements, UserPlan } from '../types.ts';
 import { sendEmail } from './emailService.ts';
 
 // Local fallbacks & active cache
@@ -7,6 +7,26 @@ export const userInvoicesStore = new Map<string, BillingInvoice[]>();
 export const userTransactionsStore = new Map<string, BillingTransaction[]>();
 export const userUsageStore = new Map<string, UsageMetrics>();
 export const webhookLogsStore: any[] = [];
+
+/**
+ * Authoritative Pro Access Entitlement Check:
+ * Grants full Pro feature access if user is on 'pro', 'enterprise', or active 'pro_trial' (trialEndsAt > now).
+ */
+export function hasProAccess(userOrBilling: { plan?: string; trialEndsAt?: string | null; email?: string } | null | undefined): boolean {
+  if (!userOrBilling) return false;
+  const email = (userOrBilling.email || '').toLowerCase().trim();
+  if (email === 'nyikulibramwel@gmail.com') return true;
+
+  const plan = userOrBilling.plan;
+  if (plan === 'enterprise' || plan === 'pro') return true;
+  if (plan === 'pro_trial') {
+    if (!userOrBilling.trialEndsAt) return false;
+    const now = Date.now();
+    const endsAt = new Date(userOrBilling.trialEndsAt).getTime();
+    return !isNaN(endsAt) && endsAt > now;
+  }
+  return false;
+}
 
 // Initialize default billing state for a user
 export function getOrCreateUserBilling(userId: string, email?: string): UserBillingInfo {
@@ -20,7 +40,9 @@ export function getOrCreateUserBilling(userId: string, email?: string): UserBill
       customerId: isOwner ? 'ctm_paddle_owner_01' : null,
       billingCycle: 'monthly',
       renewalDate: isOwner ? new Date(Date.now() + 365 * 86400000).toISOString() : null,
-      trialEndsAt: null
+      trialStartedAt: null,
+      trialEndsAt: null,
+      trialUsed: false
     };
     userSubscriptionsStore.set(userId, billing);
   }
@@ -28,9 +50,24 @@ export function getOrCreateUserBilling(userId: string, email?: string): UserBill
 }
 
 // Get plan entitlements
-export function getEntitlements(plan: 'free' | 'pro' | 'enterprise', status: string): PlanEntitlements {
+export function getEntitlements(plan: UserPlan, status: string, trialEndsAt?: string | null): PlanEntitlements {
   const isExpiredOrCanceled = status === 'expired' || (status === 'canceled' && false);
-  const effectivePlan = isExpiredOrCanceled ? 'free' : plan;
+  let effectivePlan: UserPlan = isExpiredOrCanceled ? 'free' : plan;
+
+  // Handle Pro Trial expiration check
+  if (effectivePlan === 'pro_trial') {
+    if (trialEndsAt) {
+      const now = Date.now();
+      const endsAt = new Date(trialEndsAt).getTime();
+      if (!isNaN(endsAt) && endsAt > now) {
+        effectivePlan = 'pro_trial';
+      } else {
+        effectivePlan = 'free';
+      }
+    } else {
+      effectivePlan = 'free';
+    }
+  }
 
   if (effectivePlan === 'enterprise') {
     return {
@@ -45,7 +82,7 @@ export function getEntitlements(plan: 'free' | 'pro' | 'enterprise', status: str
     };
   }
 
-  if (effectivePlan === 'pro') {
+  if (effectivePlan === 'pro' || effectivePlan === 'pro_trial') {
     return {
       allowAiInsights: true,
       allowAiAssistant: true,
