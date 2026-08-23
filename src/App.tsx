@@ -58,6 +58,7 @@ import { applyThemeToDocument, getActivePreset, DEFAULT_THEME_CUSTOMIZATION } fr
 
 // Import Types
 import { CSVFile, TeamMember, AuditActivity, ChatMessage, SystemSettings, SlotRequest, ThemeCustomization, AppNotification, OrganizationInvitation } from './types';
+import { applyBatchFixAll } from './lib/auditFixEngine';
 import { CSVProfilingEngine, AnalysisRouter } from './lib/ai';
 
 // Import Notification Service & Billing Context
@@ -1574,158 +1575,14 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     setIsFixingActiveFile(true);
 
     // Brief delay to provide tactile visual feedback during cleaning
-    await new Promise(r => setTimeout(r, 400));
+    await new Promise(r => setTimeout(r, 350));
 
-    let currentRows = [...(activeFile.cleanedRows || activeFile.rows)];
-
-    openIssues.forEach(issue => {
-      const targetIdx = issue.row ? issue.row - 1 : -1;
-
-      switch (issue.type) {
-        case 'duplicate': {
-          if (targetIdx !== -1 && targetIdx < currentRows.length) {
-            currentRows = currentRows.filter((_, idx) => idx !== targetIdx);
-          } else {
-            const seen = new Set();
-            currentRows = currentRows.filter(r => {
-              const val = r[issue.column];
-              if (val === issue.value) {
-                if (seen.has(val)) return false;
-                seen.add(val);
-              }
-              return true;
-            });
-          }
-          break;
-        }
-
-        case 'missing_value': {
-          let fillValue = 'N/A';
-          const isNumeric = issue.column.toLowerCase().includes('amount') || 
-                            issue.column.toLowerCase().includes('price') || 
-                            issue.column.toLowerCase().includes('quantity') ||
-                            issue.column.toLowerCase().includes('gross') ||
-                            issue.column.toLowerCase().includes('pay') ||
-                            issue.column.toLowerCase().includes('tax');
-          if (isNumeric) {
-            const numbers = currentRows
-              .map(r => r[issue.column])
-              .filter(v => v !== undefined && v !== null && String(v).trim() !== '')
-              .map(v => Number(v))
-              .filter(n => !isNaN(n));
-            if (numbers.length > 0) {
-              const avg = numbers.reduce((a, b) => a + b, 0) / numbers.length;
-              fillValue = avg.toFixed(2);
-            } else {
-              fillValue = '0.00';
-            }
-          } else if (issue.column.toLowerCase().includes('category') || issue.column.toLowerCase().includes('department')) {
-            fillValue = 'Uncategorized';
-          }
-
-          if (targetIdx !== -1 && targetIdx < currentRows.length) {
-            currentRows = currentRows.map((row, idx) => 
-              idx === targetIdx ? { ...row, [issue.column]: fillValue } : row
-            );
-          } else {
-            currentRows = currentRows.map(row => 
-              (!row[issue.column] || String(row[issue.column]).trim() === '') ? { ...row, [issue.column]: fillValue } : row
-            );
-          }
-          break;
-        }
-
-        case 'invalid_format': {
-          const formatVal = (rawVal: string) => {
-            if (!rawVal) return rawVal;
-            if (rawVal.includes('/')) {
-              const parts = rawVal.split('/');
-              if (parts.length === 3) {
-                const p0 = parseInt(parts[0]);
-                const p1 = parseInt(parts[1]);
-                const year = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
-                const mm = p0 < 10 ? `0${p0}` : `${p0}`;
-                const dd = p1 < 10 ? `0${p1}` : `${p1}`;
-                return `${year}-${mm}-${dd}`;
-              }
-            }
-            return rawVal;
-          };
-
-          if (targetIdx !== -1 && targetIdx < currentRows.length) {
-            currentRows = currentRows.map((row, idx) => 
-              idx === targetIdx ? { ...row, [issue.column]: formatVal(row[issue.column] || '') } : row
-            );
-          } else {
-            currentRows = currentRows.map(row => ({
-              ...row,
-              [issue.column]: formatVal(row[issue.column] || '')
-            }));
-          }
-          break;
-        }
-
-        case 'column_inconsistency': {
-          const fixInconsistency = (val: string) => {
-            if (!val) return val;
-            if (issue.column.toLowerCase() === 'country') {
-              if (val.toLowerCase() === 'us' || val.toLowerCase() === 'united states') return 'United States';
-              if (val.toLowerCase() === 'uk' || val.toLowerCase() === 'united kingdom') return 'United Kingdom';
-            }
-            return val.charAt(0).toUpperCase() + val.slice(1).toLowerCase();
-          };
-
-          if (targetIdx !== -1 && targetIdx < currentRows.length) {
-            currentRows = currentRows.map((row, idx) => 
-              idx === targetIdx ? { ...row, [issue.column]: fixInconsistency(row[issue.column] || '') } : row
-            );
-          } else {
-            currentRows = currentRows.map(row => {
-              const val = row[issue.column] || '';
-              if (val === issue.value) {
-                return { ...row, [issue.column]: fixInconsistency(val) };
-              }
-              return row;
-            });
-          }
-          break;
-        }
-
-        case 'outlier': {
-          const numericValues = currentRows
-            .map(r => Number(r[issue.column]))
-            .filter(n => !isNaN(n))
-            .sort((a, b) => a - b);
-          const median = numericValues.length > 0 ? numericValues[Math.floor(numericValues.length / 2)] : 1250;
-          const cappedVal = (median * 3.5).toFixed(2);
-
-          if (targetIdx !== -1 && targetIdx < currentRows.length) {
-            currentRows = currentRows.map((row, idx) => 
-              idx === targetIdx ? { ...row, [issue.column]: cappedVal } : row
-            );
-          }
-          break;
-        }
-      }
-    });
-
-    const updatedIssues = activeFile.issues.map(i => ({
-      ...i,
-      status: 'resolved' as const
-    }));
-
-    const updatedFile: CSVFile = {
-      ...activeFile,
-      cleanedRows: currentRows,
-      issues: updatedIssues,
-      score: 100,
-      status: 'completed'
-    };
-
-    await handleUpdateFile(updatedFile);
+    const result = applyBatchFixAll(activeFile);
+    await handleUpdateFile(result.updatedFile);
+    
     setIsFixingActiveFile(false);
-    setFixAllSuccessMsg(`Auto-fixed ${openIssues.length} issue(s)!`);
-    setTimeout(() => setFixAllSuccessMsg(''), 4000);
+    setFixAllSuccessMsg(result.summaryMessage || `Auto-fixed ${result.fixedCount} issue(s)!`);
+    setTimeout(() => setFixAllSuccessMsg(''), 4500);
   };
 
   // Render Miniature Active File Gauge Component with Hover Fix-All Action

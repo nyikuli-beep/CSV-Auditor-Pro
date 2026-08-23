@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { List } from 'react-window';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   FileSpreadsheet, 
   Sparkles, 
@@ -23,13 +23,19 @@ import {
   BarChart3,
   ArrowUpDown,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Wand2,
+  RotateCcw,
+  Check,
+  Zap,
+  X
 } from 'lucide-react';
 import { CSVFile, AuditIssue, Severity, IssueType, RetentionPeriodOption, RetentionPolicy } from '../types';
 import { exportCleanedAuditToExcel } from '../lib/excelExporter';
 import QualityTrendChart from './QualityTrendChart';
 import { RetentionPolicyBanner } from './RetentionPolicySelector';
 import { calculateExpiration, getRetentionOptionDetail } from '../lib/retentionService';
+import { applySingleAuditFix, applyBatchFixAll, FixAllResult } from '../lib/auditFixEngine';
 
 interface AuditResultsProps {
   activeFile: CSVFile | null;
@@ -54,6 +60,16 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
   const [aiLoading, setAiLoading] = useState<string | null>(null);
   const [aiExplanations, setAiExplanations] = useState<Record<string, string>>({});
   const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
+
+  // Batch Fix All State
+  const [isFixingAll, setIsFixingAll] = useState(false);
+  const [fixMenuOpen, setFixMenuOpen] = useState(false);
+  const [fixAllNotification, setFixAllNotification] = useState<{
+    message: string;
+    fixedCount: number;
+    breakdown: FixAllResult['breakdown'];
+    previousFile: CSVFile;
+  } | null>(null);
 
   // Virtualized List (react-window) and Pagination State
   const [viewMode, setViewMode] = useState<'virtualized' | 'paginated'>('virtualized');
@@ -316,6 +332,9 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
     }
     return true;
   });
+
+  const openIssues = mergedIssues.filter(i => i.status === 'open');
+  const filteredOpenIssues = filteredIssues.filter(i => i.status === 'open');
 
   // Sort issues by selected column and direction
   const sortedIssues = [...filteredIssues].sort((a, b) => {
@@ -586,190 +605,49 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
 
   const handleQuickFix = (issue: AuditIssue) => {
     if (!activeFile || !onUpdateFile) return;
+    const updatedFile = applySingleAuditFix(activeFile, issue);
+    onUpdateFile(updatedFile);
+    if (logAuditActivity) {
+      logAuditActivity(`Resolved issue (${issue.type}) on column ${issue.column}`, activeFile.name);
+    }
+  };
 
-    const currentRows = activeFile.cleanedRows ? [...activeFile.cleanedRows] : [...activeFile.rows];
-    
-    // Find matching row index in currentRows
-    let targetIdx = -1;
-    if (issue.row !== undefined) {
-      const idx1 = issue.row - 1;
-      const idx2 = issue.row - 2;
-      if (idx1 >= 0 && idx1 < currentRows.length && String(currentRows[idx1][issue.column]) === String(issue.value)) {
-        targetIdx = idx1;
-      } else if (idx2 >= 0 && idx2 < currentRows.length && String(currentRows[idx2][issue.column]) === String(issue.value)) {
-        targetIdx = idx2;
-      } else {
-        targetIdx = currentRows.findIndex(r => String(r[issue.column]) === String(issue.value));
-      }
-    } else if (issue.value !== undefined && issue.value !== '') {
-      targetIdx = currentRows.findIndex(r => String(r[issue.column]) === String(issue.value));
+  const handleFixAll = async (targetMode: 'all' | 'filtered' = 'all') => {
+    if (!activeFile || !onUpdateFile || isFixingAll) return;
+    const issuesToTarget = targetMode === 'filtered' ? filteredOpenIssues : openIssues;
+    if (issuesToTarget.length === 0) return;
+
+    setIsFixingAll(true);
+    const prevFile = { ...activeFile };
+
+    // Brief delay to provide responsive feedback
+    await new Promise(resolve => setTimeout(resolve, 350));
+
+    const result = applyBatchFixAll(activeFile, issuesToTarget);
+    onUpdateFile(result.updatedFile);
+
+    if (logAuditActivity) {
+      logAuditActivity(`Repaired ${result.fixedCount} findings in "${activeFile.name}"`, activeFile.name);
     }
 
-    // Fallback if targetIdx is still -1 and it is a missing value issue
-    if (targetIdx === -1 && issue.type === 'missing_value') {
-      const idx1 = issue.row ? issue.row - 1 : -1;
-      const idx2 = issue.row ? issue.row - 2 : -1;
-      if (idx1 >= 0 && idx1 < currentRows.length && (!currentRows[idx1][issue.column] || currentRows[idx1][issue.column].trim() === '')) {
-        targetIdx = idx1;
-      } else if (idx2 >= 0 && idx2 < currentRows.length && (!currentRows[idx2][issue.column] || currentRows[idx2][issue.column].trim() === '')) {
-        targetIdx = idx2;
-      } else {
-        targetIdx = currentRows.findIndex(r => !r[issue.column] || r[issue.column].trim() === '');
-      }
-    }
-
-    let updatedRows = [...currentRows];
-
-    switch (issue.type) {
-      case 'duplicate':
-        if (targetIdx !== -1) {
-          updatedRows = currentRows.filter((_, idx) => idx !== targetIdx);
-        } else {
-          // If row index couldn't be resolved, remove duplicates of this value
-          const seenVal = new Set();
-          updatedRows = currentRows.filter(r => {
-            const val = r[issue.column];
-            if (val === issue.value) {
-              if (seenVal.has(val)) return false;
-              seenVal.add(val);
-            }
-            return true;
-          });
-        }
-        break;
-
-      case 'missing_value': {
-        let fillValue = 'Uncategorized';
-        const isNumericCol = issue.column.toLowerCase() === 'amount' || 
-                             issue.column.toLowerCase().includes('price') || 
-                             issue.column.toLowerCase().includes('quantity');
-        
-        if (isNumericCol) {
-          const numbers = currentRows
-            .map(row => row[issue.column])
-            .filter(val => val !== undefined && val !== null && String(val).trim() !== '')
-            .map(val => Number(val))
-            .filter(n => !isNaN(n));
-          if (numbers.length > 0) {
-            const avg = numbers.reduce((sum, val) => sum + val, 0) / numbers.length;
-            fillValue = avg.toFixed(2);
-          } else {
-            fillValue = '0.00';
-          }
-        } else if (issue.column.toLowerCase() === 'category') {
-          fillValue = 'Uncategorized';
-        } else {
-          fillValue = 'N/A';
-        }
-
-        if (targetIdx !== -1) {
-          updatedRows = currentRows.map((row, idx) => 
-            idx === targetIdx ? { ...row, [issue.column]: fillValue } : row
-          );
-        } else {
-          updatedRows = currentRows.map(row => 
-            (!row[issue.column] || row[issue.column].trim() === '') ? { ...row, [issue.column]: fillValue } : row
-          );
-        }
-        break;
-      }
-
-      case 'invalid_format': {
-        if (targetIdx !== -1) {
-          const rawVal = currentRows[targetIdx][issue.column] || '';
-          let formatted = rawVal;
-          if (rawVal.includes('/')) {
-            const parts = rawVal.split('/');
-            if (parts.length === 3) {
-              const p0 = parseInt(parts[0]);
-              const p1 = parseInt(parts[1]);
-              const year = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
-              
-              let day = p0;
-              let month = p1;
-              if (p0 > 12) {
-                day = p0;
-                month = p1;
-              } else if (p1 > 12) {
-                day = p1;
-                month = p0;
-              } else {
-                day = p0;
-                month = p1;
-              }
-              const mm = month < 10 ? `0${month}` : `${month}`;
-              const dd = day < 10 ? `0${day}` : `${day}`;
-              formatted = `${year}-${mm}-${dd}`;
-            }
-          }
-          updatedRows = currentRows.map((row, idx) => 
-            idx === targetIdx ? { ...row, [issue.column]: formatted } : row
-          );
-        }
-        break;
-      }
-
-      case 'column_inconsistency': {
-        const fixInconsistency = (val: string) => {
-          if (issue.column.toLowerCase() === 'country') {
-            if (val.toLowerCase() === 'us' || val.toLowerCase() === 'united states') return 'United States';
-            if (val.toLowerCase() === 'uk' || val.toLowerCase() === 'united kingdom') return 'United Kingdom';
-          }
-          return val.charAt(0).toUpperCase() + val.slice(1).toLowerCase();
-        };
-
-        if (targetIdx !== -1) {
-          updatedRows = currentRows.map((row, idx) => 
-            idx === targetIdx ? { ...row, [issue.column]: fixInconsistency(row[issue.column] || '') } : row
-          );
-        } else {
-          updatedRows = currentRows.map(row => {
-            const val = row[issue.column] || '';
-            if (val === issue.value) {
-              return { ...row, [issue.column]: fixInconsistency(val) };
-            }
-            return row;
-          });
-        }
-        break;
-      }
-
-      case 'outlier': {
-        const numericValues = currentRows
-          .map(r => Number(r[issue.column]))
-          .filter(n => !isNaN(n))
-          .sort((a, b) => a - b);
-        const median = numericValues.length > 0 ? numericValues[Math.floor(numericValues.length / 2)] : 1250;
-        const cappedVal = (median * 3.5).toFixed(2);
-
-        if (targetIdx !== -1) {
-          updatedRows = currentRows.map((row, idx) => 
-            idx === targetIdx ? { ...row, [issue.column]: cappedVal } : row
-          );
-        }
-        break;
-      }
-
-      default:
-        break;
-    }
-
-    // Mark issue as resolved
-    let updatedIssues = [...activeFile.issues];
-    const index = updatedIssues.findIndex(i => i.id === issue.id);
-    if (index !== -1) {
-      updatedIssues[index] = { ...updatedIssues[index], status: 'resolved' as const };
-    } else {
-      // It is a dynamic standard-deviation outlier, add it directly as resolved so it is persisted
-      updatedIssues.push({ ...issue, status: 'resolved' as const });
-    }
-
-    onUpdateFile({
-      ...activeFile,
-      cleanedRows: updatedRows,
-      issues: updatedIssues,
-      score: Math.min(100, activeFile.score + 5)
+    setFixAllNotification({
+      message: result.summaryMessage,
+      fixedCount: result.fixedCount,
+      breakdown: result.breakdown,
+      previousFile: prevFile
     });
+
+    setIsFixingAll(false);
+    setFixMenuOpen(false);
+  };
+
+  const handleUndoFix = () => {
+    if (!fixAllNotification || !onUpdateFile) return;
+    onUpdateFile(fixAllNotification.previousFile);
+    if (logAuditActivity) {
+      logAuditActivity(`Reverted batch fix on "${activeFile.name}"`, activeFile.name);
+    }
+    setFixAllNotification(null);
   };
 
   return (
@@ -782,12 +660,48 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
           </span>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight truncate max-w-[320px] md:max-w-md">{activeFile.name}</h1>
         </div>
-        <button 
-          onClick={() => onNavigate('clean')}
-          className={`px-5 py-2.5 text-sm font-semibold text-white rounded-xl flex items-center gap-2 shadow hover:opacity-90 transition-all cursor-pointer ${accentClass}`}
-        >
-          Open Cleaning Center <ArrowRight className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {openIssues.length > 0 ? (
+            <button
+              type="button"
+              id="audit-results-fix-all-header-btn"
+              onClick={() => handleFixAll('all')}
+              disabled={isFixingAll}
+              className={`px-4 py-2.5 text-sm font-bold text-white rounded-xl flex items-center gap-2 shadow-md hover:opacity-95 transition-all cursor-pointer ${
+                isFixingAll ? 'bg-blue-600 opacity-80 cursor-wait' : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800'
+              }`}
+              title="Batch fix all compliance findings across dataset"
+            >
+              {isFixingAll ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                  <span>Fixing Findings...</span>
+                </>
+              ) : (
+                <>
+                  <Wand2 className="w-4 h-4 text-amber-300" />
+                  <span>Fix All Findings ({openIssues.length})</span>
+                </>
+              )}
+            </button>
+          ) : (
+            <div className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 border ${
+              isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-800 border-emerald-300'
+            }`}>
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              <span>All Findings Resolved (100% Clean)</span>
+            </div>
+          )}
+
+          <button 
+            onClick={() => onNavigate('clean')}
+            className={`px-4 py-2.5 text-sm font-semibold rounded-xl flex items-center gap-2 border transition-all cursor-pointer ${
+              isDarkMode ? 'bg-slate-800/80 border-slate-700 text-slate-200 hover:bg-slate-700' : 'bg-slate-100 border-slate-300 text-slate-800 hover:bg-slate-200'
+            }`}
+          >
+            Open Cleaning Center <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* File Retention Policy Banner */}
@@ -964,8 +878,117 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
 
       {/* Filter and Issues Feed */}
       <div className={`p-6 rounded-3xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
+        
+        {/* Undoable Fix All Notification Banner */}
+        <AnimatePresence>
+          {fixAllNotification && (
+            <motion.div
+              initial={{ opacity: 0, y: -10, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.98 }}
+              className={`mb-6 p-4 rounded-2xl border flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-md ${
+                isDarkMode 
+                  ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-200' 
+                  : 'bg-emerald-50 border-emerald-300 text-emerald-950'
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 shrink-0 mt-0.5">
+                  <Check className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-extrabold text-sm">{fixAllNotification.message}</span>
+                    <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold uppercase tracking-wider ${
+                      isDarkMode ? 'bg-emerald-500/20 text-emerald-300' : 'bg-emerald-200 text-emerald-800'
+                    }`}>
+                      100% Quality
+                    </span>
+                  </div>
+                  
+                  {/* Breakdown tags */}
+                  <div className="flex flex-wrap gap-1.5 mt-1.5 text-[11px]">
+                    {fixAllNotification.breakdown.duplicatesRemoved > 0 && (
+                      <span className={`px-2 py-0.5 rounded-md border font-medium ${
+                        isDarkMode ? 'bg-slate-900/80 border-emerald-500/30 text-emerald-300' : 'bg-white border-emerald-200 text-emerald-800'
+                      }`}>
+                        {fixAllNotification.breakdown.duplicatesRemoved} duplicate{fixAllNotification.breakdown.duplicatesRemoved > 1 ? 's' : ''} removed
+                      </span>
+                    )}
+                    {fixAllNotification.breakdown.missingValuesImputed > 0 && (
+                      <span className={`px-2 py-0.5 rounded-md border font-medium ${
+                        isDarkMode ? 'bg-slate-900/80 border-emerald-500/30 text-emerald-300' : 'bg-white border-emerald-200 text-emerald-800'
+                      }`}>
+                        {fixAllNotification.breakdown.missingValuesImputed} missing imputed
+                      </span>
+                    )}
+                    {fixAllNotification.breakdown.formatsStandardized > 0 && (
+                      <span className={`px-2 py-0.5 rounded-md border font-medium ${
+                        isDarkMode ? 'bg-slate-900/80 border-emerald-500/30 text-emerald-300' : 'bg-white border-emerald-200 text-emerald-800'
+                      }`}>
+                        {fixAllNotification.breakdown.formatsStandardized} dates standardized
+                      </span>
+                    )}
+                    {fixAllNotification.breakdown.inconsistenciesFixed > 0 && (
+                      <span className={`px-2 py-0.5 rounded-md border font-medium ${
+                        isDarkMode ? 'bg-slate-900/80 border-emerald-500/30 text-emerald-300' : 'bg-white border-emerald-200 text-emerald-800'
+                      }`}>
+                        {fixAllNotification.breakdown.inconsistenciesFixed} names/cases fixed
+                      </span>
+                    )}
+                    {fixAllNotification.breakdown.outliersNormalized > 0 && (
+                      <span className={`px-2 py-0.5 rounded-md border font-medium ${
+                        isDarkMode ? 'bg-slate-900/80 border-emerald-500/30 text-emerald-300' : 'bg-white border-emerald-200 text-emerald-800'
+                      }`}>
+                        {fixAllNotification.breakdown.outliersNormalized} outliers normalized
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-end md:self-center shrink-0">
+                <button
+                  type="button"
+                  onClick={handleUndoFix}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer border ${
+                    isDarkMode 
+                      ? 'bg-slate-900 border-slate-700 text-slate-200 hover:bg-slate-800 hover:border-slate-600' 
+                      : 'bg-white border-slate-300 text-slate-800 hover:bg-slate-100 shadow-xs'
+                  }`}
+                  title="Revert the last batch fix and restore previous values"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Undo Fix</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFixAllNotification(null)}
+                  className={`p-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
+                    isDarkMode ? 'hover:bg-emerald-900/40 text-emerald-400' : 'hover:bg-emerald-200 text-emerald-800'
+                  }`}
+                  title="Dismiss notification"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <div className={`flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-5 mb-6 ${isDarkMode ? 'border-slate-800/80' : 'border-slate-200'}`}>
-          <h3 className={`font-bold text-base flex items-center gap-2 ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}><Filter className="w-4 h-4 text-blue-500" /> Compliance Findings ({filteredIssues.length})</h3>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h3 className={`font-bold text-base flex items-center gap-2 ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
+              <Filter className="w-4 h-4 text-blue-500" /> Compliance Findings ({filteredIssues.length})
+            </h3>
+            {openIssues.length > 0 && (
+              <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-bold ${
+                isDarkMode ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-amber-50 text-amber-800 border border-amber-300'
+              }`}>
+                {openIssues.length} open finding{openIssues.length > 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
           
           <div className="flex flex-wrap gap-2 text-xs items-center">
             {/* Search Input */}
@@ -1035,6 +1058,101 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
               {sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-400" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-400" />}
               <span className="uppercase text-[10px] font-mono">{sortDirection}</span>
             </button>
+
+            {/* Toolbar Fix All Button / Dropdown */}
+            {openIssues.length > 0 && (
+              <div className="relative">
+                <div className="flex items-center">
+                  <button
+                    type="button"
+                    id="audit-results-toolbar-fix-all-btn"
+                    onClick={() => handleFixAll('all')}
+                    disabled={isFixingAll}
+                    className={`px-3 py-1.5 rounded-l-lg border font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      isFixingAll
+                        ? 'bg-blue-600 text-white opacity-80 cursor-wait'
+                        : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white border-blue-600 shadow-xs'
+                    }`}
+                    title="Repair all compliance issues automatically"
+                  >
+                    {isFixingAll ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Fixing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Wand2 className="w-3.5 h-3.5 text-amber-300" />
+                        <span>Fix All ({openIssues.length})</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    id="audit-results-toolbar-fix-options-btn"
+                    onClick={() => setFixMenuOpen(!fixMenuOpen)}
+                    disabled={isFixingAll}
+                    className={`px-1.5 py-1.5 rounded-r-lg border border-l-0 transition-all cursor-pointer ${
+                      isDarkMode 
+                        ? 'bg-blue-700 hover:bg-blue-600 text-white border-blue-600' 
+                        : 'bg-blue-700 hover:bg-blue-800 text-white border-blue-600'
+                    }`}
+                    title="More Fix All options"
+                  >
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {fixMenuOpen && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-20 cursor-default" 
+                      onClick={() => setFixMenuOpen(false)}
+                    />
+                    <div className={`absolute right-0 mt-2 w-64 rounded-xl border shadow-xl z-30 py-1.5 animate-fadeIn ${
+                      isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-300 text-slate-900'
+                    }`}>
+                      <div className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                        Batch Fix Actions
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleFixAll('all')}
+                        className={`w-full px-3 py-2 text-left text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
+                          isDarkMode ? 'hover:bg-slate-900' : 'hover:bg-slate-100'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <Zap className="w-3.5 h-3.5 text-amber-400" />
+                          Fix All Dataset Issues
+                        </span>
+                        <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300">
+                          {openIssues.length}
+                        </span>
+                      </button>
+
+                      {filteredOpenIssues.length > 0 && filteredOpenIssues.length < openIssues.length && (
+                        <button
+                          type="button"
+                          onClick={() => handleFixAll('filtered')}
+                          className={`w-full px-3 py-2 text-left text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer border-t ${
+                            isDarkMode ? 'border-slate-800/60 hover:bg-slate-900' : 'border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <Filter className="w-3.5 h-3.5 text-blue-400" />
+                            Fix Only Filtered Issues
+                          </span>
+                          <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">
+                            {filteredOpenIssues.length}
+                          </span>
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
             {/* View Mode Toggle: Virtualized vs Paginated */}
             <div className={`flex items-center rounded-lg border p-0.5 ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-300'}`}>

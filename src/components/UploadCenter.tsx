@@ -22,10 +22,14 @@ import {
   ShieldAlert,
   Loader2,
   GitMerge,
-  Search
+  Search,
+  Wand2,
+  Zap,
+  CheckCheck
 } from 'lucide-react';
 import { CSVFile, AuditIssue, Severity, IssueType, CustomValidationRule } from '../types';
 import { detectCSVFormats } from '../lib/formatDetector';
+import { applyBatchFixAll, FixAllResult } from '../lib/auditFixEngine';
 import {
   checkUserUploadPermission,
   checkUploadRateLimit,
@@ -127,6 +131,23 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
   useEffect(() => {
     localStorage.setItem('quick_clean_enabled', String(quickCleanEnabled));
   }, [quickCleanEnabled]);
+
+  // Toggle option to auto-apply all recommended fixes upon file ingestion and skip manual review step
+  const [autoApplyFixesOnUpload, setAutoApplyFixesOnUpload] = useState<boolean>(() => {
+    const saved = localStorage.getItem('auto_apply_fixes_on_upload');
+    return saved ? saved === 'true' : false;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('auto_apply_fixes_on_upload', String(autoApplyFixesOnUpload));
+  }, [autoApplyFixesOnUpload]);
+
+  const [autoFixSuccessNotification, setAutoFixSuccessNotification] = useState<{
+    fileName: string;
+    fixedCount: number;
+    breakdown: FixAllResult['breakdown'];
+    summaryMessage: string;
+  } | null>(null);
   const [mappings, setMappings] = useState<Record<string, string>>({});
   const [explanations, setExplanations] = useState<Record<string, string>>({});
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -1645,13 +1666,53 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
             bytesAdd: file.size
           }).catch(err => console.warn('Usage tracking error:', err));
 
-          setTimeout(() => {
-            setPendingFiles([parsedFile]);
-            setActivePendingIndex(0);
-            setPendingFile(parsedFile);
-            fetchHeaderAnalysis(parsedFile.headers, parsedFile.rows);
-            setProcessingStageMessage('');
-          }, 300);
+          if (autoApplyFixesOnUpload) {
+            // Auto-apply all recommended fixes immediately and skip manual review
+            const fixResult = applyBatchFixAll(parsedFile);
+            let fileToSubmit = fixResult.updatedFile;
+
+            if (!fileToSubmit.retentionPolicy) {
+              fileToSubmit.retentionPolicy = createDefaultRetentionPolicy(selectedRetentionOption);
+            }
+            if (fileToSubmit.retentionPolicy?.option === 'immediate') {
+              fileToSubmit = {
+                ...fileToSubmit,
+                rows: [],
+                retentionPolicy: {
+                  ...fileToSubmit.retentionPolicy,
+                  status: 'deleted_immediately',
+                  originalFileDeleted: true,
+                  originalDeletedAt: new Date().toISOString(),
+                  deletedBy: 'System Post-Validation Purge'
+                }
+              };
+            }
+
+            onFileUpload(fileToSubmit);
+
+            setAutoFixSuccessNotification({
+              fileName: fileToSubmit.name,
+              fixedCount: fixResult.fixedCount,
+              breakdown: fixResult.breakdown,
+              summaryMessage: `Auto-applied ${fixResult.fixedCount} recommended fixes for "${fileToSubmit.name}" (100% Quality Score) and skipped manual review.`
+            });
+
+            setTimeout(() => {
+              setPendingFiles([]);
+              setPendingFile(null);
+              setUploadProgress(null);
+              setFileDetails(null);
+              setProcessingStageMessage('');
+            }, 800);
+          } else {
+            setTimeout(() => {
+              setPendingFiles([parsedFile]);
+              setActivePendingIndex(0);
+              setPendingFile(parsedFile);
+              fetchHeaderAnalysis(parsedFile.headers, parsedFile.rows);
+              setProcessingStageMessage('');
+            }, 300);
+          }
 
         } catch (err: any) {
           setErrorMsg(err.message || 'Parsing error: Make sure file has valid CSV syntax and column layout.');
@@ -1792,11 +1853,68 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
         bytesAdd: parsedFiles.reduce((acc, f) => acc + (f.size || 0), 0)
       }).catch(err => console.warn('Batch usage tracking error:', err));
 
-      setPendingFiles(parsedFiles);
-      setActivePendingIndex(0);
-      setPendingFile(parsedFiles[0]);
-      fetchHeaderAnalysis(parsedFiles[0].headers, parsedFiles[0].rows);
-      setProcessingStageMessage('');
+      if (autoApplyFixesOnUpload) {
+        let totalFixed = 0;
+        const totalBreakdown = {
+          duplicatesRemoved: 0,
+          missingValuesImputed: 0,
+          formatsStandardized: 0,
+          inconsistenciesFixed: 0,
+          outliersNormalized: 0
+        };
+
+        parsedFiles.forEach(f => {
+          const fixResult = applyBatchFixAll(f);
+          let fileToSubmit = fixResult.updatedFile;
+
+          if (!fileToSubmit.retentionPolicy) {
+            fileToSubmit.retentionPolicy = createDefaultRetentionPolicy(selectedRetentionOption);
+          }
+          if (fileToSubmit.retentionPolicy?.option === 'immediate') {
+            fileToSubmit = {
+              ...fileToSubmit,
+              rows: [],
+              retentionPolicy: {
+                ...fileToSubmit.retentionPolicy,
+                status: 'deleted_immediately',
+                originalFileDeleted: true,
+                originalDeletedAt: new Date().toISOString(),
+                deletedBy: 'System Post-Validation Purge'
+              }
+            };
+          }
+
+          totalFixed += fixResult.fixedCount;
+          totalBreakdown.duplicatesRemoved += fixResult.breakdown.duplicatesRemoved;
+          totalBreakdown.missingValuesImputed += fixResult.breakdown.missingValuesImputed;
+          totalBreakdown.formatsStandardized += fixResult.breakdown.formatsStandardized;
+          totalBreakdown.inconsistenciesFixed += fixResult.breakdown.inconsistenciesFixed;
+          totalBreakdown.outliersNormalized += fixResult.breakdown.outliersNormalized;
+
+          onFileUpload(fileToSubmit);
+        });
+
+        setAutoFixSuccessNotification({
+          fileName: `${parsedFiles.length} Datasets`,
+          fixedCount: totalFixed,
+          breakdown: totalBreakdown,
+          summaryMessage: `Auto-applied recommended fixes across ${parsedFiles.length} uploaded files (${totalFixed} fixes applied, 100% Quality) and skipped manual review.`
+        });
+
+        setTimeout(() => {
+          setPendingFiles([]);
+          setPendingFile(null);
+          setUploadProgress(null);
+          setFileDetails(null);
+          setProcessingStageMessage('');
+        }, 800);
+      } else {
+        setPendingFiles(parsedFiles);
+        setActivePendingIndex(0);
+        setPendingFile(parsedFiles[0]);
+        fetchHeaderAnalysis(parsedFiles[0].headers, parsedFiles[0].rows);
+        setProcessingStageMessage('');
+      }
     }
   };
 
@@ -2565,6 +2683,50 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
             </div>
           </div>
 
+          {/* Auto-apply fixes toggle in modal */}
+          <div className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 ${
+            autoApplyFixesOnUpload 
+              ? (isDarkMode ? 'bg-[#064E3B]/20 border-[#059669]/40' : 'bg-[#ECFDF5] border-[#A7F3D0]')
+              : (isDarkMode ? 'bg-[#0B0F19] border-[#1E293B]' : 'bg-[#F8FAFC] border-[#E2E8F0]')
+          }`}>
+            <div className="flex items-center gap-2.5">
+              <div className={`p-1.5 rounded-lg ${
+                autoApplyFixesOnUpload 
+                  ? (isDarkMode ? 'bg-[#059669]/20 text-[#34D399]' : 'bg-[#D1FAE5] text-[#059669]')
+                  : (isDarkMode ? 'bg-[#1E293B] text-[#64748B]' : 'bg-[#E2E8F0] text-[#64748B]')
+              }`}>
+                <Wand2 className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs font-bold ${isDarkMode ? 'text-[#F1F5F9]' : 'text-[#0F172A]'}`}>
+                    Auto-apply all recommended fixes
+                  </span>
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#059669]/10 text-[#059669] dark:text-[#34D399] uppercase tracking-wide">
+                    Skip Manual Review
+                  </span>
+                </div>
+                <p className="text-[10px] text-[#64748B] dark:text-[#94A3B8] mt-0.5">
+                  Automatically repair duplicates, standardize dates (ISO-8601), fill missing values, and normalize casing immediately upon ingestion.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              id="modal-auto-apply-fixes-toggle"
+              aria-label="Toggle auto-apply recommended fixes"
+              onClick={() => setAutoApplyFixesOnUpload(!autoApplyFixesOnUpload)}
+              className={`w-10 h-5.5 rounded-full p-0.5 transition-colors relative cursor-pointer shrink-0 ${
+                autoApplyFixesOnUpload ? 'bg-[#059669]' : 'bg-[#475569]'
+              }`}
+            >
+              <div className={`bg-white w-4.5 h-4.5 rounded-full shadow-sm transform transition-transform duration-200 ${
+                autoApplyFixesOnUpload ? 'translate-x-4.5' : 'translate-x-0'
+              }`} />
+            </button>
+          </div>
+
           {/* Start Action */}
           <div className="flex items-center justify-end gap-3 pt-2">
             <button
@@ -2602,6 +2764,67 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
           Upload your messy worksheets to execute real-time structural analysis and statistical validation.
         </p>
       </div>
+
+      {/* Auto-apply fixes success notification banner */}
+      {autoFixSuccessNotification && (
+        <div className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn ${
+          isDarkMode ? 'bg-[#064E3B]/20 border-[#059669]/30 text-[#F1F5F9]' : 'bg-[#ECFDF5] border-[#A7F3D0] text-[#064E3B] shadow-sm'
+        }`}>
+          <div className="flex items-start gap-3">
+            <div className={`p-2 rounded-lg shrink-0 ${isDarkMode ? 'bg-[#059669]/30 text-[#34D399]' : 'bg-[#D1FAE5] text-[#059669]'}`}>
+              <CheckCheck className="w-5 h-5 text-[#059669] dark:text-[#34D399]" />
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <h4 className="font-bold text-xs">Auto-Applied Recommended Fixes</h4>
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#059669]/20 text-[#059669] dark:text-[#34D399] uppercase">
+                  100% Quality Score
+                </span>
+              </div>
+              <p className="text-[11px] text-[#475569] dark:text-[#94A3B8] leading-relaxed">
+                {autoFixSuccessNotification.summaryMessage}
+              </p>
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {autoFixSuccessNotification.breakdown.duplicatesRemoved > 0 && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-[#059669]/10 text-[#059669] dark:text-[#34D399] font-medium">
+                    {autoFixSuccessNotification.breakdown.duplicatesRemoved} duplicate(s) removed
+                  </span>
+                )}
+                {autoFixSuccessNotification.breakdown.formatsStandardized > 0 && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-[#2563EB]/10 text-[#2563EB] dark:text-[#60A5FA] font-medium">
+                    {autoFixSuccessNotification.breakdown.formatsStandardized} date(s) standardized
+                  </span>
+                )}
+                {autoFixSuccessNotification.breakdown.missingValuesImputed > 0 && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-[#D97706]/10 text-[#D97706] dark:text-[#FBBF24] font-medium">
+                    {autoFixSuccessNotification.breakdown.missingValuesImputed} missing cell(s) filled
+                  </span>
+                )}
+                {autoFixSuccessNotification.breakdown.inconsistenciesFixed > 0 && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-[#7C3AED]/10 text-[#7C3AED] dark:text-[#A78BFA] font-medium">
+                    {autoFixSuccessNotification.breakdown.inconsistenciesFixed} casing error(s) resolved
+                  </span>
+                )}
+                {autoFixSuccessNotification.breakdown.outliersNormalized > 0 && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-[#DC2626]/10 text-[#DC2626] dark:text-[#F87171] font-medium">
+                    {autoFixSuccessNotification.breakdown.outliersNormalized} outlier(s) capped
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setAutoFixSuccessNotification(null)}
+              className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
+                isDarkMode ? 'border-[#334155] text-[#94A3B8] hover:text-[#F1F5F9] hover:bg-[#1E293B]' : 'border-[#CBD5E1] text-[#475569] bg-white hover:bg-[#F8FAFC]'
+              }`}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       {savedDraft && !pendingFile && (
         <div className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn ${
@@ -2749,6 +2972,57 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
                 </button>
               </div>
             </div>
+          </div>
+
+          {/* Auto-apply all recommended fixes toggle */}
+          <div className={`p-4 rounded-xl border flex items-center justify-between gap-4 transition-all duration-200 ${
+            autoApplyFixesOnUpload 
+              ? (isDarkMode ? 'bg-[#064E3B]/20 border-[#059669]/40 shadow-sm' : 'bg-[#ECFDF5] border-[#A7F3D0] shadow-sm')
+              : (isDarkMode ? 'bg-[#131B2E] border-[#1E293B]' : 'bg-[#F8FAFC] border-[#E2E8F0]')
+          }`}>
+            <div className="flex gap-3 items-start">
+              <div className={`p-2.5 rounded-lg shrink-0 transition-colors ${
+                autoApplyFixesOnUpload 
+                  ? (isDarkMode ? 'bg-[#059669]/20 text-[#34D399]' : 'bg-[#D1FAE5] text-[#059669]')
+                  : (isDarkMode ? 'bg-[#0B0F19] text-[#64748B]' : 'bg-[#E2E8F0] text-[#64748B]')
+              }`}>
+                <Wand2 className={`w-5 h-5 ${autoApplyFixesOnUpload ? 'text-[#059669] dark:text-[#34D399]' : 'text-[#64748B]'}`} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className={`font-bold text-xs ${isDarkMode ? 'text-[#F1F5F9]' : 'text-[#0F172A]'}`}>
+                    Auto-apply all recommended fixes
+                  </span>
+                  <span className="text-[9px] bg-[#059669]/10 text-[#059669] dark:text-[#34D399] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                    Skip Manual Review
+                  </span>
+                </div>
+                <p className="text-[10px] text-[#64748B] dark:text-[#94A3B8] mt-0.5 leading-relaxed">
+                  Immediately apply all recommended automated corrections (deduplicate rows, standardize dates to ISO-8601, fill missing values, and normalize casing) upon file ingestion, skipping the manual schema review step.
+                </p>
+                {autoApplyFixesOnUpload && (
+                  <div className="flex items-center gap-1.5 mt-2 text-[10px] font-medium text-[#059669] dark:text-[#34D399]">
+                    <CheckCheck className="w-3.5 h-3.5" />
+                    <span>Instant Ingestion Active: Spreadsheets are automatically sanitized to 100% data quality and added directly to workspace</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* Toggle Button */}
+            <button
+              type="button"
+              id="auto-apply-fixes-toggle-btn"
+              aria-label="Toggle auto-apply recommended fixes"
+              onClick={() => setAutoApplyFixesOnUpload(!autoApplyFixesOnUpload)}
+              className={`w-12 h-6.5 rounded-full p-1 transition-colors duration-200 relative cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#059669] shrink-0 ${
+                autoApplyFixesOnUpload ? 'bg-[#059669]' : 'bg-[#475569]'
+              }`}
+            >
+              <div className={`bg-white w-4.5 h-4.5 rounded-full shadow-md transform transition-transform duration-200 ${
+                autoApplyFixesOnUpload ? 'translate-x-5.5' : 'translate-x-0'
+              }`}></div>
+            </button>
           </div>
 
           {/* Quick Clean Toggle */}
