@@ -19,7 +19,8 @@ import {
   Info, 
   ArrowRight,
   Filter,
-  Trash2
+  Trash2,
+  Lock
 } from 'lucide-react';
 import { CSVFile, CustomValidationRule, AuditIssue } from '../types';
 import { 
@@ -63,7 +64,9 @@ export default function BatchValidationPanel({
   accentClass,
   userRole
 }: BatchValidationPanelProps) {
-  const { plan, usage, recordUsage, resetInfo, openProCheckout } = useBilling();
+  const { plan, usage, recordUsage, resetInfo, openProCheckout, hasProAccess, checkAuditLimit } = useBilling();
+  const isFreemiumLimitReached = !hasProAccess && plan === 'free' && (!checkAuditLimit() || (usage?.auditCount || 0) >= 5);
+
   // Selection state for workspace files
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>(() => files.map(f => f.id));
   const [searchFilter, setSearchFilter] = useState('');
@@ -119,6 +122,11 @@ export default function BatchValidationPanel({
     e.stopPropagation();
     setBatchDragActive(false);
 
+    if (isFreemiumLimitReached) {
+      setValidationError(`Monthly upload limit reached (5/5 used). Raw file queuing is locked until quota resets on ${resetInfo.nextResetDate}.`);
+      return;
+    }
+
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const droppedFiles = Array.from(e.dataTransfer.files).filter(f => 
         f.name.endsWith('.csv') || f.type.includes('csv') || f.type.includes('spreadsheet')
@@ -130,6 +138,14 @@ export default function BatchValidationPanel({
   };
 
   const handleBatchFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isFreemiumLimitReached) {
+      setValidationError(`Monthly upload limit reached (5/5 used). Raw file queuing is locked until quota resets on ${resetInfo.nextResetDate}.`);
+      if (e.target) {
+        e.target.value = '';
+      }
+      return;
+    }
+
     if (e.target.files && e.target.files.length > 0) {
       const selectedFilesList = Array.from(e.target.files).filter(f => 
         f.name.endsWith('.csv') || f.type.includes('csv') || f.type.includes('spreadsheet')
@@ -549,30 +565,62 @@ export default function BatchValidationPanel({
           </span>
 
           <div
-            onDragEnter={(e) => { e.preventDefault(); setBatchDragActive(true); }}
-            onDragOver={(e) => { e.preventDefault(); setBatchDragActive(true); }}
-            onDragLeave={(e) => { e.preventDefault(); setBatchDragActive(false); }}
+            onDragEnter={(e) => { 
+              e.preventDefault(); 
+              if (!isFreemiumLimitReached) setBatchDragActive(true); 
+            }}
+            onDragOver={(e) => { 
+              e.preventDefault(); 
+              if (!isFreemiumLimitReached) setBatchDragActive(true); 
+            }}
+            onDragLeave={(e) => { 
+              e.preventDefault(); 
+              setBatchDragActive(false); 
+            }}
             onDrop={handleBatchFileDrop}
-            className={`border-2 border-dashed rounded-xl p-5 text-center transition-all cursor-pointer relative ${
-              batchDragActive 
-                ? 'border-blue-500 bg-blue-500/10' 
-                : isDarkMode 
-                ? 'border-slate-800 bg-[#0f172a] hover:border-slate-700' 
-                : 'border-slate-200 bg-slate-50/50 hover:border-slate-300'
+            className={`border-2 border-dashed rounded-xl p-5 text-center transition-all relative ${
+              isFreemiumLimitReached
+                ? isDarkMode 
+                  ? 'border-[#334155] bg-[#0b101d] opacity-80 cursor-not-allowed select-none' 
+                  : 'border-[#CBD5E1] bg-[#F1F5F9] opacity-80 cursor-not-allowed select-none'
+                : batchDragActive 
+                  ? 'border-blue-500 bg-blue-500/10 cursor-pointer' 
+                  : isDarkMode 
+                    ? 'border-slate-800 bg-[#0f172a] hover:border-slate-700 cursor-pointer' 
+                    : 'border-slate-200 bg-slate-50/50 hover:border-slate-300 cursor-pointer'
             }`}
-            onClick={() => batchFileInputRef.current?.click()}
+            onClick={() => {
+              if (!isFreemiumLimitReached) {
+                batchFileInputRef.current?.click();
+              }
+            }}
           >
             <input
               ref={batchFileInputRef}
               type="file"
               accept=".csv"
               multiple
+              disabled={isFreemiumLimitReached}
+              readOnly={isFreemiumLimitReached}
+              aria-disabled={isFreemiumLimitReached}
               onChange={handleBatchFileSelect}
               className="hidden"
             />
-            <Upload className="w-5 h-5 text-blue-500 mx-auto mb-1.5 animate-bounce" />
-            <p className="text-xs font-bold">Drag & drop files to queue</p>
-            <p className="text-[10px] text-slate-400 mt-0.5">Click to browse local .CSV spreadsheets</p>
+            {isFreemiumLimitReached ? (
+              <div className="space-y-1.5 py-1">
+                <Lock className="w-5 h-5 text-[#DC2626] dark:text-[#F87171] mx-auto mb-1" />
+                <p className="text-xs font-bold text-[#DC2626] dark:text-[#F87171]">Raw Uploads Locked (5/5 Used)</p>
+                <p className="text-[10px] text-slate-400">
+                  Read-only mode. Resets on {resetInfo.nextResetDate}
+                </p>
+              </div>
+            ) : (
+              <>
+                <Upload className="w-5 h-5 text-blue-500 mx-auto mb-1.5 animate-bounce" />
+                <p className="text-xs font-bold">Drag & drop files to queue</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">Click to browse local .CSV spreadsheets</p>
+              </>
+            )}
           </div>
 
           {/* List of raw queued files */}

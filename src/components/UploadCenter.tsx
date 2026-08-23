@@ -25,7 +25,8 @@ import {
   Search,
   Wand2,
   Zap,
-  CheckCheck
+  CheckCheck,
+  Lock
 } from 'lucide-react';
 import { CSVFile, AuditIssue, Severity, IssueType, CustomValidationRule } from '../types';
 import { detectCSVFormats } from '../lib/formatDetector';
@@ -69,9 +70,15 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     openEnterpriseModal, 
     refreshBilling, 
     recordUsage, 
-    resetInfo 
+    resetInfo,
+    trialUsed,
+    hasProAccess
   } = useBilling();
   
+  // Calculate if freemium upload limit is reached (5 uploads per month for free plan)
+  const currentUploadsCount = usage?.auditCount || 0;
+  const isFreemiumLimitReached = !hasProAccess && plan === 'free' && (!checkAuditLimit() || currentUploadsCount >= 5);
+
   // Unlock Modal State for Plan Limits
   const [isUnlockModalOpen, setIsUnlockModalOpen] = useState(false);
   const [unlockFeatureName, setUnlockFeatureName] = useState('5 Monthly Uploads Limit');
@@ -1490,6 +1497,10 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (isFreemiumLimitReached) {
+      setDragActive(false);
+      return;
+    }
     if (e.type === "dragenter" || e.type === "dragover") {
       setDragActive(true);
     } else if (e.type === "dragleave") {
@@ -1923,8 +1934,8 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     e.stopPropagation();
     setDragActive(false);
 
-    if (plan === 'free' && (!checkAuditLimit() || (usage?.auditCount || 0) >= 5)) {
-      const msg = `Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${usage?.auditCount || 0}/5 used). Upgrade to Pro for unlimited uploads or wait until quota resets on ${resetInfo.nextResetDate}.`;
+    if (isFreemiumLimitReached) {
+      const msg = `Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${currentUploadsCount}/5 used). Upload center is in read-only mode until your quota resets on ${resetInfo.nextResetDate}, or upgrade to Pro for unlimited uploads.`;
       setErrorMsg(msg);
       triggerUnlockModal('5 Monthly Uploads Limit', 'pro');
       return;
@@ -1940,10 +1951,13 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
   };
 
   const handleBrowse = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (plan === 'free' && (!checkAuditLimit() || (usage?.auditCount || 0) >= 5)) {
-      const msg = `Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${usage?.auditCount || 0}/5 used). Upgrade to Pro for unlimited uploads or wait until quota resets on ${resetInfo.nextResetDate}.`;
+    if (isFreemiumLimitReached) {
+      const msg = `Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${currentUploadsCount}/5 used). Upload center is in read-only mode until your quota resets on ${resetInfo.nextResetDate}, or upgrade to Pro for unlimited uploads.`;
       setErrorMsg(msg);
       triggerUnlockModal('5 Monthly Uploads Limit', 'pro');
+      if (e.target) {
+        e.target.value = '';
+      }
       return;
     }
 
@@ -2931,47 +2945,108 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
           )}
 
           <div 
+            id="csv-upload-dropzone"
             onDragEnter={handleDrag}
             onDragOver={handleDrag}
             onDragLeave={handleDrag}
             onDrop={handleDrop}
-            className={`border-2 border-dashed rounded-xl p-8 text-center transition-all relative ${dragActive ? 'border-blue-500 bg-blue-500/5' : isDarkMode ? 'border-slate-800 bg-[#131b2e]/60 hover:border-slate-700 hover:bg-[#131b2e]' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+            className={`border-2 border-dashed rounded-xl p-8 text-center transition-all relative ${
+              isFreemiumLimitReached
+                ? isDarkMode 
+                  ? 'border-[#334155] bg-[#0b101d] opacity-90 cursor-not-allowed select-none' 
+                  : 'border-[#CBD5E1] bg-[#F1F5F9] opacity-90 cursor-not-allowed select-none'
+                : dragActive 
+                  ? 'border-[#2563EB] bg-[#2563EB]/5' 
+                  : isDarkMode 
+                    ? 'border-slate-800 bg-[#131b2e]/60 hover:border-slate-700 hover:bg-[#131b2e]' 
+                    : 'border-slate-200 bg-white hover:border-slate-300'
+            }`}
           >
             <input 
               ref={fileInputRef}
+              id="csv-file-input"
               type="file" 
               accept=".csv"
               onChange={handleBrowse}
               className="hidden"
               multiple
+              disabled={isFreemiumLimitReached}
+              readOnly={isFreemiumLimitReached}
+              aria-disabled={isFreemiumLimitReached}
+              tabIndex={isFreemiumLimitReached ? -1 : 0}
             />
             
-            <div className="max-w-md mx-auto space-y-3">
-              <div className={`mx-auto p-3.5 rounded-full w-fit ${isDarkMode ? 'bg-slate-950 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
-                <Upload className="w-6 h-6 animate-pulse" />
-              </div>
+            {isFreemiumLimitReached ? (
+              <div className="max-w-md mx-auto space-y-4 py-2">
+                <div className={`mx-auto p-3.5 rounded-full w-fit ${isDarkMode ? 'bg-[#450A0A]/50 text-[#F87171] border border-[#991B1B]/40' : 'bg-[#FEE2E2] text-[#DC2626] border border-[#FECACA]'}`}>
+                  <Lock className="w-6 h-6 text-[#DC2626] dark:text-[#F87171]" />
+                </div>
 
-              <div>
-                <h3 className="font-bold text-sm mb-1">Drag and drop your spreadsheet</h3>
-                <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                  Supports standard comma-delimited <span className="font-bold text-blue-700 dark:text-blue-400">.CSV</span> files up to <span className="font-bold text-blue-600 dark:text-blue-400">{plan === 'enterprise' ? '50MB' : plan === 'pro' ? '25MB' : '5MB'}</span>.
-                </p>
-                {plan === 'free' && (
-                  <p className="text-[11px] font-medium text-amber-600 dark:text-amber-400 mt-1">
-                    Freemium Tier: 5MB file size limit &bull; 5 uploads per month max ({usage?.auditCount || 0}/5 used)
+                <div className="space-y-1.5">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-[#DC2626]/10 text-[#DC2626] dark:text-[#F87171] border border-[#DC2626]/20">
+                    <Lock className="w-3 h-3" />
+                    <span>Upload Center Read-Only (5/5 Used)</span>
+                  </div>
+
+                  <h3 className="font-bold text-sm">Monthly Upload Quota Reached</h3>
+                  <p className={`text-xs max-w-sm mx-auto leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                    Drag & drop and local file browsing are locked. Interactivity will automatically restore when your free monthly limit resets on <strong className="text-slate-200 dark:text-slate-100">{resetInfo.nextResetDate}</strong> (in {resetInfo.daysRemaining} {resetInfo.daysRemaining === 1 ? 'day' : 'days'}).
                   </p>
-                )}
-              </div>
+                </div>
 
-              <div className="pt-1">
-                <button 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="px-4 py-1.5 text-xs font-bold text-white rounded-lg cursor-pointer bg-[#2563EB] hover:bg-[#1D4ED8] shadow-sm hover:scale-[1.01] transition-all"
-                >
-                  Browse local files
-                </button>
+                <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2.5">
+                  <button 
+                    id="browse-files-button-locked"
+                    type="button"
+                    disabled
+                    aria-disabled="true"
+                    className="w-full sm:w-auto px-4 py-2 text-xs font-bold text-slate-400 dark:text-slate-500 bg-slate-800/60 dark:bg-slate-900 border border-slate-700/50 rounded-lg cursor-not-allowed flex items-center justify-center gap-1.5 shadow-none"
+                  >
+                    <Lock className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Browse local files (Locked)</span>
+                  </button>
+
+                  <button
+                    id="unlock-quota-action-button"
+                    type="button"
+                    onClick={() => triggerUnlockModal('5 Monthly Uploads Limit', 'pro')}
+                    className="w-full sm:w-auto px-4 py-2 text-xs font-bold text-white rounded-lg bg-[#2563EB] hover:bg-[#1D4ED8] shadow-sm hover:scale-[1.01] transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>{!trialUsed ? 'Start 14-Day Free Trial' : 'Upgrade to Pro'}</span>
+                  </button>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="max-w-md mx-auto space-y-3">
+                <div className={`mx-auto p-3.5 rounded-full w-fit ${isDarkMode ? 'bg-slate-950 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
+                  <Upload className="w-6 h-6 animate-pulse" />
+                </div>
+
+                <div>
+                  <h3 className="font-bold text-sm mb-1">Drag and drop your spreadsheet</h3>
+                  <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                    Supports standard comma-delimited <span className="font-bold text-blue-700 dark:text-blue-400">.CSV</span> files up to <span className="font-bold text-blue-600 dark:text-blue-400">{plan === 'enterprise' ? '50MB' : plan === 'pro' ? '25MB' : '5MB'}</span>.
+                  </p>
+                  {plan === 'free' && (
+                    <p className="text-[11px] font-medium text-amber-600 dark:text-amber-400 mt-1">
+                      Freemium Tier: 5MB file size limit &bull; 5 uploads per month max ({usage?.auditCount || 0}/5 used)
+                    </p>
+                  )}
+                </div>
+
+                <div className="pt-1">
+                  <button 
+                    id="browse-local-files-btn"
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-4 py-1.5 text-xs font-bold text-white rounded-lg cursor-pointer bg-[#2563EB] hover:bg-[#1D4ED8] shadow-sm hover:scale-[1.01] transition-all"
+                  >
+                    Browse local files
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Auto-apply all recommended fixes toggle */}
