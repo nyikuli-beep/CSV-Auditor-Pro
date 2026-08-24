@@ -70,6 +70,7 @@ import {
   clearAllNotifications
 } from './lib/notificationService';
 import { subscribeToOrganizationInvitations, DEFAULT_ORG_ID, getPersistedInvitations } from './lib/teamTenancyService';
+import { bumpUserSyncVersion } from './lib/sessionSyncService';
 import { useBilling } from './context/BillingContext';
 import { useTeamTenancy } from './context/TeamTenancyContext';
 
@@ -270,6 +271,8 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     incomingInvitations,
     pendingInviteForBanner,
     workspaceFiles,
+    isFilesInitialized,
+    filesDataState,
     currentMember,
     currentRole,
     permissions: tenancyPermissions,
@@ -389,30 +392,33 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
 
   // Synchronize authoritative workspace datasets across browsers in real-time
   useEffect(() => {
-    if (workspaceFiles !== undefined) {
+    if (isFilesInitialized && workspaceFiles !== undefined) {
+      setFiles(workspaceFiles);
+      saveWorkspaceFilesToStorage(activeWorkspaceId, workspaceFiles);
+
       if (workspaceFiles.length > 0) {
-        setFiles(workspaceFiles);
-        saveWorkspaceFilesToStorage(activeWorkspaceId, workspaceFiles);
-      } else if (firebaseUser || auth.currentUser) {
-        // Authenticated workspace with 0 files: do not inject stale sample data
-        setFiles([]);
-        saveWorkspaceFilesToStorage(activeWorkspaceId, []);
+        // Validate and update activeFileId safely
+        setActiveFileId(prev => {
+          const fileStillExists = workspaceFiles.some(f => f.id === prev);
+          if (fileStillExists) return prev;
+          return workspaceFiles[0].id;
+        });
+      } else {
+        setActiveFileId('');
       }
     }
-  }, [workspaceFiles, activeWorkspaceId, firebaseUser]);
+  }, [workspaceFiles, isFilesInitialized, activeWorkspaceId]);
 
-  // When workspace changes, load cached files for the specific workspace
+  // When workspace changes, load cached files for the specific workspace if available
   useEffect(() => {
     if (activeWorkspaceId) {
       const cached = loadWorkspaceFilesFromLocalStorageSync(activeWorkspaceId);
       if (cached && cached.length > 0) {
         setFiles(cached);
-      } else if (firebaseUser || auth.currentUser) {
-        setFiles([]);
       }
       setActiveFileIndex(0);
     }
-  }, [activeWorkspaceId, firebaseUser]);
+  }, [activeWorkspaceId]);
 
   // Auto-persist files whenever files state changes and record into workspace memory
   useEffect(() => {
@@ -921,50 +927,6 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     document.body.style.backgroundColor = activePreset.bgMain;
   }, [isDarkMode, settings.themeCustomization, settings.accentColor]);
 
-  // Automated background scheduler for CSV retention policies
-  useEffect(() => {
-    if (!files || files.length === 0) return;
-
-    const runCleanup = async () => {
-      const { updatedFiles, deletedCount } = executeScheduledRetentionCleanup(files);
-      if (deletedCount > 0) {
-        setFiles(updatedFiles);
-        saveFilesToStorage(updatedFiles);
-
-        // Sync cleaned files to Firestore
-        for (const file of updatedFiles) {
-          if (file.retentionPolicy?.status === 'deleted_expired') {
-            try {
-              await setDoc(doc(db, 'files', file.id), file);
-              await syncToPostgres('sync-file', 'POST', file);
-            } catch (e) {
-              console.warn('Firestore sync during retention auto-cleanup:', e);
-            }
-          }
-        }
-
-        // Log retention cleanup activity
-        const retentionLog: AuditActivity = {
-          id: `act-${Date.now()}`,
-          userId: 'system',
-          userName: 'Retention Scheduler',
-          action: `Automated Retention Policy: Auto-purged ${deletedCount} expired CSV file(s) according to compliance schedules`,
-          timestamp: 'Just now'
-        };
-        try {
-          await setDoc(doc(db, 'activities', retentionLog.id), retentionLog);
-        } catch (e) {}
-        setActivities(prev => [retentionLog, ...prev]);
-
-        triggerShortcutToast(`Auto-purged ${deletedCount} expired CSV file(s) based on retention policy`, 'COMPLIANCE #PURGE');
-      }
-    };
-
-    runCleanup();
-    const interval = setInterval(runCleanup, 30000); // Check retention expiration every 30s
-    return () => clearInterval(interval);
-  }, [files]);
-
   // Capture incoming Firebase Auth redirect results (for Vercel & mobile browser OAuth redirects)
   useEffect(() => {
     getRedirectResult(auth)
@@ -1203,49 +1165,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
 
     let isMounted = true;
 
-    // 1. Files snapshot
-    const filesQuery = query(collection(db, 'files'), where('ownerId', '==', firebaseUser.uid));
-    const unsubscribeFiles = onSnapshot(filesQuery, async (snapshot) => {
-      if (!isMounted) return;
-      const filesList: CSVFile[] = [];
-      snapshot.forEach((docSnap) => {
-        filesList.push(docSnap.data() as CSVFile);
-      });
-
-      setFiles(prev => {
-        const map = new Map<string, CSVFile>();
-        // Add existing local files first
-        prev.forEach(f => {
-          if (f && f.id) map.set(f.id, f);
-        });
-        // Add / override with Firestore files
-        filesList.forEach(f => {
-          if (f && f.id) map.set(f.id, f);
-        });
-
-        const combined = Array.from(map.values());
-        combined.sort((a, b) => {
-          let timeA = 0;
-          let timeB = 0;
-          if (a.uploadedAt) {
-            const parsed = Date.parse(a.uploadedAt);
-            if (!isNaN(parsed)) timeA = parsed;
-          }
-          if (b.uploadedAt) {
-            const parsed = Date.parse(b.uploadedAt);
-            if (!isNaN(parsed)) timeB = parsed;
-          }
-          return timeB - timeA;
-        });
-
-        saveFilesToStorage(combined);
-        return combined;
-      });
-    }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, 'files');
-    });
-
-    // 2. Team snapshot
+    // 1. Team snapshot
     const membersQuery = collection(db, 'members');
     const unsubscribeMembers = onSnapshot(membersQuery, async (snapshot) => {
       if (!isMounted) return;
@@ -1352,7 +1272,6 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
 
     return () => {
       isMounted = false;
-      unsubscribeFiles();
       unsubscribeMembers();
       unsubscribeActivities();
       unsubscribeSlotReq();
@@ -1564,8 +1483,20 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
 
     // Save in firestore and sync to postgres in the background without blocking the UI navigation
     try {
+      console.log(`[SYNC] Explicit mutation: Upload dataset "${fileToUpload.name}" (${fileId})`);
+      console.log(`[SYNC] Firestore write: files/${fileId}`);
       await setDoc(doc(db, 'files', fileId), fileToUpload);
       await syncToPostgres('sync-file', 'POST', fileToUpload);
+
+      if (firebaseUser?.uid) {
+        bumpUserSyncVersion({
+          uid: firebaseUser.uid,
+          workspaceVersion: true,
+          activeWorkspaceId: targetOrgId,
+          sessionId,
+          reason: 'upload_dataset'
+        });
+      }
     } catch (err) {
       console.warn('Firestore write failed, using local fallback state:', err);
     }
@@ -1589,8 +1520,20 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     };
 
     try {
+      console.log(`[SYNC] Explicit mutation: Update dataset "${filePayload.name}" (${filePayload.id})`);
+      console.log(`[SYNC] Firestore write: files/${filePayload.id}`);
       await setDoc(doc(db, 'files', filePayload.id), filePayload);
       await syncToPostgres('sync-file', 'POST', filePayload);
+
+      if (firebaseUser?.uid) {
+        bumpUserSyncVersion({
+          uid: firebaseUser.uid,
+          workspaceVersion: true,
+          activeWorkspaceId: targetOrgId,
+          sessionId,
+          reason: 'update_dataset'
+        });
+      }
     } catch (err) {
       console.warn('Firestore update failed, using local fallback state:', err);
     }
@@ -1813,9 +1756,21 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     }));
 
     try {
+      console.log(`[SYNC] Explicit mutation: Batch update ${scopedFiles.length} dataset(s)`);
       for (const file of scopedFiles) {
+        console.log(`[SYNC] Firestore write: files/${file.id}`);
         await setDoc(doc(db, 'files', file.id), file);
         await syncToPostgres('sync-file', 'POST', file);
+      }
+
+      if (firebaseUser?.uid) {
+        bumpUserSyncVersion({
+          uid: firebaseUser.uid,
+          workspaceVersion: true,
+          activeWorkspaceId: targetOrgId,
+          sessionId,
+          reason: 'batch_update_datasets'
+        });
       }
     } catch (err) {
       console.warn('Firestore batch update failed, using local fallback state:', err);
@@ -1853,8 +1808,20 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     deleteFileFromStorage(id);
 
     try {
+      console.log(`[SYNC] Explicit mutation: Delete dataset "${name}" (${id})`);
+      console.log(`[SYNC] Firestore delete: files/${id}`);
       await deleteDoc(doc(db, 'files', id));
       await syncToPostgres(`delete-file/${id}`, 'DELETE');
+
+      if (firebaseUser?.uid) {
+        bumpUserSyncVersion({
+          uid: firebaseUser.uid,
+          workspaceVersion: true,
+          activeWorkspaceId: activeWorkspaceId || DEFAULT_ORG_ID,
+          sessionId,
+          reason: 'delete_dataset'
+        });
+      }
     } catch (err) {
       console.warn('Firestore delete failed, using local fallback state:', err);
     }
@@ -2275,15 +2242,28 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
 
   const handlePurgeInactiveFiles = async () => {
     const inactiveFiles = files.filter(f => f.id !== activeFileId);
+    console.log(`[SYNC] Explicit mutation: Purge ${inactiveFiles.length} inactive dataset(s)`);
     for (const file of inactiveFiles) {
       deleteFileFromStorage(file.id);
       try {
+        console.log(`[SYNC] Firestore delete: files/${file.id}`);
         await deleteDoc(doc(db, 'files', file.id));
         await syncToPostgres(`delete-file/${file.id}`, 'DELETE').catch(() => {});
       } catch (err) {
         console.error(`Error purging file ${file.name}:`, err);
       }
     }
+
+    if (firebaseUser?.uid) {
+      bumpUserSyncVersion({
+        uid: firebaseUser.uid,
+        workspaceVersion: true,
+        activeWorkspaceId: activeWorkspaceId || DEFAULT_ORG_ID,
+        sessionId,
+        reason: 'purge_inactive_files'
+      });
+    }
+
     setFiles(prev => {
       const remaining = prev.filter(f => f.id === activeFileId);
       saveFilesToStorage(remaining);

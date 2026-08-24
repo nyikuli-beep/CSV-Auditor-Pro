@@ -67,6 +67,15 @@ import { useBilling } from './BillingContext';
 // CONTEXT INTERFACE
 // ============================================================================
 
+export interface FilesDataState {
+  data: CSVFile[] | null;
+  initialized: boolean;
+  syncing: boolean;
+  source: 'server' | 'cache' | 'uninitialized';
+  datasetCount: number;
+  recordCount: number;
+}
+
 export interface TeamTenancyContextType {
   // Session & Identity
   uid: string;
@@ -104,6 +113,8 @@ export interface TeamTenancyContextType {
   pendingInviteForBanner: OrganizationInvitation | null;
   auditLogs: OrganizationAuditLog[];
   workspaceFiles: CSVFile[];
+  isFilesInitialized: boolean;
+  filesDataState: FilesDataState;
   isLoading: boolean;
 
   // Tenancy Actions
@@ -170,6 +181,15 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [activeOrgInvitations, setActiveOrgInvitations] = useState<OrganizationInvitation[]>([]);
   const [auditLogs, setAuditLogs] = useState<OrganizationAuditLog[]>([]);
   const [workspaceFiles, setWorkspaceFiles] = useState<CSVFile[]>([]);
+  const [isFilesInitialized, setIsFilesInitialized] = useState<boolean>(false);
+  const [filesDataState, setFilesDataState] = useState<FilesDataState>({
+    data: null,
+    initialized: false,
+    syncing: true,
+    source: 'uninitialized',
+    datasetCount: 0,
+    recordCount: 0
+  });
   const [dismissedInviteIds, setDismissedInviteIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
@@ -255,7 +275,24 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
         const filesSnap = await getDocs(filesRef);
         const filesList: CSVFile[] = [];
         filesSnap.forEach(d => filesList.push(d.data() as CSVFile));
+        const totalRecords = filesList.reduce((acc, f) => acc + (f.rows?.length || 0), 0);
+
+        console.log(`[SYNC] Authenticated UID: ${userUid || 'anonymous'}`);
+        console.log(`[SYNC] Active workspace: ${resolution.activeWorkspaceId}`);
+        console.log(`[SYNC] Dataset count from server: ${filesList.length}`);
+        console.log(`[SYNC] Record count from server: ${totalRecords}`);
+        console.log(`[SYNC] Local state initialized: true`);
+
         setWorkspaceFiles(filesList);
+        setIsFilesInitialized(true);
+        setFilesDataState({
+          data: filesList,
+          initialized: true,
+          syncing: false,
+          source: filesSnap.metadata.fromCache ? 'cache' : 'server',
+          datasetCount: filesList.length,
+          recordCount: totalRecords
+        });
         saveWorkspaceFilesToStorage(resolution.activeWorkspaceId, filesList);
       } catch (err) {
         logSyncDiagnostic('WORKSPACE', 'Error fetching workspace files during reconcile:', err);
@@ -506,7 +543,10 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
 
     // (e) Workspace Datasets Listener (Fixes 11 vs 6,058 record discrepancy!)
     try {
-      logSyncDiagnostic('WORKSPACE', `Attaching real-time files listener for workspace "${activeWorkspaceId}"`);
+      console.log(`[SYNC] Authenticated UID: ${userUid || 'anonymous'}`);
+      console.log(`[SYNC] Active workspace: ${activeWorkspaceId}`);
+      console.log(`[SYNC] Local state initialized: false`);
+
       const filesQuery = query(
         collection(db, 'files'),
         where('workspaceId', '==', activeWorkspaceId)
@@ -518,8 +558,25 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
           filesList.push(docSnap.data() as CSVFile);
         });
 
-        logSyncDiagnostic('WORKSPACE', `Received ${filesList.length} authoritative dataset(s) for workspace "${activeWorkspaceId}"`);
+        const totalRecords = filesList.reduce((acc, f) => acc + (f.rows?.length || 0), 0);
+        const source = snap.metadata.fromCache ? 'cache' : 'server';
+
+        console.log(`[SYNC] Firestore snapshot received: files collection`);
+        console.log(`[SYNC] Snapshot source: ${source}`);
+        console.log(`[SYNC] Dataset count from server: ${filesList.length}`);
+        console.log(`[SYNC] Record count from server: ${totalRecords}`);
+        console.log(`[SYNC] Local state initialized: true`);
+
         setWorkspaceFiles(filesList);
+        setIsFilesInitialized(true);
+        setFilesDataState({
+          data: filesList,
+          initialized: true,
+          syncing: snap.metadata.hasPendingWrites,
+          source,
+          datasetCount: filesList.length,
+          recordCount: totalRecords
+        });
         saveWorkspaceFilesToStorage(activeWorkspaceId, filesList);
       }, (err) => {
         logSyncDiagnostic('WORKSPACE', 'Error querying workspace files:', err);
@@ -1079,6 +1136,8 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
         pendingInviteForBanner,
         auditLogs,
         workspaceFiles,
+        isFilesInitialized,
+        filesDataState,
         isLoading,
         reconcileSession,
         switchWorkspace,
