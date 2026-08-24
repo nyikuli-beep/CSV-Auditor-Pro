@@ -259,7 +259,32 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   const [trialAlert, setTrialAlert] = useState<TrialAlert | null>(null);
 
   // Billing Context for quota and subscription depletion tracking
-  const { billing, usage: billingUsage } = useBilling();
+  const { billing, usage: billingUsage, refreshBilling } = useBilling();
+
+  // Multi-device synchronization: periodic polling & window focus/visibility sync for tier usage limits & quota
+  useEffect(() => {
+    // 1. Polling interval: re-fetch usage limits & tier status every 30 seconds
+    const intervalId = setInterval(() => {
+      refreshBilling().catch(err => console.warn('[SYNC] Auto-refresh billing usage error:', err));
+    }, 30000);
+
+    // 2. Tab focus & visibility change trigger: immediately re-fetch when user switches back to tab/window
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        refreshBilling().catch(err => console.warn('[SYNC] Tab-focus billing usage refresh error:', err));
+      }
+    };
+
+    window.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+
+    // 3. Cleanup to prevent memory leaks
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+    };
+  }, [refreshBilling]);
 
   // Multi-Tenant Tenancy Context Hook (Central Session Coordinator)
   const {
