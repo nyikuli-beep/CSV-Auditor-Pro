@@ -2035,7 +2035,7 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
               <button
                 onClick={() => {
                   pendingFiles.forEach(f => {
-                    const fileToSubmit = quickCleanEnabled ? executeDefaultHygiene(f) : f;
+                    const fileToSubmit = prepareFileForSubmission(f);
                     onFileUpload(fileToSubmit);
                   });
                   setPendingFiles([]);

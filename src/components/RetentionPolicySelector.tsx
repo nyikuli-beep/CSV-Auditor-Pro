@@ -123,8 +123,8 @@ export const RetentionPolicyBanner: React.FC<RetentionPolicyBannerProps> = ({
 }) => {
   const policy = file.retentionPolicy || {
     option: '24h',
-    selectedAt: file.uploadedAt || new Date().toISOString(),
-    expiresAt: calculateExpiration('24h', new Date(file.uploadedAt || Date.now())),
+    selectedAt: new Date().toISOString(),
+    expiresAt: calculateExpiration('24h', new Date()),
     status: 'scheduled_deletion',
     originalFileDeleted: false,
   };

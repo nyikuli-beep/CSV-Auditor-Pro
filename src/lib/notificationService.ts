@@ -489,26 +489,34 @@ export function computeUserNotifications(params: ComputeNotificationsParams): Ap
       }
     }
 
-    // Retention 24-hour purge warning
-    if (file.retentionPolicy?.expiresAt && file.retentionPolicy.status === 'scheduled_deletion') {
-      const expTime = new Date(file.retentionPolicy.expiresAt).getTime();
-      const hoursLeft = Math.round((expTime - Date.now()) / (1000 * 60 * 60));
-      if (hoursLeft > 0 && hoursLeft <= 24) {
-        const notifId = `retention_warning_${file.id}`;
-        if (!dismissedIds.has(notifId)) {
-          notifs.push({
-            id: notifId,
-            type: 'retention_warning',
-            category: 'security',
-            priority: 'warning',
-            title: `Scheduled Auto-Purge: ${file.name}`,
-            message: `Per compliance retention schedule, this dataset will be permanently deleted in ~${hoursLeft} hours. Export any necessary reports.`,
-            timestamp: new Date().toISOString(),
-            read: readIds.has(notifId),
-            actionLabel: 'View File Archive',
-            actionType: 'navigate',
-            actionPayload: { tab: 'history', fileId: file.id }
-          });
+    // Retention imminent purge warning (< 2 hours remaining, only if not already purged)
+    if (
+      file.retentionPolicy?.expiresAt &&
+      file.retentionPolicy.status === 'scheduled_deletion' &&
+      !file.retentionPolicy.originalFileDeleted
+    ) {
+      const expTime = Date.parse(file.retentionPolicy.expiresAt);
+      if (!isNaN(expTime) && expTime > 0) {
+        const msLeft = expTime - Date.now();
+        if (msLeft > 0 && msLeft <= 2 * 60 * 60 * 1000) {
+          const minutesLeft = Math.max(1, Math.round(msLeft / (1000 * 60)));
+          const hoursLeft = Math.ceil(msLeft / (1000 * 60 * 60));
+          const notifId = `retention_warning_${file.id}`;
+          if (!dismissedIds.has(notifId)) {
+            notifs.push({
+              id: notifId,
+              type: 'retention_warning',
+              category: 'security',
+              priority: 'warning',
+              title: `Scheduled Auto-Purge: ${file.name}`,
+              message: `Per compliance retention schedule, this dataset will be permanently deleted in ~${hoursLeft > 1 ? `${hoursLeft} hours` : `${minutesLeft} min`}. Export any necessary reports.`,
+              timestamp: new Date().toISOString(),
+              read: readIds.has(notifId),
+              actionLabel: 'View File Archive',
+              actionType: 'navigate',
+              actionPayload: { tab: 'history', fileId: file.id }
+            });
+          }
         }
       }
     }

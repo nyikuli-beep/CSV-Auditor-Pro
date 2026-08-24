@@ -1278,6 +1278,52 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     };
   }, [firebaseUser?.uid, user?.uid, authLoading]);
 
+  // Periodic background check for expired CSV file retention policies with strict expiration guardrails
+  useEffect(() => {
+    if (!files || files.length === 0) return;
+
+    const interval = setInterval(() => {
+      const { updatedFiles, deletedCount } = executeScheduledRetentionCleanup(
+        files,
+        (action, fileName) => {
+          handleAddNewActivity(`${action}: ${fileName || 'dataset'}`);
+        },
+        (msg, type) => {
+          triggerShortcutToast(msg, type === 'warning' ? 'RETENTION #WARNING' : 'RETENTION #CLEANUP');
+        }
+      );
+
+      if (deletedCount > 0) {
+        console.log(`[RETENTION] Automated cleanup purged ${deletedCount} genuinely expired dataset(s)`);
+        setFiles(updatedFiles);
+        saveFilesToStorage(updatedFiles);
+
+        // Sync expired state for purged files to Firestore and bump version vector
+        const targetOrgId = activeWorkspaceId || DEFAULT_ORG_ID;
+        for (const f of updatedFiles) {
+          if (f.retentionPolicy?.status === 'deleted_expired') {
+            setDoc(doc(db, 'files', f.id), f).catch((err) =>
+              console.warn('[RETENTION] Firestore update failed for expired file:', err)
+            );
+            syncToPostgres('sync-file', 'POST', f).catch(() => {});
+          }
+        }
+
+        if (firebaseUser?.uid) {
+          bumpUserSyncVersion({
+            uid: firebaseUser.uid,
+            workspaceVersion: true,
+            activeWorkspaceId: targetOrgId,
+            sessionId,
+            reason: 'retention_auto_cleanup'
+          });
+        }
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [files, activeWorkspaceId, firebaseUser?.uid, sessionId]);
+
   const handleApproveSlotRequest = async (req: SlotRequest) => {
     try {
       // 1. Update slot request status in Firestore
