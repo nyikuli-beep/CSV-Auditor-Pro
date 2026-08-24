@@ -74,82 +74,27 @@ export function getRetentionOptionDetail(option: RetentionPeriodOption): Retenti
   return RETENTION_OPTIONS.find(o => o.id === option) || RETENTION_OPTIONS[1]; // fallback 24h
 }
 
-export function parseSafeDate(input: string | number | Date | null | undefined): Date {
-  if (!input) return new Date();
-  if (input instanceof Date) {
-    return isNaN(input.getTime()) ? new Date() : input;
-  }
-  if (typeof input === 'number') {
-    const d = new Date(input);
-    return isNaN(d.getTime()) ? new Date() : d;
-  }
-  if (typeof input === 'string') {
-    const trimmed = input.trim();
-    if (!trimmed) return new Date();
-
-    // Direct parse test
-    const parsed = Date.parse(trimmed);
-    if (!isNaN(parsed) && parsed > 0) {
-      return new Date(parsed);
-    }
-
-    // Try standard ISO or locale cleaning
-    const d = new Date(trimmed);
-    if (!isNaN(d.getTime()) && d.getTime() > 0) {
-      return d;
-    }
-
-    // Handle "DD/MM/YYYY" or "MM/DD/YYYY" formats
-    const parts = trimmed.split(/[/,\s-:]+/);
-    if (parts.length >= 3) {
-      const p0 = parseInt(parts[0], 10);
-      const p1 = parseInt(parts[1], 10);
-      const p2 = parseInt(parts[2], 10);
-      if (!isNaN(p0) && !isNaN(p1) && !isNaN(p2)) {
-        // Try year-first YYYY-MM-DD
-        if (p0 > 1000) {
-          return new Date(p0, p1 - 1, p2);
-        }
-        // Try year-last DD/MM/YYYY or MM/DD/YYYY
-        if (p2 > 1000) {
-          const tryDate = new Date(p2, p1 - 1, p0);
-          if (!isNaN(tryDate.getTime())) return tryDate;
-        }
-      }
-    }
-  }
-  return new Date();
-}
-
-export function calculateExpiration(
-  option: RetentionPeriodOption,
-  baseTime: Date | string | number = new Date()
-): string | null {
+export function calculateExpiration(option: RetentionPeriodOption, baseTime: Date = new Date()): string | null {
   const detail = getRetentionOptionDetail(option);
-  if (detail.id === 'forever' || detail.durationMs === null) return null;
-  
-  const safeBase = parseSafeDate(baseTime);
-  if (detail.id === 'immediate') return safeBase.toISOString();
+  if (detail.id === 'forever') return null;
+  if (detail.id === 'immediate') return baseTime.toISOString();
+  if (detail.durationMs === null) return null;
 
-  // Always compute using epoch milliseconds to eliminate timezone conversion drift
-  const baseMs = safeBase.getTime();
-  const expireMs = baseMs + detail.durationMs;
-  return new Date(expireMs).toISOString();
+  return new Date(baseTime.getTime() + detail.durationMs).toISOString();
 }
 
 export function createDefaultRetentionPolicy(option: RetentionPeriodOption = '24h'): RetentionPolicy {
   const now = new Date();
-  const nowIso = now.toISOString();
   const expiresAt = calculateExpiration(option, now);
 
   if (option === 'immediate') {
     return {
       option: 'immediate',
-      selectedAt: nowIso,
-      expiresAt: nowIso,
+      selectedAt: now.toISOString(),
+      expiresAt: now.toISOString(),
       status: 'deleted_immediately',
       originalFileDeleted: true,
-      originalDeletedAt: nowIso,
+      originalDeletedAt: now.toISOString(),
       deletedBy: 'System Post-Validation Purge',
     };
   }
@@ -157,7 +102,7 @@ export function createDefaultRetentionPolicy(option: RetentionPeriodOption = '24
   if (option === 'forever') {
     return {
       option: 'forever',
-      selectedAt: nowIso,
+      selectedAt: now.toISOString(),
       expiresAt: null,
       status: 'kept_forever',
       originalFileDeleted: false,
@@ -166,7 +111,7 @@ export function createDefaultRetentionPolicy(option: RetentionPeriodOption = '24
 
   return {
     option,
-    selectedAt: nowIso,
+    selectedAt: now.toISOString(),
     expiresAt,
     status: 'scheduled_deletion',
     originalFileDeleted: false,
@@ -179,10 +124,7 @@ export function canManageRetention(role?: TeamMember['role'] | string): boolean 
   return normalized === 'owner' || normalized === 'admin';
 }
 
-export function formatTimeRemaining(
-  expiresAt: string | null | undefined,
-  originalFileDeleted: boolean
-): {
+export function formatTimeRemaining(expiresAt: string | null, originalFileDeleted: boolean): {
   label: string;
   isUrgent: boolean;
   isExpired: boolean;
@@ -194,11 +136,7 @@ export function formatTimeRemaining(
     return { label: 'No Auto-Deletion (Indefinite)', isUrgent: false, isExpired: false };
   }
 
-  const expireTime = Date.parse(expiresAt);
-  if (isNaN(expireTime) || expireTime <= 0) {
-    return { label: 'Active (24h Default)', isUrgent: false, isExpired: false };
-  }
-
+  const expireTime = new Date(expiresAt).getTime();
   const now = Date.now();
   const diff = expireTime - now;
 
@@ -211,7 +149,7 @@ export function formatTimeRemaining(
   const seconds = Math.floor((diff % (1000 * 60)) / 1000);
 
   let formatted = '';
-  if (hours >= 48) {
+  if (hours > 24) {
     const days = Math.floor(hours / 24);
     const remHours = hours % 24;
     formatted = `${days}d ${remHours}h remaining`;
@@ -227,7 +165,7 @@ export function formatTimeRemaining(
 }
 
 /**
- * Process automatic scheduled deletion for expired files with strict safety guardrails
+ * Process automatic scheduled deletion for expired files
  */
 export function executeScheduledRetentionCleanup(
   files: CSVFile[],
@@ -238,70 +176,13 @@ export function executeScheduledRetentionCleanup(
   let deletedCount = 0;
 
   const updatedFiles = files.map(file => {
-    // Safety check 0: Demo / Sample files are always preserved indefinitely
-    if (
-      file.id === 'file-active' ||
-      file.name?.toLowerCase().includes('sample') ||
-      file.name?.toLowerCase().includes('messy')
-    ) {
-      return file;
-    }
-
     const policy = file.retentionPolicy;
-    // Safety check 1: Must have active policy and not already deleted or set to forever/immediate
-    if (
-      !policy ||
-      policy.originalFileDeleted ||
-      !policy.expiresAt ||
-      policy.option === 'forever' ||
-      policy.option === 'immediate' || // Immediate purging is performed synchronously during ingestion
-      policy.status === 'kept_forever' ||
-      policy.status === 'deleted_immediately' ||
-      policy.status === 'deleted_manually'
-    ) {
+    if (!policy || policy.originalFileDeleted || !policy.expiresAt || policy.option === 'forever') {
       return file;
     }
 
-    const optionDetail = getRetentionOptionDetail(policy.option);
-    if (!optionDetail.durationMs || optionDetail.durationMs <= 0) {
-      return file;
-    }
-
-    // Safety check 2: Validate expiration timestamp
-    const expireTime = parseSafeDate(policy.expiresAt).getTime();
-    if (isNaN(expireTime) || expireTime <= 0) {
-      return file; // Invalid timestamp - never purge prematurely
-    }
-
-    // Safety check 3: Verification of elapsed duration
-    // Guard against corrupted expiresAt in the past: verify that the elapsed time since policy creation / upload
-    // actually matches the policy's configured duration (with 1 min grace window).
-    const rawCreation = policy.selectedAt || file.uploadedAt;
-    if (!rawCreation) {
-      // If neither selectedAt nor uploadedAt exists, repair with current time to prevent instant deletion
-      return {
-        ...file,
-        retentionPolicy: {
-          ...policy,
-          selectedAt: new Date().toISOString(),
-          expiresAt: calculateExpiration(policy.option, new Date()),
-        }
-      };
-    }
-
-    const creationTime = parseSafeDate(rawCreation).getTime();
-    if (isNaN(creationTime) || creationTime <= 0) {
-      return file;
-    }
-
-    const elapsed = now - creationTime;
-    // If elapsed time is less than the required duration (minus 60s tolerance), DO NOT PURGE!
-    if (elapsed < (optionDetail.durationMs - 60000)) {
-      return file;
-    }
-
-    // Check if genuinely expired (both expiresAt reached AND full configured duration elapsed)
-    if (expireTime <= now && elapsed >= (optionDetail.durationMs - 60000)) {
+    const expireTime = new Date(policy.expiresAt).getTime();
+    if (expireTime <= now) {
       deletedCount++;
       const deletedAtIso = new Date().toISOString();
       

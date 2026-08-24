@@ -2,7 +2,6 @@ import { CSVFile, AuditIssue, CustomValidationRule, Severity } from '../../types
 import { formatLocalTimestamp } from '../timeService';
 import { runSecurityAndStructureScan, parseCSVContentRFC4180 } from '../csvSecurityValidator';
 import { detectCSVFormats } from '../formatDetector';
-import { createDefaultRetentionPolicy } from '../retentionService';
 
 export function calculateScore(issueCount: number, cellCount: number): number {
   return Math.max(25, Math.min(100, Math.round(100 - (issueCount / (cellCount || 1)) * 300)));
@@ -287,7 +286,6 @@ export function validateRawCSVContent(
     totalRowsCount: scanResult.sanitizedRows.length,
     isLargeFile: isLargeFile,
     detectedMetadata: detectedMetadata,
-    retentionPolicy: createDefaultRetentionPolicy('24h'),
     securityScanSummary: {
       formulasSanitized: scanResult.formulasSanitizedCount,
       maliciousThreatsDetected: scanResult.maliciousThreatsCount,

@@ -319,10 +319,6 @@
     "/annotations/{annotationId}": {
       "schema": "ChatMessage",
       "description": "Root annotations path for legacy and top-level sync."
-    },
-    "/workspaceInvitations/{invitationId}": {
-      "schema": "OrganizationInvitation",
-      "description": "Top-level real-time workspace invitations ledger indexed for recipient discovery."
     }
   }
 }

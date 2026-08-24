@@ -49,11 +49,9 @@ service cloud.firestore {
         && data.score is int && data.score >= 0 && data.score <= 100
         && data.headers is list
         && data.rows is list
-        && (!('ownerId' in data) || (data.ownerId is string && data.ownerId.size() <= 128))
-        && (!('workspaceId' in data) || (data.workspaceId is string && data.workspaceId.size() <= 128))
-        && (!('organizationId' in data) || (data.organizationId is string && data.organizationId.size() <= 128))
+        && data.ownerId is string
         && data.issues is list
-        && data.keys().hasAll(['id', 'name', 'size', 'uploadedAt', 'status', 'score', 'headers', 'rows', 'issues']);
+        && data.keys().hasAll(['id', 'name', 'size', 'uploadedAt', 'status', 'score', 'headers', 'rows', 'ownerId', 'issues']);
     }
 
     function isValidAuditActivity(data) {
@@ -157,42 +155,16 @@ service cloud.firestore {
       allow create: if isSignedIn() && (request.auth.uid == userId) && isValidUser(incoming());
       allow update: if isSignedIn() && (request.auth.uid == userId);
       allow delete: if false;
-
-      // Subcollection: Sessions (Per-device / browser session coordination)
-      match /sessions/{sessionId} {
-        allow read, write: if isSignedIn() && request.auth.uid == userId;
-      }
-
-      // Subcollection: Sync State (Global cross-device versioning)
-      match /sync/{docId} {
-        allow read: if isSignedIn() && request.auth.uid == userId;
-        allow write: if isSignedIn(); // Allow self or authorized org admins to bump sync state
-      }
     }
 
     // FILES COLLECTION
     match /files/{fileId} {
       allow get: if isSignedIn() && isValidId(fileId);
-      allow list: if isSignedIn() && (
-        resource.data.ownerId == request.auth.uid ||
-        (('workspaceId' in resource.data) && resource.data.workspaceId != null && isOrgMember(resource.data.workspaceId)) ||
-        (('organizationId' in resource.data) && resource.data.organizationId != null && isOrgMember(resource.data.organizationId))
-      );
-      allow create: if isSignedIn() && isValidId(fileId) && isValidCSVFile(incoming()) && (
-        isOwner(incoming().ownerId) ||
-        (('workspaceId' in incoming()) && incoming().workspaceId != null && isOrgMember(incoming().workspaceId)) ||
-        (('organizationId' in incoming()) && incoming().organizationId != null && isOrgMember(incoming().organizationId))
-      );
-      allow update: if isSignedIn() && isValidId(fileId) && isValidCSVFile(incoming()) && (
-        isOwner(existing().ownerId) ||
-        (('workspaceId' in existing()) && existing().workspaceId != null && isOrgAdminOrOwner(existing().workspaceId)) ||
-        (('organizationId' in existing()) && existing().organizationId != null && isOrgAdminOrOwner(existing().organizationId))
-      );
-      allow delete: if isSignedIn() && isValidId(fileId) && (
-        isOwner(existing().ownerId) ||
-        (('workspaceId' in existing()) && existing().workspaceId != null && isOrgAdminOrOwner(existing().workspaceId)) ||
-        (('organizationId' in existing()) && existing().organizationId != null && isOrgAdminOrOwner(existing().organizationId))
-      );
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(fileId) && isOwner(incoming().ownerId) && isValidCSVFile(incoming());
+      allow update: if isSignedIn() && isValidId(fileId) && isOwner(existing().ownerId) && isValidCSVFile(incoming())
+        && incoming().ownerId == existing().ownerId;
+      allow delete: if isSignedIn() && isValidId(fileId) && isOwner(existing().ownerId);
     }
 
     // ACTIVITIES TIMELINE
@@ -252,11 +224,6 @@ service cloud.firestore {
 
     // INVITATIONS COLLECTION (Top-level compatibility)
     match /invitations/{invitationId} {
-      allow read, create, update, delete: if isSignedIn();
-    }
-
-    // WORKSPACE INVITATIONS COLLECTION (Cross-browser real-time synchronization)
-    match /workspaceInvitations/{invitationId} {
       allow read, create, update, delete: if isSignedIn();
     }
 

@@ -105,13 +105,6 @@ export const SAMPLE_MESSY_FILE: CSVFile = {
   headers: ['Transaction_ID', 'Date', 'Customer_Name', 'Amount', 'Category', 'Country', 'Contact_Info'],
   rows: MESSY_ROWS,
   issues: MESSY_ISSUES,
-  retentionPolicy: {
-    option: 'forever',
-    selectedAt: new Date().toISOString(),
-    expiresAt: null,
-    status: 'kept_forever',
-    originalFileDeleted: false
-  }
 };
 
 export const PREVIOUS_AUDITS: CSVFile[] = [];

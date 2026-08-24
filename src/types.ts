@@ -49,8 +49,6 @@ export interface CSVFile {
   issues: AuditIssue[];
   cleanedRows?: Record<string, string>[];
   ownerId?: string;
-  workspaceId?: string;
-  organizationId?: string;
   totalRowsCount?: number;
   isLargeFile?: boolean;
   detectedMetadata?: DetectedFormatMetadata;
