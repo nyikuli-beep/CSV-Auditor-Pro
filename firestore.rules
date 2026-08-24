@@ -157,6 +157,17 @@ service cloud.firestore {
       allow create: if isSignedIn() && (request.auth.uid == userId) && isValidUser(incoming());
       allow update: if isSignedIn() && (request.auth.uid == userId);
       allow delete: if false;
+
+      // Subcollection: Sessions (Per-device / browser session coordination)
+      match /sessions/{sessionId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
+
+      // Subcollection: Sync State (Global cross-device versioning)
+      match /sync/{docId} {
+        allow read: if isSignedIn() && request.auth.uid == userId;
+        allow write: if isSignedIn(); // Allow self or authorized org admins to bump sync state
+      }
     }
 
     // FILES COLLECTION

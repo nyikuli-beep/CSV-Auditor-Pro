@@ -1,11 +1,12 @@
 import { CSVFile } from '../types';
 import { SAMPLE_MESSY_FILE } from '../sampleData';
 
-const STORAGE_KEY_FILES = 'app_uploaded_files_v2';
+const STORAGE_KEY_FILES_PREFIX = 'csv_auditor_workspace_files_';
+const STORAGE_KEY_FILES_LEGACY = 'app_uploaded_files_v2';
 const STORAGE_KEY_ACTIVE_ID = 'app_active_file_id_v2';
 const DB_NAME = 'CSV_Auditor_Pro_DB';
-const DB_VERSION = 1;
-const STORE_NAME = 'csv_files';
+const DB_VERSION = 2;
+const STORE_NAME = 'csv_files_v2';
 
 // Helper to open or initialize IndexedDB
 function openDB(): Promise<IDBDatabase> {
@@ -26,20 +27,21 @@ function openDB(): Promise<IDBDatabase> {
   });
 }
 
-// Save all files to IndexedDB with localStorage fallback
-export async function saveFilesToStorage(files: CSVFile[]): Promise<void> {
-  if (!files || !Array.isArray(files)) return;
+// Workspace-scoped file persistence
+export async function saveWorkspaceFilesToStorage(workspaceId: string, files: CSVFile[]): Promise<void> {
+  if (!workspaceId || !files || !Array.isArray(files)) return;
 
-  // 1. Persist in IndexedDB for high-capacity offline storage
+  const scopedKey = `${STORAGE_KEY_FILES_PREFIX}${workspaceId}`;
+
+  // 1. IndexedDB persistence
   try {
     const db = await openDB();
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
-    
-    // Put each file into object store
+
     for (const file of files) {
       if (file && file.id) {
-        store.put(file);
+        store.put({ ...file, workspaceId });
       }
     }
 
@@ -51,17 +53,34 @@ export async function saveFilesToStorage(files: CSVFile[]): Promise<void> {
     console.warn('[FileStorage] IndexedDB save error:', err);
   }
 
-  // 2. Also keep in localStorage as synchronous fallback
+  // 2. LocalStorage fast synchronous cache
   try {
-    localStorage.setItem(STORAGE_KEY_FILES, JSON.stringify(files));
+    localStorage.setItem(scopedKey, JSON.stringify(files));
+    localStorage.setItem(STORAGE_KEY_FILES_LEGACY, JSON.stringify(files));
   } catch (err) {
-    console.warn('[FileStorage] localStorage save fallback warning (quota limit reached for large file):', err);
+    console.warn('[FileStorage] LocalStorage quota reached for workspace files:', err);
   }
 }
 
-// Load all files from IndexedDB or localStorage, returning default sample file if none found
-export async function loadFilesFromStorage(): Promise<CSVFile[]> {
-  // 1. Try IndexedDB first
+export async function loadWorkspaceFilesFromStorage(workspaceId: string): Promise<CSVFile[]> {
+  if (!workspaceId) return [];
+
+  const scopedKey = `${STORAGE_KEY_FILES_PREFIX}${workspaceId}`;
+
+  // 1. Try LocalStorage for immediate return
+  try {
+    const raw = localStorage.getItem(scopedKey);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.warn('[FileStorage] LocalStorage read error:', err);
+  }
+
+  // 2. Try IndexedDB
   try {
     const db = await openDB();
     const tx = db.transaction(STORE_NAME, 'readonly');
@@ -73,47 +92,65 @@ export async function loadFilesFromStorage(): Promise<CSVFile[]> {
       request.onerror = () => reject(request.error);
     });
 
-    if (result && Array.isArray(result) && result.length > 0) {
-      return result;
+    if (result && Array.isArray(result)) {
+      const scoped = result.filter(f => f.workspaceId === workspaceId || (!f.workspaceId && workspaceId === 'org-enterprise-root'));
+      return scoped;
     }
   } catch (err) {
-    console.warn('[FileStorage] IndexedDB load failed, falling back to localStorage:', err);
+    console.warn('[FileStorage] IndexedDB read error:', err);
   }
 
-  // 2. Try localStorage
+  return [];
+}
+
+export function loadWorkspaceFilesFromLocalStorageSync(workspaceId?: string): CSVFile[] {
+  if (workspaceId) {
+    const scopedKey = `${STORAGE_KEY_FILES_PREFIX}${workspaceId}`;
+    try {
+      const raw = localStorage.getItem(scopedKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return [];
+  }
+
+  // Default fallback for demo / unauthenticated preview only
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_FILES);
+    const raw = localStorage.getItem(STORAGE_KEY_FILES_LEGACY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
         return parsed;
       }
     }
-  } catch (err) {
-    console.warn('[FileStorage] localStorage load error:', err);
+  } catch {
+    // ignore
   }
 
-  // 3. Fallback default dataset
   return [SAMPLE_MESSY_FILE];
 }
 
-// Synchronously load cached files from localStorage for initial React state
+// Backwards compatibility legacy wrappers
+export async function saveFilesToStorage(files: CSVFile[]): Promise<void> {
+  const wsId = files[0]?.workspaceId || 'org-enterprise-root';
+  return saveWorkspaceFilesToStorage(wsId, files);
+}
+
+export async function loadFilesFromStorage(): Promise<CSVFile[]> {
+  return loadWorkspaceFilesFromStorage('org-enterprise-root');
+}
+
 export function loadFilesFromLocalStorageSync(): CSVFile[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_FILES);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
-      }
-    }
-  } catch (err) {
-    console.warn('[FileStorage] localStorage sync load error:', err);
-  }
-  return [SAMPLE_MESSY_FILE];
+  return loadWorkspaceFilesFromLocalStorageSync();
 }
 
-// Save current active file ID
+// Active File ID tracking
 export function saveActiveFileIdToStorage(id: string): void {
   try {
     if (id) {
@@ -124,7 +161,6 @@ export function saveActiveFileIdToStorage(id: string): void {
   }
 }
 
-// Load active file ID from storage
 export function loadActiveFileIdFromStorage(): string {
   try {
     const saved = localStorage.getItem(STORAGE_KEY_ACTIVE_ID);
@@ -135,8 +171,7 @@ export function loadActiveFileIdFromStorage(): string {
   return 'file-active';
 }
 
-// Delete file from storage
-export async function deleteFileFromStorage(id: string): Promise<void> {
+export async function deleteFileFromStorage(id: string, workspaceId?: string): Promise<void> {
   try {
     const db = await openDB();
     const tx = db.transaction(STORE_NAME, 'readwrite');
@@ -146,14 +181,28 @@ export async function deleteFileFromStorage(id: string): Promise<void> {
     console.warn('[FileStorage] IndexedDB delete error:', err);
   }
 
+  if (workspaceId) {
+    const scopedKey = `${STORAGE_KEY_FILES_PREFIX}${workspaceId}`;
+    try {
+      const raw = localStorage.getItem(scopedKey);
+      if (raw) {
+        const parsed: CSVFile[] = JSON.parse(raw);
+        const filtered = parsed.filter(f => f && f.id !== id);
+        localStorage.setItem(scopedKey, JSON.stringify(filtered));
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_FILES);
+    const raw = localStorage.getItem(STORAGE_KEY_FILES_LEGACY);
     if (raw) {
       const parsed: CSVFile[] = JSON.parse(raw);
       const filtered = parsed.filter(f => f && f.id !== id);
-      localStorage.setItem(STORAGE_KEY_FILES, JSON.stringify(filtered));
+      localStorage.setItem(STORAGE_KEY_FILES_LEGACY, JSON.stringify(filtered));
     }
-  } catch (e) {
-    console.warn('[FileStorage] localStorage delete error:', e);
+  } catch {
+    // ignore
   }
 }

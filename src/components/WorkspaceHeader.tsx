@@ -23,11 +23,14 @@ import {
   SlidersHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
-  Sparkles
+  Sparkles,
+  RefreshCw
 } from 'lucide-react';
 import { useAssistant } from '../context/AssistantContext';
+import { useTeamTenancy } from '../context/TeamTenancyContext';
 import { SlotRequest, AppNotification } from '../types';
 import { NotificationCenter } from './NotificationCenter';
+import { SyncDiagnosticModal } from './SyncDiagnosticModal';
 
 interface WorkspaceHeaderProps {
   activeTab: string;
@@ -86,6 +89,15 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+
+  const {
+    synchronizationStatus,
+    sessionVersion,
+    isReconciling,
+    isOnline: sessionOnline,
+    activeOrganization
+  } = useTeamTenancy();
 
   const { timeData } = useTime();
   const { isOpen: isAssistantOpen, toggleAssistant, datasetContext } = useAssistant();
@@ -131,61 +143,84 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
   };
 
   return (
-    <header className={`h-14 px-3 sm:px-5 border-b flex items-center justify-between gap-2 sm:gap-4 shrink-0 w-full max-w-full relative z-30 transition-colors duration-200 ${
-      isDarkMode ? 'bg-[#0f172a] border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
-    }`}>
-      {/* LEFT SECTION: Hamburger + Workspace Title + Status Badge */}
-      <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0 shrink">
-        <button
-          onClick={onOpenMobileMenu}
-          aria-label="Open sidebar menu"
-          className={`p-2 rounded-xl border flex items-center justify-center min-w-[40px] min-h-[40px] md:hidden cursor-pointer transition-colors ${
-            isDarkMode 
-              ? 'bg-[#374151] border-[#374151] text-[#F9FAFB] hover:bg-slate-700' 
-              : 'bg-[#F3F4F6] border-[#E5E7EB] text-[#111827] hover:bg-slate-200'
-          }`}
-          title="Open Navigation Menu"
-        >
-          <Menu className="w-4 h-4" />
-        </button>
-
-        {onToggleSidebar && (
+    <>
+      <header className={`h-14 px-3 sm:px-5 border-b flex items-center justify-between gap-2 sm:gap-4 shrink-0 w-full max-w-full relative z-30 transition-colors duration-200 ${
+        isDarkMode ? 'bg-[#0f172a] border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
+      }`}>
+        {/* LEFT SECTION: Hamburger + Workspace Title + Status Badge */}
+        <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0 shrink">
           <button
-            onClick={onToggleSidebar}
-            aria-label={isSidebarCollapsed ? "Expand navigation sidebar" : "Collapse navigation sidebar"}
-            className={`hidden md:flex p-2 rounded-xl border items-center justify-center min-w-[36px] min-h-[36px] cursor-pointer transition-colors ${
+            onClick={onOpenMobileMenu}
+            aria-label="Open sidebar menu"
+            className={`p-2 rounded-xl border flex items-center justify-center min-w-[40px] min-h-[40px] md:hidden cursor-pointer transition-colors ${
               isDarkMode 
                 ? 'bg-[#374151] border-[#374151] text-[#F9FAFB] hover:bg-slate-700' 
                 : 'bg-[#F3F4F6] border-[#E5E7EB] text-[#111827] hover:bg-slate-200'
             }`}
-            title={isSidebarCollapsed ? "Expand Sidebar (Alt + [)" : "Collapse Sidebar (Alt + [)"}
+            title="Open Navigation Menu"
           >
-            {isSidebarCollapsed ? (
-              <PanelLeftOpen className="w-4 h-4" />
-            ) : (
-              <PanelLeftClose className="w-4 h-4" />
-            )}
+            <Menu className="w-4 h-4" />
           </button>
-        )}
 
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0 truncate">
-          <h1 className={`font-bold text-xs sm:text-sm md:text-base tracking-tight truncate max-w-[130px] sm:max-w-[220px] md:max-w-[320px] lg:max-w-[420px] ${
-            isDarkMode ? 'text-slate-100' : 'text-slate-900'
-          }`} title={getTitle()}>
-            {getTitle()}
-          </h1>
+          {onToggleSidebar && (
+            <button
+              onClick={onToggleSidebar}
+              aria-label={isSidebarCollapsed ? "Expand navigation sidebar" : "Collapse navigation sidebar"}
+              className={`hidden md:flex p-2 rounded-xl border items-center justify-center min-w-[36px] min-h-[36px] cursor-pointer transition-colors ${
+                isDarkMode 
+                  ? 'bg-[#374151] border-[#374151] text-[#F9FAFB] hover:bg-slate-700' 
+                  : 'bg-[#F3F4F6] border-[#E5E7EB] text-[#111827] hover:bg-slate-200'
+              }`}
+              title={isSidebarCollapsed ? "Expand Sidebar (Alt + [)" : "Collapse Sidebar (Alt + [)"}
+            >
+              {isSidebarCollapsed ? (
+                <PanelLeftOpen className="w-4 h-4" />
+              ) : (
+                <PanelLeftClose className="w-4 h-4" />
+              )}
+            </button>
+          )}
 
-          {/* Compact Single-Line Status Badge */}
-          <div className={`hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[10px] font-bold shrink-0 ${
-            isDarkMode 
-              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
-              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-          }`}>
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-            <span className="truncate">All Systems Normal</span>
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 truncate">
+            <h1 className={`font-bold text-xs sm:text-sm md:text-base tracking-tight truncate max-w-[130px] sm:max-w-[220px] md:max-w-[320px] lg:max-w-[420px] ${
+              isDarkMode ? 'text-slate-100' : 'text-slate-900'
+            }`} title={getTitle()}>
+              {getTitle()}
+            </h1>
+
+            {/* Real-time Tenancy Synchronization Badge */}
+            <button
+              onClick={() => setShowDiagnostics(true)}
+              className={`hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[10px] font-bold shrink-0 cursor-pointer transition-all hover:scale-105 ${
+                synchronizationStatus === 'synced'
+                  ? isDarkMode
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                    : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                  : synchronizationStatus === 'syncing' || isReconciling
+                  ? isDarkMode
+                    ? 'bg-blue-500/10 text-blue-400 border-blue-500/30 hover:bg-blue-500/20'
+                    : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                  : isDarkMode
+                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20'
+                  : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+              }`}
+              title="Click to view Cross-Device Sync Diagnostics & State Telemetry"
+            >
+              <span className={`w-2 h-2 rounded-full shrink-0 ${
+                synchronizationStatus === 'synced'
+                  ? 'bg-emerald-500'
+                  : 'bg-blue-500 animate-pulse'
+              }`} />
+              <span className="truncate">
+                {synchronizationStatus === 'synced'
+                  ? 'Synced (Authoritative)'
+                  : synchronizationStatus === 'syncing' || isReconciling
+                  ? 'Synchronizing...'
+                  : 'Reconnecting...'}
+              </span>
+            </button>
           </div>
         </div>
-      </div>
 
       {/* RIGHT ACTION TOOLBAR */}
       <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
@@ -436,6 +471,19 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
 
                 <button
                   onClick={() => {
+                    setShowDiagnostics(true);
+                    setShowOverflowMenu(false);
+                  }}
+                  className={`w-full px-3 py-2 rounded-xl flex items-center gap-2.5 text-xs font-semibold transition-colors cursor-pointer ${
+                    isDarkMode ? 'hover:bg-slate-800 text-slate-200' : 'hover:bg-slate-100 text-slate-800'
+                  }`}
+                >
+                  <Activity className="w-4 h-4 text-purple-400" />
+                  <span>Sync Diagnostics (Telemetry)</span>
+                </button>
+
+                <button
+                  onClick={() => {
                     onNavigate('settings');
                     setShowOverflowMenu(false);
                   }}
@@ -506,5 +554,11 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
 
       </div>
     </header>
+
+    <SyncDiagnosticModal
+      isOpen={showDiagnostics}
+      onClose={() => setShowDiagnostics(false)}
+    />
+  </>
   );
 };

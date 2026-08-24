@@ -1,5 +1,14 @@
-import React, { createContext, useContext, useEffect, useState, useRef, useMemo, ReactNode } from 'react';
-import { User, onAuthStateChanged } from 'firebase/auth';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useRef,
+  useMemo,
+  ReactNode,
+  useCallback
+} from 'react';
+import { User } from 'firebase/auth';
 import { auth, db } from '../firebase/firebase';
 import {
   collection,
@@ -12,7 +21,8 @@ import {
   onSnapshot,
   query,
   where,
-  Unsubscribe
+  Unsubscribe,
+  writeBatch
 } from 'firebase/firestore';
 import {
   Organization,
@@ -26,18 +36,56 @@ import {
 import {
   DEFAULT_ORG_ID,
   DEFAULT_ROLE_PERMISSIONS,
-  isOrganizationAdmin,
-  isOrganizationOwner,
-  getMemberPermissions,
-  hasPermission as checkHasPermission,
   getOrCreateDefaultOrganization,
   recordOrganizationAuditLog,
   broadcastSystemChatMessage
 } from '../lib/teamTenancyService';
+import {
+  DeviceSession,
+  UserSyncState,
+  SyncConnectionStatus,
+  getOrCreateDeviceId,
+  generateSessionId,
+  savePreferredWorkspaceId,
+  getPreferredWorkspaceId,
+  registerDeviceSession,
+  updateSessionHeartbeat,
+  terminateDeviceSession,
+  initUserSyncStateIfMissing,
+  bumpUserSyncVersion,
+  resolveAuthoritativeTenancy,
+  logSyncDiagnostic
+} from '../lib/sessionSyncService';
+import {
+  saveWorkspaceFilesToStorage,
+  loadWorkspaceFilesFromStorage
+} from '../lib/fileStorage';
 import { useAuth } from './AuthProvider';
 import { useBilling } from './BillingContext';
 
+// ============================================================================
+// CONTEXT INTERFACE
+// ============================================================================
+
 export interface TeamTenancyContextType {
+  // Session & Identity
+  uid: string;
+  sessionId: string;
+  deviceId: string;
+  userEmail: string;
+  isOnline: boolean;
+  isFromCache: boolean;
+  isReconciling: boolean;
+  synchronizationStatus: SyncConnectionStatus;
+  lastSyncTimestamp: string;
+
+  // Versions
+  sessionVersion: number;
+  membershipVersion: number;
+  workspaceVersion: number;
+  notificationVersion: number;
+
+  // Tenancy & Authoritative Workspace
   activeWorkspaceId: string;
   activeOrganization: Organization | null;
   workspaces: Organization[];
@@ -49,13 +97,18 @@ export interface TeamTenancyContextType {
   isOwnerOrAdmin: boolean;
   isPrimaryOwner: boolean;
   isAuthorized: boolean;
+
+  // Real-Time Invitations, Notifications & Logs
   incomingInvitations: OrganizationInvitation[];
   activeOrgInvitations: OrganizationInvitation[];
   pendingInviteForBanner: OrganizationInvitation | null;
   auditLogs: OrganizationAuditLog[];
   workspaceFiles: CSVFile[];
   isLoading: boolean;
-  switchWorkspace: (workspaceId: string) => void;
+
+  // Tenancy Actions
+  reconcileSession: (reason?: string) => Promise<void>;
+  switchWorkspace: (workspaceId: string) => Promise<void>;
   createInvite: (params: {
     email: string;
     role: 'Admin' | 'Member';
@@ -74,14 +127,45 @@ export interface TeamTenancyContextType {
 
 const TeamTenancyContext = createContext<TeamTenancyContextType | undefined>(undefined);
 
+// ============================================================================
+// CENTRAL SESSION PROVIDER & COORDINATOR
+// ============================================================================
+
 export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user: authUser } = useAuth();
   const { billing } = useBilling();
 
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>(DEFAULT_ORG_ID);
+  // Stable Client Device & Session Identifiers
+  const deviceId = useMemo(() => getOrCreateDeviceId(), []);
+  const sessionId = useMemo(() => generateSessionId(), []);
+
+  // Connection & Sync State
+  const [isOnline, setIsOnline] = useState<boolean>(
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
+  const [isFromCache, setIsFromCache] = useState<boolean>(false);
+  const [isReconciling, setIsReconciling] = useState<boolean>(false);
+  const [synchronizationStatus, setSynchronizationStatus] = useState<SyncConnectionStatus>('idle');
+  const [lastSyncTimestamp, setLastSyncTimestamp] = useState<string>(new Date().toISOString());
+
+  // Versions from users/{uid}/sync/state
+  const [sessionVersion, setSessionVersion] = useState<number>(1);
+  const [membershipVersion, setMembershipVersion] = useState<number>(1);
+  const [workspaceVersion, setWorkspaceVersion] = useState<number>(1);
+  const [notificationVersion, setNotificationVersion] = useState<number>(1);
+
+  // Authoritative Tenancy State
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>(() => {
+    return getPreferredWorkspaceId() || DEFAULT_ORG_ID;
+  });
   const [activeOrganization, setActiveOrganization] = useState<Organization | null>(null);
   const [workspaces, setWorkspaces] = useState<Organization[]>([]);
   const [members, setMembers] = useState<OrganizationMember[]>([]);
+  const [currentMember, setCurrentMember] = useState<OrganizationMember | null>(null);
+  const [currentRole, setCurrentRole] = useState<OrganizationRole>('Member');
+  const [permissions, setPermissions] = useState<OrganizationPermission[]>([]);
+
+  // Invitations, Logs, Files
   const [incomingInvitations, setIncomingInvitations] = useState<OrganizationInvitation[]>([]);
   const [activeOrgInvitations, setActiveOrgInvitations] = useState<OrganizationInvitation[]>([]);
   const [auditLogs, setAuditLogs] = useState<OrganizationAuditLog[]>([]);
@@ -89,59 +173,204 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [dismissedInviteIds, setDismissedInviteIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Active unsubscription refs for bullet-proof listener lifecycles
+  // Active Unsubscription References
+  const unsubSyncStateRef = useRef<Unsubscribe | null>(null);
+  const unsubIncomingInvitesRef = useRef<Unsubscribe | null>(null);
   const unsubOrgRef = useRef<Unsubscribe | null>(null);
   const unsubMembersRef = useRef<Unsubscribe | null>(null);
   const unsubOrgInvitesRef = useRef<Unsubscribe | null>(null);
-  const unsubUserInvitesRef = useRef<Unsubscribe | null>(null);
-  const unsubTopLevelInvitesRef = useRef<Unsubscribe | null>(null);
   const unsubAuditLogsRef = useRef<Unsubscribe | null>(null);
   const unsubFilesRef = useRef<Unsubscribe | null>(null);
+  const heartbeatTimerRef = useRef<any>(null);
 
-  const cleanupListeners = () => {
-    console.log('[TEAM LISTENER] Cleaning up all active Firestore listeners');
-    if (unsubOrgRef.current) { unsubOrgRef.current(); unsubOrgRef.current = null; }
-    if (unsubMembersRef.current) { unsubMembersRef.current(); unsubMembersRef.current = null; }
-    if (unsubOrgInvitesRef.current) { unsubOrgInvitesRef.current(); unsubOrgInvitesRef.current = null; }
-    if (unsubUserInvitesRef.current) { unsubUserInvitesRef.current(); unsubUserInvitesRef.current = null; }
-    if (unsubTopLevelInvitesRef.current) { unsubTopLevelInvitesRef.current(); unsubTopLevelInvitesRef.current = null; }
-    if (unsubAuditLogsRef.current) { unsubAuditLogsRef.current(); unsubAuditLogsRef.current = null; }
-    if (unsubFilesRef.current) { unsubFilesRef.current(); unsubFilesRef.current = null; }
-  };
+  // Version tracking ref to avoid stale reconciliation loops
+  const lastKnownVersionsRef = useRef({
+    sessionVersion: 1,
+    membershipVersion: 1,
+    workspaceVersion: 1,
+    notificationVersion: 1
+  });
 
   const userEmail = (authUser?.email || '').toLowerCase().trim();
   const userUid = authUser?.uid || '';
 
-  // -------------------------------------------------------------
-  // 1. Core Auth & User-Directed Inbound Invitation Listener
-  // -------------------------------------------------------------
+  // Clean all active listeners
+  const cleanupAllListeners = useCallback(() => {
+    logSyncDiagnostic('LISTENER', 'Cleaning up all active Firestore listeners');
+    if (unsubSyncStateRef.current) { unsubSyncStateRef.current(); unsubSyncStateRef.current = null; }
+    if (unsubIncomingInvitesRef.current) { unsubIncomingInvitesRef.current(); unsubIncomingInvitesRef.current = null; }
+    if (unsubOrgRef.current) { unsubOrgRef.current(); unsubOrgRef.current = null; }
+    if (unsubMembersRef.current) { unsubMembersRef.current(); unsubMembersRef.current = null; }
+    if (unsubOrgInvitesRef.current) { unsubOrgInvitesRef.current(); unsubOrgInvitesRef.current = null; }
+    if (unsubAuditLogsRef.current) { unsubAuditLogsRef.current(); unsubAuditLogsRef.current = null; }
+    if (unsubFilesRef.current) { unsubFilesRef.current(); unsubFilesRef.current = null; }
+    if (heartbeatTimerRef.current) { clearInterval(heartbeatTimerRef.current); heartbeatTimerRef.current = null; }
+  }, []);
+
+  // ==========================================================================
+  // AUTHORITATIVE SESSION RECONCILIATION
+  // ==========================================================================
+  const reconcileSession = useCallback(async (reason: string = 'manual_reconcile') => {
+    if (!userUid) return;
+
+    logSyncDiagnostic('SYNC', `Reconciling session for UID "${userUid}". Reason: "${reason}"`);
+    setIsReconciling(true);
+    setSynchronizationStatus('syncing');
+
+    try {
+      // 1. Resolve Authoritative Tenancy (workspaces, memberships, active workspace)
+      const resolution = await resolveAuthoritativeTenancy({
+        uid: userUid,
+        email: userEmail,
+        preferredWorkspaceId: activeWorkspaceId
+      });
+
+      setWorkspaces(resolution.workspaces);
+      setActiveWorkspaceId(resolution.activeWorkspaceId);
+      setActiveOrganization(resolution.activeOrganization);
+      setCurrentMember(resolution.currentMember);
+      setCurrentRole(resolution.currentRole);
+      setPermissions(resolution.permissions);
+      savePreferredWorkspaceId(resolution.activeWorkspaceId);
+
+      // 2. Fetch Active Workspace Members
+      try {
+        const membersRef = collection(db, 'organizations', resolution.activeWorkspaceId, 'members');
+        const membersSnap = await getDocs(membersRef);
+        const membersList: OrganizationMember[] = [];
+        membersSnap.forEach(d => {
+          membersList.push({ ...(d.data() as OrganizationMember), uid: d.id });
+        });
+        setMembers(membersList);
+      } catch (err) {
+        logSyncDiagnostic('MEMBERSHIP', 'Error fetching members during reconcile:', err);
+      }
+
+      // 3. Fetch Workspace Files / Datasets
+      try {
+        const filesRef = query(
+          collection(db, 'files'),
+          where('workspaceId', '==', resolution.activeWorkspaceId)
+        );
+        const filesSnap = await getDocs(filesRef);
+        const filesList: CSVFile[] = [];
+        filesSnap.forEach(d => filesList.push(d.data() as CSVFile));
+        setWorkspaceFiles(filesList);
+        saveWorkspaceFilesToStorage(resolution.activeWorkspaceId, filesList);
+      } catch (err) {
+        logSyncDiagnostic('WORKSPACE', 'Error fetching workspace files during reconcile:', err);
+      }
+
+      setSynchronizationStatus('synced');
+      setLastSyncTimestamp(new Date().toISOString());
+      logSyncDiagnostic('SYNC', `Session reconciliation completed successfully for workspace "${resolution.activeWorkspaceId}"`);
+    } catch (error) {
+      logSyncDiagnostic('SYNC', `Error during session reconciliation:`, error);
+      setSynchronizationStatus('error');
+    } finally {
+      setIsReconciling(false);
+      setIsLoading(false);
+    }
+  }, [userUid, userEmail, activeWorkspaceId]);
+
+  // ==========================================================================
+  // 1. AUTH LIFECYCLE & GLOBAL SYNC STATE LISTENER (users/{uid}/sync/state)
+  // ==========================================================================
   useEffect(() => {
-    if (!authUser || !userEmail) {
-      cleanupListeners();
+    if (!authUser || !userUid) {
+      cleanupAllListeners();
       setMembers([]);
+      setWorkspaces([]);
       setIncomingInvitations([]);
       setActiveOrgInvitations([]);
       setAuditLogs([]);
       setWorkspaceFiles([]);
+      setCurrentMember(null);
+      setCurrentRole('Member');
+      setPermissions([]);
+      setSynchronizationStatus('idle');
       setIsLoading(false);
       return;
     }
 
-    console.log(`[TEAM AUTH] User authenticated with UID: "${userUid}", email: "${userEmail}"`);
+    logSyncDiagnostic('AUTH', `Auth identity confirmed: UID="${userUid}", Email="${userEmail}"`);
+    setSynchronizationStatus('syncing');
 
-    // Clean previous user-specific listeners
-    if (unsubUserInvitesRef.current) { unsubUserInvitesRef.current(); unsubUserInvitesRef.current = null; }
-    if (unsubTopLevelInvitesRef.current) { unsubTopLevelInvitesRef.current(); unsubTopLevelInvitesRef.current = null; }
+    // (a) Register active device session in Firestore
+    registerDeviceSession({
+      uid: userUid,
+      sessionId,
+      deviceId,
+      activeWorkspaceId
+    });
 
-    // Listener A: Query top-level `workspaceInvitations` matching recipient email or UID
+    // (b) Start Session Heartbeat Interval
+    if (heartbeatTimerRef.current) clearInterval(heartbeatTimerRef.current);
+    heartbeatTimerRef.current = setInterval(() => {
+      updateSessionHeartbeat({
+        uid: userUid,
+        sessionId,
+        status: 'active',
+        activeWorkspaceId
+      });
+    }, 30000);
+
+    // (c) Initialize user sync document if missing
+    initUserSyncStateIfMissing(userUid, activeWorkspaceId);
+
+    // (d) Attach Real-time listener on users/{uid}/sync/state
     try {
-      console.log(`[TEAM INVITATIONS] Attaching real-time listener for incoming user invitations`);
+      const syncDocRef = doc(db, 'users', userUid, 'sync', 'state');
+      unsubSyncStateRef.current = onSnapshot(syncDocRef, (docSnap) => {
+        if (!docSnap.exists()) return;
+        const syncState = docSnap.data() as UserSyncState;
+        const fromCache = docSnap.metadata.fromCache;
+        setIsFromCache(fromCache);
+
+        logSyncDiagnostic('SYNC', `Received sync state snapshot (v: S${syncState.sessionVersion}/M${syncState.membershipVersion}/W${syncState.workspaceVersion}/N${syncState.notificationVersion}, cache: ${fromCache})`, {
+          lastReason: syncState.lastReason,
+          lastBySession: syncState.lastUpdatedBySessionId
+        });
+
+        const prev = lastKnownVersionsRef.current;
+        const isNewer =
+          (syncState.sessionVersion || 1) > prev.sessionVersion ||
+          (syncState.membershipVersion || 1) > prev.membershipVersion ||
+          (syncState.workspaceVersion || 1) > prev.workspaceVersion ||
+          (syncState.notificationVersion || 1) > prev.notificationVersion;
+
+        setSessionVersion(syncState.sessionVersion || 1);
+        setMembershipVersion(syncState.membershipVersion || 1);
+        setWorkspaceVersion(syncState.workspaceVersion || 1);
+        setNotificationVersion(syncState.notificationVersion || 1);
+
+        lastKnownVersionsRef.current = {
+          sessionVersion: syncState.sessionVersion || 1,
+          membershipVersion: syncState.membershipVersion || 1,
+          workspaceVersion: syncState.workspaceVersion || 1,
+          notificationVersion: syncState.notificationVersion || 1
+        };
+
+        if (isNewer && syncState.lastUpdatedBySessionId !== sessionId) {
+          logSyncDiagnostic('SYNC', `Detected newer server version from another session. Triggering automated reconciliation...`);
+          reconcileSession('cross_device_version_bump');
+        }
+      }, (err) => {
+        logSyncDiagnostic('SYNC', `Error listening to sync state:`, err);
+      });
+    } catch (e) {
+      logSyncDiagnostic('SYNC', `Failed to attach sync state listener:`, e);
+    }
+
+    // (e) Attach Inbound Invitations Listener across workspaceInvitations
+    try {
+      logSyncDiagnostic('INVITATIONS', `Attaching real-time listener for incoming invitations for ${userEmail}`);
       const invitesQuery = query(
         collection(db, 'workspaceInvitations'),
         where('status', '==', 'pending')
       );
 
-      unsubTopLevelInvitesRef.current = onSnapshot(invitesQuery, (snap) => {
+      unsubIncomingInvitesRef.current = onSnapshot(invitesQuery, (snap) => {
         const list: OrganizationInvitation[] = [];
         const now = Date.now();
         snap.forEach((docSnap) => {
@@ -156,91 +385,47 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
           }
         });
 
-        console.log(`[TEAM INVITATIONS] Received ${list.length} pending incoming invitation(s) for ${userEmail}`);
+        logSyncDiagnostic('INVITATIONS', `Discovered ${list.length} pending incoming invitation(s) for "${userEmail}"`);
         setIncomingInvitations(list);
       }, (err) => {
-        console.warn('[TEAM INVITATIONS] Error listening to workspaceInvitations:', err);
+        logSyncDiagnostic('INVITATIONS', 'Error in workspaceInvitations listener:', err);
       });
     } catch (e) {
-      console.warn('[TEAM INVITATIONS] Failed to attach workspaceInvitations listener:', e);
+      logSyncDiagnostic('INVITATIONS', 'Failed to attach incoming invites listener:', e);
     }
 
-    // Listener B: Also listen to default org subcollection invitations
-    try {
-      const defaultOrgInvitesQuery = collection(db, 'organizations', DEFAULT_ORG_ID, 'invitations');
-      unsubUserInvitesRef.current = onSnapshot(defaultOrgInvitesQuery, (snap) => {
-        const list: OrganizationInvitation[] = [];
-        const now = Date.now();
-        snap.forEach((docSnap) => {
-          const inv = docSnap.data() as OrganizationInvitation;
-          if (
-            inv &&
-            inv.status === 'pending' &&
-            new Date(inv.expiresAt).getTime() > now &&
-            inv.email && inv.email.toLowerCase().trim() === userEmail
-          ) {
-            list.push(inv);
-          }
-        });
-        
-        setIncomingInvitations(prev => {
-          const map = new Map<string, OrganizationInvitation>();
-          prev.forEach(i => map.set(i.id, i));
-          list.forEach(i => map.set(i.id, i));
-          return Array.from(map.values());
-        });
-      }, (err) => {
-        console.warn('[TEAM INVITATIONS] Default org invitations listener warning:', err);
-      });
-    } catch (e) {
-      console.warn('[TEAM INVITATIONS] Failed to attach default org invites listener:', e);
-    }
+    // Initial session reconciliation
+    reconcileSession('initial_mount');
 
+    // Cleanup on unmount or auth change
     return () => {
-      if (unsubUserInvitesRef.current) unsubUserInvitesRef.current();
-      if (unsubTopLevelInvitesRef.current) unsubTopLevelInvitesRef.current();
+      terminateDeviceSession({ uid: userUid, sessionId });
+      cleanupAllListeners();
     };
-  }, [userUid, userEmail]);
+  }, [userUid, userEmail, sessionId, deviceId]);
 
-  // -------------------------------------------------------------
-  // 2. Active Workspace & Scoped Tenancy Listeners
-  // -------------------------------------------------------------
+  // ==========================================================================
+  // 2. ACTIVE WORKSPACE REAL-TIME LISTENERS
+  // ==========================================================================
   useEffect(() => {
-    if (!authUser || !userUid) {
-      return;
-    }
+    if (!authUser || !userUid || !activeWorkspaceId) return;
 
-    let isMounted = true;
-    setIsLoading(true);
-    console.log(`[TEAM WORKSPACE] Resolving active workspace for ID: "${activeWorkspaceId}"`);
+    logSyncDiagnostic('WORKSPACE', `Attaching real-time listeners for workspace "${activeWorkspaceId}"`);
 
-    // (a) Ensure Organization doc exists and subscribe
-    getOrCreateDefaultOrganization(userUid, userEmail, authUser.displayName || userEmail.split('@')[0])
-      .then((org) => {
-        if (isMounted && org) {
-          setActiveOrganization(org);
-          setWorkspaces([org]);
-        }
-      })
-      .catch((err) => {
-        console.warn('[TEAM WORKSPACE] Error getting/creating default organization:', err);
-      });
-
-    // Clean up previous workspace listeners
+    // Clean previous workspace-scoped listeners
     if (unsubOrgRef.current) { unsubOrgRef.current(); unsubOrgRef.current = null; }
     if (unsubMembersRef.current) { unsubMembersRef.current(); unsubMembersRef.current = null; }
     if (unsubOrgInvitesRef.current) { unsubOrgInvitesRef.current(); unsubOrgInvitesRef.current = null; }
     if (unsubAuditLogsRef.current) { unsubAuditLogsRef.current(); unsubAuditLogsRef.current = null; }
     if (unsubFilesRef.current) { unsubFilesRef.current(); unsubFilesRef.current = null; }
 
-    // 1. Subscribe to active Organization doc
+    // (a) Active Organization Document Listener
     try {
       const orgRef = doc(db, 'organizations', activeWorkspaceId);
       unsubOrgRef.current = onSnapshot(orgRef, (docSnap) => {
-        if (!isMounted) return;
         if (docSnap.exists()) {
           const orgData = docSnap.data() as Organization;
-          console.log(`[TEAM WORKSPACE] Organization details updated: "${orgData.name}"`);
+          logSyncDiagnostic('WORKSPACE', `Organization details updated: "${orgData.name}"`);
           setActiveOrganization(orgData);
           setWorkspaces(prev => {
             const map = new Map<string, Organization>();
@@ -250,18 +435,16 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
           });
         }
       }, (err) => {
-        console.warn('[TEAM WORKSPACE] Error listening to organization doc:', err);
+        logSyncDiagnostic('WORKSPACE', 'Error listening to organization document:', err);
       });
     } catch (e) {
-      console.warn('[TEAM WORKSPACE] Listener setup error for org:', e);
+      logSyncDiagnostic('WORKSPACE', 'Org listener setup error:', e);
     }
 
-    // 2. Subscribe to Organization Members
+    // (b) Active Workspace Members Collection Listener
     try {
-      console.log(`[TEAM MEMBERSHIP] Attaching real-time listener for workspace "${activeWorkspaceId}" members`);
       const membersRef = collection(db, 'organizations', activeWorkspaceId, 'members');
       unsubMembersRef.current = onSnapshot(membersRef, (snap) => {
-        if (!isMounted) return;
         const membersList: OrganizationMember[] = [];
         snap.forEach((docSnap) => {
           const data = docSnap.data() as OrganizationMember;
@@ -271,40 +454,43 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
           });
         });
 
-        console.log(`[TEAM MEMBERSHIP] Snapshot updated: ${membersList.length} active member(s)`);
+        logSyncDiagnostic('MEMBERSHIP', `Workspace members updated: ${membersList.length} member(s)`);
         setMembers(membersList);
-        setIsLoading(false);
+
+        // Update current member & role
+        const me = membersList.find(m => m.uid === userUid || (m.email && m.email.toLowerCase().trim() === userEmail));
+        if (me) {
+          setCurrentMember(me);
+          setCurrentRole(me.role);
+          setPermissions(me.permissions || DEFAULT_ROLE_PERMISSIONS[me.role] || DEFAULT_ROLE_PERMISSIONS.Member);
+        }
       }, (err) => {
-        console.warn('[TEAM MEMBERSHIP] Error listening to members:', err);
-        setIsLoading(false);
+        logSyncDiagnostic('MEMBERSHIP', 'Error listening to workspace members:', err);
       });
     } catch (e) {
-      console.warn('[TEAM MEMBERSHIP] Listener setup error for members:', e);
-      setIsLoading(false);
+      logSyncDiagnostic('MEMBERSHIP', 'Members listener setup error:', e);
     }
 
-    // 3. Subscribe to Organization Outgoing Invitations
+    // (c) Active Workspace Outgoing Invitations Listener
     try {
       const orgInvitesRef = collection(db, 'organizations', activeWorkspaceId, 'invitations');
       unsubOrgInvitesRef.current = onSnapshot(orgInvitesRef, (snap) => {
-        if (!isMounted) return;
         const list: OrganizationInvitation[] = [];
         snap.forEach((docSnap) => {
           list.push(docSnap.data() as OrganizationInvitation);
         });
         setActiveOrgInvitations(list);
       }, (err) => {
-        console.warn('[TEAM INVITATIONS] Error listening to org invitations:', err);
+        logSyncDiagnostic('INVITATIONS', 'Error listening to org invitations:', err);
       });
     } catch (e) {
-      console.warn('[TEAM INVITATIONS] Listener setup error for org invitations:', e);
+      logSyncDiagnostic('INVITATIONS', 'Org invites listener setup error:', e);
     }
 
-    // 4. Subscribe to Organization Audit Logs
+    // (d) Active Workspace Audit Logs Listener
     try {
       const auditLogsRef = collection(db, 'organizations', activeWorkspaceId, 'audit_logs');
       unsubAuditLogsRef.current = onSnapshot(auditLogsRef, (snap) => {
-        if (!isMounted) return;
         const list: OrganizationAuditLog[] = [];
         snap.forEach((docSnap) => {
           list.push(docSnap.data() as OrganizationAuditLog);
@@ -312,74 +498,88 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
         list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         setAuditLogs(list);
       }, (err) => {
-        console.warn('[TEAM LISTENER] Audit logs listener notice:', err);
+        logSyncDiagnostic('LISTENER', 'Audit logs listener notice:', err);
       });
     } catch (e) {
-      console.warn('[TEAM LISTENER] Error setting up audit logs listener:', e);
+      logSyncDiagnostic('LISTENER', 'Audit logs setup error:', e);
     }
 
-    // 5. Subscribe to Workspace Files / Datasets (Resolves 11 vs 6,058 discrepancy across browsers!)
+    // (e) Workspace Datasets Listener (Fixes 11 vs 6,058 record discrepancy!)
     try {
-      console.log(`[TEAM WORKSPACE] Attaching real-time listener for workspace "${activeWorkspaceId}" datasets`);
+      logSyncDiagnostic('WORKSPACE', `Attaching real-time files listener for workspace "${activeWorkspaceId}"`);
       const filesQuery = query(
         collection(db, 'files'),
         where('workspaceId', '==', activeWorkspaceId)
       );
 
       unsubFilesRef.current = onSnapshot(filesQuery, (snap) => {
-        if (!isMounted) return;
         const filesList: CSVFile[] = [];
         snap.forEach((docSnap) => {
           filesList.push(docSnap.data() as CSVFile);
         });
 
-        console.log(`[TEAM WORKSPACE] Received ${filesList.length} authoritative dataset(s) for workspace "${activeWorkspaceId}"`);
+        logSyncDiagnostic('WORKSPACE', `Received ${filesList.length} authoritative dataset(s) for workspace "${activeWorkspaceId}"`);
         setWorkspaceFiles(filesList);
+        saveWorkspaceFilesToStorage(activeWorkspaceId, filesList);
       }, (err) => {
-        console.warn('[TEAM WORKSPACE] Error querying workspace files:', err);
+        logSyncDiagnostic('WORKSPACE', 'Error querying workspace files:', err);
       });
     } catch (e) {
-      console.warn('[TEAM WORKSPACE] Error setting up files listener:', e);
+      logSyncDiagnostic('WORKSPACE', 'Files listener setup error:', e);
     }
 
     return () => {
-      isMounted = false;
-      cleanupListeners();
+      if (unsubOrgRef.current) unsubOrgRef.current();
+      if (unsubMembersRef.current) unsubMembersRef.current();
+      if (unsubOrgInvitesRef.current) unsubOrgInvitesRef.current();
+      if (unsubAuditLogsRef.current) unsubAuditLogsRef.current();
+      if (unsubFilesRef.current) unsubFilesRef.current();
     };
   }, [activeWorkspaceId, userUid, userEmail]);
 
-  // -------------------------------------------------------------
-  // 3. Derived Current Member, Role & Permissions Resolution
-  // -------------------------------------------------------------
+  // ==========================================================================
+  // 3. NETWORK RECONNECTION & VISIBILITY SYNC HANDLERS
+  // ==========================================================================
+  useEffect(() => {
+    const handleOnline = () => {
+      logSyncDiagnostic('SYNC', 'Network connection restored. Reconnecting listeners and reconciling...');
+      setIsOnline(true);
+      setSynchronizationStatus('reconnecting');
+      reconcileSession('network_online_reconnect');
+    };
+
+    const handleOffline = () => {
+      logSyncDiagnostic('SYNC', 'Network connection lost. Entering offline cache mode.');
+      setIsOnline(false);
+      setSynchronizationStatus('reconnecting');
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && userUid) {
+        logSyncDiagnostic('SYNC', 'Tab visibility restored. Verifying session...');
+        updateSessionHeartbeat({ uid: userUid, sessionId, status: 'active', activeWorkspaceId });
+        reconcileSession('tab_visibility_focused');
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [userUid, sessionId, activeWorkspaceId, reconcileSession]);
+
+  // ==========================================================================
+  // 4. DERIVED PERMISSIONS & HELPERS
+  // ==========================================================================
   const isPrimaryOwner = useMemo(() => {
     if (!userEmail) return false;
     return userEmail === 'nyikulibramwel@gmail.com' || (activeOrganization?.ownerEmail?.toLowerCase() === userEmail);
   }, [userEmail, activeOrganization?.ownerEmail]);
-
-  const currentMember = useMemo(() => {
-    if (!userUid && !userEmail) return null;
-    return members.find(m => m.uid === userUid || (m.email && m.email.toLowerCase().trim() === userEmail)) || null;
-  }, [members, userUid, userEmail]);
-
-  const currentRole: OrganizationRole = useMemo(() => {
-    if (isPrimaryOwner) return 'Owner';
-    if (currentMember?.role) return currentMember.role;
-    if (userEmail === 'nyikulibramwel@gmail.com') return 'Owner';
-    return 'Member';
-  }, [isPrimaryOwner, currentMember?.role, userEmail]);
-
-  const permissions: OrganizationPermission[] = useMemo(() => {
-    if (isPrimaryOwner) return ['upload_csv', 'clean_csv', 'audit_csv', 'export_reports', 'ai_analysis', 'team_chat', 'cell_annotations', 'view_reports'];
-    if (currentMember && currentMember.permissions && currentMember.permissions.length > 0) {
-      return currentMember.permissions;
-    }
-    return DEFAULT_ROLE_PERMISSIONS[currentRole] || DEFAULT_ROLE_PERMISSIONS.Member;
-  }, [isPrimaryOwner, currentMember, currentRole]);
-
-  const hasPermission = (permission: OrganizationPermission): boolean => {
-    if (isPrimaryOwner) return true;
-    return permissions.includes(permission);
-  };
 
   const isOwnerOrAdmin = useMemo(() => {
     return isPrimaryOwner || currentRole === 'Owner' || currentRole === 'Admin';
@@ -387,7 +587,11 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   const isAuthorized = Boolean(authUser && (isPrimaryOwner || currentMember || userEmail === 'nyikulibramwel@gmail.com'));
 
-  // Pending user invitation specifically to show in banner
+  const hasPermission = useCallback((permission: OrganizationPermission): boolean => {
+    if (isPrimaryOwner) return true;
+    return permissions.includes(permission);
+  }, [isPrimaryOwner, permissions]);
+
   const pendingInviteForBanner = useMemo(() => {
     if (!userEmail) return null;
     return incomingInvitations.find(
@@ -397,18 +601,23 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
     ) || null;
   }, [incomingInvitations, userEmail, dismissedInviteIds]);
 
-  const dismissBannerInvite = (inviteId: string) => {
+  const dismissBannerInvite = useCallback((inviteId: string) => {
     setDismissedInviteIds(prev => new Set(prev).add(inviteId));
-  };
+  }, []);
 
-  const switchWorkspace = (workspaceId: string) => {
-    console.log(`[TEAM WORKSPACE] Switching active workspace to: "${workspaceId}"`);
+  // ==========================================================================
+  // 5. TENANCY ACTIONS & MUTATIONS
+  // ==========================================================================
+  const switchWorkspace = async (workspaceId: string) => {
+    logSyncDiagnostic('WORKSPACE', `Switching active workspace to: "${workspaceId}"`);
     setActiveWorkspaceId(workspaceId);
+    savePreferredWorkspaceId(workspaceId);
+    if (userUid) {
+      updateSessionHeartbeat({ uid: userUid, sessionId, activeWorkspaceId: workspaceId });
+      bumpUserSyncVersion({ uid: userUid, workspaceVersion: true, activeWorkspaceId: workspaceId, sessionId, reason: 'switch_workspace' });
+    }
   };
 
-  // -------------------------------------------------------------
-  // 4. Tenancy Actions & Mutations
-  // -------------------------------------------------------------
   const createInvite = async (params: {
     email: string;
     role: 'Admin' | 'Member';
@@ -417,7 +626,6 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
     if (!userUid || !userEmail) {
       return { success: false, error: 'You must be authenticated to invite members.' };
     }
-
     if (!isOwnerOrAdmin) {
       return { success: false, error: 'Administrative privileges required to invite new members.' };
     }
@@ -427,7 +635,6 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
       return { success: false, error: 'Please enter a valid email address.' };
     }
 
-    // Check duplicate active membership
     const existingMember = members.find(m => m.email.toLowerCase().trim() === targetEmail && m.status === 'active');
     if (existingMember) {
       return { success: false, error: `${targetEmail} is already an active member of this organization.` };
@@ -454,17 +661,13 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
     };
 
     try {
-      console.log(`[TEAM INVITATIONS] Creating invitation for "${targetEmail}" (${params.role}) in "${activeWorkspaceId}"`);
-      
-      // Write 1: Subcollection under organization
-      const subRef = doc(db, 'organizations', activeWorkspaceId, 'invitations', inviteId);
-      await setDoc(subRef, invitation);
+      logSyncDiagnostic('INVITATIONS', `Creating invitation for "${targetEmail}" (${params.role}) in workspace "${activeWorkspaceId}"`);
 
-      // Write 2: Top-level workspaceInvitations collection for recipient real-time discovery
-      const topRef = doc(db, 'workspaceInvitations', inviteId);
-      await setDoc(topRef, invitation);
+      // Write to both subcollection and top-level
+      await setDoc(doc(db, 'organizations', activeWorkspaceId, 'invitations', inviteId), invitation);
+      await setDoc(doc(db, 'workspaceInvitations', inviteId), invitation);
 
-      // Write 3: Record audit log
+      // Record Audit Log
       recordOrganizationAuditLog({
         orgId: activeWorkspaceId,
         action: 'member.invited',
@@ -474,32 +677,28 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
           displayName: authUser?.displayName || userEmail.split('@')[0],
           role: currentRole
         },
-        target: {
-          id: inviteId,
-          email: targetEmail,
-          type: 'invitation'
-        },
+        target: { id: inviteId, email: targetEmail, type: 'invitation' },
         metadata: { role: params.role, expiresAt: expiresIso }
       }).catch(() => {});
 
-      // Write 4: Broadcast chat notice
+      // Broadcast Chat notice
       broadcastSystemChatMessage({
         tenantId: activeWorkspaceId,
         text: `${authUser?.displayName || userEmail.split('@')[0]} dispatched an invitation to ${targetEmail} (${params.role}).`
       }).catch(() => {});
 
-      // Sync to backend API endpoint for cross-session pickup
-      if (typeof fetch !== 'undefined') {
-        fetch('/api/workspaces/invitations', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(invitation)
-        }).catch(err => console.warn('[TEAM INVITATIONS] Backend invitation sync notice:', err));
-      }
+      // Bump sync version for instant cross-device pickup
+      bumpUserSyncVersion({
+        uid: userUid,
+        notificationVersion: true,
+        membershipVersion: true,
+        sessionId,
+        reason: 'invite_created'
+      });
 
       return { success: true, invitation };
     } catch (err: any) {
-      console.error('[TEAM INVITATIONS] Error creating invitation:', err);
+      logSyncDiagnostic('INVITATIONS', 'Error creating invitation:', err);
       return { success: false, error: err?.message || 'Failed to create invitation in Firestore.' };
     }
   };
@@ -511,14 +710,13 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
       return { success: false, error: 'Authentication required. Please sign in to accept this invitation.' };
     }
 
-    console.log(`[TEAM INVITATIONS] Accepting invitation with token/ID: "${tokenOrId}" for user: "${userEmail}"`);
+    logSyncDiagnostic('INVITATIONS', `Accepting invitation "${tokenOrId}" for user "${userEmail}"`);
 
     try {
-      // 1. Locate the invitation in top-level or subcollection
       let matchedInvitation: OrganizationInvitation | null = null;
       let matchedOrgId = activeWorkspaceId;
 
-      // Check top-level workspaceInvitations first
+      // Locate invitation in top-level
       const topSnap = await getDocs(query(collection(db, 'workspaceInvitations'), where('status', '==', 'pending')));
       topSnap.forEach(d => {
         const data = d.data() as OrganizationInvitation;
@@ -529,7 +727,7 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
       });
 
       if (!matchedInvitation) {
-        // Fallback to active org subcollection
+        // Check subcollection
         const subSnap = await getDocs(collection(db, 'organizations', activeWorkspaceId, 'invitations'));
         subSnap.forEach(d => {
           const data = d.data() as OrganizationInvitation;
@@ -541,11 +739,10 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
       }
 
       if (!matchedInvitation) {
-        return { success: false, error: 'Invitation not found or has already expired. Please request a new invitation.' };
+        return { success: false, error: 'Invitation not found or expired. Please request a new invitation.' };
       }
 
       const inv: OrganizationInvitation = matchedInvitation;
-
       if (inv.status === 'accepted') {
         return { success: false, error: 'This invitation has already been accepted.' };
       }
@@ -572,27 +769,42 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
         avatar: authUser?.photoURL || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(authUser?.displayName || userEmail)}&backgroundColor=3b82f6`
       };
 
-      // 1. Create or update member doc in Firestore under organizations/{orgId}/members/{uid}
-      const memberRef = doc(db, 'organizations', matchedOrgId, 'members', userUid);
-      await setDoc(memberRef, newMember);
+      // 1. Create member in Firestore
+      await setDoc(doc(db, 'organizations', matchedOrgId, 'members', userUid), newMember);
 
-      // 2. Mark invitation accepted in both places
-      const topInviteRef = doc(db, 'workspaceInvitations', inv.id);
-      await updateDoc(topInviteRef, {
+      // 2. Mark accepted in both collections
+      await updateDoc(doc(db, 'workspaceInvitations', inv.id), {
         status: 'accepted',
         acceptedAt: nowIso,
         acceptedByUid: userUid
       }).catch(() => {});
 
-      const subInviteRef = doc(db, 'organizations', matchedOrgId, 'invitations', inv.id);
-      await updateDoc(subInviteRef, {
+      await updateDoc(doc(db, 'organizations', matchedOrgId, 'invitations', inv.id), {
         status: 'accepted',
         acceptedAt: nowIso,
         acceptedByUid: userUid
       }).catch(() => {});
 
-      // 3. Switch active workspace to the joined organization
+      // 3. Switch workspace & bump sync
       setActiveWorkspaceId(matchedOrgId);
+      savePreferredWorkspaceId(matchedOrgId);
+
+      bumpUserSyncVersion({
+        uid: userUid,
+        membershipVersion: true,
+        workspaceVersion: true,
+        activeWorkspaceId: matchedOrgId,
+        sessionId,
+        reason: 'invite_accepted'
+      });
+
+      if (inv.invitedBy) {
+        bumpUserSyncVersion({
+          uid: inv.invitedBy,
+          membershipVersion: true,
+          reason: 'member_joined'
+        });
+      }
 
       // 4. Record audit log
       recordOrganizationAuditLog({
@@ -604,35 +816,20 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
           displayName: newMember.displayName,
           role: newMember.role
         },
-        target: {
-          id: inv.id,
-          uid: userUid,
-          email: userEmail,
-          name: newMember.displayName,
-          type: 'member'
-        },
+        target: { id: inv.id, uid: userUid, email: userEmail, name: newMember.displayName, type: 'member' },
         metadata: { role: inv.role, inviteId: inv.id }
       }).catch(() => {});
 
-      // 5. Broadcast live chat event
+      // 5. Broadcast Chat event
       broadcastSystemChatMessage({
         tenantId: matchedOrgId,
         text: `${newMember.displayName} accepted the team invitation and joined as ${newMember.role}.`
       }).catch(() => {});
 
-      // 6. Sync to backend endpoint
-      if (typeof fetch !== 'undefined') {
-        fetch(`/api/workspaces/invitations/${inv.id}/accept`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uid: userUid, userEmail })
-        }).catch(() => {});
-      }
-
-      console.log(`[TEAM MEMBERSHIP] Successfully joined workspace "${matchedOrgId}" as ${newMember.role}`);
+      logSyncDiagnostic('MEMBERSHIP', `Successfully joined workspace "${matchedOrgId}" as ${newMember.role}`);
       return { success: true, member: newMember };
     } catch (err: any) {
-      console.error('[TEAM INVITATIONS] Error accepting invitation:', err);
+      logSyncDiagnostic('INVITATIONS', 'Error accepting invitation:', err);
       return { success: false, error: err?.message || 'Failed to accept invitation.' };
     }
   };
@@ -643,20 +840,17 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
 
     try {
-      console.log(`[TEAM INVITATIONS] Cancelling invitation: "${inviteId}" in org: "${activeWorkspaceId}"`);
-      await updateDoc(doc(db, 'organizations', activeWorkspaceId, 'invitations', inviteId), {
-        status: 'cancelled',
-        cancelledAt: new Date().toISOString()
-      }).catch(() => {});
+      const updates = { status: 'cancelled' as const, cancelledAt: new Date().toISOString() };
+      await updateDoc(doc(db, 'organizations', activeWorkspaceId, 'invitations', inviteId), updates).catch(() => {});
+      await updateDoc(doc(db, 'workspaceInvitations', inviteId), updates).catch(() => {});
 
-      await updateDoc(doc(db, 'workspaceInvitations', inviteId), {
-        status: 'cancelled',
-        cancelledAt: new Date().toISOString()
-      }).catch(() => {});
-
-      if (typeof fetch !== 'undefined') {
-        fetch(`/api/workspaces/invitations/${inviteId}/cancel`, { method: 'POST' }).catch(() => {});
-      }
+      bumpUserSyncVersion({
+        uid: userUid,
+        notificationVersion: true,
+        membershipVersion: true,
+        sessionId,
+        reason: 'invite_cancelled'
+      });
 
       return { success: true };
     } catch (err: any) {
@@ -664,9 +858,7 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   };
 
-  const resendInvite = async (
-    inviteId: string
-  ): Promise<{ success: boolean; invitation?: OrganizationInvitation; error?: string }> => {
+  const resendInvite = async (inviteId: string): Promise<{ success: boolean; invitation?: OrganizationInvitation; error?: string }> => {
     if (!isOwnerOrAdmin) {
       return { success: false, error: 'Administrative privileges required.' };
     }
@@ -682,30 +874,49 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
       await updateDoc(doc(db, 'organizations', activeWorkspaceId, 'invitations', inviteId), updates);
       await updateDoc(doc(db, 'workspaceInvitations', inviteId), updates).catch(() => {});
 
+      bumpUserSyncVersion({
+        uid: userUid,
+        notificationVersion: true,
+        sessionId,
+        reason: 'invite_resent'
+      });
+
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err?.message || 'Failed to resend invitation.' };
     }
   };
 
-  const updateMemberRole = async (
-    memberUid: string,
-    role: OrganizationRole
-  ): Promise<{ success: boolean; error?: string }> => {
+  const updateMemberRole = async (memberUid: string, role: OrganizationRole): Promise<{ success: boolean; error?: string }> => {
     if (!isOwnerOrAdmin) {
       return { success: false, error: 'Administrative privileges required to modify roles.' };
     }
 
     try {
-      console.log(`[TEAM PERMISSIONS] Updating role for member "${memberUid}" to "${role}"`);
+      logSyncDiagnostic('PERMISSIONS', `Updating role for member "${memberUid}" to "${role}"`);
       const assignedPermissions = DEFAULT_ROLE_PERMISSIONS[role] || DEFAULT_ROLE_PERMISSIONS.Member;
-      
       const memberRef = doc(db, 'organizations', activeWorkspaceId, 'members', memberUid);
+
       await updateDoc(memberRef, {
         role,
         permissions: assignedPermissions,
         updatedAt: new Date().toISOString()
       });
+
+      bumpUserSyncVersion({
+        uid: userUid,
+        membershipVersion: true,
+        sessionId,
+        reason: 'role_updated'
+      });
+
+      if (memberUid !== userUid) {
+        bumpUserSyncVersion({
+          uid: memberUid,
+          membershipVersion: true,
+          reason: 'role_updated_by_admin'
+        });
+      }
 
       recordOrganizationAuditLog({
         orgId: activeWorkspaceId,
@@ -726,34 +937,34 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   };
 
-  const updateMemberPermissions = async (
-    memberUid: string,
-    perms: OrganizationPermission[]
-  ): Promise<{ success: boolean; error?: string }> => {
+  const updateMemberPermissions = async (memberUid: string, perms: OrganizationPermission[]): Promise<{ success: boolean; error?: string }> => {
     if (!isOwnerOrAdmin) {
       return { success: false, error: 'Administrative privileges required to modify permissions.' };
     }
 
     try {
-      console.log(`[TEAM PERMISSIONS] Updating granular permissions for member "${memberUid}":`, perms);
+      logSyncDiagnostic('PERMISSIONS', `Updating permissions for member "${memberUid}":`, perms);
       const memberRef = doc(db, 'organizations', activeWorkspaceId, 'members', memberUid);
+
       await updateDoc(memberRef, {
         permissions: perms,
         updatedAt: new Date().toISOString()
       });
 
-      recordOrganizationAuditLog({
-        orgId: activeWorkspaceId,
-        action: 'member.permissions_updated',
-        actor: {
-          uid: userUid,
-          email: userEmail,
-          displayName: authUser?.displayName || userEmail.split('@')[0],
-          role: currentRole
-        },
-        target: { uid: memberUid, type: 'member' },
-        metadata: { permissions: perms }
-      }).catch(() => {});
+      bumpUserSyncVersion({
+        uid: userUid,
+        membershipVersion: true,
+        sessionId,
+        reason: 'permissions_updated'
+      });
+
+      if (memberUid !== userUid) {
+        bumpUserSyncVersion({
+          uid: memberUid,
+          membershipVersion: true,
+          reason: 'permissions_updated_by_admin'
+        });
+      }
 
       return { success: true };
     } catch (err: any) {
@@ -767,9 +978,25 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
 
     try {
-      console.log(`[TEAM MEMBERSHIP] Removing member "${memberUid}" from workspace "${activeWorkspaceId}"`);
+      logSyncDiagnostic('MEMBERSHIP', `Removing member "${memberUid}" from workspace "${activeWorkspaceId}"`);
       const memberRef = doc(db, 'organizations', activeWorkspaceId, 'members', memberUid);
       await deleteDoc(memberRef);
+
+      bumpUserSyncVersion({
+        uid: userUid,
+        membershipVersion: true,
+        sessionId,
+        reason: 'member_removed'
+      });
+
+      if (memberUid !== userUid) {
+        bumpUserSyncVersion({
+          uid: memberUid,
+          membershipVersion: true,
+          workspaceVersion: true,
+          reason: 'removed_from_workspace'
+        });
+      }
 
       recordOrganizationAuditLog({
         orgId: activeWorkspaceId,
@@ -790,10 +1017,7 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   };
 
-  const updateOrgDetails = async (
-    name: string,
-    description?: string
-  ): Promise<{ success: boolean; error?: string }> => {
+  const updateOrgDetails = async (name: string, description?: string): Promise<{ success: boolean; error?: string }> => {
     if (!isOwnerOrAdmin) {
       return { success: false, error: 'Administrative privileges required to update workspace details.' };
     }
@@ -805,6 +1029,14 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
         description: description || '',
         updatedAt: new Date().toISOString()
       });
+
+      bumpUserSyncVersion({
+        uid: userUid,
+        workspaceVersion: true,
+        sessionId,
+        reason: 'workspace_details_updated'
+      });
+
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err?.message || 'Failed to update organization details.' };
@@ -812,20 +1044,25 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
   };
 
   const refreshTenancyState = async (): Promise<void> => {
-    if (!authUser) return;
-    try {
-      const snap = await getDocs(collection(db, 'organizations', activeWorkspaceId, 'members'));
-      const membersList: OrganizationMember[] = [];
-      snap.forEach(d => membersList.push(d.data() as OrganizationMember));
-      setMembers(membersList);
-    } catch (e) {
-      console.warn('[TEAM LISTENER] Manual tenancy refresh notice:', e);
-    }
+    await reconcileSession('manual_refresh_request');
   };
 
   return (
     <TeamTenancyContext.Provider
       value={{
+        uid: userUid,
+        sessionId,
+        deviceId,
+        userEmail,
+        isOnline,
+        isFromCache,
+        isReconciling,
+        synchronizationStatus,
+        lastSyncTimestamp,
+        sessionVersion,
+        membershipVersion,
+        workspaceVersion,
+        notificationVersion,
         activeWorkspaceId,
         activeOrganization,
         workspaces,
@@ -843,6 +1080,7 @@ export const TeamTenancyProvider: React.FC<{ children: ReactNode }> = ({ childre
         auditLogs,
         workspaceFiles,
         isLoading,
+        reconcileSession,
         switchWorkspace,
         createInvite,
         acceptInvite,
@@ -868,3 +1106,8 @@ export const useTeamTenancy = (): TeamTenancyContextType => {
   }
   return context;
 };
+
+// Aliases for explicit SessionCoordinator naming
+export const SessionCoordinator = TeamTenancyContext;
+export const SessionProvider = TeamTenancyProvider;
+export const useSessionCoordinator = useTeamTenancy;

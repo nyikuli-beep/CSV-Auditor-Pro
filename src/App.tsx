@@ -80,7 +80,10 @@ import {
   loadFilesFromLocalStorageSync, 
   saveActiveFileIdToStorage, 
   loadActiveFileIdFromStorage, 
-  deleteFileFromStorage 
+  deleteFileFromStorage,
+  saveWorkspaceFilesToStorage,
+  loadWorkspaceFilesFromStorage,
+  loadWorkspaceFilesFromLocalStorageSync
 } from './lib/fileStorage';
 import { executeScheduledRetentionCleanup } from './lib/retentionService';
 import { recordActiveDatasetInMemory } from './lib/workspaceMemoryEngine';
@@ -257,8 +260,11 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   // Billing Context for quota and subscription depletion tracking
   const { billing, usage: billingUsage } = useBilling();
 
-  // Multi-Tenant Tenancy Context Hook
+  // Multi-Tenant Tenancy Context Hook (Central Session Coordinator)
   const {
+    uid: sessionUid,
+    sessionId,
+    deviceId,
     activeWorkspaceId,
     activeOrganization,
     incomingInvitations,
@@ -271,7 +277,11 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     isOwnerOrAdmin,
     isPrimaryOwner,
     acceptInvite: executeAcceptInvite,
-    dismissBannerInvite
+    dismissBannerInvite,
+    synchronizationStatus,
+    sessionVersion,
+    isOnline: sessionIsOnline,
+    reconcileSession
   } = useTeamTenancy();
 
   // Multi-Tenant Invitations & Accept Modal State
@@ -366,9 +376,9 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
     });
   };
 
-  // Files Registry (with persistent IndexedDB + localStorage storage)
+  // Files Registry (strictly workspace-scoped and synchronized in real-time)
   const [files, setFiles] = useState<CSVFile[]>(() => {
-    return loadFilesFromLocalStorageSync();
+    return loadWorkspaceFilesFromLocalStorageSync(activeWorkspaceId);
   });
   const [activeFileIndex, setActiveFileIndex] = useState<number>(0);
   const [activeFileId, setActiveFileId] = useState<string>(() => {
@@ -377,38 +387,32 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   const [isFixingActiveFile, setIsFixingActiveFile] = useState<boolean>(false);
   const [fixAllSuccessMsg, setFixAllSuccessMsg] = useState<string>('');
 
-  // Async load persistent uploaded files from IndexedDB engine on initial mount
-  useEffect(() => {
-    let isMounted = true;
-    loadFilesFromStorage().then(storedFiles => {
-      if (!isMounted) return;
-      if (storedFiles && storedFiles.length > 0) {
-        setFiles(prev => {
-          const map = new Map<string, CSVFile>();
-          prev.forEach(f => { if (f && f.id) map.set(f.id, f); });
-          storedFiles.forEach(f => { if (f && f.id) map.set(f.id, f); });
-          return Array.from(map.values());
-        });
-      }
-    }).catch(err => {
-      console.warn("Failed to load files from storage engine on mount:", err);
-    });
-    return () => { isMounted = false; };
-  }, []);
-
   // Synchronize authoritative workspace datasets across browsers in real-time
   useEffect(() => {
-    if (workspaceFiles && workspaceFiles.length > 0) {
-      setFiles(prev => {
-        const map = new Map<string, CSVFile>();
-        prev.forEach(f => { if (f && f.id) map.set(f.id, f); });
-        workspaceFiles.forEach(f => { if (f && f.id) map.set(f.id, f); });
-        const merged = Array.from(map.values());
-        saveFilesToStorage(merged);
-        return merged;
-      });
+    if (workspaceFiles !== undefined) {
+      if (workspaceFiles.length > 0) {
+        setFiles(workspaceFiles);
+        saveWorkspaceFilesToStorage(activeWorkspaceId, workspaceFiles);
+      } else if (firebaseUser || auth.currentUser) {
+        // Authenticated workspace with 0 files: do not inject stale sample data
+        setFiles([]);
+        saveWorkspaceFilesToStorage(activeWorkspaceId, []);
+      }
     }
-  }, [workspaceFiles]);
+  }, [workspaceFiles, activeWorkspaceId, firebaseUser]);
+
+  // When workspace changes, load cached files for the specific workspace
+  useEffect(() => {
+    if (activeWorkspaceId) {
+      const cached = loadWorkspaceFilesFromLocalStorageSync(activeWorkspaceId);
+      if (cached && cached.length > 0) {
+        setFiles(cached);
+      } else if (firebaseUser || auth.currentUser) {
+        setFiles([]);
+      }
+      setActiveFileIndex(0);
+    }
+  }, [activeWorkspaceId, firebaseUser]);
 
   // Auto-persist files whenever files state changes and record into workspace memory
   useEffect(() => {
