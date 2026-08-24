@@ -49,9 +49,11 @@ service cloud.firestore {
         && data.score is int && data.score >= 0 && data.score <= 100
         && data.headers is list
         && data.rows is list
-        && data.ownerId is string
+        && (!('ownerId' in data) || (data.ownerId is string && data.ownerId.size() <= 128))
+        && (!('workspaceId' in data) || (data.workspaceId is string && data.workspaceId.size() <= 128))
+        && (!('organizationId' in data) || (data.organizationId is string && data.organizationId.size() <= 128))
         && data.issues is list
-        && data.keys().hasAll(['id', 'name', 'size', 'uploadedAt', 'status', 'score', 'headers', 'rows', 'ownerId', 'issues']);
+        && data.keys().hasAll(['id', 'name', 'size', 'uploadedAt', 'status', 'score', 'headers', 'rows', 'issues']);
     }
 
     function isValidAuditActivity(data) {
@@ -160,11 +162,26 @@ service cloud.firestore {
     // FILES COLLECTION
     match /files/{fileId} {
       allow get: if isSignedIn() && isValidId(fileId);
-      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
-      allow create: if isSignedIn() && isValidId(fileId) && isOwner(incoming().ownerId) && isValidCSVFile(incoming());
-      allow update: if isSignedIn() && isValidId(fileId) && isOwner(existing().ownerId) && isValidCSVFile(incoming())
-        && incoming().ownerId == existing().ownerId;
-      allow delete: if isSignedIn() && isValidId(fileId) && isOwner(existing().ownerId);
+      allow list: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        (('workspaceId' in resource.data) && resource.data.workspaceId != null && isOrgMember(resource.data.workspaceId)) ||
+        (('organizationId' in resource.data) && resource.data.organizationId != null && isOrgMember(resource.data.organizationId))
+      );
+      allow create: if isSignedIn() && isValidId(fileId) && isValidCSVFile(incoming()) && (
+        isOwner(incoming().ownerId) ||
+        (('workspaceId' in incoming()) && incoming().workspaceId != null && isOrgMember(incoming().workspaceId)) ||
+        (('organizationId' in incoming()) && incoming().organizationId != null && isOrgMember(incoming().organizationId))
+      );
+      allow update: if isSignedIn() && isValidId(fileId) && isValidCSVFile(incoming()) && (
+        isOwner(existing().ownerId) ||
+        (('workspaceId' in existing()) && existing().workspaceId != null && isOrgAdminOrOwner(existing().workspaceId)) ||
+        (('organizationId' in existing()) && existing().organizationId != null && isOrgAdminOrOwner(existing().organizationId))
+      );
+      allow delete: if isSignedIn() && isValidId(fileId) && (
+        isOwner(existing().ownerId) ||
+        (('workspaceId' in existing()) && existing().workspaceId != null && isOrgAdminOrOwner(existing().workspaceId)) ||
+        (('organizationId' in existing()) && existing().organizationId != null && isOrgAdminOrOwner(existing().organizationId))
+      );
     }
 
     // ACTIVITIES TIMELINE
@@ -224,6 +241,11 @@ service cloud.firestore {
 
     // INVITATIONS COLLECTION (Top-level compatibility)
     match /invitations/{invitationId} {
+      allow read, create, update, delete: if isSignedIn();
+    }
+
+    // WORKSPACE INVITATIONS COLLECTION (Cross-browser real-time synchronization)
+    match /workspaceInvitations/{invitationId} {
       allow read, create, update, delete: if isSignedIn();
     }
 

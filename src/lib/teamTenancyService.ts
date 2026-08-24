@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase/firebase';
 import { broadcastSystemChatMessage, removeUserPresence } from './chatClient';
+export { broadcastSystemChatMessage, removeUserPresence };
 import { dispatchInAppNotification } from './notificationService';
 import { 
   Organization, 
@@ -906,14 +907,17 @@ export async function createOrganizationInvitation(params: {
   try {
     const inviteRef = doc(db, 'organizations', orgId, 'invitations', inviteId);
     const topLevelRef = doc(db, 'invitations', inviteId);
+    const workspaceInvitesRef = doc(db, 'workspaceInvitations', inviteId);
     
+    console.log(`[TEAM INVITATIONS] Writing invitation "${inviteId}" to Firestore for ${targetEmail}`);
     const p1 = setDoc(inviteRef, invitation);
     const p2 = setDoc(topLevelRef, invitation).catch(() => {});
+    const p3 = setDoc(workspaceInvitesRef, invitation).catch(() => {});
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error('Invite write timeout')), 5000)
     );
-    await Promise.race([Promise.all([p1, p2]), timeoutPromise]).catch(err => {
-      console.warn('[Tenancy] Firestore setDoc timeout/fallback for invitation:', err);
+    await Promise.race([Promise.all([p1, p2, p3]), timeoutPromise]).catch(err => {
+      console.warn('[TEAM INVITATIONS] Firestore setDoc timeout/fallback for invitation:', err);
     });
 
     // Update in-memory store and persistent local storage
@@ -1227,10 +1231,17 @@ export async function cancelOrganizationInvitation(
 
   try {
     const inviteRef = doc(db, 'organizations', orgId, 'invitations', invitationId);
-    await updateDoc(inviteRef, {
-      status: 'cancelled',
+    const topInviteRef = doc(db, 'invitations', invitationId);
+    const workspaceInviteRef = doc(db, 'workspaceInvitations', invitationId);
+
+    const cancelPayload = {
+      status: 'cancelled' as const,
       updatedAt: new Date().toISOString()
-    });
+    };
+
+    await updateDoc(inviteRef, cancelPayload).catch(() => {});
+    await updateDoc(topInviteRef, cancelPayload).catch(() => {});
+    await updateDoc(workspaceInviteRef, cancelPayload).catch(() => {});
 
     const cached = localInvitationsStore.get(orgId) || getPersistedInvitations(orgId);
     const updated = cached.map(inv => {
@@ -1355,11 +1366,18 @@ export async function acceptOrganizationInvitation(params: {
 
     // 5. Mark Invitation as Accepted
     const inviteRef = doc(db, 'organizations', orgId, 'invitations', invitation.id);
-    await updateDoc(inviteRef, {
-      status: 'accepted',
+    const topInviteRef = doc(db, 'invitations', invitation.id);
+    const workspaceInviteRef = doc(db, 'workspaceInvitations', invitation.id);
+
+    const updatePayload = {
+      status: 'accepted' as const,
       acceptedAt: nowIso,
       acceptedByUid: user.uid
-    });
+    };
+
+    await updateDoc(inviteRef, updatePayload).catch(() => {});
+    await updateDoc(topInviteRef, updatePayload).catch(() => {});
+    await updateDoc(workspaceInviteRef, updatePayload).catch(() => {});
 
     // Update local cache
     const cachedMembers = localMembersStore.get(orgId) || [];

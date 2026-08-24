@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './context/AuthProvider';
 import { BillingProvider } from './context/BillingContext';
 import { TimeProvider } from './context/TimeContext';
+import { TeamTenancyProvider } from './context/TeamTenancyContext';
 import { registerServiceWorker } from './registerServiceWorker';
 import App from './App.tsx';
 import './index.css';
@@ -15,9 +16,11 @@ createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
       <AuthProvider>
         <BillingProvider>
-          <TimeProvider>
-            <App />
-          </TimeProvider>
+          <TeamTenancyProvider>
+            <TimeProvider>
+              <App />
+            </TimeProvider>
+          </TeamTenancyProvider>
         </BillingProvider>
       </AuthProvider>
     </BrowserRouter>
