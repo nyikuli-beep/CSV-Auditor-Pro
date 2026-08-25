@@ -30,6 +30,7 @@ import {
 } from '../lib/cleaning/batchValidationHelper';
 import { validateFilePreFlight, checkUserUploadPermission, checkUploadRateLimit } from '../lib/csvSecurityValidator';
 import { useBilling } from '../context/BillingContext';
+import { useUserQuota } from '../hooks/useUserQuota';
 import { auth } from '../firebase';
 
 export interface BatchFileStatusItem {
@@ -65,7 +66,13 @@ export default function BatchValidationPanel({
   userRole
 }: BatchValidationPanelProps) {
   const { plan, usage, recordUsage, resetInfo, openProCheckout, hasProAccess, checkAuditLimit } = useBilling();
-  const isFreemiumLimitReached = !hasProAccess && plan === 'free' && (!checkAuditLimit() || (usage?.auditCount || 0) >= 5);
+  const { uploadsRemaining, isExhausted: isQuotaExhausted, consumeUpload } = useUserQuota();
+  const isFreemiumLimitReached = !hasProAccess && plan === 'free' && (
+    uploadsRemaining <= 0 ||
+    isQuotaExhausted ||
+    !checkAuditLimit() ||
+    (usage?.auditCount || 0) >= 5
+  );
 
   // Selection state for workspace files
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>(() => files.map(f => f.id));
@@ -122,8 +129,8 @@ export default function BatchValidationPanel({
     e.stopPropagation();
     setBatchDragActive(false);
 
-    if (isFreemiumLimitReached) {
-      setValidationError(`Monthly upload limit reached (5/5 used). Raw file queuing is locked until quota resets on ${resetInfo.nextResetDate}.`);
+    if (isFreemiumLimitReached || uploadsRemaining <= 0) {
+      setValidationError(`Monthly upload limit reached (${uploadsRemaining}/5 remaining). Raw file queuing is locked until quota resets on ${resetInfo.nextResetDate}.`);
       return;
     }
 
@@ -138,8 +145,8 @@ export default function BatchValidationPanel({
   };
 
   const handleBatchFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (isFreemiumLimitReached) {
-      setValidationError(`Monthly upload limit reached (5/5 used). Raw file queuing is locked until quota resets on ${resetInfo.nextResetDate}.`);
+    if (isFreemiumLimitReached || uploadsRemaining <= 0) {
+      setValidationError(`Monthly upload limit reached (${uploadsRemaining}/5 remaining). Raw file queuing is locked until quota resets on ${resetInfo.nextResetDate}.`);
       if (e.target) {
         e.target.value = '';
       }
@@ -186,14 +193,13 @@ export default function BatchValidationPanel({
     }
 
     // Freemium 5 uploads monthly limit check for new raw files
-    if (plan === 'free' && queuedRawFiles.length > 0) {
-      const currentUploads = usage?.auditCount || 0;
-      if (currentUploads >= 5) {
-        setValidationError(`Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${currentUploads}/5 used). Upgrade to Pro for unlimited uploads or wait for quota reset on ${resetInfo.nextResetDate}.`);
+    if (plan === 'free' && !hasProAccess && queuedRawFiles.length > 0) {
+      if (uploadsRemaining <= 0 || isQuotaExhausted || !checkAuditLimit()) {
+        setValidationError(`Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${uploadsRemaining}/5 remaining). Multi-device real-time sync updated your balance. Upgrade to Pro for unlimited uploads or wait for quota reset on ${resetInfo.nextResetDate}.`);
         return;
       }
-      if (currentUploads + queuedRawFiles.length > 5) {
-        setValidationError(`Queueing ${queuedRawFiles.length} new files exceeds your 5 monthly uploads limit (${currentUploads}/5 used). Please reduce files or upgrade to Pro.`);
+      if (queuedRawFiles.length > uploadsRemaining) {
+        setValidationError(`Queueing ${queuedRawFiles.length} new files exceeds your remaining quota of ${uploadsRemaining} uploads on Freemium. Please reduce files or upgrade to Pro.`);
         return;
       }
     }
@@ -318,6 +324,18 @@ export default function BatchValidationPanel({
         const preFlight = validateFilePreFlight(rawFile, plan);
         if (!preFlight.valid) {
           throw new Error(preFlight.errorMessage || 'Invalid file format or size limit exceeded.');
+        }
+
+        // Multi-device Freemium Atomic Quota Check & Decrement
+        if (plan === 'free' && !hasProAccess) {
+          const quotaCheck = await consumeUpload({
+            fileName: rawFile.name,
+            fileSize: rawFile.size
+          });
+          if (!quotaCheck.allowed) {
+            throw new Error(quotaCheck.error || 'Monthly upload limit depleted across connected devices.');
+          }
+          await recordUsage({ auditAdd: 1, bytesAdd: rawFile.size });
         }
 
         const rawText = await new Promise<string>((resolve, reject) => {

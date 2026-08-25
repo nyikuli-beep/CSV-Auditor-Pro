@@ -57,10 +57,10 @@ export function useUserQuota(): UserQuotaState {
 
   const deviceIdRef = useRef<string>(getClientDeviceId());
 
-  const userId = user?.uid;
+  const activeUserId = user?.uid || auth?.currentUser?.uid || (typeof window !== 'undefined' ? localStorage.getItem('user_profile_uid') : null) || 'usr-nyikuli';
 
   useEffect(() => {
-    if (!userId) {
+    if (!activeUserId) {
       setLoading(false);
       setUploadsRemaining(DEFAULT_QUOTA);
       return;
@@ -69,8 +69,8 @@ export function useUserQuota(): UserQuotaState {
     setLoading(true);
     setError(null);
 
-    const userDocRef = doc(db, 'users', userId);
-    const docPath = `users/${userId}`;
+    const userDocRef = doc(db, 'users', activeUserId);
+    const docPath = `users/${activeUserId}`;
 
     // Attach real-time snapshot listener on Firestore
     const unsubscribe = onSnapshot(
@@ -82,7 +82,7 @@ export function useUserQuota(): UserQuotaState {
           
           setUploadsRemaining(quota);
           setUpdatedAt(data?.updatedAt || null);
-          setEmail(data?.email || user.email || null);
+          setEmail(data?.email || user?.email || auth?.currentUser?.email || null);
           setRole(data?.role || 'Editor');
           setPlan(data?.plan || 'Free');
           setLastUploadedFile(data?.lastUploadedFile || null);
@@ -111,10 +111,10 @@ export function useUserQuota(): UserQuotaState {
     return () => {
       unsubscribe();
     };
-  }, [userId, user?.email]);
+  }, [activeUserId, user?.email]);
 
   const consumeUpload = useCallback(async (metadata?: UploadMetadata): Promise<QuotaCheckResult> => {
-    if (!userId) {
+    if (!activeUserId) {
       return {
         allowed: false,
         uploadsRemaining: 0,
@@ -122,7 +122,7 @@ export function useUserQuota(): UserQuotaState {
       };
     }
 
-    const res = await checkAndDecrementUploadQuota(userId, {
+    const res = await checkAndDecrementUploadQuota(activeUserId, {
       ...metadata,
       deviceId: metadata?.deviceId || deviceIdRef.current
     });
@@ -134,17 +134,17 @@ export function useUserQuota(): UserQuotaState {
     }
 
     return res;
-  }, [userId]);
+  }, [activeUserId]);
 
   const resetQuota = useCallback(async (amount: number = DEFAULT_QUOTA) => {
-    if (!userId) return { success: false, uploadsRemaining: 0 };
-    const res = await resetUserUploadQuota(userId, amount);
+    if (!activeUserId) return { success: false, uploadsRemaining: 0 };
+    const res = await resetUserUploadQuota(activeUserId, amount);
     if (res.success) {
       setUploadsRemaining(res.uploadsRemaining);
       setSyncTimestamp(Date.now());
     }
     return res;
-  }, [userId]);
+  }, [activeUserId]);
 
   return {
     uploadsRemaining,

@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db, auth } from '../firebase';
 import { UserPlan, UserBillingInfo, PlanEntitlements, UsageMetrics } from '../types';
 import { getEntitlements, getOrCreateUserBilling, getUserUsage, incrementUserUsage, getNextMonthlyResetInfo, MonthlyResetInfo } from '../lib/billingService';
 import { openPaddleCheckout } from '../lib/paddle';
@@ -90,6 +92,40 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setIsLoading(false);
     }
   }, [userEmail]);
+
+  const [cloudQuotaRemaining, setCloudQuotaRemaining] = useState<number | null>(null);
+
+  const activeUserId = user?.uid || auth?.currentUser?.uid || (typeof window !== 'undefined' ? localStorage.getItem('user_profile_uid') : null) || 'usr-nyikuli';
+
+  // Sync real-time Firestore user quota into Billing state
+  useEffect(() => {
+    if (!activeUserId) return;
+    try {
+      const userRef = doc(db, 'users', activeUserId);
+      const unsubscribe = onSnapshot(userRef, (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (typeof data?.uploadsRemaining === 'number') {
+            const quota = data.uploadsRemaining;
+            setCloudQuotaRemaining(quota);
+            const cloudUsed = Math.max(0, 5 - quota);
+            setUsage(prev => {
+              const current = prev || getUserUsage(userEmail, billing?.plan || 'free');
+              return {
+                ...current,
+                auditCount: Math.max(current.auditCount, cloudUsed)
+              };
+            });
+          }
+        }
+      }, (err) => {
+        console.warn('BillingContext firestore quota listener notice:', err);
+      });
+      return () => unsubscribe();
+    } catch (e) {
+      console.warn('BillingContext firestore subscription error:', e);
+    }
+  }, [activeUserId, userEmail, billing?.plan]);
 
   useEffect(() => {
     fetchBillingData();
@@ -208,6 +244,9 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const checkAuditLimit = (): boolean => {
     const currentPlan = billing?.plan || 'free';
     if (currentPlan === 'free') {
+      if (cloudQuotaRemaining !== null && cloudQuotaRemaining <= 0) {
+        return false;
+      }
       const currentUsage = usage || getUserUsage(userEmail, 'free');
       if (currentUsage.auditCount >= 5) {
         return false;

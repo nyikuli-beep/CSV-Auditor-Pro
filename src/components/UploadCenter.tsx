@@ -422,6 +422,20 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
   const handleStartIngestion = () => {
     if (!fileToConfigure) return;
     
+    // Check Freemium 5 Uploads Per Month Limit & Multi-Device Real-Time Quota
+    const currentUploadsCount = usage?.auditCount || 0;
+    if (plan === 'free' && !hasProAccess) {
+      if ((!quotaLoading && uploadsRemaining <= 0) || isQuotaExhausted || !checkAuditLimit() || currentUploadsCount >= 5) {
+        const msg = `Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${uploadsRemaining}/5 remaining). Multi-device real-time sync updated your balance. Upgrade to Pro for unlimited uploads.`;
+        setErrorMsg(msg);
+        triggerUnlockModal('5 Monthly Uploads Limit', 'pro');
+        setFileToConfigure(null);
+        setMultipleFilesToConfigure([]);
+        setDelimiterPreviewLines([]);
+        return;
+      }
+    }
+
     const file = fileToConfigure;
     const delim = selectedDelimiter;
     
