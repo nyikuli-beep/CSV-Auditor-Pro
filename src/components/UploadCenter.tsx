@@ -26,7 +26,12 @@ import {
   Wand2,
   Zap,
   CheckCheck,
-  Lock
+  Lock,
+  Cloud,
+  Monitor,
+  Smartphone,
+  RefreshCw,
+  ShieldCheck
 } from 'lucide-react';
 import { CSVFile, AuditIssue, Severity, IssueType, CustomValidationRule } from '../types';
 import { detectCSVFormats } from '../lib/formatDetector';
@@ -49,6 +54,7 @@ import BatchValidationPanel from './BatchValidationPanel';
 import { RetentionUploadSelector } from './RetentionPolicySelector';
 import { createDefaultRetentionPolicy, RetentionPeriodOption } from '../lib/retentionService';
 import { useBilling } from '../context/BillingContext';
+import { useUserQuota } from '../hooks/useUserQuota';
 import PlanFeatureLock from './PlanFeatureLock';
 import UnlockPremiumModal from './UnlockPremiumModal';
 
@@ -74,10 +80,44 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     trialUsed,
     hasProAccess
   } = useBilling();
+
+  const {
+    uploadsRemaining,
+    updatedAt: quotaUpdatedAt,
+    isExhausted: isQuotaExhausted,
+    loading: quotaLoading,
+    consumeUpload,
+    resetQuota,
+    deviceId,
+    lastUploadDeviceId,
+    lastUploadedFile,
+    syncTimestamp
+  } = useUserQuota();
   
   // Calculate if freemium upload limit is reached (5 uploads per month for free plan)
   const currentUploadsCount = usage?.auditCount || 0;
-  const isFreemiumLimitReached = !hasProAccess && plan === 'free' && (!checkAuditLimit() || currentUploadsCount >= 5);
+  const isFreemiumLimitReached = !hasProAccess && plan === 'free' && (
+    (!quotaLoading && uploadsRemaining <= 0) ||
+    isQuotaExhausted ||
+    !checkAuditLimit() ||
+    currentUploadsCount >= 5
+  );
+
+  const [isResettingQuota, setIsResettingQuota] = useState(false);
+  const [quotaFeedbackMsg, setQuotaFeedbackMsg] = useState<string | null>(null);
+
+  const handleManualResetQuota = async () => {
+    setIsResettingQuota(true);
+    try {
+      await resetQuota(5);
+      setQuotaFeedbackMsg('Upload quota restored to 5 and synchronized across all active devices.');
+      setTimeout(() => setQuotaFeedbackMsg(null), 4000);
+    } catch (e: any) {
+      setQuotaFeedbackMsg('Failed to reset quota. Please try again.');
+    } finally {
+      setIsResettingQuota(false);
+    }
+  };
 
   // Unlock Modal State for Plan Limits
   const [isUnlockModalOpen, setIsUnlockModalOpen] = useState(false);
@@ -254,13 +294,15 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
       return;
     }
 
-    // 1b. Check Freemium 5 Uploads Per Month Limit
+    // 1b. Check Freemium 5 Uploads Per Month Limit & Multi-Device Real-Time Quota
     const currentUploadsCount = usage?.auditCount || 0;
-    if (plan === 'free' && (!checkAuditLimit() || currentUploadsCount >= 5)) {
-      const msg = `Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${currentUploadsCount}/5 used). Upgrade to Pro for unlimited uploads.`;
-      setErrorMsg(msg);
-      triggerUnlockModal('5 Monthly Uploads Limit', 'pro');
-      return;
+    if (plan === 'free' && !hasProAccess) {
+      if ((!quotaLoading && uploadsRemaining <= 0) || isQuotaExhausted || !checkAuditLimit() || currentUploadsCount >= 5) {
+        const msg = `Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${uploadsRemaining}/5 remaining). Multi-device real-time sync updated your balance. Upgrade to Pro for unlimited uploads.`;
+        setErrorMsg(msg);
+        triggerUnlockModal('5 Monthly Uploads Limit', 'pro');
+        return;
+      }
     }
 
     // 2. Check Rate Limit
@@ -315,17 +357,17 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
       return;
     }
 
-    // 1b. Check Freemium 5 Uploads Per Month Limit
+    // 1b. Check Freemium 5 Uploads Per Month Limit & Multi-Device Real-Time Quota
     const currentUploadsCount = usage?.auditCount || 0;
-    if (plan === 'free') {
-      if (!checkAuditLimit() || currentUploadsCount >= 5) {
-        const msg = `Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${currentUploadsCount}/5 used). Upgrade to Pro for unlimited uploads.`;
+    if (plan === 'free' && !hasProAccess) {
+      if ((!quotaLoading && uploadsRemaining <= 0) || isQuotaExhausted || !checkAuditLimit() || currentUploadsCount >= 5) {
+        const msg = `Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${uploadsRemaining}/5 remaining). Multi-device real-time sync updated your balance. Upgrade to Pro for unlimited uploads.`;
         setErrorMsg(msg);
         triggerUnlockModal('5 Monthly Uploads Limit', 'pro');
         return;
       }
-      if (currentUploadsCount + filesList.length > 5) {
-        const msg = `Uploading ${filesList.length} files would exceed your 5 uploads per month limit on Freemium (${currentUploadsCount}/5 used). Please select fewer files or upgrade to Pro for unlimited uploads.`;
+      if (filesList.length > uploadsRemaining) {
+        const msg = `Uploading ${filesList.length} files would exceed your remaining quota of ${uploadsRemaining} uploads on Freemium. Please select fewer files or upgrade to Pro for unlimited uploads.`;
         setErrorMsg(msg);
         triggerUnlockModal('5 Monthly Uploads Limit', 'pro');
         return;
@@ -1521,13 +1563,15 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
       return;
     }
 
-    // 1b. Check Freemium 5 Uploads Per Month Limit
+    // 1b. Check Freemium 5 Uploads Per Month Limit & Real-time multi-device quota
     const currentUploadsCount = usage?.auditCount || 0;
-    if (plan === 'free' && (!checkAuditLimit() || currentUploadsCount >= 5)) {
-      const msg = `Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${currentUploadsCount}/5 used). Upgrade to Pro for unlimited uploads.`;
-      setErrorMsg(msg);
-      triggerUnlockModal('5 Monthly Uploads Limit', 'pro');
-      return;
+    if (plan === 'free' && !hasProAccess) {
+      if ((!quotaLoading && uploadsRemaining <= 0) || isQuotaExhausted || !checkAuditLimit() || currentUploadsCount >= 5) {
+        const msg = `Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${uploadsRemaining}/5 remaining). Multi-device real-time sync updated your balance. Upgrade to Pro for unlimited uploads.`;
+        setErrorMsg(msg);
+        triggerUnlockModal('5 Monthly Uploads Limit', 'pro');
+        return;
+      }
     }
 
     // 2. Upload Rate Limit Check (5/min, 50/hour)
@@ -1623,6 +1667,26 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
           // Stage 5: Preparing download...
           setProcessingStageMessage('Preparing download...');
           setUploadProgress(90);
+
+          // Atomically decrement multi-device quota in Firestore
+          if (plan === 'free' && !hasProAccess) {
+            try {
+              const quotaResult = await consumeUpload({
+                fileName: file.name,
+                fileSize: file.size,
+                rowCount: scanResult.sanitizedRows.length
+              });
+              if (!quotaResult.allowed) {
+                setErrorMsg(quotaResult.error || 'Upload quota depleted across your connected devices.');
+                setUploadProgress(null);
+                setProcessingStageMessage('');
+                triggerUnlockModal('5 Monthly Uploads Limit', 'pro');
+                return;
+              }
+            } catch (quotaErr) {
+              console.warn('Quota consumption warning:', quotaErr);
+            }
+          }
 
           // Record upload timestamp in rate limiter upon success
           recordUploadTimestamp(userId);
@@ -1748,11 +1812,11 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
       return;
     }
 
-    // Check Freemium 5 Uploads Per Month Limit
+    // Check Freemium 5 Uploads Per Month Limit & Multi-Device Quota
     const currentUploadsCount = usage?.auditCount || 0;
-    if (plan === 'free') {
-      if (!checkAuditLimit() || currentUploadsCount >= 5) {
-        const msg = `Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${currentUploadsCount}/5 used). Upgrade to Pro for unlimited uploads or wait until quota resets on ${resetInfo.nextResetDate}.`;
+    if (plan === 'free' && !hasProAccess) {
+      if ((!quotaLoading && uploadsRemaining <= 0) || isQuotaExhausted || !checkAuditLimit() || currentUploadsCount >= 5) {
+        const msg = `Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${uploadsRemaining}/5 remaining). Upgrade to Pro for unlimited uploads or wait until quota resets on ${resetInfo.nextResetDate}.`;
         setErrorMsg(msg);
         triggerUnlockModal('5 Monthly Uploads Limit', 'pro');
         return;
@@ -1857,7 +1921,21 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     setIsAnalyzing(false);
 
     if (parsedFiles.length > 0) {
-      // Record batch usage
+      // Record batch usage and multi-device quota
+      if (plan === 'free' && !hasProAccess) {
+        for (const pFile of parsedFiles) {
+          try {
+            await consumeUpload({
+              fileName: pFile.name,
+              fileSize: pFile.size,
+              rowCount: pFile.totalRowsCount || 0
+            });
+          } catch (err) {
+            console.warn('Batch quota decrement error:', err);
+          }
+        }
+      }
+
       recordUsage({
         auditAdd: parsedFiles.length,
         rowsAdd: parsedFiles.reduce((acc, f) => acc + (f.totalRowsCount || 0), 0),
@@ -2877,6 +2955,101 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Upload Zone */}
         <div className="lg:col-span-8 space-y-4">
+          {/* Real-Time Multi-Device Freemium Quota Synchronization Widget */}
+          <div className={`p-4 rounded-xl border transition-all ${
+            isDarkMode ? 'bg-[#131b2e] border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800 shadow-sm'
+          }`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className={`p-2 rounded-lg ${isDarkMode ? 'bg-blue-950/60 text-blue-400 border border-blue-800/40' : 'bg-blue-50 text-blue-600 border border-blue-100'}`}>
+                  <Cloud className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-xs">Multi-Device Cloud Quota Sync</h3>
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                      Real-time Firestore
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Uploads performed on Device A instantly update Device B in real-time.
+                  </p>
+                </div>
+              </div>
+
+              {plan === 'free' && !hasProAccess && (
+                <button
+                  id="reset-quota-btn"
+                  onClick={handleManualResetQuota}
+                  disabled={isResettingQuota}
+                  title="Reset quota to 5 to test multi-device synchronization across browser tabs or devices"
+                  className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                    isDarkMode 
+                      ? 'border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200' 
+                      : 'border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isResettingQuota ? 'animate-spin' : ''}`} />
+                  <span>Reset Quota (Test Sync)</span>
+                </button>
+              )}
+            </div>
+
+            {quotaFeedbackMsg && (
+              <div className="mt-3 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>{quotaFeedbackMsg}</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3 pt-1">
+              <div className={`p-2.5 rounded-lg border ${isDarkMode ? 'bg-[#0b101d] border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                <div className="text-[10px] uppercase font-bold text-slate-400">Remaining Quota</div>
+                <div className="flex items-baseline gap-1.5 mt-0.5">
+                  <span className={`text-lg font-black ${
+                    plan === 'free' && !hasProAccess && uploadsRemaining <= 0 ? 'text-rose-500' : 'text-blue-600 dark:text-blue-400'
+                  }`}>
+                    {plan === 'free' && !hasProAccess ? uploadsRemaining : '∞'}
+                  </span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                    {plan === 'free' && !hasProAccess ? '/ 5 uploads left' : 'Unlimited (Pro)'}
+                  </span>
+                </div>
+              </div>
+
+              <div className={`p-2.5 rounded-lg border ${isDarkMode ? 'bg-[#0b101d] border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                <div className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1">
+                  <Monitor className="w-3 h-3 text-slate-400" />
+                  <span>Current Device</span>
+                </div>
+                <div className="text-xs font-mono font-bold text-slate-700 dark:text-slate-300 mt-1 truncate">
+                  {deviceId || 'dev-local'}
+                </div>
+              </div>
+
+              <div className={`p-2.5 rounded-lg border ${isDarkMode ? 'bg-[#0b101d] border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                <div className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1">
+                  <Clock className="w-3 h-3 text-slate-400" />
+                  <span>Last Cloud Sync</span>
+                </div>
+                <div className="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-1">
+                  {syncTimestamp ? formatLocalTimestamp(syncTimestamp, { includeSeconds: true }) : 'Connecting...'}
+                </div>
+              </div>
+            </div>
+
+            {lastUploadDeviceId && (
+              <div className="mt-2.5 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                <Smartphone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <span>
+                  Last upload performed on device <strong className="font-mono text-slate-700 dark:text-slate-300">{lastUploadDeviceId}</strong>
+                  {lastUploadedFile ? ` ("${lastUploadedFile}")` : ''}
+                </span>
+              </div>
+            )}
+          </div>
+
           {/* Plan Tier Limits Status Banner */}
           <div className={`p-3.5 rounded-xl border text-xs flex flex-wrap items-center justify-between gap-3 ${
             isDarkMode ? 'bg-[#131b2e] border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-700 shadow-sm'
@@ -2896,12 +3069,12 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
               </span>
               <span className="text-slate-300 dark:text-slate-700">&bull;</span>
               <span className="font-semibold">
-                Monthly Uploads: <span className={`font-bold ${plan === 'free' && (usage?.auditCount || 0) >= 5 ? 'text-rose-500' : 'text-blue-600 dark:text-blue-400'}`}>
-                  {plan === 'free' ? `${usage?.auditCount || 0} / 5 used` : 'Unlimited'}
+                Monthly Uploads Remaining: <span className={`font-bold ${plan === 'free' && !hasProAccess && uploadsRemaining <= 0 ? 'text-rose-500' : 'text-blue-600 dark:text-blue-400'}`}>
+                  {plan === 'free' && !hasProAccess ? `${uploadsRemaining} / 5 remaining` : 'Unlimited'}
                 </span>
               </span>
             </div>
-            {plan === 'free' && (
+            {plan === 'free' && !hasProAccess && (
               <button
                 onClick={() => triggerUnlockModal('5 Monthly Uploads Limit', 'pro')}
                 className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:text-blue-500 hover:underline cursor-pointer flex items-center gap-1 shrink-0"
@@ -2920,7 +3093,7 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
           </div>
 
           {/* Freemium Quota Exceeded Notice Card */}
-          {plan === 'free' && (usage?.auditCount || 0) >= 5 && (
+          {plan === 'free' && !hasProAccess && uploadsRemaining <= 0 && (
             <div className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
               isDarkMode ? 'bg-rose-950/30 border-rose-800/60 text-rose-200' : 'bg-rose-50 border-rose-200 text-rose-900 shadow-sm'
             }`}>
@@ -2929,9 +3102,9 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
                   <AlertCircle className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="font-bold text-xs">Monthly Upload Limit Reached ({usage?.auditCount || 5}/5 Used)</h4>
+                  <h4 className="font-bold text-xs">Monthly Upload Limit Reached (0/5 Remaining)</h4>
                   <p className="text-[11px] opacity-90 mt-0.5 leading-relaxed">
-                    You have reached the free tier limit of 5 uploads for this billing cycle. Upgrade to Pro for unlimited spreadsheet uploads, or wait for your free upload quota to reset on <strong>{resetInfo.nextResetDate}</strong> (in {resetInfo.daysRemaining} days).
+                    You have reached the free tier limit of 5 uploads across all synchronized devices. Upgrade to Pro for unlimited spreadsheet uploads, or use the "Reset Quota" button to test multi-device synchronization.
                   </p>
                 </div>
               </div>
@@ -2985,7 +3158,7 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
                 <div className="space-y-1.5">
                   <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-[#DC2626]/10 text-[#DC2626] dark:text-[#F87171] border border-[#DC2626]/20">
                     <Lock className="w-3 h-3" />
-                    <span>Upload Center Read-Only (5/5 Used)</span>
+                    <span>Upload Center Read-Only ({5 - Math.max(0, uploadsRemaining)}/5 Used &bull; {uploadsRemaining} Remaining)</span>
                   </div>
 
                   <h3 className="font-bold text-sm">Monthly Upload Quota Reached</h3>

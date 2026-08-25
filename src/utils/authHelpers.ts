@@ -8,6 +8,8 @@ export interface UserProfileDocument {
   displayName: string;
   name: string;
   email: string;
+  uploadsRemaining: number;
+  updatedAt: string;
   photoURL?: string;
   avatar?: string;
   createdAt: string;
@@ -16,11 +18,15 @@ export interface UserProfileDocument {
   provider: string;
   plan: string;
   role: 'Owner' | 'Admin' | 'Editor' | 'Viewer';
+  lastUploadedFile?: string;
+  lastUploadDeviceId?: string;
 }
 
 /**
  * Creates or updates the Firestore user profile document.
- * Guarantees lastLogin and emailVerified are refreshed on every auth event.
+ * Checks if user document exists in 'users' collection (keyed by user uid).
+ * If not, initializes with email, uploadsRemaining: 5, and updatedAt.
+ * Guarantees lastLogin, emailVerified, and updatedAt are refreshed on auth event.
  */
 export async function syncUserProfileToFirestore(
   user: User,
@@ -47,13 +53,15 @@ export async function syncUserProfileToFirestore(
     const assignedRole: 'Owner' | 'Admin' | 'Editor' | 'Viewer' = isOwnerEmail ? 'Owner' : (customData?.role || 'Editor');
 
     if (!existingSnap.exists()) {
-      // Create new profile document
+      // Create new profile document with default fields: email, uploadsRemaining: 5, updatedAt
       const newProfile: UserProfileDocument = {
         uid: user.uid,
         id: user.uid,
         displayName,
         name: displayName,
         email,
+        uploadsRemaining: 5, // Default freemium quota
+        updatedAt: nowIso,
         photoURL,
         avatar: photoURL,
         createdAt: nowIso,
@@ -66,12 +74,18 @@ export async function syncUserProfileToFirestore(
 
       await setDoc(userRef, newProfile);
     } else {
-      // Update existing document with latest lastLogin & emailVerified
+      // Update existing document while preserving uploadsRemaining (or setting to 5 if undefined)
       const existingData = existingSnap.data();
       const currentRole = isOwnerEmail ? 'Owner' : (existingData?.role || assignedRole);
+      const currentUploadsRemaining = typeof existingData?.uploadsRemaining === 'number' 
+        ? existingData.uploadsRemaining 
+        : 5;
 
       await updateDoc(userRef, {
         lastLogin: nowIso,
+        updatedAt: nowIso,
+        email: email || existingData?.email || '',
+        uploadsRemaining: currentUploadsRemaining,
         emailVerified: user.emailVerified,
         displayName: displayName || existingData?.displayName || 'User',
         name: displayName || existingData?.name || 'User',

@@ -17,6 +17,14 @@
           "type": "string",
           "description": "Email address of the user."
         },
+        "uploadsRemaining": {
+          "type": "number",
+          "description": "Remaining freemium CSV audit uploads for multi-device synchronization."
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp indicating last quota change or profile update."
+        },
         "role": {
           "type": "string",
           "enum": ["Owner", "Admin", "Editor", "Viewer"],
@@ -27,7 +35,7 @@
           "description": "Timestamp indicating registration date."
         }
       },
-      "required": ["id", "name", "email", "role"]
+      "required": ["id", "email"]
     },
     "CSVFile": {
       "title": "CSVFile",
