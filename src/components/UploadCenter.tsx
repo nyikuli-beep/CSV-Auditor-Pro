@@ -121,10 +121,10 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
 
   // Unlock Modal State for Plan Limits
   const [isUnlockModalOpen, setIsUnlockModalOpen] = useState(false);
-  const [unlockFeatureName, setUnlockFeatureName] = useState('5 Monthly Uploads Limit');
+  const [unlockFeatureName, setUnlockFeatureName] = useState('Upgrade Required: Monthly Upload Limit Reached');
   const [unlockFeatureTier, setUnlockFeatureTier] = useState<'pro' | 'enterprise'>('pro');
 
-  const triggerUnlockModal = (featureName: string, tier: 'pro' | 'enterprise' = 'pro') => {
+  const triggerUnlockModal = (featureName: string = 'Upgrade Required: Monthly Upload Limit Reached', tier: 'pro' | 'enterprise' = 'pro') => {
     setUnlockFeatureName(featureName);
     setUnlockFeatureTier(tier);
     setIsUnlockModalOpen(true);
@@ -298,9 +298,9 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     const currentUploadsCount = usage?.auditCount || 0;
     if (plan === 'free' && !hasProAccess) {
       if ((!quotaLoading && uploadsRemaining <= 0) || isQuotaExhausted || !checkAuditLimit() || currentUploadsCount >= 5) {
-        const msg = `Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${uploadsRemaining}/5 remaining). Multi-device real-time sync updated your balance. Upgrade to Pro for unlimited uploads.`;
+        const msg = `Monthly upload quota reached: Freemium users are restricted to 5 uploads per month (${uploadsRemaining}/5 remaining). Multi-device real-time sync updated your balance. Upgrade to Pro for unlimited uploads.`;
         setErrorMsg(msg);
-        triggerUnlockModal('5 Monthly Uploads Limit', 'pro');
+        triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro');
         return;
       }
     }
@@ -361,15 +361,15 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     const currentUploadsCount = usage?.auditCount || 0;
     if (plan === 'free' && !hasProAccess) {
       if ((!quotaLoading && uploadsRemaining <= 0) || isQuotaExhausted || !checkAuditLimit() || currentUploadsCount >= 5) {
-        const msg = `Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${uploadsRemaining}/5 remaining). Multi-device real-time sync updated your balance. Upgrade to Pro for unlimited uploads.`;
+        const msg = `Monthly upload quota reached: Freemium users are restricted to 5 uploads per month (${uploadsRemaining}/5 remaining). Multi-device real-time sync updated your balance. Upgrade to Pro for unlimited uploads.`;
         setErrorMsg(msg);
-        triggerUnlockModal('5 Monthly Uploads Limit', 'pro');
+        triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro');
         return;
       }
       if (filesList.length > uploadsRemaining) {
         const msg = `Uploading ${filesList.length} files would exceed your remaining quota of ${uploadsRemaining} uploads on Freemium. Please select fewer files or upgrade to Pro for unlimited uploads.`;
         setErrorMsg(msg);
-        triggerUnlockModal('5 Monthly Uploads Limit', 'pro');
+        triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro');
         return;
       }
     }
@@ -426,9 +426,9 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     const currentUploadsCount = usage?.auditCount || 0;
     if (plan === 'free' && !hasProAccess) {
       if ((!quotaLoading && uploadsRemaining <= 0) || isQuotaExhausted || !checkAuditLimit() || currentUploadsCount >= 5) {
-        const msg = `Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${uploadsRemaining}/5 remaining). Multi-device real-time sync updated your balance. Upgrade to Pro for unlimited uploads.`;
+        const msg = `Monthly upload quota reached: Freemium users are restricted to 5 uploads per month (${uploadsRemaining}/5 remaining). Multi-device real-time sync updated your balance. Upgrade to Pro for unlimited uploads.`;
         setErrorMsg(msg);
-        triggerUnlockModal('5 Monthly Uploads Limit', 'pro');
+        triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro');
         setFileToConfigure(null);
         setMultipleFilesToConfigure([]);
         setDelimiterPreviewLines([]);
@@ -1581,9 +1581,9 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     const currentUploadsCount = usage?.auditCount || 0;
     if (plan === 'free' && !hasProAccess) {
       if ((!quotaLoading && uploadsRemaining <= 0) || isQuotaExhausted || !checkAuditLimit() || currentUploadsCount >= 5) {
-        const msg = `Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${uploadsRemaining}/5 remaining). Multi-device real-time sync updated your balance. Upgrade to Pro for unlimited uploads.`;
+        const msg = `Monthly upload quota reached: Freemium users are restricted to 5 uploads per month (${uploadsRemaining}/5 remaining). Multi-device real-time sync updated your balance. Upgrade to Pro for unlimited uploads.`;
         setErrorMsg(msg);
-        triggerUnlockModal('5 Monthly Uploads Limit', 'pro');
+        triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro');
         return;
       }
     }
@@ -1694,7 +1694,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
                 setErrorMsg(quotaResult.error || 'Upload quota depleted across your connected devices.');
                 setUploadProgress(null);
                 setProcessingStageMessage('');
-                triggerUnlockModal('5 Monthly Uploads Limit', 'pro');
+                triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro');
                 return;
               }
             } catch (quotaErr) {
@@ -1830,9 +1830,9 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     const currentUploadsCount = usage?.auditCount || 0;
     if (plan === 'free' && !hasProAccess) {
       if ((!quotaLoading && uploadsRemaining <= 0) || isQuotaExhausted || !checkAuditLimit() || currentUploadsCount >= 5) {
-        const msg = `Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${uploadsRemaining}/5 remaining). Upgrade to Pro for unlimited uploads or wait until quota resets on ${resetInfo.nextResetDate}.`;
+        const msg = `Monthly upload quota reached: Freemium users are restricted to 5 uploads per month (${uploadsRemaining}/5 remaining). Upgrade to Pro for unlimited uploads or wait until quota resets on ${resetInfo.nextResetDate}.`;
         setErrorMsg(msg);
-        triggerUnlockModal('5 Monthly Uploads Limit', 'pro');
+        triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro');
         return;
       }
     }
@@ -2027,9 +2027,9 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     setDragActive(false);
 
     if (isFreemiumLimitReached) {
-      const msg = `Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${currentUploadsCount}/5 used). Upload center is in read-only mode until your quota resets on ${resetInfo.nextResetDate}, or upgrade to Pro for unlimited uploads.`;
+      const msg = `Monthly upload quota reached: Freemium users are restricted to 5 uploads per month (${currentUploadsCount}/5 used). Upload center is in read-only mode until your quota resets on ${resetInfo.nextResetDate}, or upgrade to Pro for unlimited uploads.`;
       setErrorMsg(msg);
-      triggerUnlockModal('5 Monthly Uploads Limit', 'pro');
+      triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro');
       return;
     }
 
@@ -2044,9 +2044,9 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
 
   const handleBrowse = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (isFreemiumLimitReached) {
-      const msg = `Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${currentUploadsCount}/5 used). Upload center is in read-only mode until your quota resets on ${resetInfo.nextResetDate}, or upgrade to Pro for unlimited uploads.`;
+      const msg = `Monthly upload quota reached: Freemium users are restricted to 5 uploads per month (${currentUploadsCount}/5 used). Upload center is in read-only mode until your quota resets on ${resetInfo.nextResetDate}, or upgrade to Pro for unlimited uploads.`;
       setErrorMsg(msg);
-      triggerUnlockModal('5 Monthly Uploads Limit', 'pro');
+      triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro');
       if (e.target) {
         e.target.value = '';
       }
@@ -3090,7 +3090,7 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
             </div>
             {plan === 'free' && !hasProAccess && (
               <button
-                onClick={() => triggerUnlockModal('5 Monthly Uploads Limit', 'pro')}
+                onClick={() => triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro')}
                 className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:text-blue-500 hover:underline cursor-pointer flex items-center gap-1 shrink-0"
               >
                 Upgrade to Pro (Unlimited Uploads) &rarr;
@@ -3123,7 +3123,7 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
                 </div>
               </div>
               <button
-                onClick={() => triggerUnlockModal('5 Monthly Uploads Limit', 'pro')}
+                onClick={() => triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro')}
                 className="px-4 py-2 rounded-lg text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-all shrink-0 cursor-pointer text-center"
               >
                 Upgrade to Pro ($49/mo)
@@ -3137,11 +3137,16 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
             onDragOver={handleDrag}
             onDragLeave={handleDrag}
             onDrop={handleDrop}
+            onClick={() => {
+              if (isFreemiumLimitReached) {
+                triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro');
+              }
+            }}
             className={`border-2 border-dashed rounded-xl p-8 text-center transition-all relative ${
               isFreemiumLimitReached
                 ? isDarkMode 
-                  ? 'border-[#334155] bg-[#0b101d] opacity-90 cursor-not-allowed select-none' 
-                  : 'border-[#CBD5E1] bg-[#F1F5F9] opacity-90 cursor-not-allowed select-none'
+                  ? 'border-[#334155] bg-[#0b101d] opacity-90 cursor-pointer select-none' 
+                  : 'border-[#CBD5E1] bg-[#F1F5F9] opacity-90 cursor-pointer select-none'
                 : dragActive 
                   ? 'border-[#2563EB] bg-[#2563EB]/5' 
                   : isDarkMode 
@@ -3185,18 +3190,17 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
                   <button 
                     id="browse-files-button-locked"
                     type="button"
-                    disabled
-                    aria-disabled="true"
-                    className="w-full sm:w-auto px-4 py-2 text-xs font-bold text-slate-400 dark:text-slate-500 bg-slate-800/60 dark:bg-slate-900 border border-slate-700/50 rounded-lg cursor-not-allowed flex items-center justify-center gap-1.5 shadow-none"
+                    onClick={() => triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro')}
+                    className="w-full sm:w-auto px-4 py-2 text-xs font-bold text-slate-300 dark:text-slate-400 bg-slate-800/60 dark:bg-slate-900 border border-slate-700/50 rounded-lg hover:border-slate-600 flex items-center justify-center gap-1.5 shadow-none cursor-pointer"
                   >
-                    <Lock className="w-3.5 h-3.5 text-slate-500" />
+                    <Lock className="w-3.5 h-3.5 text-slate-400" />
                     <span>Browse local files (Locked)</span>
                   </button>
 
                   <button
                     id="unlock-quota-action-button"
                     type="button"
-                    onClick={() => triggerUnlockModal('5 Monthly Uploads Limit', 'pro')}
+                    onClick={() => triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro')}
                     className="w-full sm:w-auto px-4 py-2 text-xs font-bold text-white rounded-lg bg-[#2563EB] hover:bg-[#1D4ED8] shadow-sm hover:scale-[1.01] transition-all cursor-pointer flex items-center justify-center gap-1.5"
                   >
                     <Zap className="w-3.5 h-3.5" />

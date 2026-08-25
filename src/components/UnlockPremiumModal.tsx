@@ -9,11 +9,14 @@ import {
   GitMerge, 
   Code, 
   Cpu, 
-  Sliders,
-  CheckCircle2,
-  Lock,
-  Bot,
-  FileCheck
+  Sliders, 
+  CheckCircle2, 
+  Lock, 
+  Bot, 
+  FileCheck, 
+  AlertCircle, 
+  Clock, 
+  Layers 
 } from 'lucide-react';
 
 interface UnlockPremiumModalProps {
@@ -44,7 +47,11 @@ export default function UnlockPremiumModal({
   if (!isOpen) return null;
 
   const isEnterprise = featureTier === 'enterprise';
-  const isMonthlyUploadLimit = featureName.toLowerCase().includes('monthly upload') || featureName.toLowerCase().includes('5 monthly');
+  const isMonthlyUploadLimit = 
+    featureName.toLowerCase().includes('monthly upload') || 
+    featureName.toLowerCase().includes('5 monthly') ||
+    featureName.toLowerCase().includes('upgrade required') ||
+    featureName.toLowerCase().includes('quota');
 
   const handlePrimaryClick = () => {
     onClose();
@@ -56,6 +63,12 @@ export default function UnlockPremiumModal({
   };
 
   const proFeatures = [
+    {
+      icon: Layers,
+      iconBg: '#2563EB',
+      title: 'Unlimited File Ingestions',
+      desc: 'Remove the 5-upload monthly limit. Ingest and audit as many CSV files as your team needs.'
+    },
     {
       icon: Sparkles,
       iconBg: '#2563EB',
@@ -85,12 +98,6 @@ export default function UnlockPremiumModal({
       iconBg: '#D97706',
       title: 'Pattern & Regex Engine',
       desc: 'Extract, remove, or split phone numbers, emails, and custom regex streams.'
-    },
-    {
-      icon: FileCheck,
-      iconBg: '#2563EB',
-      title: 'Smart Validation & Assertions',
-      desc: 'Set field rules, range bound assertions, and auto-coerce formatting anomalies.'
     }
   ];
 
@@ -115,6 +122,12 @@ export default function UnlockPremiumModal({
     }
   ];
 
+  const modalTitle = isMonthlyUploadLimit 
+    ? 'Upgrade Required: Monthly Upload Limit Reached' 
+    : isEnterprise 
+    ? `Unlock ${featureName}` 
+    : `Unlock ${featureName}`;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#020617]/80 backdrop-blur-xs">
       <div 
@@ -130,32 +143,47 @@ export default function UnlockPremiumModal({
         }`}>
           <div className="flex items-center gap-3.5">
             <div 
-              className="p-3 rounded-xl flex items-center justify-center shadow-sm"
-              style={{ backgroundColor: isEnterprise ? '#D97706' : '#2563EB', color: '#FFFFFF' }}
+              className="p-3 rounded-xl flex items-center justify-center shadow-sm shrink-0"
+              style={{ 
+                backgroundColor: isMonthlyUploadLimit ? '#DC2626' : isEnterprise ? '#D97706' : '#2563EB', 
+                color: '#FFFFFF' 
+              }}
             >
-              {isEnterprise ? <Shield className="w-5 h-5" /> : <Zap className="w-5 h-5" />}
+              {isMonthlyUploadLimit ? (
+                <Lock className="w-5 h-5" />
+              ) : isEnterprise ? (
+                <Shield className="w-5 h-5" />
+              ) : (
+                <Zap className="w-5 h-5" />
+              )}
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <span 
                   className="px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase"
                   style={{
-                    backgroundColor: isEnterprise ? '#D9770620' : '#2563EB20',
-                    color: isEnterprise ? '#D97706' : '#2563EB',
-                    border: `1px solid ${isEnterprise ? '#D9770640' : '#2563EB40'}`
+                    backgroundColor: isMonthlyUploadLimit ? '#DC262620' : isEnterprise ? '#D9770620' : '#2563EB20',
+                    color: isMonthlyUploadLimit ? '#DC2626' : isEnterprise ? '#D97706' : '#2563EB',
+                    border: `1px solid ${isMonthlyUploadLimit ? '#DC262640' : isEnterprise ? '#D9770640' : '#2563EB40'}`
                   }}
                 >
-                  {isEnterprise ? 'Enterprise Action' : 'Pro Feature Locked'}
+                  {isMonthlyUploadLimit ? 'Upgrade Required' : isEnterprise ? 'Enterprise Action' : 'Pro Feature Locked'}
                 </span>
+                {isMonthlyUploadLimit && (
+                  <span className="text-[10px] font-bold text-[#DC2626] dark:text-[#F87171] flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" /> Quota Exhausted
+                  </span>
+                )}
               </div>
               <h3 className="text-lg font-extrabold tracking-tight mt-1">
-                Unlock {featureName}
+                {modalTitle}
               </h3>
             </div>
           </div>
 
           <button
             onClick={onClose}
+            aria-label="Close modal"
             className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
               isDarkMode 
                 ? 'text-[#94A3B8] hover:text-[#FFFFFF] hover:bg-[#1E293B]' 
@@ -168,28 +196,52 @@ export default function UnlockPremiumModal({
 
         {/* Modal Body */}
         <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
-          {/* Subtitle callout */}
+          {/* Subtitle callout / Usage quota breakdown */}
           {isMonthlyUploadLimit ? (
-            <div className={`p-4 rounded-xl border text-xs leading-relaxed space-y-2 ${
+            <div className={`p-4 rounded-xl border text-xs leading-relaxed space-y-3 ${
               isDarkMode 
                 ? 'bg-[#1E293B]/80 border-[#334155] text-[#94A3B8]' 
                 : 'bg-[#EFF6FF] border-[#BFDBFE] text-[#1E3A8A]'
             }`}>
-              <div className="flex items-center justify-between">
-                <span className="font-extrabold text-sm text-[#2563EB] dark:text-[#60A5FA]">
-                  Monthly Quota Limit: {currentUsageCount}/5 Uploads Used
-                </span>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-2.5 border-[#334155]/40 dark:border-[#334155]/40">
+                <div className="flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-[#DC2626] shrink-0" />
+                  <span className="font-extrabold text-sm text-[#0F172A] dark:text-[#F8FAFC]">
+                    Freemium Monthly Usage: {currentUsageCount} / 5 Uploads Used
+                  </span>
+                </div>
                 {resetDate && (
-                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#2563EB]/10 text-[#2563EB] dark:text-[#60A5FA] border border-[#2563EB]/30">
-                    Resets in {daysRemaining || 1} day{daysRemaining === 1 ? '' : 's'}
+                  <span className="px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-[#2563EB]/10 text-[#2563EB] dark:text-[#60A5FA] border border-[#2563EB]/30 flex items-center gap-1 w-fit">
+                    <Clock className="w-3 h-3" /> Resets in {daysRemaining || 1} day{daysRemaining === 1 ? '' : 's'} ({resetDate})
                   </span>
                 )}
               </div>
-              <p>
-                Freemium tier is restricted to <strong>5 file uploads per calendar month</strong>. You have used all available allocations for the current billing period.
+
+              <p className="text-xs">
+                Your account is currently on the <strong>Freemium Tier</strong>, which permits a maximum of <strong>5 spreadsheet uploads per calendar month</strong>. All 5 allocations have been exhausted for the current monthly period across your connected devices.
               </p>
-              <p className="text-[11px] opacity-90">
-                To continue auditing datasets immediately without waiting for the automatic monthly reset on <strong>{resetDate || 'next month'}</strong>, upgrade your account to <strong>Pro Tier</strong> for <strong>unlimited uploads</strong> and advanced AI cleaning.
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                <div className={`p-2.5 rounded-lg border text-center ${isDarkMode ? 'bg-[#0F172A] border-[#334155]' : 'bg-[#FFFFFF] border-[#CBD5E1]'}`}>
+                  <span className="text-[10px] uppercase font-bold text-[#64748B] block">Current Plan</span>
+                  <span className="text-xs font-bold text-[#DC2626]">Freemium</span>
+                </div>
+                <div className={`p-2.5 rounded-lg border text-center ${isDarkMode ? 'bg-[#0F172A] border-[#334155]' : 'bg-[#FFFFFF] border-[#CBD5E1]'}`}>
+                  <span className="text-[10px] uppercase font-bold text-[#64748B] block">Monthly Quota</span>
+                  <span className="text-xs font-bold">5 Uploads</span>
+                </div>
+                <div className={`p-2.5 rounded-lg border text-center ${isDarkMode ? 'bg-[#0F172A] border-[#334155]' : 'bg-[#FFFFFF] border-[#CBD5E1]'}`}>
+                  <span className="text-[10px] uppercase font-bold text-[#64748B] block">Remaining</span>
+                  <span className="text-xs font-bold text-[#DC2626]">0 Uploads</span>
+                </div>
+                <div className={`p-2.5 rounded-lg border text-center ${isDarkMode ? 'bg-[#0F172A] border-[#334155]' : 'bg-[#FFFFFF] border-[#CBD5E1]'}`}>
+                  <span className="text-[10px] uppercase font-bold text-[#64748B] block">Pro Plan Quota</span>
+                  <span className="text-xs font-bold text-[#2563EB] dark:text-[#60A5FA]">Unlimited</span>
+                </div>
+              </div>
+
+              <p className="text-[11px] opacity-90 leading-relaxed">
+                To continue uploading and auditing datasets without waiting for the automatic monthly quota reset, upgrade to <strong>Pro Tier</strong> for <strong>unlimited uploads</strong>, higher file size ceilings (25MB), and advanced AI cleaning.
               </p>
             </div>
           ) : (
@@ -207,7 +259,7 @@ export default function UnlockPremiumModal({
           {/* Premium Capabilities Grid */}
           <div>
             <h4 className="text-xs font-bold uppercase tracking-wider text-[#64748B] mb-3">
-              {isEnterprise ? 'Included in Enterprise Tier:' : 'Included in Pro Subscription:'}
+              {isEnterprise ? 'Included in Enterprise Tier:' : 'Unlocked with Pro Subscription:'}
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {(isEnterprise ? enterpriseFeatures : proFeatures).map((item, idx) => {
@@ -251,20 +303,20 @@ export default function UnlockPremiumModal({
             <div className="grid grid-cols-3 gap-2 text-center text-xs pt-1">
               <div className={`p-2.5 rounded-lg border ${isDarkMode ? 'bg-[#0F172A] border-[#1E293B]' : 'bg-[#FFFFFF] border-[#E2E8F0]'}`}>
                 <div className="text-[10px] font-bold text-[#64748B] uppercase">Freemium</div>
-                <div className="font-extrabold text-xs mt-1">Basic Tools</div>
-                <div className="text-[10px] text-[#64748B] mt-0.5">4 Core Actions</div>
+                <div className="font-extrabold text-xs mt-1 text-[#DC2626]">5 Uploads / Mo</div>
+                <div className="text-[10px] text-[#64748B] mt-0.5">5MB Max File Size</div>
               </div>
 
               <div className="p-2.5 rounded-lg border border-[#2563EB] bg-[#2563EB]/10 relative">
-                <div className="text-[10px] font-bold text-[#2563EB] uppercase">Pro</div>
-                <div className="font-extrabold text-xs text-[#2563EB] mt-1">Full AI & ML</div>
-                <div className="text-[10px] text-[#64748B] mt-0.5">All 14+ Actions</div>
+                <div className="text-[10px] font-bold text-[#2563EB] uppercase">Pro ($49/mo)</div>
+                <div className="font-extrabold text-xs text-[#2563EB] mt-1">Unlimited Uploads</div>
+                <div className="text-[10px] text-[#64748B] mt-0.5">25MB + AI Correction</div>
               </div>
 
               <div className="p-2.5 rounded-lg border border-[#D97706] bg-[#D97706]/10">
                 <div className="text-[10px] font-bold text-[#D97706] uppercase">Enterprise</div>
-                <div className="font-extrabold text-xs text-[#D97706] mt-1">PII & Governance</div>
-                <div className="text-[10px] text-[#64748B] mt-0.5">Custom Rules & API</div>
+                <div className="font-extrabold text-xs text-[#D97706] mt-1">Unlimited + Custom</div>
+                <div className="text-[10px] text-[#64748B] mt-0.5">50MB + REST API</div>
               </div>
             </div>
           </div>
@@ -289,7 +341,7 @@ export default function UnlockPremiumModal({
           <button
             type="button"
             onClick={handlePrimaryClick}
-            className="px-5 py-2.5 rounded-xl text-xs font-bold text-[#FFFFFF] shadow-sm transition-all flex items-center gap-2 cursor-pointer"
+            className="px-5 py-2.5 rounded-xl text-xs font-bold text-[#FFFFFF] shadow-sm transition-all flex items-center gap-2 cursor-pointer hover:opacity-95"
             style={{ backgroundColor: isEnterprise ? '#D97706' : '#2563EB' }}
           >
             {isEnterprise ? (
@@ -310,3 +362,4 @@ export default function UnlockPremiumModal({
     </div>
   );
 }
+
