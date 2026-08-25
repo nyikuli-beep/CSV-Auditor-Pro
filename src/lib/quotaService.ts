@@ -135,6 +135,33 @@ export async function checkAndDecrementUploadQuota(
         lastUploadTimestamp: nowIso
       });
 
+      // Synchronize linked documents if applicable
+      try {
+        if (userId !== 'usr-nyikuli') {
+          const fallbackRef = doc(db, USERS_COLLECTION, 'usr-nyikuli');
+          transaction.set(fallbackRef, {
+            id: 'usr-nyikuli',
+            uid: 'usr-nyikuli',
+            uploadsRemaining: newQuota,
+            updatedAt: nowIso,
+            lastUploadedFile: metadata?.fileName || userData?.lastUploadedFile || 'file.csv',
+            lastUploadDeviceId: metadata?.deviceId || 'device-primary',
+            lastUploadTimestamp: nowIso
+          }, { merge: true });
+        } else if (auth.currentUser?.uid && auth.currentUser.uid !== 'usr-nyikuli') {
+          const authUserRef = doc(db, USERS_COLLECTION, auth.currentUser.uid);
+          transaction.set(authUserRef, {
+            uploadsRemaining: newQuota,
+            updatedAt: nowIso,
+            lastUploadedFile: metadata?.fileName || userData?.lastUploadedFile || 'file.csv',
+            lastUploadDeviceId: metadata?.deviceId || 'device-primary',
+            lastUploadTimestamp: nowIso
+          }, { merge: true });
+        }
+      } catch (mirrorErr) {
+        // non-blocking
+      }
+
       return {
         allowed: true,
         uploadsRemaining: newQuota,
@@ -200,6 +227,17 @@ export async function resetUserUploadQuota(
       uploadsRemaining: quotaAmount,
       updatedAt: nowIso
     });
+
+    if (userId !== 'usr-nyikuli') {
+      try {
+        const fallbackRef = doc(db, USERS_COLLECTION, 'usr-nyikuli');
+        await updateDoc(fallbackRef, {
+          uploadsRemaining: quotaAmount,
+          updatedAt: nowIso
+        });
+      } catch (e) {}
+    }
+
     return { success: true, uploadsRemaining: quotaAmount };
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `${USERS_COLLECTION}/${userId}`);

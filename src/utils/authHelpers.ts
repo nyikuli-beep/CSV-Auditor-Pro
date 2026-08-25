@@ -53,14 +53,26 @@ export async function syncUserProfileToFirestore(
     const assignedRole: 'Owner' | 'Admin' | 'Editor' | 'Viewer' = isOwnerEmail ? 'Owner' : (customData?.role || 'Editor');
 
     if (!existingSnap.exists()) {
-      // Create new profile document with default fields: email, uploadsRemaining: 5, updatedAt
+      // Check if there is an existing fallback quota to preserve cross-device testing state
+      let initialUploadsRemaining = 5;
+      try {
+        const fallbackRef = doc(db, 'users', 'usr-nyikuli');
+        const fallbackSnap = await getDoc(fallbackRef);
+        if (fallbackSnap.exists() && typeof fallbackSnap.data()?.uploadsRemaining === 'number') {
+          initialUploadsRemaining = fallbackSnap.data().uploadsRemaining;
+        }
+      } catch (e) {
+        // use default 5
+      }
+
+      // Create new profile document with default fields: email, uploadsRemaining, updatedAt
       const newProfile: UserProfileDocument = {
         uid: user.uid,
         id: user.uid,
         displayName,
         name: displayName,
         email,
-        uploadsRemaining: 5, // Default freemium quota
+        uploadsRemaining: initialUploadsRemaining,
         updatedAt: nowIso,
         photoURL,
         avatar: photoURL,

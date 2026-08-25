@@ -90,12 +90,36 @@ export function useUserQuota(): UserQuotaState {
           setLastUploadTimestamp(data?.lastUploadTimestamp || null);
           setSyncTimestamp(Date.now());
           setError(null);
+          setLoading(false);
         } else {
-          // Document does not exist yet; default to 5
-          setUploadsRemaining(DEFAULT_QUOTA);
-          setUpdatedAt(null);
+          // If primary user document does not exist yet, check fallback document
+          if (activeUserId !== 'usr-nyikuli') {
+            const fallbackRef = doc(db, 'users', 'usr-nyikuli');
+            onSnapshot(fallbackRef, (fallbackSnap) => {
+              if (fallbackSnap.exists()) {
+                const fbData = fallbackSnap.data();
+                const quota = typeof fbData?.uploadsRemaining === 'number' ? fbData.uploadsRemaining : DEFAULT_QUOTA;
+                setUploadsRemaining(quota);
+                setUpdatedAt(fbData?.updatedAt || null);
+                setLastUploadedFile(fbData?.lastUploadedFile || null);
+                setLastUploadDeviceId(fbData?.lastUploadDeviceId || null);
+                setLastUploadTimestamp(fbData?.lastUploadTimestamp || null);
+                setSyncTimestamp(Date.now());
+              } else {
+                setUploadsRemaining(DEFAULT_QUOTA);
+                setUpdatedAt(null);
+              }
+              setLoading(false);
+            }, () => {
+              setUploadsRemaining(DEFAULT_QUOTA);
+              setLoading(false);
+            });
+          } else {
+            setUploadsRemaining(DEFAULT_QUOTA);
+            setUpdatedAt(null);
+            setLoading(false);
+          }
         }
-        setLoading(false);
       },
       (err) => {
         console.warn('[useUserQuota] onSnapshot listener notice:', err);

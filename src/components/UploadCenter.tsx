@@ -96,8 +96,9 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
   
   // Calculate if freemium upload limit is reached (5 uploads per month for free plan)
   const currentUploadsCount = usage?.auditCount || 0;
-  const isFreemiumLimitReached = !hasProAccess && plan === 'free' && (
-    (!quotaLoading && uploadsRemaining <= 0) ||
+  const isFreePlan = !hasProAccess || plan?.toLowerCase() === 'free' || plan === 'free';
+  const isFreemiumLimitReached = isFreePlan && (
+    uploadsRemaining <= 0 ||
     isQuotaExhausted ||
     !checkAuditLimit() ||
     currentUploadsCount >= 5

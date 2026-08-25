@@ -43,6 +43,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       clearTenancyState();
       if (currentUser) {
         setUser(currentUser);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('user_profile_uid', currentUser.uid);
+          if (currentUser.email) {
+            localStorage.setItem('user_profile_email', currentUser.email);
+          }
+        }
         setLoading(false);
         // Non-blocking background sync
         syncUserProfileToFirestore(currentUser).catch((e) => {
@@ -50,9 +56,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         });
       } else {
         setUser(null);
-        localStorage.removeItem('user_profile_uid');
-        localStorage.removeItem('user_profile_avatar');
-        localStorage.removeItem('user_profile_name');
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('user_profile_uid');
+          localStorage.removeItem('user_profile_email');
+          localStorage.removeItem('user_profile_avatar');
+          localStorage.removeItem('user_profile_name');
+        }
         sessionStorage.removeItem('auth_session_active');
         sessionStorage.removeItem('auth_last_verified');
         setLoading(false);

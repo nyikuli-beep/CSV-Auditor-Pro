@@ -117,6 +117,26 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
               };
             });
           }
+        } else if (activeUserId !== 'usr-nyikuli') {
+          // Check fallback
+          const fallbackRef = doc(db, 'users', 'usr-nyikuli');
+          onSnapshot(fallbackRef, (fallbackSnap) => {
+            if (fallbackSnap.exists()) {
+              const fbData = fallbackSnap.data();
+              if (typeof fbData?.uploadsRemaining === 'number') {
+                const quota = fbData.uploadsRemaining;
+                setCloudQuotaRemaining(quota);
+                const cloudUsed = Math.max(0, 5 - quota);
+                setUsage(prev => {
+                  const current = prev || getUserUsage(userEmail, billing?.plan || 'free');
+                  return {
+                    ...current,
+                    auditCount: Math.max(current.auditCount, cloudUsed)
+                  };
+                });
+              }
+            }
+          });
         }
       }, (err) => {
         console.warn('BillingContext firestore quota listener notice:', err);
