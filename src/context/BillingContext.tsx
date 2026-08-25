@@ -100,6 +100,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Sync real-time Firestore user quota into Billing state
   useEffect(() => {
     if (!activeUserId) return;
+    let fallbackUnsubscribe: (() => void) | null = null;
     try {
       const userRef = doc(db, 'users', activeUserId);
       const unsubscribe = onSnapshot(userRef, (snap) => {
@@ -107,31 +108,40 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           const data = snap.data();
           if (typeof data?.uploadsRemaining === 'number') {
             const quota = data.uploadsRemaining;
+            const authoritativeUsed = typeof data?.monthlyUploadsUsed === 'number' 
+              ? data.monthlyUploadsUsed 
+              : Math.max(0, 5 - quota);
+            
             setCloudQuotaRemaining(quota);
-            const cloudUsed = Math.max(0, 5 - quota);
             setUsage(prev => {
               const current = prev || getUserUsage(userEmail, billing?.plan || 'free');
               return {
                 ...current,
-                auditCount: Math.max(current.auditCount, cloudUsed)
+                auditCount: (billing?.plan || 'free') === 'free' ? authoritativeUsed : current.auditCount,
+                maxAudits: (billing?.plan || 'free') === 'free' ? 5 : 'unlimited'
               };
             });
           }
         } else if (activeUserId !== 'usr-nyikuli') {
           // Check fallback
           const fallbackRef = doc(db, 'users', 'usr-nyikuli');
-          onSnapshot(fallbackRef, (fallbackSnap) => {
+          if (fallbackUnsubscribe) fallbackUnsubscribe();
+          fallbackUnsubscribe = onSnapshot(fallbackRef, (fallbackSnap) => {
             if (fallbackSnap.exists()) {
               const fbData = fallbackSnap.data();
               if (typeof fbData?.uploadsRemaining === 'number') {
                 const quota = fbData.uploadsRemaining;
+                const authoritativeUsed = typeof fbData?.monthlyUploadsUsed === 'number' 
+                  ? fbData.monthlyUploadsUsed 
+                  : Math.max(0, 5 - quota);
+                
                 setCloudQuotaRemaining(quota);
-                const cloudUsed = Math.max(0, 5 - quota);
                 setUsage(prev => {
                   const current = prev || getUserUsage(userEmail, billing?.plan || 'free');
                   return {
                     ...current,
-                    auditCount: Math.max(current.auditCount, cloudUsed)
+                    auditCount: (billing?.plan || 'free') === 'free' ? authoritativeUsed : current.auditCount,
+                    maxAudits: (billing?.plan || 'free') === 'free' ? 5 : 'unlimited'
                   };
                 });
               }
@@ -141,7 +151,10 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }, (err) => {
         console.warn('BillingContext firestore quota listener notice:', err);
       });
-      return () => unsubscribe();
+      return () => {
+        unsubscribe();
+        if (fallbackUnsubscribe) fallbackUnsubscribe();
+      };
     } catch (e) {
       console.warn('BillingContext firestore subscription error:', e);
     }

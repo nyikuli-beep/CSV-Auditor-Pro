@@ -1039,6 +1039,22 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                 localStorage.setItem('user_profile_name', updatedName);
               }
             } else {
+              let initialUploadsRemaining = 5;
+              let initialMonthlyUploadsUsed = 0;
+              try {
+                const fallbackRef = doc(db, 'users', 'usr-nyikuli');
+                const fallbackSnap = await getDoc(fallbackRef);
+                if (fallbackSnap.exists()) {
+                  const fbData = fallbackSnap.data();
+                  if (typeof fbData?.uploadsRemaining === 'number') {
+                    initialUploadsRemaining = fbData.uploadsRemaining;
+                  }
+                  if (typeof fbData?.monthlyUploadsUsed === 'number') {
+                    initialMonthlyUploadsUsed = fbData.monthlyUploadsUsed;
+                  }
+                }
+              } catch (e) {}
+
               const newProfile = {
                 id: fUser.uid,
                 uid: fUser.uid,
@@ -1046,7 +1062,11 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                 email: fUser.email || `${fUser.uid}@demo.com`,
                 role: initialRole,
                 avatar: initialAvatar,
-                createdAt: new Date().toISOString()
+                uploadsRemaining: initialUploadsRemaining,
+                monthlyUploadsUsed: initialMonthlyUploadsUsed,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                plan: isOwnerEmail ? 'Enterprise' : 'Free'
               };
               await setDoc(userRef, newProfile);
             }
@@ -1170,35 +1190,25 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
         filesList.push(docSnap.data() as CSVFile);
       });
 
-      setFiles(prev => {
-        const map = new Map<string, CSVFile>();
-        // Add existing local files first
-        prev.forEach(f => {
-          if (f && f.id) map.set(f.id, f);
-        });
-        // Add / override with Firestore files
-        filesList.forEach(f => {
-          if (f && f.id) map.set(f.id, f);
-        });
-
-        const combined = Array.from(map.values());
-        combined.sort((a, b) => {
-          let timeA = 0;
-          let timeB = 0;
-          if (a.uploadedAt) {
-            const parsed = Date.parse(a.uploadedAt);
-            if (!isNaN(parsed)) timeA = parsed;
-          }
-          if (b.uploadedAt) {
-            const parsed = Date.parse(b.uploadedAt);
-            if (!isNaN(parsed)) timeB = parsed;
-          }
-          return timeB - timeA;
-        });
-
-        saveFilesToStorage(combined);
-        return combined;
+      // Sort by uploadedAt descending
+      filesList.sort((a, b) => {
+        let timeA = 0;
+        let timeB = 0;
+        if (a.uploadedAt) {
+          const parsed = Date.parse(a.uploadedAt);
+          if (!isNaN(parsed)) timeA = parsed;
+        }
+        if (b.uploadedAt) {
+          const parsed = Date.parse(b.uploadedAt);
+          if (!isNaN(parsed)) timeB = parsed;
+        }
+        return timeB - timeA;
       });
+
+      // Firestore is the authoritative source of truth for cloud files
+      setFiles(filesList);
+      saveFilesToStorage(filesList);
+      console.log(`[SYNC] source=onSnapshot-files count=${filesList.length}`);
     }, (err) => {
       handleFirestoreError(err, OperationType.LIST, 'files');
     });

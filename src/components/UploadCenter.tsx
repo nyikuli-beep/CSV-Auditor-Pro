@@ -83,6 +83,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
 
   const {
     uploadsRemaining,
+    monthlyUploadsUsed,
     updatedAt: quotaUpdatedAt,
     isExhausted: isQuotaExhausted,
     loading: quotaLoading,
@@ -95,13 +96,12 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
   } = useUserQuota();
   
   // Calculate if freemium upload limit is reached (5 uploads per month for free plan)
-  const currentUploadsCount = usage?.auditCount || 0;
   const isFreePlan = !hasProAccess || plan?.toLowerCase() === 'free' || plan === 'free';
+  const effectiveUsed = typeof monthlyUploadsUsed === 'number' ? monthlyUploadsUsed : Math.max(0, 5 - uploadsRemaining);
   const isFreemiumLimitReached = isFreePlan && (
     uploadsRemaining <= 0 ||
     isQuotaExhausted ||
-    !checkAuditLimit() ||
-    currentUploadsCount >= 5
+    effectiveUsed >= 5
   );
 
   const [isResettingQuota, setIsResettingQuota] = useState(false);
@@ -2028,7 +2028,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     setDragActive(false);
 
     if (isFreemiumLimitReached) {
-      const msg = `Monthly upload quota reached: Freemium users are restricted to 5 uploads per month (${currentUploadsCount}/5 used). Upload center is in read-only mode until your quota resets on ${resetInfo.nextResetDate}, or upgrade to Pro for unlimited uploads.`;
+      const msg = `Monthly upload quota reached: Freemium users are restricted to 5 uploads per month (${effectiveUsed}/5 used). Upload center is in read-only mode until your quota resets on ${resetInfo.nextResetDate}, or upgrade to Pro for unlimited uploads.`;
       setErrorMsg(msg);
       triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro');
       return;
@@ -2045,7 +2045,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
 
   const handleBrowse = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (isFreemiumLimitReached) {
-      const msg = `Monthly upload quota reached: Freemium users are restricted to 5 uploads per month (${currentUploadsCount}/5 used). Upload center is in read-only mode until your quota resets on ${resetInfo.nextResetDate}, or upgrade to Pro for unlimited uploads.`;
+      const msg = `Monthly upload quota reached: Freemium users are restricted to 5 uploads per month (${effectiveUsed}/5 used). Upload center is in read-only mode until your quota resets on ${resetInfo.nextResetDate}, or upgrade to Pro for unlimited uploads.`;
       setErrorMsg(msg);
       triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro');
       if (e.target) {

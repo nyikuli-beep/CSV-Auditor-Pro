@@ -55,24 +55,32 @@ export async function syncUserProfileToFirestore(
     if (!existingSnap.exists()) {
       // Check if there is an existing fallback quota to preserve cross-device testing state
       let initialUploadsRemaining = 5;
+      let initialMonthlyUploadsUsed = 0;
       try {
         const fallbackRef = doc(db, 'users', 'usr-nyikuli');
         const fallbackSnap = await getDoc(fallbackRef);
-        if (fallbackSnap.exists() && typeof fallbackSnap.data()?.uploadsRemaining === 'number') {
-          initialUploadsRemaining = fallbackSnap.data().uploadsRemaining;
+        if (fallbackSnap.exists()) {
+          const fbData = fallbackSnap.data();
+          if (typeof fbData?.uploadsRemaining === 'number') {
+            initialUploadsRemaining = fbData.uploadsRemaining;
+          }
+          if (typeof fbData?.monthlyUploadsUsed === 'number') {
+            initialMonthlyUploadsUsed = fbData.monthlyUploadsUsed;
+          }
         }
       } catch (e) {
         // use default 5
       }
 
-      // Create new profile document with default fields: email, uploadsRemaining, updatedAt
-      const newProfile: UserProfileDocument = {
+      // Create new profile document with default fields
+      const newProfile: any = {
         uid: user.uid,
         id: user.uid,
         displayName,
         name: displayName,
         email,
         uploadsRemaining: initialUploadsRemaining,
+        monthlyUploadsUsed: initialMonthlyUploadsUsed,
         updatedAt: nowIso,
         photoURL,
         avatar: photoURL,
@@ -86,18 +94,14 @@ export async function syncUserProfileToFirestore(
 
       await setDoc(userRef, newProfile);
     } else {
-      // Update existing document while preserving uploadsRemaining (or setting to 5 if undefined)
+      // Update existing document metadata while NEVER overwriting uploadsRemaining or monthlyUploadsUsed
       const existingData = existingSnap.data();
       const currentRole = isOwnerEmail ? 'Owner' : (existingData?.role || assignedRole);
-      const currentUploadsRemaining = typeof existingData?.uploadsRemaining === 'number' 
-        ? existingData.uploadsRemaining 
-        : 5;
 
       await updateDoc(userRef, {
         lastLogin: nowIso,
         updatedAt: nowIso,
         email: email || existingData?.email || '',
-        uploadsRemaining: currentUploadsRemaining,
         emailVerified: user.emailVerified,
         displayName: displayName || existingData?.displayName || 'User',
         name: displayName || existingData?.name || 'User',

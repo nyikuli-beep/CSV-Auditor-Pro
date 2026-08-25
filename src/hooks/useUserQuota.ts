@@ -6,6 +6,7 @@ import { checkAndDecrementUploadQuota, resetUserUploadQuota, QuotaCheckResult, U
 
 export interface UserQuotaState {
   uploadsRemaining: number;
+  monthlyUploadsUsed: number;
   updatedAt: string | null;
   email: string | null;
   role: string | null;
@@ -19,7 +20,7 @@ export interface UserQuotaState {
   lastUploadTimestamp: string | null;
   deviceId: string;
   consumeUpload: (metadata?: UploadMetadata) => Promise<QuotaCheckResult>;
-  resetQuota: (amount?: number) => Promise<{ success: boolean; uploadsRemaining: number }>;
+  resetQuota: (amount?: number) => Promise<{ success: boolean; uploadsRemaining: number; monthlyUploadsUsed: number }>;
 }
 
 const DEFAULT_QUOTA = 5;
@@ -44,6 +45,7 @@ function getClientDeviceId(): string {
 export function useUserQuota(): UserQuotaState {
   const { user } = useAuth();
   const [uploadsRemaining, setUploadsRemaining] = useState<number>(DEFAULT_QUOTA);
+  const [monthlyUploadsUsed, setMonthlyUploadsUsed] = useState<number>(0);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(user?.email || null);
   const [role, setRole] = useState<string | null>(null);
@@ -63,6 +65,7 @@ export function useUserQuota(): UserQuotaState {
     if (!activeUserId) {
       setLoading(false);
       setUploadsRemaining(DEFAULT_QUOTA);
+      setMonthlyUploadsUsed(0);
       return;
     }
 
@@ -71,6 +74,7 @@ export function useUserQuota(): UserQuotaState {
 
     const userDocRef = doc(db, 'users', activeUserId);
     const docPath = `users/${activeUserId}`;
+    let fallbackUnsubscribe: (() => void) | null = null;
 
     // Attach real-time snapshot listener on Firestore
     const unsubscribe = onSnapshot(
@@ -79,8 +83,10 @@ export function useUserQuota(): UserQuotaState {
         if (snapshot.exists()) {
           const data = snapshot.data();
           const quota = typeof data?.uploadsRemaining === 'number' ? data.uploadsRemaining : DEFAULT_QUOTA;
+          const used = typeof data?.monthlyUploadsUsed === 'number' ? data.monthlyUploadsUsed : Math.max(0, DEFAULT_QUOTA - quota);
           
           setUploadsRemaining(quota);
+          setMonthlyUploadsUsed(used);
           setUpdatedAt(data?.updatedAt || null);
           setEmail(data?.email || user?.email || auth?.currentUser?.email || null);
           setRole(data?.role || 'Editor');
@@ -91,31 +97,40 @@ export function useUserQuota(): UserQuotaState {
           setSyncTimestamp(Date.now());
           setError(null);
           setLoading(false);
+
+          console.log(`[SYNC] device=${deviceIdRef.current} source=onSnapshot doc=${activeUserId} remaining=${quota} used=${used}`);
         } else {
           // If primary user document does not exist yet, check fallback document
           if (activeUserId !== 'usr-nyikuli') {
             const fallbackRef = doc(db, 'users', 'usr-nyikuli');
-            onSnapshot(fallbackRef, (fallbackSnap) => {
+            if (fallbackUnsubscribe) fallbackUnsubscribe();
+            fallbackUnsubscribe = onSnapshot(fallbackRef, (fallbackSnap) => {
               if (fallbackSnap.exists()) {
                 const fbData = fallbackSnap.data();
                 const quota = typeof fbData?.uploadsRemaining === 'number' ? fbData.uploadsRemaining : DEFAULT_QUOTA;
+                const used = typeof fbData?.monthlyUploadsUsed === 'number' ? fbData.monthlyUploadsUsed : Math.max(0, DEFAULT_QUOTA - quota);
                 setUploadsRemaining(quota);
+                setMonthlyUploadsUsed(used);
                 setUpdatedAt(fbData?.updatedAt || null);
                 setLastUploadedFile(fbData?.lastUploadedFile || null);
                 setLastUploadDeviceId(fbData?.lastUploadDeviceId || null);
                 setLastUploadTimestamp(fbData?.lastUploadTimestamp || null);
                 setSyncTimestamp(Date.now());
+                console.log(`[SYNC] device=${deviceIdRef.current} source=onSnapshot-fallback remaining=${quota} used=${used}`);
               } else {
                 setUploadsRemaining(DEFAULT_QUOTA);
+                setMonthlyUploadsUsed(0);
                 setUpdatedAt(null);
               }
               setLoading(false);
             }, () => {
               setUploadsRemaining(DEFAULT_QUOTA);
+              setMonthlyUploadsUsed(0);
               setLoading(false);
             });
           } else {
             setUploadsRemaining(DEFAULT_QUOTA);
+            setMonthlyUploadsUsed(0);
             setUpdatedAt(null);
             setLoading(false);
           }
@@ -134,6 +149,7 @@ export function useUserQuota(): UserQuotaState {
 
     return () => {
       unsubscribe();
+      if (fallbackUnsubscribe) fallbackUnsubscribe();
     };
   }, [activeUserId, user?.email]);
 
@@ -142,6 +158,7 @@ export function useUserQuota(): UserQuotaState {
       return {
         allowed: false,
         uploadsRemaining: 0,
+        monthlyUploadsUsed: DEFAULT_QUOTA,
         error: 'Authentication required. Please log in before uploading CSV files.'
       };
     }
@@ -153,6 +170,9 @@ export function useUserQuota(): UserQuotaState {
 
     if (res.allowed) {
       setUploadsRemaining(res.uploadsRemaining);
+      if (typeof res.monthlyUploadsUsed === 'number') {
+        setMonthlyUploadsUsed(res.monthlyUploadsUsed);
+      }
       setUpdatedAt(res.updatedAt || new Date().toISOString());
       setSyncTimestamp(Date.now());
     }
@@ -161,10 +181,11 @@ export function useUserQuota(): UserQuotaState {
   }, [activeUserId]);
 
   const resetQuota = useCallback(async (amount: number = DEFAULT_QUOTA) => {
-    if (!activeUserId) return { success: false, uploadsRemaining: 0 };
+    if (!activeUserId) return { success: false, uploadsRemaining: 0, monthlyUploadsUsed: DEFAULT_QUOTA };
     const res = await resetUserUploadQuota(activeUserId, amount);
     if (res.success) {
       setUploadsRemaining(res.uploadsRemaining);
+      setMonthlyUploadsUsed(res.monthlyUploadsUsed);
       setSyncTimestamp(Date.now());
     }
     return res;
@@ -172,6 +193,7 @@ export function useUserQuota(): UserQuotaState {
 
   return {
     uploadsRemaining,
+    monthlyUploadsUsed,
     updatedAt,
     email,
     role,
