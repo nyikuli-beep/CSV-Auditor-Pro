@@ -34,7 +34,7 @@ import { CSVFile, AuditIssue, Severity, IssueType, RetentionPeriodOption, Retent
 import { exportCleanedAuditToExcel } from '../lib/excelExporter';
 import QualityTrendChart from './QualityTrendChart';
 import { RetentionPolicyBanner } from './RetentionPolicySelector';
-import { createDefaultRetentionPolicy, getRetentionOptionDetail } from '../lib/retentionService';
+import { calculateExpiration, getRetentionOptionDetail } from '../lib/retentionService';
 import { applySingleAuditFix, applyBatchFixAll, FixAllResult } from '../lib/auditFixEngine';
 
 interface AuditResultsProps {
@@ -78,7 +78,15 @@ export default function AuditResults({ activeFile, allFiles, onNavigate, isDarkM
 
   const handleUpdatePolicy = (fileId: string, newOption: RetentionPeriodOption) => {
     if (!activeFile) return;
-    const updatedPolicy = createDefaultRetentionPolicy(newOption);
+    const now = new Date();
+    const expiresAt = calculateExpiration(newOption, now);
+    const updatedPolicy: RetentionPolicy = {
+      option: newOption,
+      selectedAt: now.toISOString(),
+      expiresAt,
+      status: newOption === 'forever' ? 'kept_forever' : 'scheduled_deletion',
+      originalFileDeleted: false,
+    };
     const updatedFile: CSVFile = {
       ...activeFile,
       retentionPolicy: updatedPolicy,

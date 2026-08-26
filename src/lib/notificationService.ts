@@ -489,29 +489,26 @@ export function computeUserNotifications(params: ComputeNotificationsParams): Ap
       }
     }
 
-    // Retention approaching purge warning (within 2 hours)
-    if (file.retentionPolicy?.expiresAt && file.retentionPolicy.status === 'scheduled_deletion' && !file.retentionPolicy.originalFileDeleted) {
+    // Retention 24-hour purge warning
+    if (file.retentionPolicy?.expiresAt && file.retentionPolicy.status === 'scheduled_deletion') {
       const expTime = new Date(file.retentionPolicy.expiresAt).getTime();
-      if (!isNaN(expTime) && expTime > Date.now()) {
-        const diffMs = expTime - Date.now();
-        const hoursLeft = Math.ceil(diffMs / (1000 * 60 * 60));
-        if (diffMs <= 2 * 60 * 60 * 1000) {
-          const notifId = `retention_warning_${file.id}`;
-          if (!dismissedIds.has(notifId)) {
-            notifs.push({
-              id: notifId,
-              type: 'retention_warning',
-              category: 'security',
-              priority: 'warning',
-              title: `Scheduled Auto-Purge: ${file.name}`,
-              message: `Per compliance retention schedule, this dataset will be permanently deleted in ~${hoursLeft} hour(s). Export any necessary reports.`,
-              timestamp: new Date().toISOString(),
-              read: readIds.has(notifId),
-              actionLabel: 'View File Archive',
-              actionType: 'navigate',
-              actionPayload: { tab: 'history', fileId: file.id }
-            });
-          }
+      const hoursLeft = Math.round((expTime - Date.now()) / (1000 * 60 * 60));
+      if (hoursLeft > 0 && hoursLeft <= 24) {
+        const notifId = `retention_warning_${file.id}`;
+        if (!dismissedIds.has(notifId)) {
+          notifs.push({
+            id: notifId,
+            type: 'retention_warning',
+            category: 'security',
+            priority: 'warning',
+            title: `Scheduled Auto-Purge: ${file.name}`,
+            message: `Per compliance retention schedule, this dataset will be permanently deleted in ~${hoursLeft} hours. Export any necessary reports.`,
+            timestamp: new Date().toISOString(),
+            read: readIds.has(notifId),
+            actionLabel: 'View File Archive',
+            actionType: 'navigate',
+            actionPayload: { tab: 'history', fileId: file.id }
+          });
         }
       }
     }

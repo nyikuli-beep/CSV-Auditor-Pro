@@ -66,12 +66,12 @@ export default function BatchValidationPanel({
   userRole
 }: BatchValidationPanelProps) {
   const { plan, usage, recordUsage, resetInfo, openProCheckout, hasProAccess, checkAuditLimit } = useBilling();
-  const { uploadsRemaining, monthlyUploadsUsed, isExhausted: isQuotaExhausted, consumeUpload } = useUserQuota();
-  const effectiveUsed = typeof monthlyUploadsUsed === 'number' ? monthlyUploadsUsed : Math.max(0, 5 - uploadsRemaining);
+  const { uploadsRemaining, isExhausted: isQuotaExhausted, consumeUpload } = useUserQuota();
   const isFreemiumLimitReached = !hasProAccess && plan === 'free' && (
     uploadsRemaining <= 0 ||
     isQuotaExhausted ||
-    effectiveUsed >= 5
+    !checkAuditLimit() ||
+    (usage?.auditCount || 0) >= 5
   );
 
   // Selection state for workspace files
