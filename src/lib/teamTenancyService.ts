@@ -256,6 +256,26 @@ export function checkEnterpriseEntitlement(
     };
   }
 
+  // Active Trial Testing / Pro Trial enables full Team Tenancy access during the trial window
+  if (currentPlan === 'pro_trial' || subscriptionStatus === 'trial') {
+    if (billing?.trialEndsAt) {
+      const now = Date.now();
+      const endsAt = new Date(billing.trialEndsAt).getTime();
+      if (!isNaN(endsAt) && endsAt > now) {
+        return {
+          authorized: true,
+          isEnterprise: true
+        };
+      }
+    } else {
+      // If active trial without specific date
+      return {
+        authorized: true,
+        isEnterprise: true
+      };
+    }
+  }
+
   return {
     authorized: false,
     isEnterprise: false,

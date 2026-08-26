@@ -20,6 +20,9 @@ interface BillingContextType {
   trialEndsAt: string | null;
   trialUsed: boolean;
   startFreeTrial: () => Promise<{ success: boolean; message?: string; error?: string }>;
+  startTrialSimulation: (days: number) => Promise<{ success: boolean; message?: string; error?: string }>;
+  rollbackTrialSimulation: () => Promise<{ success: boolean; message?: string; error?: string }>;
+  fastForwardTrialSimulation: (days: number) => Promise<{ success: boolean; message?: string; error?: string }>;
   isEnterpriseModalOpen: boolean;
   setIsEnterpriseModalOpen: (open: boolean) => void;
   openProCheckout: () => Promise<void>;
@@ -182,6 +185,125 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
+  // Simulation Environment for Trial Testing (Selected Days, Fast Forward, Rollback)
+  const startTrialSimulation = async (days: number): Promise<{ success: boolean; message?: string; error?: string }> => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/billing/simulation-trial', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: userEmail,
+          email: userEmail,
+          durationDays: days
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (data.billing) {
+          setBilling(data.billing);
+          setEntitlementsState(data.entitlements || getEntitlements(data.billing.plan, data.billing.subscriptionStatus, data.billing.trialEndsAt));
+        }
+        await fetchBillingData();
+        return { 
+          success: true, 
+          message: data.message || `Simulation environment trial activated for ${days} days! Team tenancy, branded reports, and restricted cleaning actions enabled.` 
+        };
+      } else {
+        return { success: false, error: data.error || 'Failed to initialize simulation trial' };
+      }
+    } catch (err: any) {
+      console.error('startTrialSimulation error:', err);
+      return { success: false, error: err.message || 'Network error activating trial simulation' };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const rollbackTrialSimulation = async (): Promise<{ success: boolean; message?: string; error?: string }> => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/billing/simulation-rollback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: userEmail,
+          email: userEmail
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (data.billing) {
+          setBilling(data.billing);
+          setEntitlementsState(data.entitlements || getEntitlements(data.billing.plan, data.billing.subscriptionStatus, data.billing.trialEndsAt));
+        }
+        await fetchBillingData();
+        return { 
+          success: true, 
+          message: data.message || 'Trial concluded. Account successfully rolled back to the Free plan.' 
+        };
+      } else {
+        return { success: false, error: data.error || 'Failed to roll back trial simulation' };
+      }
+    } catch (err: any) {
+      console.error('rollbackTrialSimulation error:', err);
+      return { success: false, error: err.message || 'Network error rolling back trial simulation' };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fastForwardTrialSimulation = async (days: number): Promise<{ success: boolean; message?: string; error?: string }> => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/billing/simulation-time-shift', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: userEmail,
+          email: userEmail,
+          shiftDays: days
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (data.billing) {
+          setBilling(data.billing);
+          setEntitlementsState(data.entitlements || getEntitlements(data.billing.plan, data.billing.subscriptionStatus, data.billing.trialEndsAt));
+        }
+        await fetchBillingData();
+        return { 
+          success: true, 
+          message: data.message || `Simulated time shifted by ${days} day(s).` 
+        };
+      } else {
+        return { success: false, error: data.error || 'Failed to advance simulated time' };
+      }
+    } catch (err: any) {
+      console.error('fastForwardTrialSimulation error:', err);
+      return { success: false, error: err.message || 'Network error adjusting simulation time' };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Periodic Trial Expiration Check (auto rolls back to free plan once trialEndsAt is passed)
+  useEffect(() => {
+    const checkTrialExpiry = () => {
+      if (billing?.plan === 'pro_trial' && billing?.trialEndsAt) {
+        const now = Date.now();
+        const endsAt = new Date(billing.trialEndsAt).getTime();
+        if (!isNaN(endsAt) && endsAt <= now) {
+          // Auto rollback
+          rollbackTrialSimulation();
+        }
+      }
+    };
+
+    const interval = setInterval(checkTrialExpiry, 15000);
+    return () => clearInterval(interval);
+  }, [billing?.plan, billing?.trialEndsAt]);
+
   const recordUsage = async (params: {
     auditAdd?: number;
     rowsAdd?: number;
@@ -319,6 +441,9 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         trialEndsAt,
         trialUsed,
         startFreeTrial,
+        startTrialSimulation,
+        rollbackTrialSimulation,
+        fastForwardTrialSimulation,
         isEnterpriseModalOpen,
         setIsEnterpriseModalOpen,
         openProCheckout,
@@ -360,6 +485,9 @@ export const useBilling = () => {
       trialEndsAt: null,
       trialUsed: false,
       startFreeTrial: async () => ({ success: false, error: 'Billing provider not mounted' }),
+      startTrialSimulation: async () => ({ success: false, error: 'Billing provider not mounted' }),
+      rollbackTrialSimulation: async () => ({ success: false, error: 'Billing provider not mounted' }),
+      fastForwardTrialSimulation: async () => ({ success: false, error: 'Billing provider not mounted' }),
       isEnterpriseModalOpen: false,
       setIsEnterpriseModalOpen: () => {},
       openProCheckout: async () => {},

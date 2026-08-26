@@ -3189,6 +3189,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
                         onPurgeInactiveFiles={handlePurgeInactiveFiles}
                         currentUser={user}
                         onOpenProfileModal={() => setProfileModalOpen(true)}
+                        onNavigateTab={handleNavigateTab}
                       />
                     )}
 

@@ -574,6 +574,107 @@ const handleStartTrial = async (req: express.Request, res: express.Response) => 
 app.post('/api/billing/start-trial', handleStartTrial);
 app.post('/api/trial/activate', handleStartTrial);
 
+// 1c. Simulation Environment: Configure & Start Trial Testing for Selected Days
+app.post('/api/billing/simulation-trial', async (req, res) => {
+  try {
+    const { userId = 'freemium_user', email = 'freemium_user', durationDays = 14 } = req.body;
+    const parsedDays = Math.max(1, Math.min(365, Number(durationDays) || 14));
+
+    const current = getOrCreateUserBilling(userId, email);
+    const now = new Date();
+    const trialStartedAt = now.toISOString();
+    const trialEndsAt = new Date(now.getTime() + parsedDays * 86400000).toISOString();
+
+    current.plan = 'pro_trial';
+    current.subscriptionStatus = 'trial';
+    current.trialStartedAt = trialStartedAt;
+    current.trialEndsAt = trialEndsAt;
+    current.trialUsed = true;
+
+    userSubscriptionsStore.set(userId, current);
+
+    const entitlements = getEntitlements('pro_trial', 'trial', trialEndsAt);
+
+    console.log(`[TRIAL SIMULATION] Activated ${parsedDays}-day trial for ${userId}. Ends at: ${trialEndsAt}`);
+
+    res.json({
+      success: true,
+      durationDays: parsedDays,
+      billing: current,
+      entitlements,
+      message: `Simulation Trial successfully activated for ${parsedDays} day(s)! Team tenancy, branded reports, and restricted automated cleaning actions are unlocked.`
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to initialize simulation trial' });
+  }
+});
+
+// 1d. Simulation Environment: Roll Back Trial to Free Plan
+app.post('/api/billing/simulation-rollback', async (req, res) => {
+  try {
+    const { userId = 'freemium_user', email = 'freemium_user' } = req.body;
+    const current = getOrCreateUserBilling(userId, email);
+
+    current.plan = 'free';
+    current.subscriptionStatus = 'expired';
+    current.trialEndsAt = new Date(Date.now() - 1000).toISOString(); // marked expired
+
+    userSubscriptionsStore.set(userId, current);
+
+    const entitlements = getEntitlements('free', 'expired', current.trialEndsAt);
+
+    console.log(`[TRIAL SIMULATION] Rolled back ${userId} to Free plan.`);
+
+    res.json({
+      success: true,
+      billing: current,
+      entitlements,
+      message: 'Simulation trial concluded. Account successfully rolled back to the Free plan with standard quotas.'
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to roll back simulation trial' });
+  }
+});
+
+// 1e. Simulation Environment: Fast-Forward / Shift Simulated Time
+app.post('/api/billing/simulation-time-shift', async (req, res) => {
+  try {
+    const { userId = 'freemium_user', email = 'freemium_user', shiftDays = 1, forceExpire = false } = req.body;
+    const current = getOrCreateUserBilling(userId, email);
+
+    if (forceExpire) {
+      current.plan = 'free';
+      current.subscriptionStatus = 'expired';
+      current.trialEndsAt = new Date(Date.now() - 1000).toISOString();
+    } else if (current.trialEndsAt) {
+      const currentEnd = new Date(current.trialEndsAt).getTime();
+      const newEnd = currentEnd - (Number(shiftDays) || 1) * 86400000;
+      if (newEnd <= Date.now()) {
+        current.plan = 'free';
+        current.subscriptionStatus = 'expired';
+        current.trialEndsAt = new Date(newEnd).toISOString();
+      } else {
+        current.trialEndsAt = new Date(newEnd).toISOString();
+      }
+    }
+
+    userSubscriptionsStore.set(userId, current);
+
+    const entitlements = getEntitlements(current.plan, current.subscriptionStatus, current.trialEndsAt);
+
+    res.json({
+      success: true,
+      billing: current,
+      entitlements,
+      message: current.plan === 'free'
+        ? 'Simulated time advanced past expiry: Trial expired and rolled back to Free Plan.'
+        : `Simulated time advanced by ${shiftDays} day(s). Remaining trial window updated.`
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to shift simulation time' });
+  }
+});
+
 // 2. Upgrade Plan / Activate Subscription
 app.post('/api/billing/upgrade-plan', async (req, res) => {
   try {

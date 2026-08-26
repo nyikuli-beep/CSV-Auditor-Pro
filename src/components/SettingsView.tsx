@@ -52,7 +52,7 @@ import AdminBillingDashboard from './AdminBillingDashboard';
 import ThemeCustomizationPanel from './ThemeCustomizationPanel';
 import SettingsTypographyCard from './typography/SettingsTypographyCard';
 import SettingsPresetsAndAccentsCard from './SettingsPresetsAndAccentsCard';
-
+import TrialSimulationEnvironment from './TrialSimulationEnvironment';
 
 interface SettingsViewProps {
   settings: SystemSettings;
@@ -74,6 +74,7 @@ interface SettingsViewProps {
     avatar?: string;
   } | null;
   onOpenProfileModal?: () => void;
+  onNavigateTab?: (tab: string) => void;
 }
 
 export default function SettingsView({ 
@@ -90,7 +91,8 @@ export default function SettingsView({
   onClearChat,
   onPurgeInactiveFiles,
   currentUser,
-  onOpenProfileModal
+  onOpenProfileModal,
+  onNavigateTab
 }: SettingsViewProps) {
   const { plan, entitlements, openProCheckout, openEnterpriseModal } = useBilling();
   const { timeData, use24Hour, setUse24Hour } = useTime();
@@ -618,7 +620,7 @@ export default function SettingsView({
           }`}
         >
           <Cpu className="w-3.5 h-3.5" />
-          <span>API & AI Models</span>
+          <span>API & Simulation</span>
         </button>
 
         <button
@@ -971,6 +973,17 @@ export default function SettingsView({
             </div>
           )}
         </div>
+
+        {/* Simulation Environment for Free Trial Testing */}
+        {(activeSettingsTab === 'all' || activeSettingsTab === 'api') && (
+          <div className="lg:col-span-12">
+            <TrialSimulationEnvironment 
+              isDarkMode={isDarkMode}
+              accentClass={accentClass}
+              onNavigateTab={onNavigateTab}
+            />
+          </div>
+        )}
 
         {/* Right Side: API Key Management & Notifications */}
         <div className="lg:col-span-6 space-y-6">

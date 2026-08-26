@@ -82,7 +82,21 @@ export function getEntitlements(plan: UserPlan, status: string, trialEndsAt?: st
     };
   }
 
-  if (effectivePlan === 'pro' || effectivePlan === 'pro_trial') {
+  // Active Pro Trial (Simulation Environment / Trial Testing enables Team Tenancy, Branded Reports & Restricted Cleaning Actions)
+  if (effectivePlan === 'pro_trial') {
+    return {
+      allowAiInsights: true,
+      allowAiAssistant: true,
+      allowUnlimitedRows: true,
+      allowAdvancedCleaning: true,
+      allowCustomBranding: true,
+      allowPdfReports: true,
+      allowTeamCollab: true,
+      allowDeveloperApi: true,
+    };
+  }
+
+  if (effectivePlan === 'pro') {
     return {
       allowAiInsights: true,
       allowAiAssistant: true,
