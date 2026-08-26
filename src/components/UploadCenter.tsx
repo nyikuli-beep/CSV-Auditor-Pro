@@ -495,20 +495,6 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     if (!processed.retentionPolicy) {
       processed.retentionPolicy = createDefaultRetentionPolicy(selectedRetentionOption);
     }
-    // Check if immediate deletion option was selected
-    if (processed.retentionPolicy?.option === 'immediate') {
-      processed = {
-        ...processed,
-        rows: [], // Purge raw CSV content immediately after validation
-        retentionPolicy: {
-          ...processed.retentionPolicy,
-          status: 'deleted_immediately',
-          originalFileDeleted: true,
-          originalDeletedAt: new Date().toISOString(),
-          deletedBy: 'System Post-Validation Purge'
-        }
-      };
-    }
     return processed;
   };
 
@@ -1764,19 +1750,6 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
             if (!fileToSubmit.retentionPolicy) {
               fileToSubmit.retentionPolicy = createDefaultRetentionPolicy(selectedRetentionOption);
             }
-            if (fileToSubmit.retentionPolicy?.option === 'immediate') {
-              fileToSubmit = {
-                ...fileToSubmit,
-                rows: [],
-                retentionPolicy: {
-                  ...fileToSubmit.retentionPolicy,
-                  status: 'deleted_immediately',
-                  originalFileDeleted: true,
-                  originalDeletedAt: new Date().toISOString(),
-                  deletedBy: 'System Post-Validation Purge'
-                }
-              };
-            }
 
             onFileUpload(fileToSubmit);
 
@@ -1973,19 +1946,6 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
 
           if (!fileToSubmit.retentionPolicy) {
             fileToSubmit.retentionPolicy = createDefaultRetentionPolicy(selectedRetentionOption);
-          }
-          if (fileToSubmit.retentionPolicy?.option === 'immediate') {
-            fileToSubmit = {
-              ...fileToSubmit,
-              rows: [],
-              retentionPolicy: {
-                ...fileToSubmit.retentionPolicy,
-                status: 'deleted_immediately',
-                originalFileDeleted: true,
-                originalDeletedAt: new Date().toISOString(),
-                deletedBy: 'System Post-Validation Purge'
-              }
-            };
           }
 
           totalFixed += fixResult.fixedCount;

@@ -19,7 +19,8 @@ import {
   getRetentionOptionDetail, 
   formatTimeRemaining, 
   canManageRetention, 
-  calculateExpiration 
+  calculateExpiration,
+  createDefaultRetentionPolicy 
 } from '../lib/retentionService';
 
 interface RetentionUploadSelectorProps {
@@ -121,13 +122,7 @@ export const RetentionPolicyBanner: React.FC<RetentionPolicyBannerProps> = ({
   onUpdatePolicy,
   onManualDelete,
 }) => {
-  const policy = file.retentionPolicy || {
-    option: '24h',
-    selectedAt: file.uploadedAt || new Date().toISOString(),
-    expiresAt: calculateExpiration('24h', new Date(file.uploadedAt || Date.now())),
-    status: 'scheduled_deletion',
-    originalFileDeleted: false,
-  };
+  const policy = file.retentionPolicy || createDefaultRetentionPolicy('forever');
 
   const isAllowed = canManageRetention(userRole);
   const [timeInfo, setTimeInfo] = useState(() => formatTimeRemaining(policy.expiresAt, policy.originalFileDeleted));

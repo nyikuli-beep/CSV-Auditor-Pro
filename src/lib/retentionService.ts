@@ -70,48 +70,89 @@ export const RETENTION_OPTIONS: RetentionOptionDetail[] = [
   },
 ];
 
+export function parseSafeDate(input?: Date | string | number | null): Date {
+  if (!input) return new Date();
+  if (input instanceof Date && !isNaN(input.getTime())) return input;
+  if (typeof input === 'number' && !isNaN(input) && input > 0) return new Date(input);
+
+  if (typeof input === 'string') {
+    const trimmed = input.trim();
+    if (!trimmed) return new Date();
+
+    // Try native ISO / RFC2822 parsing
+    const parsed = Date.parse(trimmed);
+    if (!isNaN(parsed) && parsed > 0) {
+      return new Date(parsed);
+    }
+
+    // Try custom formats like "26 August 2026, 03:01 AM" or "2026-06-23 10:15 AM"
+    const cleaned = trimmed.replace(/,/g, '');
+    const altParsed = Date.parse(cleaned);
+    if (!isNaN(altParsed) && altParsed > 0) {
+      return new Date(altParsed);
+    }
+  }
+
+  return new Date();
+}
+
 export function getRetentionOptionDetail(option: RetentionPeriodOption): RetentionOptionDetail {
   return RETENTION_OPTIONS.find(o => o.id === option) || RETENTION_OPTIONS[1]; // fallback 24h
 }
 
-export function calculateExpiration(option: RetentionPeriodOption, baseTime: Date = new Date()): string | null {
+export function calculateExpiration(
+  option: RetentionPeriodOption,
+  baseTime?: Date | string | number | null
+): string | null {
   const detail = getRetentionOptionDetail(option);
-  if (detail.id === 'forever') return null;
-  if (detail.id === 'immediate') return baseTime.toISOString();
-  if (detail.durationMs === null) return null;
+  if (detail.id === 'forever' || detail.durationMs === null) return null;
 
-  return new Date(baseTime.getTime() + detail.durationMs).toISOString();
+  const base = parseSafeDate(baseTime);
+  const now = Date.now();
+
+  // If baseTime is somehow in the distant past (> 1 hour older than current clock),
+  // anchor the retention window against current timestamp so the file is not purged early.
+  const effectiveBaseMs = (base.getTime() < now - 60 * 60 * 1000) ? now : base.getTime();
+
+  if (detail.id === 'immediate') {
+    return new Date(effectiveBaseMs).toISOString();
+  }
+
+  return new Date(effectiveBaseMs + detail.durationMs).toISOString();
 }
 
-export function createDefaultRetentionPolicy(option: RetentionPeriodOption = '24h'): RetentionPolicy {
+export function createDefaultRetentionPolicy(
+  option: RetentionPeriodOption = '24h',
+  baseDate?: Date | string | number | null
+): RetentionPolicy {
   const now = new Date();
-  const expiresAt = calculateExpiration(option, now);
-
-  if (option === 'immediate') {
-    return {
-      option: 'immediate',
-      selectedAt: now.toISOString(),
-      expiresAt: now.toISOString(),
-      status: 'deleted_immediately',
-      originalFileDeleted: true,
-      originalDeletedAt: now.toISOString(),
-      deletedBy: 'System Post-Validation Purge',
-    };
-  }
+  const selectedAt = now.toISOString();
 
   if (option === 'forever') {
     return {
       option: 'forever',
-      selectedAt: now.toISOString(),
+      selectedAt,
       expiresAt: null,
       status: 'kept_forever',
       originalFileDeleted: false,
     };
   }
 
+  const expiresAt = calculateExpiration(option, baseDate || now);
+
+  if (option === 'immediate') {
+    return {
+      option: 'immediate',
+      selectedAt,
+      expiresAt,
+      status: 'scheduled_deletion',
+      originalFileDeleted: false,
+    };
+  }
+
   return {
     option,
-    selectedAt: now.toISOString(),
+    selectedAt,
     expiresAt,
     status: 'scheduled_deletion',
     originalFileDeleted: false,
@@ -124,7 +165,7 @@ export function canManageRetention(role?: TeamMember['role'] | string): boolean 
   return normalized === 'owner' || normalized === 'admin';
 }
 
-export function formatTimeRemaining(expiresAt: string | null, originalFileDeleted: boolean): {
+export function formatTimeRemaining(expiresAt: string | null | undefined, originalFileDeleted: boolean): {
   label: string;
   isUrgent: boolean;
   isExpired: boolean;
@@ -136,7 +177,8 @@ export function formatTimeRemaining(expiresAt: string | null, originalFileDelete
     return { label: 'No Auto-Deletion (Indefinite)', isUrgent: false, isExpired: false };
   }
 
-  const expireTime = new Date(expiresAt).getTime();
+  const expireDate = parseSafeDate(expiresAt);
+  const expireTime = expireDate.getTime();
   const now = Date.now();
   const diff = expireTime - now;
 
@@ -144,15 +186,15 @@ export function formatTimeRemaining(expiresAt: string | null, originalFileDelete
     return { label: 'Expired & Pending Cleanup', isUrgent: true, isExpired: true };
   }
 
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-  const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+  const totalSeconds = Math.floor(diff / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
 
   let formatted = '';
-  if (hours > 24) {
-    const days = Math.floor(hours / 24);
-    const remHours = hours % 24;
-    formatted = `${days}d ${remHours}h remaining`;
+  if (days > 0) {
+    formatted = `${days}d ${hours}h remaining`;
   } else if (hours > 0) {
     formatted = `${hours}h ${minutes}m ${seconds}s`;
   } else {
@@ -177,11 +219,26 @@ export function executeScheduledRetentionCleanup(
 
   const updatedFiles = files.map(file => {
     const policy = file.retentionPolicy;
-    if (!policy || policy.originalFileDeleted || !policy.expiresAt || policy.option === 'forever') {
+    // Strictly protect files without retention policy, indefinitely retained files, or already purged files
+    if (
+      !policy || 
+      policy.originalFileDeleted === true || 
+      !policy.expiresAt || 
+      policy.option === 'forever' || 
+      policy.status === 'kept_forever'
+    ) {
       return file;
     }
 
-    const expireTime = new Date(policy.expiresAt).getTime();
+    const expireDate = parseSafeDate(policy.expiresAt);
+    const expireTime = expireDate.getTime();
+
+    // Guard: invalid or zero timestamps must NEVER trigger deletion
+    if (isNaN(expireTime) || expireTime <= 0) {
+      return file;
+    }
+
+    // Only purge if current time has truly passed the expiration timestamp
     if (expireTime <= now) {
       deletedCount++;
       const deletedAtIso = new Date().toISOString();
