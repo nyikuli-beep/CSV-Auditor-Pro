@@ -119,7 +119,7 @@ export function getMaxFileSizeForPlan(plan: string = 'free'): { bytes: number; m
   if (plan === 'enterprise') {
     return { bytes: 50 * 1024 * 1024, mb: 50 };
   }
-  if (plan === 'pro') {
+  if (plan === 'pro' || plan === 'pro_trial' || plan === 'trial') {
     return { bytes: 25 * 1024 * 1024, mb: 25 };
   }
   return { bytes: 5 * 1024 * 1024, mb: 5 };

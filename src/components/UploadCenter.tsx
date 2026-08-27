@@ -78,7 +78,8 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     recordUsage, 
     resetInfo,
     trialUsed,
-    hasProAccess
+    hasProAccess,
+    isTrialActive
   } = useBilling();
 
   const {
@@ -94,9 +95,10 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     syncTimestamp
   } = useUserQuota();
   
-  // Calculate if freemium upload limit is reached (5 uploads per month for free plan)
+  // Calculate if freemium upload limit is reached (Unlimited in Trial Testing / Pro / Enterprise)
+  const isUnlimitedUploads = Boolean(hasProAccess || isTrialActive || plan === 'pro_trial' || plan === 'pro' || plan === 'enterprise');
   const currentUploadsCount = usage?.auditCount || 0;
-  const isFreePlan = !hasProAccess || plan?.toLowerCase() === 'free' || plan === 'free';
+  const isFreePlan = !isUnlimitedUploads;
   const isFreemiumLimitReached = isFreePlan && (
     uploadsRemaining <= 0 ||
     isQuotaExhausted ||
@@ -3073,23 +3075,23 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
               <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${
                 plan === 'enterprise'
                   ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20'
-                  : plan === 'pro'
+                  : isUnlimitedUploads
                   ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20'
                   : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
               }`}>
-                {plan} Tier
+                {plan === 'pro_trial' || isTrialActive ? 'Pro Trial (Unlimited)' : `${plan} Tier`}
               </span>
               <span className="font-semibold">
-                File Size Limit: <span className="font-bold text-blue-600 dark:text-blue-400">{plan === 'enterprise' ? '50 MB' : plan === 'pro' ? '25 MB' : '5 MB'}</span>
+                File Size Limit: <span className="font-bold text-blue-600 dark:text-blue-400">{plan === 'enterprise' ? '50 MB' : isUnlimitedUploads ? '25 MB' : '5 MB'}</span>
               </span>
               <span className="text-slate-300 dark:text-slate-700">&bull;</span>
               <span className="font-semibold">
-                Monthly Uploads Remaining: <span className={`font-bold ${plan === 'free' && !hasProAccess && uploadsRemaining <= 0 ? 'text-rose-500' : 'text-blue-600 dark:text-blue-400'}`}>
-                  {plan === 'free' && !hasProAccess ? `${uploadsRemaining} / 5 remaining` : 'Unlimited'}
+                Monthly Uploads Remaining: <span className={`font-bold ${isFreePlan && uploadsRemaining <= 0 ? 'text-rose-500' : 'text-blue-600 dark:text-blue-400'}`}>
+                  {isFreePlan ? `${uploadsRemaining} / 5 remaining` : 'Unlimited'}
                 </span>
               </span>
             </div>
-            {plan === 'free' && !hasProAccess && (
+            {isFreePlan && (
               <button
                 onClick={() => triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro')}
                 className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:text-blue-500 hover:underline cursor-pointer flex items-center gap-1 shrink-0"
