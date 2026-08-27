@@ -88,20 +88,10 @@ export default function ReportGen({
   settings,
   onUpdateSettings
 }: ReportGenProps) {
-  const { plan, entitlements, openProCheckout, openEnterpriseModal, hasProAccess, isTrialActive } = useBilling();
+  const { plan, entitlements, openProCheckout, openEnterpriseModal } = useBilling();
   const effectiveMembers = (members && members.length > 0) ? members : DEFAULT_TEAM_MEMBERS;
 
-  const isReportUnlocked = Boolean(
-    entitlements?.allowPdfReports ||
-    entitlements?.allowCustomBranding ||
-    hasProAccess ||
-    isTrialActive ||
-    plan === 'pro' ||
-    plan === 'enterprise' ||
-    plan === 'pro_trial'
-  );
-
-  if (!isReportUnlocked) {
+  if (!entitlements.allowPdfReports) {
     return (
       <PlanFeatureLock
         featureName="Branded Compliance PDF Reports & Custom Logos"

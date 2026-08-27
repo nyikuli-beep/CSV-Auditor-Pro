@@ -110,22 +110,8 @@ export default function CleaningCenter({
   accentClass, 
   userRole 
 }: CleaningCenterProps) {
-  const { 
-    plan, 
-    entitlements, 
-    openProCheckout, 
-    openEnterpriseModal,
-    hasProAccess,
-    isTrialActive
-  } = useBilling();
-
-  // Allow non-owners and users in trial testing to access pro and enterprise automated actions
-  const isTrialOrSubscribed = Boolean(isTrialActive || plan === 'pro_trial' || plan === 'pro' || plan === 'enterprise' || hasProAccess || entitlements?.allowAdvancedCleaning);
-  const isProUnlocked = isTrialOrSubscribed || Boolean(entitlements?.allowAdvancedCleaning);
-  const isEnterpriseUnlocked = isTrialOrSubscribed || plan === 'enterprise' || Boolean(entitlements?.allowAdvancedCleaning);
-
-  // Non-owners (Analysts, Members, Admins, Auditors, etc.) have full execution permissions in hygiene center
-  const isViewer = false;
+  const { plan, entitlements, openProCheckout, openEnterpriseModal } = useBilling();
+  const isViewer = userRole === 'Viewer';
 
   // Unlock Premium Modal State
   const [isUnlockModalOpen, setIsUnlockModalOpen] = useState(false);
@@ -1354,7 +1340,7 @@ export default function CleaningCenter({
 
   const handleRunProfiler = () => {
     if (!activeFile) return;
-    if (!isProUnlocked) {
+    if (plan === 'free') {
       triggerUnlockModal('Data Profiler & Quality Scan', 'pro');
       return;
     }
@@ -1365,7 +1351,7 @@ export default function CleaningCenter({
 
   const handleRunAiCorrectionScan = () => {
     if (!activeFile) return;
-    if (!isProUnlocked) {
+    if (plan === 'free') {
       triggerUnlockModal('AI Smart Data Correction', 'pro');
       return;
     }
@@ -1392,7 +1378,7 @@ export default function CleaningCenter({
 
   const handleRunMissingPredictionScan = () => {
     if (!activeFile) return;
-    if (!isProUnlocked) {
+    if (plan === 'free') {
       triggerUnlockModal('AI Missing Value Imputation', 'pro');
       return;
     }
@@ -1419,7 +1405,7 @@ export default function CleaningCenter({
 
   const handleRunFuzzyDuplicateScan = () => {
     if (!activeFile) return;
-    if (!isProUnlocked) {
+    if (plan === 'free') {
       triggerUnlockModal('Fuzzy Duplicate Resolution', 'pro');
       return;
     }
@@ -1456,7 +1442,7 @@ export default function CleaningCenter({
   };
 
   const handleRunInvisibleCharCleaner = () => {
-    if (!isProUnlocked) {
+    if (plan === 'free') {
       triggerUnlockModal('Invisible Character Cleaner', 'pro');
       return;
     }
@@ -1465,7 +1451,7 @@ export default function CleaningCenter({
   };
 
   const handleRunUnicodeRepair = () => {
-    if (!isProUnlocked) {
+    if (plan === 'free') {
       triggerUnlockModal('Unicode Encoding Repair', 'pro');
       return;
     }
@@ -1474,7 +1460,7 @@ export default function CleaningCenter({
   };
 
   const handleRunHtmlClean = () => {
-    if (!isProUnlocked) {
+    if (plan === 'free') {
       triggerUnlockModal('HTML & Markdown Cleaner', 'pro');
       return;
     }
@@ -1483,7 +1469,7 @@ export default function CleaningCenter({
   };
 
   const handleRunContactNormalize = () => {
-    if (!isProUnlocked) {
+    if (plan === 'free') {
       triggerUnlockModal('Contact Normalization', 'pro');
       return;
     }
@@ -1492,7 +1478,7 @@ export default function CleaningCenter({
   };
 
   const handleRunAddressStandardize = () => {
-    if (!isProUnlocked) {
+    if (plan === 'free') {
       triggerUnlockModal('Address Standardization', 'pro');
       return;
     }
@@ -1501,7 +1487,7 @@ export default function CleaningCenter({
   };
 
   const handleRunNullNormalize = () => {
-    if (!isProUnlocked) {
+    if (plan === 'free') {
       triggerUnlockModal('Null Value Normalizer', 'pro');
       return;
     }
@@ -1510,7 +1496,7 @@ export default function CleaningCenter({
   };
 
   const handleRunHeaderStandardize = (style: 'database' | 'snake_case' | 'camelCase' | 'PascalCase') => {
-    if (!isProUnlocked) {
+    if (plan === 'free') {
       triggerUnlockModal('Header Naming Standardization', 'pro');
       return;
     }
@@ -1519,7 +1505,7 @@ export default function CleaningCenter({
   };
 
   const handleRunFormulaProtect = () => {
-    if (!isProUnlocked) {
+    if (plan === 'free') {
       triggerUnlockModal('CSV Formula Injection Shield', 'pro');
       return;
     }
@@ -1926,7 +1912,7 @@ export default function CleaningCenter({
   };
 
   const runColumnSplitter = () => {
-    if (!isProUnlocked) {
+    if (plan === 'free') {
       triggerUnlockModal('Conditional Column Splitter', 'pro');
       return;
     }
@@ -2054,7 +2040,7 @@ export default function CleaningCenter({
   };
 
   const runColumnMerger = () => {
-    if (!isProUnlocked) {
+    if (plan === 'free') {
       triggerUnlockModal('Column Merger', 'pro');
       return;
     }
@@ -2170,7 +2156,7 @@ export default function CleaningCenter({
   };
 
   const runValidationRule = () => {
-    if (!isProUnlocked) {
+    if (plan === 'free') {
       triggerUnlockModal('Smart Validation Engine', 'pro');
       return;
     }
@@ -2289,7 +2275,7 @@ export default function CleaningCenter({
   };
 
   const runPatternSanitization = () => {
-    if (!isProUnlocked) {
+    if (plan === 'free') {
       triggerUnlockModal('Pattern Sanitization Engine', 'pro');
       return;
     }
@@ -2798,7 +2784,7 @@ export default function CleaningCenter({
               <RotateCw className="w-4 h-4" /> Redo
             </button>
 
-            {!isProUnlocked && (
+            {plan === 'free' && (
               <button
                 onClick={() => triggerUnlockModal('Pro Automated Workspace', 'pro')}
                 className="px-3 py-2.5 rounded-xl text-xs font-bold text-[#FFFFFF] bg-[#2563EB] hover:bg-[#1D4ED8] flex items-center gap-1.5 shadow-sm transition-all cursor-pointer shrink-0"
@@ -2854,7 +2840,7 @@ export default function CleaningCenter({
             <span>Audit & Compliance Report</span>
           </button>
 
-          {!isProUnlocked && (
+          {plan === 'free' && (
             <button
               onClick={() => triggerUnlockModal('Pro Automated Workspace', 'pro')}
               className="px-3.5 py-2 rounded-xl bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold flex items-center gap-1.5 shadow cursor-pointer transition-all whitespace-nowrap shrink-0"
@@ -3118,7 +3104,7 @@ export default function CleaningCenter({
                       <h4 className="font-bold text-xs text-blue-500">AI Smart Data Correction</h4>
                       <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">AI Pro</span>
                     </div>
-                    {!isProUnlocked && (
+                    {plan === 'free' && (
                       <span 
                         onClick={(e) => { e.stopPropagation(); triggerUnlockModal('AI Smart Data Correction', 'pro'); }}
                         className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1 shadow-xs cursor-pointer shrink-0"
@@ -3144,7 +3130,7 @@ export default function CleaningCenter({
                       <h4 className="font-bold text-xs text-indigo-400">AI Missing Value Imputation</h4>
                       <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">AI Pro</span>
                     </div>
-                    {!isProUnlocked && (
+                    {plan === 'free' && (
                       <span 
                         onClick={(e) => { e.stopPropagation(); triggerUnlockModal('AI Missing Value Imputation', 'pro'); }}
                         className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1 shadow-xs cursor-pointer shrink-0"
@@ -3170,7 +3156,7 @@ export default function CleaningCenter({
                       <h4 className="font-bold text-xs text-purple-400">Fuzzy Duplicate Resolution</h4>
                       <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">ML Pro</span>
                     </div>
-                    {!isProUnlocked && (
+                    {plan === 'free' && (
                       <span 
                         onClick={(e) => { e.stopPropagation(); triggerUnlockModal('Fuzzy Duplicate Resolution', 'pro'); }}
                         className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-1 shadow-xs cursor-pointer shrink-0"
@@ -3196,7 +3182,7 @@ export default function CleaningCenter({
                       <h4 className="font-bold text-xs">Invisible Character Cleaner</h4>
                       <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Pro</span>
                     </div>
-                    {!isProUnlocked && (
+                    {plan === 'free' && (
                       <span 
                         onClick={(e) => { e.stopPropagation(); triggerUnlockModal('Invisible Character Cleaner', 'pro'); }}
                         className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 shadow-xs cursor-pointer shrink-0"
@@ -3212,7 +3198,7 @@ export default function CleaningCenter({
               {/* PII Protection */}
               <button
                 onClick={() => {
-                  if (!isEnterpriseUnlocked) {
+                  if (plan !== 'enterprise') {
                     triggerUnlockModal('PII Masking & Encryption', 'enterprise');
                     return;
                   }
@@ -3230,7 +3216,7 @@ export default function CleaningCenter({
                       <h4 className="font-bold text-xs">PII Masking & Encryption</h4>
                       <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-amber-500/10 text-amber-500 border border-amber-500/20">Enterprise</span>
                     </div>
-                    {!isEnterpriseUnlocked && (
+                    {plan !== 'enterprise' && (
                       <span 
                         onClick={(e) => { e.stopPropagation(); triggerUnlockModal('PII Masking & Encryption', 'enterprise'); }}
                         className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-1 shadow-xs cursor-pointer shrink-0"
@@ -3256,7 +3242,7 @@ export default function CleaningCenter({
                       <h4 className="font-bold text-xs">CSV Injection Shield</h4>
                       <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-rose-500/10 text-rose-500 border border-rose-500/20">Pro</span>
                     </div>
-                    {!isProUnlocked && (
+                    {plan === 'free' && (
                       <span 
                         onClick={(e) => { e.stopPropagation(); triggerUnlockModal('CSV Injection Shield', 'pro'); }}
                         className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1 shadow-xs cursor-pointer shrink-0"
@@ -3358,7 +3344,7 @@ export default function CleaningCenter({
                         <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">Pro</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        {!isProUnlocked && (
+                        {plan === 'free' && (
                           <span 
                             onClick={(e) => { e.stopPropagation(); triggerUnlockModal('Conditional Column Splitter', 'pro'); }}
                             className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1 shadow-xs cursor-pointer"
@@ -3493,7 +3479,7 @@ export default function CleaningCenter({
                         <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Pro</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        {!isProUnlocked && (
+                        {plan === 'free' && (
                           <span 
                             onClick={(e) => { e.stopPropagation(); triggerUnlockModal('Column Merger', 'pro'); }}
                             className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1 shadow-xs cursor-pointer"
@@ -3751,7 +3737,7 @@ export default function CleaningCenter({
                         <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Pro</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        {!isProUnlocked && (
+                        {plan === 'free' && (
                           <span 
                             onClick={(e) => { e.stopPropagation(); triggerUnlockModal('Smart Validation Engine', 'pro'); }}
                             className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 shadow-xs cursor-pointer"
@@ -3993,7 +3979,7 @@ export default function CleaningCenter({
                         <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Pro</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        {!isProUnlocked && (
+                        {plan === 'free' && (
                           <span 
                             onClick={(e) => { e.stopPropagation(); triggerUnlockModal('Pattern Sanitization Engine', 'pro'); }}
                             className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1 shadow-xs cursor-pointer"
