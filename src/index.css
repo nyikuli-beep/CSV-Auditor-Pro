@@ -8,7 +8,7 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
-/* Centralized Theme Token System */
+/* Centralized Theme Token System - Professional Security Software Visual System */
 :root {
   /* Centralized Typography Tokens */
   --app-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
@@ -16,63 +16,91 @@
   --app-font-weight: 400;
   --app-font-base: 16px;
 
-  /* Light Mode Tokens */
-  --primary-blue: #2563EB;
+  /* Light Mode Tokens - Clean, High-Contrast Security System */
+  --primary-blue: #1D4ED8;
+  --primary-accent: #1D4ED8;
   --link-color: #1D4ED8;
-  --text-primary: #111827;
-  --text-secondary: #4B5563;
-  --text-muted: #6B7280;
+  --text-primary: #0F172A;
+  --text-secondary: #334155;
+  --text-muted: #64748B;
   
-  --bg-app: #F8FAFC;
+  --bg-app: #F4F6F8;
   --bg-card: #FFFFFF;
-  --bg-secondary: #F1F5F9;
-  --border-color: #E2E8F0;
-  --border-hover: #CBD5E1;
+  --bg-secondary: #EBF0F5;
+  --border-color: #D3DDE8;
+  --border-hover: #BACAD8;
   
-  --bg-hover: #F1F5F9;
-  --bg-active: #E2E8F0;
+  --bg-hover: #EBF1F6;
+  --bg-active: #DCE5EE;
   --bg-blue-subtle: #EFF6FF;
   --border-blue-subtle: #BFDBFE;
   --text-blue-subtle: #1D4ED8;
 
-  /* 3D Card Elevation Tokens - Light Mode */
-  --card-shadow-level-1: 0 1px 3px rgba(15, 23, 42, 0.04), 0 4px 12px -1px rgba(15, 23, 42, 0.05), inset 0 1px 0 rgba(255, 255, 255, 1);
-  --card-shadow-level-2: 0 2px 4px rgba(15, 23, 42, 0.04), 0 8px 20px -2px rgba(15, 23, 42, 0.07), inset 0 1px 0 rgba(255, 255, 255, 1);
-  --card-shadow-level-3: 0 3px 6px rgba(15, 23, 42, 0.04), 0 12px 28px -3px rgba(15, 23, 42, 0.09), inset 0 1px 0 rgba(255, 255, 255, 1);
-  --card-shadow-hover: 0 4px 8px rgba(15, 23, 42, 0.05), 0 16px 32px -4px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255, 255, 255, 1);
+  /* Semantic Security Status Tokens - Light Mode */
+  --status-success-bg: #ECFDF5;
+  --status-success-border: #86EFAC;
+  --status-success-text: #15803D;
+
+  --status-warning-bg: #FFFBEB;
+  --status-warning-border: #FDE68A;
+  --status-warning-text: #B45309;
+
+  --status-danger-bg: #FEF2F2;
+  --status-danger-border: #FECACA;
+  --status-danger-text: #B91C1C;
+
+  /* Controlled Security Panel Elevation Tokens - Light Mode */
+  --card-shadow-level-1: 0 1px 3px rgba(15, 23, 42, 0.05), 0 1px 2px rgba(15, 23, 42, 0.03);
+  --card-shadow-level-2: 0 2px 5px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04);
+  --card-shadow-level-3: 0 4px 10px rgba(15, 23, 42, 0.08), 0 2px 4px rgba(15, 23, 42, 0.04);
+  --card-shadow-hover: 0 4px 12px rgba(15, 23, 42, 0.1);
   
-  --btn-shadow-elevated: 0 1px 2px rgba(15, 23, 42, 0.08), 0 3px 8px -1px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.25);
-  --btn-shadow-elevated-hover: 0 2px 4px rgba(15, 23, 42, 0.1), 0 6px 14px -2px rgba(15, 23, 42, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  --btn-shadow-elevated: 0 1px 2px rgba(15, 23, 42, 0.08);
+  --btn-shadow-elevated-hover: 0 2px 4px rgba(15, 23, 42, 0.12);
 }
 
 .dark {
-  /* Dark Mode Tokens */
-  --primary-blue: #60A5FA;
+  /* Dark Mode Tokens - Deep Technical Security Panels */
+  --primary-blue: #3B82F6;
+  --primary-accent: #3B82F6;
   --link-color: #60A5FA;
-  --text-primary: #F3F4F6;
-  --text-secondary: #9CA3AF;
-  --text-muted: #6B7280;
+  --text-primary: #F8FAFC;
+  --text-secondary: #CBD5E1;
+  --text-muted: #8295AD;
   
   --bg-app: #0B0F19;
-  --bg-card: #151D2E;
-  --bg-secondary: #0F172A;
-  --border-color: #222F43;
-  --border-hover: #334155;
+  --bg-card: #131B2A;
+  --bg-secondary: #182236;
+  --border-color: #233249;
+  --border-hover: #334460;
   
-  --bg-hover: #1E293B;
-  --bg-active: #334155;
-  --bg-blue-subtle: rgba(30, 58, 138, 0.25);
-  --border-blue-subtle: #1D4ED8;
+  --bg-hover: #1C283E;
+  --bg-active: #24344F;
+  --bg-blue-subtle: rgba(37, 99, 235, 0.15);
+  --border-blue-subtle: #2563EB;
   --text-blue-subtle: #60A5FA;
 
-  /* 3D Card Elevation Tokens - Dark Mode */
-  --card-shadow-level-1: 0 2px 4px rgba(0, 0, 0, 0.35), 0 6px 16px -2px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  --card-shadow-level-2: 0 3px 6px rgba(0, 0, 0, 0.4), 0 10px 24px -3px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.09);
-  --card-shadow-level-3: 0 4px 8px rgba(0, 0, 0, 0.45), 0 14px 32px -4px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  --card-shadow-hover: 0 6px 12px rgba(0, 0, 0, 0.5), 0 20px 40px -4px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  /* Semantic Security Status Tokens - Dark Mode */
+  --status-success-bg: rgba(22, 163, 74, 0.12);
+  --status-success-border: rgba(34, 197, 94, 0.3);
+  --status-success-text: #4ADE80;
 
-  --btn-shadow-elevated: 0 2px 4px rgba(0, 0, 0, 0.4), 0 4px 10px -1px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  --btn-shadow-elevated-hover: 0 3px 6px rgba(0, 0, 0, 0.5), 0 8px 16px -2px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  --status-warning-bg: rgba(217, 119, 6, 0.12);
+  --status-warning-border: rgba(245, 158, 11, 0.3);
+  --status-warning-text: #FBBF24;
+
+  --status-danger-bg: rgba(220, 38, 38, 0.12);
+  --status-danger-border: rgba(239, 68, 68, 0.3);
+  --status-danger-text: #F87171;
+
+  /* Controlled Security Panel Elevation Tokens - Dark Mode */
+  --card-shadow-level-1: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --card-shadow-level-2: 0 3px 6px rgba(0, 0, 0, 0.35);
+  --card-shadow-level-3: 0 6px 14px rgba(0, 0, 0, 0.4);
+  --card-shadow-hover: 0 6px 16px rgba(0, 0, 0, 0.45);
+
+  --btn-shadow-elevated: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --btn-shadow-elevated-hover: 0 2px 5px rgba(0, 0, 0, 0.4);
 }
 
 html, body, #root {

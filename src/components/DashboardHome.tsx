@@ -45,7 +45,8 @@ import {
   Sun,
   Sunrise,
   Moon,
-  Building2
+  Building2,
+  ShieldCheck
 } from 'lucide-react';
 
 function HandWaveIcon({ className }: { className?: string }) {
@@ -717,6 +718,134 @@ export default function DashboardHome({
         </div>
       )}
 
+      {/* CENTRAL SECURITY HEALTH STATUS OVERVIEW BANNER (Inspired by AVG Antivirus visual discipline) */}
+      <motion.div 
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, delay: 0.05 }}
+        className={`p-5 sm:p-6 rounded-xl border transition-all ${
+          criticalIssuesCount > 0
+            ? isDarkMode 
+              ? 'bg-[#181119] border-[#DC2626]/50 shadow-sm' 
+              : 'bg-[#FEF2F2] border-[#FECACA] shadow-xs'
+            : warningIssuesCount > 0
+              ? isDarkMode 
+                ? 'bg-[#1A160F] border-[#D97706]/50 shadow-sm' 
+                : 'bg-[#FFFBEB] border-[#FDE68A] shadow-xs'
+              : isDarkMode 
+                ? 'bg-[#0E1B18] border-[#16A34A]/50 shadow-sm' 
+                : 'bg-[#ECFDF5] border-[#86EFAC] shadow-xs'
+        }`}
+        id="security-health-status-banner"
+      >
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <div className={`p-3 rounded-xl shrink-0 ${
+              criticalIssuesCount > 0
+                ? 'bg-[#DC2626] text-white'
+                : warningIssuesCount > 0
+                  ? 'bg-[#D97706] text-white'
+                  : 'bg-[#16A34A] text-white'
+            }`}>
+              {criticalIssuesCount > 0 ? (
+                <ShieldAlert className="w-7 h-7" />
+              ) : warningIssuesCount > 0 ? (
+                <AlertTriangle className="w-7 h-7" />
+              ) : (
+                <ShieldCheck className="w-7 h-7" />
+              )}
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <span className={`text-[11px] font-mono font-black uppercase tracking-wider px-2 py-0.5 rounded ${
+                  criticalIssuesCount > 0
+                    ? 'bg-[#DC2626]/20 text-[#EF4444] border border-[#DC2626]/30'
+                    : warningIssuesCount > 0
+                      ? 'bg-[#D97706]/20 text-[#F59E0B] border border-[#D97706]/30'
+                      : 'bg-[#16A34A]/20 text-[#22C55E] border border-[#16A34A]/30'
+                }`}>
+                  {criticalIssuesCount > 0 
+                    ? 'THREATS DETECTED' 
+                    : warningIssuesCount > 0 
+                      ? 'ATTENTION REQUIRED' 
+                      : 'ALL SYSTEMS SECURE & COMPLIANT'}
+                </span>
+                <span className={`text-xs font-mono font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                  {files.length} Dataset{files.length === 1 ? '' : 's'} Monitored • {totalRecords.toLocaleString()} Verified Records
+                </span>
+              </div>
+              <h2 className={`text-lg sm:text-xl font-black tracking-tight ${
+                isDarkMode ? 'text-white' : 'text-slate-900'
+              }`}>
+                {criticalIssuesCount > 0
+                  ? `${criticalIssuesCount} Critical Data Anomaly Violations Found`
+                  : warningIssuesCount > 0
+                    ? `${warningIssuesCount} Minor Formatting Warnings Require Review`
+                    : 'CSV Data Structure & Hygiene Passed All Security Scans'}
+              </h2>
+              <p className={`text-xs sm:text-sm max-w-3xl ${
+                isDarkMode ? 'text-slate-300' : 'text-slate-600'
+              }`}>
+                {criticalIssuesCount > 0
+                  ? 'High-severity structural violations or data format inconsistencies detected. Immediate sanitization is recommended before pipeline ingestion.'
+                  : warningIssuesCount > 0
+                    ? 'Datasets are intact with moderate anomalies (missing fields, unexpected dates, or whitespace outliers). Run automated cleaning routines to resolve.'
+                    : 'All scanned CSV records comply with RFC 4180 parsing standards, header verification, and automated enterprise hygiene rules.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 shrink-0 self-start md:self-center">
+            {activeIssuesCount > 0 ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('results')}
+                  className="px-4 py-2 text-xs font-bold rounded-lg bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <ShieldAlert className="w-3.5 h-3.5" />
+                  <span>Inspect Anomaly Reports</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('clean')}
+                  className={`px-3.5 py-2 text-xs font-bold rounded-lg border transition-colors cursor-pointer ${
+                    isDarkMode 
+                      ? 'bg-[#1E293B] border-slate-700 text-slate-200 hover:bg-[#334155]' 
+                      : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <span>Hygiene Lab &rarr;</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('upload')}
+                  className="px-4 py-2 text-xs font-bold rounded-lg bg-[#16A34A] hover:bg-[#15803D] text-white shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Ingest New CSV File</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('reports')}
+                  className={`px-3.5 py-2 text-xs font-bold rounded-lg border transition-colors cursor-pointer ${
+                    isDarkMode 
+                      ? 'bg-[#1E293B] border-slate-700 text-slate-200 hover:bg-[#334155]' 
+                      : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Export Report</span>
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </motion.div>
+
       {/* Interactive KPI Cards Grid */}
       <motion.div 
         variants={cardGridContainerVariants}
@@ -728,23 +857,23 @@ export default function DashboardHome({
         <motion.div 
           variants={cardItemVariants}
           onClick={() => setActivePanel(activePanel === 'records' ? null : 'records')}
-          className={`p-5 rounded-xl border cursor-pointer select-none transition-all duration-300 relative overflow-hidden group card-elevated-1 card-hover-lift ${
+          className={`p-5 rounded-xl border cursor-pointer select-none transition-all duration-200 relative overflow-hidden group ${
             activePanel === 'records' 
               ? isDarkMode 
-                ? 'bg-blue-950/40 border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.15)] ring-1 ring-blue-500/30' 
-                : 'bg-blue-50/70 border-blue-500 shadow-sm ring-1 ring-blue-500/20'
+                ? 'bg-[#1A2538] border-[#2563EB] ring-1 ring-[#2563EB]' 
+                : 'bg-[#EFF6FF] border-[#2563EB] ring-1 ring-[#2563EB]'
               : isDarkMode 
-                ? 'bg-[#151D2E] border-[#222F43] hover:border-blue-500/50' 
-                : 'bg-white border-slate-200 hover:border-blue-300'
+                ? 'bg-[#131B2A] border-[#233249] hover:border-[#3B82F6]' 
+                : 'bg-white border-[#D3DDE8] hover:border-[#2563EB]'
           }`}
           id="kpi-records-card"
         >
           <div className="flex justify-between items-start mb-3">
             <span className={`text-xs font-semibold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Total Records Audited</span>
-            <div className={`p-2 rounded-xl transition-colors ${
+            <div className={`p-2 rounded-lg transition-colors ${
               activePanel === 'records' 
-                ? 'bg-blue-500 text-white' 
-                : isDarkMode ? 'bg-blue-500/10 text-blue-400 group-hover:bg-blue-500/20' : 'bg-blue-50 text-blue-600 group-hover:bg-blue-100'
+                ? 'bg-[#2563EB] text-white' 
+                : isDarkMode ? 'bg-[#2563EB]/15 text-[#60A5FA]' : 'bg-[#EFF6FF] text-[#1D4ED8]'
             }`}>
               <Database className="w-4.5 h-4.5" />
             </div>
@@ -759,43 +888,42 @@ export default function DashboardHome({
               <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>
                 Across {files.length} dataset{files.length === 1 ? '' : 's'}
               </span>
-              <span className="text-blue-500 font-bold flex items-center gap-0.5 group-hover:underline">
+              <span className="text-[#2563EB] dark:text-[#60A5FA] font-bold flex items-center gap-0.5 group-hover:underline">
                 {activePanel === 'records' ? 'Collapse' : 'Breakdown'} &rarr;
               </span>
             </div>
           </div>
-          {/* Bottom highlight bar */}
-          <div className={`absolute bottom-0 left-0 right-0 h-1 transition-all ${activePanel === 'records' ? 'bg-blue-500' : 'bg-transparent group-hover:bg-blue-500/30'}`} />
+          <div className={`absolute bottom-0 left-0 right-0 h-1 transition-all ${activePanel === 'records' ? 'bg-[#2563EB]' : 'bg-transparent group-hover:bg-[#2563EB]/30'}`} />
         </motion.div>
 
         {/* Card 2: Active Hygiene Issues */}
         <motion.div 
           variants={cardItemVariants}
           onClick={() => setActivePanel(activePanel === 'issues' ? null : 'issues')}
-          className={`p-5 rounded-xl border cursor-pointer select-none transition-all duration-300 relative overflow-hidden group card-elevated-1 card-hover-lift ${
+          className={`p-5 rounded-xl border cursor-pointer select-none transition-all duration-200 relative overflow-hidden group ${
             activePanel === 'issues' 
               ? isDarkMode 
-                ? 'bg-rose-950/30 border-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.15)] ring-1 ring-rose-500/30' 
-                : 'bg-rose-50/60 border-rose-500 shadow-sm ring-1 ring-rose-500/20'
+                ? 'bg-[#261418] border-[#DC2626] ring-1 ring-[#DC2626]' 
+                : 'bg-[#FEF2F2] border-[#DC2626] ring-1 ring-[#DC2626]'
               : isDarkMode 
-                ? 'bg-[#151D2E] border-[#222F43] hover:border-rose-500/50' 
-                : 'bg-white border-slate-200 hover:border-rose-300'
+                ? 'bg-[#131B2A] border-[#233249] hover:border-[#EF4444]' 
+                : 'bg-white border-[#D3DDE8] hover:border-[#DC2626]'
           }`}
           id="kpi-issues-card"
         >
           <div className="flex justify-between items-start mb-3">
             <span className={`text-xs font-semibold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Active Hygiene Issues</span>
-            <div className={`p-2 rounded-xl transition-colors ${
+            <div className={`p-2 rounded-lg transition-colors ${
               activePanel === 'issues' 
-                ? 'bg-rose-500 text-white' 
-                : isDarkMode ? 'bg-rose-500/10 text-rose-400 group-hover:bg-rose-500/20' : 'bg-rose-50 text-rose-600 group-hover:bg-rose-100'
+                ? 'bg-[#DC2626] text-white' 
+                : isDarkMode ? 'bg-[#DC2626]/15 text-[#F87171]' : 'bg-[#FEF2F2] text-[#B91C1C]'
             }`}>
               <AlertTriangle className="w-4.5 h-4.5" />
             </div>
           </div>
           <div className="space-y-1">
             <div className="flex items-baseline gap-2">
-              <span className={`text-3xl font-black tracking-tight ${activeIssuesCount > 0 ? 'text-rose-500' : isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
+              <span className={`text-3xl font-black tracking-tight ${activeIssuesCount > 0 ? 'text-[#DC2626] dark:text-[#F87171]' : isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
                 {activeIssuesCount.toLocaleString()}
               </span>
             </div>
@@ -803,42 +931,42 @@ export default function DashboardHome({
               <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>
                 {criticalIssuesCount} critical threats
               </span>
-              <span className="text-rose-500 font-bold flex items-center gap-0.5 group-hover:underline">
+              <span className="text-[#DC2626] dark:text-[#F87171] font-bold flex items-center gap-0.5 group-hover:underline">
                 {activePanel === 'issues' ? 'Collapse' : 'Severity Matrix'} &rarr;
               </span>
             </div>
           </div>
-          <div className={`absolute bottom-0 left-0 right-0 h-1 transition-all ${activePanel === 'issues' ? 'bg-rose-500' : 'bg-transparent group-hover:bg-rose-500/30'}`} />
+          <div className={`absolute bottom-0 left-0 right-0 h-1 transition-all ${activePanel === 'issues' ? 'bg-[#DC2626]' : 'bg-transparent group-hover:bg-[#DC2626]/30'}`} />
         </motion.div>
 
         {/* Card 3: Time Saved with AI */}
         <motion.div 
           variants={cardItemVariants}
           onClick={() => setActivePanel(activePanel === 'savings' ? null : 'savings')}
-          className={`p-5 rounded-xl border cursor-pointer select-none transition-all duration-300 relative overflow-hidden group card-elevated-1 card-hover-lift ${
+          className={`p-5 rounded-xl border cursor-pointer select-none transition-all duration-200 relative overflow-hidden group ${
             activePanel === 'savings' 
               ? isDarkMode 
-                ? 'bg-violet-950/30 border-violet-500 shadow-[0_0_15px_rgba(139,92,246,0.15)] ring-1 ring-violet-500/30' 
-                : 'bg-violet-50/60 border-violet-500 shadow-sm ring-1 ring-violet-500/20'
+                ? 'bg-[#1C1A2E] border-[#6366F1] ring-1 ring-[#6366F1]' 
+                : 'bg-[#EEF2FF] border-[#6366F1] ring-1 ring-[#6366F1]'
               : isDarkMode 
-                ? 'bg-[#151D2E] border-[#222F43] hover:border-violet-500/50' 
-                : 'bg-white border-slate-200 hover:border-violet-300'
+                ? 'bg-[#131B2A] border-[#233249] hover:border-[#818CF8]' 
+                : 'bg-white border-[#D3DDE8] hover:border-[#6366F1]'
           }`}
           id="kpi-savings-card"
         >
           <div className="flex justify-between items-start mb-3">
             <span className={`text-xs font-semibold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Time Saved with AI</span>
-            <div className={`p-2 rounded-xl transition-colors ${
+            <div className={`p-2 rounded-lg transition-colors ${
               activePanel === 'savings' 
-                ? 'bg-violet-500 text-white' 
-                : isDarkMode ? 'bg-violet-500/10 text-violet-400 group-hover:bg-violet-500/20' : 'bg-violet-50 text-violet-600 group-hover:bg-violet-100'
+                ? 'bg-[#6366F1] text-white' 
+                : isDarkMode ? 'bg-[#6366F1]/15 text-[#A5B4FC]' : 'bg-[#EEF2FF] text-[#4338CA]'
             }`}>
               <Clock className="w-4.5 h-4.5" />
             </div>
           </div>
           <div className="space-y-1">
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black tracking-tight text-violet-500">
+              <span className="text-3xl font-black tracking-tight text-[#4F46E5] dark:text-[#818CF8]">
                 {hoursSaved} hrs
               </span>
             </div>
@@ -846,46 +974,46 @@ export default function DashboardHome({
               <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>
                 Auto-rules &amp; cleanups
               </span>
-              <span className="text-violet-500 font-bold flex items-center gap-0.5 group-hover:underline">
+              <span className="text-[#4F46E5] dark:text-[#818CF8] font-bold flex items-center gap-0.5 group-hover:underline">
                 {activePanel === 'savings' ? 'Collapse ROI' : 'Calculate ROI'} &rarr;
               </span>
             </div>
           </div>
-          <div className={`absolute bottom-0 left-0 right-0 h-1 transition-all ${activePanel === 'savings' ? 'bg-violet-500' : 'bg-transparent group-hover:bg-violet-500/30'}`} />
+          <div className={`absolute bottom-0 left-0 right-0 h-1 transition-all ${activePanel === 'savings' ? 'bg-[#6366F1]' : 'bg-transparent group-hover:bg-[#6366F1]/30'}`} />
         </motion.div>
 
-        {/* Card 4: Average Data Quality Score (Level 2 Prominence) */}
+        {/* Card 4: Average Data Quality Score */}
         <motion.div 
           variants={cardItemVariants}
-          className={`p-5 rounded-xl border relative overflow-hidden group card-elevated-2 card-hover-lift ${
-            isDarkMode ? 'bg-[#151D2E] border-[#222F43]' : 'bg-white border-slate-200'
+          className={`p-5 rounded-xl border relative overflow-hidden group ${
+            isDarkMode ? 'bg-[#131B2A] border-[#233249]' : 'bg-white border-[#D3DDE8]'
           }`} 
           id="kpi-score-card"
         >
           <div className="flex justify-between items-start mb-3">
             <span className={`text-xs font-semibold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Data Quality Score</span>
-            <div className={`p-2 rounded-xl ${
-              isDarkMode ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600'
+            <div className={`p-2 rounded-lg ${
+              isDarkMode ? 'bg-[#16A34A]/15 text-[#4ADE80]' : 'bg-[#ECFDF5] text-[#15803D]'
             }`}>
               <TrendingUp className="w-4.5 h-4.5" />
             </div>
           </div>
           <div className="space-y-1">
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black tracking-tight text-emerald-500">{avgScore}%</span>
+              <span className="text-3xl font-black tracking-tight text-[#16A34A] dark:text-[#4ADE80]">{avgScore}%</span>
             </div>
             <div className="flex items-center gap-1.5 text-[11px] mt-2">
               <span className={`font-bold px-1.5 py-0.25 rounded ${
                 avgScore > 80 
-                  ? isDarkMode ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-700'
-                  : isDarkMode ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-50 text-amber-700'
+                  ? isDarkMode ? 'bg-[#16A34A]/20 text-[#4ADE80]' : 'bg-[#ECFDF5] text-[#15803D]'
+                  : isDarkMode ? 'bg-[#D97706]/20 text-[#FBBF24]' : 'bg-[#FFFBEB] text-[#B45309]'
               }`}>
                 {avgScore > 80 ? 'Excellent' : 'Needs Action'}
               </span>
               <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>Compliance</span>
             </div>
           </div>
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-emerald-500/30" />
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#16A34A]/30" />
         </motion.div>
       </motion.div>
 
@@ -990,13 +1118,13 @@ export default function DashboardHome({
       )}
 
       {activePanel === 'issues' && (
-        <div className={`p-6 rounded-xl border animate-fadeIn transition-all card-elevated-2 ${
-          isDarkMode ? 'bg-[#0f172a] border-rose-500/30' : 'bg-rose-50/30 border-rose-200'
+        <div className={`p-6 rounded-xl border transition-all ${
+          isDarkMode ? 'bg-[#131B2A] border-[#233249]' : 'bg-white border-[#D3DDE8]'
         }`} id="drilldown-issues">
           <div className="flex justify-between items-center mb-4">
             <div>
-              <h3 className="font-extrabold text-sm md:text-base flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-rose-500" /> Active Hygiene Anomaly Matrix
+              <h3 className="font-bold text-sm md:text-base flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-[#DC2626]" /> Active Hygiene Anomaly Matrix
               </h3>
               <p className="text-xs text-slate-400 mt-1">
                 Real-time severity classification and categorization of open errors across current workspace datasets.
@@ -1012,21 +1140,21 @@ export default function DashboardHome({
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Severity Distribution */}
-            <div className={`p-4 rounded-xl border card-elevated-1 ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
+            <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#182236] border-[#233249]' : 'bg-[#F8FAFC] border-[#E2E8F0]'}`}>
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3.5">Severity Distribution</h4>
               <div className="space-y-3">
                 {/* Critical */}
                 <div>
                   <div className="flex justify-between text-xs mb-1">
-                    <span className="font-bold flex items-center gap-1.5 text-rose-500">
-                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" />
+                    <span className="font-bold flex items-center gap-1.5 text-[#DC2626]">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#DC2626] inline-block" />
                       Critical Threats
                     </span>
                     <span className="font-mono font-bold">{criticalIssuesCount}</span>
                   </div>
                   <div className="w-full bg-slate-700/20 h-2 rounded-full overflow-hidden">
                     <div 
-                      className="bg-rose-500 h-2 rounded-full" 
+                      className="bg-[#DC2626] h-2 rounded-full" 
                       style={{ width: `${activeIssuesCount > 0 ? (criticalIssuesCount / activeIssuesCount) * 100 : 0}%` }}
                     />
                   </div>
@@ -1035,15 +1163,15 @@ export default function DashboardHome({
                 {/* Warning */}
                 <div>
                   <div className="flex justify-between text-xs mb-1">
-                    <span className="font-bold flex items-center gap-1.5 text-amber-500">
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" />
+                    <span className="font-bold flex items-center gap-1.5 text-[#D97706]">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#D97706] inline-block" />
                       Warnings
                     </span>
                     <span className="font-mono font-bold">{warningIssuesCount}</span>
                   </div>
                   <div className="w-full bg-slate-700/20 h-2 rounded-full overflow-hidden">
                     <div 
-                      className="bg-amber-500 h-2 rounded-full" 
+                      className="bg-[#D97706] h-2 rounded-full" 
                       style={{ width: `${activeIssuesCount > 0 ? (warningIssuesCount / activeIssuesCount) * 100 : 0}%` }}
                     />
                   </div>
@@ -1052,15 +1180,15 @@ export default function DashboardHome({
                 {/* Info */}
                 <div>
                   <div className="flex justify-between text-xs mb-1">
-                    <span className="font-bold flex items-center gap-1.5 text-blue-400">
-                      <span className="w-2.5 h-2.5 rounded-full bg-blue-400 inline-block" />
+                    <span className="font-bold flex items-center gap-1.5 text-[#2563EB]">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#2563EB] inline-block" />
                       Informational
                     </span>
                     <span className="font-mono font-bold">{infoIssuesCount}</span>
                   </div>
                   <div className="w-full bg-slate-700/20 h-2 rounded-full overflow-hidden">
                     <div 
-                      className="bg-blue-400 h-2 rounded-full" 
+                      className="bg-[#2563EB] h-2 rounded-full" 
                       style={{ width: `${activeIssuesCount > 0 ? (infoIssuesCount / activeIssuesCount) * 100 : 0}%` }}
                     />
                   </div>
@@ -1069,10 +1197,9 @@ export default function DashboardHome({
             </div>
 
             {/* Anomaly Type Categorization */}
-            <div className={`p-4 rounded-xl border card-elevated-1 ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'} md:col-span-2`}>
+            <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#182236] border-[#233249]' : 'bg-[#F8FAFC] border-[#E2E8F0]'} md:col-span-2`}>
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Category Prevalence</h4>
               <div className="grid grid-cols-2 gap-3">
-                {/* We compute counts of each issue type across all files */}
                 {(() => {
                   const typeCounts: Record<string, number> = {
                     duplicate: 0,
@@ -1092,11 +1219,11 @@ export default function DashboardHome({
                   });
 
                   const typesMeta = [
-                    { key: 'duplicate', label: 'Duplicate Rows', color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' },
-                    { key: 'missing_value', label: 'Missing Values', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
-                    { key: 'invalid_format', label: 'Invalid Formats', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
-                    { key: 'outlier', label: 'Outlier Anomalies', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
-                    { key: 'column_inconsistency', label: 'Inconsistencies', color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' },
+                    { key: 'duplicate', label: 'Duplicate Rows', color: isDarkMode ? 'bg-[#1E293B] text-slate-200 border-[#334155]' : 'bg-white text-slate-700 border-slate-200' },
+                    { key: 'missing_value', label: 'Missing Values', color: isDarkMode ? 'bg-[#261418] text-[#F87171] border-[#DC2626]/40' : 'bg-[#FEF2F2] text-[#B91C1C] border-[#FECACA]' },
+                    { key: 'invalid_format', label: 'Invalid Formats', color: isDarkMode ? 'bg-[#231C13] text-[#FBBF24] border-[#D97706]/40' : 'bg-[#FFFBEB] text-[#B45309] border-[#FDE68A]' },
+                    { key: 'outlier', label: 'Outlier Anomalies', color: isDarkMode ? 'bg-[#1F1E33] text-[#A5B4FC] border-[#6366F1]/40' : 'bg-[#EEF2FF] text-[#4338CA] border-[#C7D2FE]' },
+                    { key: 'column_inconsistency', label: 'Inconsistencies', color: isDarkMode ? 'bg-[#162534] text-[#38BDF8] border-[#0284C7]/40' : 'bg-[#F0F9FF] text-[#0369A1] border-[#BAE6FD]' },
                   ];
 
                   return typesMeta.map(t => (
@@ -1112,11 +1239,11 @@ export default function DashboardHome({
               </div>
 
               {/* Quick file audit link list */}
-              <div className="mt-4 pt-3 border-t border-slate-800/30 flex justify-between items-center text-xs">
+              <div className="mt-4 pt-3 border-t border-slate-800/20 flex justify-between items-center text-xs">
                 <span className="text-[10px] text-slate-400">Select any spreadsheet to inspect and fix immediately.</span>
                 <button 
                   onClick={() => onNavigate('results')} 
-                  className="text-xs text-rose-500 font-bold hover:underline cursor-pointer"
+                  className="text-xs text-[#2563EB] dark:text-[#60A5FA] font-bold hover:underline cursor-pointer"
                 >
                   View full anomaly reports &rarr;
                 </button>
@@ -1127,13 +1254,13 @@ export default function DashboardHome({
       )}
 
       {activePanel === 'savings' && (
-        <div className={`p-6 rounded-xl border animate-fadeIn transition-all card-elevated-2 ${
-          isDarkMode ? 'bg-[#0f172a] border-violet-500/30' : 'bg-violet-50/30 border-violet-200'
+        <div className={`p-6 rounded-xl border transition-all ${
+          isDarkMode ? 'bg-[#131B2A] border-[#233249]' : 'bg-white border-[#D3DDE8]'
         }`} id="drilldown-savings">
           <div className="flex justify-between items-center mb-4">
             <div>
-              <h3 className="font-extrabold text-sm md:text-base flex items-center gap-2">
-                <Clock className="w-5 h-5 text-violet-500" /> AI Productivity &amp; ROI Calculator
+              <h3 className="font-bold text-sm md:text-base flex items-center gap-2">
+                <Clock className="w-5 h-5 text-[#2563EB]" /> AI Productivity &amp; ROI Calculator
               </h3>
               <p className="text-xs text-slate-400 mt-1">
                 Calculate the real-world operational cost and labor-hours saved using Automated CSV Auditor hygiene loops.
@@ -1149,13 +1276,13 @@ export default function DashboardHome({
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
             {/* Slider Controls */}
-            <div className={`md:col-span-7 p-4 rounded-xl border card-elevated-1 ${
-              isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'
+            <div className={`md:col-span-7 p-4 rounded-xl border ${
+              isDarkMode ? 'bg-[#182236] border-[#233249]' : 'bg-[#F8FAFC] border-[#E2E8F0]'
             } space-y-4`}>
               <div className="space-y-1">
                 <div className="flex justify-between text-xs">
                   <span className="font-bold text-slate-400 uppercase tracking-wider">Hourly Labor Rate (USD)</span>
-                  <span className="font-mono font-black text-violet-500 text-sm">${hourlyRate} / hour</span>
+                  <span className="font-mono font-black text-[#2563EB] dark:text-[#60A5FA] text-sm">${hourlyRate} / hour</span>
                 </div>
                 <input 
                   type="range" 
@@ -1164,7 +1291,7 @@ export default function DashboardHome({
                   step="5"
                   value={hourlyRate} 
                   onChange={(e) => setHourlyRate(Number(e.target.value))} 
-                  className="w-full h-1.5 bg-violet-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-violet-500" 
+                  className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-[#2563EB]" 
                   id="roi-rate-slider"
                 />
                 <p className="text-[10px] text-slate-500">
@@ -1177,15 +1304,15 @@ export default function DashboardHome({
                 <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Time-Saving Formula Details</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[10px] text-slate-400">
                   <div className="p-2 rounded bg-slate-500/5">
-                    <p className="text-violet-500 font-bold mb-0.5">15m / file</p>
+                    <p className="text-[#2563EB] dark:text-[#60A5FA] font-bold mb-0.5">15m / file</p>
                     <span>Parsing structure &amp; column schemas</span>
                   </div>
                   <div className="p-2 rounded bg-slate-500/5">
-                    <p className="text-violet-500 font-bold mb-0.5">2m / issue</p>
+                    <p className="text-[#2563EB] dark:text-[#60A5FA] font-bold mb-0.5">2m / issue</p>
                     <span>Automated scanning &amp; recommendations</span>
                   </div>
                   <div className="p-2 rounded bg-slate-500/5">
-                    <p className="text-violet-500 font-bold mb-0.5">5m / resolution</p>
+                    <p className="text-[#2563EB] dark:text-[#60A5FA] font-bold mb-0.5">5m / resolution</p>
                     <span>Instant regex/trim bulk fixes</span>
                   </div>
                 </div>
@@ -1193,13 +1320,13 @@ export default function DashboardHome({
             </div>
 
             {/* Incurred ROI Banner */}
-            <div className="md:col-span-5 bg-blue-600 p-5 rounded-xl text-white shadow-md space-y-4 card-elevated-3">
+            <div className="md:col-span-5 bg-[#1D4ED8] p-5 rounded-xl text-white space-y-4">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-violet-100">Estimated Reclaimed Value</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-blue-200">Estimated Reclaimed Value</p>
                 <h4 className="text-3xl font-black tracking-tight mt-1">
                   ${Math.round((timeSavedMinutes / 60) * hourlyRate).toLocaleString()}
                 </h4>
-                <p className="text-xs text-violet-200 mt-1">
+                <p className="text-xs text-blue-100 mt-1">
                   Saved {hoursSaved} operational hours through automated compliance.
                 </p>
               </div>
@@ -1207,7 +1334,7 @@ export default function DashboardHome({
               <div className="bg-white/10 p-3 rounded-lg space-y-1">
                 <div className="flex justify-between text-[11px] font-mono">
                   <span>Manual Time Spent:</span>
-                  <span className="line-through text-red-300">{(timeSavedMinutes / 60 * 4.5).toFixed(1)} hrs</span>
+                  <span className="line-through text-red-200">{(timeSavedMinutes / 60 * 4.5).toFixed(1)} hrs</span>
                 </div>
                 <div className="flex justify-between text-[11px] font-mono font-bold">
                   <span>AI Audit Cycle:</span>
