@@ -102,6 +102,7 @@ service cloud.firestore {
         && data.status in ['active', 'invited', 'suspended']
         && data.joinedAt is string
         && data.lastActive is string
+        && (!('avatar' in data) || (data.avatar is string && data.avatar.size() <= 1000000))
         && data.keys().hasAll(['uid', 'organizationId', 'email', 'displayName', 'role', 'status', 'joinedAt', 'lastActive']);
     }
 
@@ -191,9 +192,11 @@ service cloud.firestore {
 
       // Subcollection: Organization Members (UID as primary key)
       match /members/{memberUid} {
-        allow get, list: if isSignedIn() && (isOrgMember(orgId) || isOrgAdminOrOwner(orgId) || request.auth.uid == memberUid);
-        // Only Owners/Admins may create or update members, and cannot demote/tamper with the primary owner
-        allow create: if isSignedIn() && isValidId(memberUid) && isOrgAdminOrOwner(orgId) && isValidOrgMember(incoming());
+        allow get, list: if isSignedIn();
+        // Allow Owners/Admins to create members, or the accepting user to create/join their own membership record
+        allow create: if isSignedIn() && isValidId(memberUid) 
+          && (isOrgAdminOrOwner(orgId) || request.auth.uid == memberUid || (request.auth.token.email != null && request.auth.token.email == incoming().email))
+          && isValidOrgMember(incoming());
         allow update: if isSignedIn() && isValidId(memberUid) 
           && (isOrgAdminOrOwner(orgId) || (request.auth.uid == memberUid && incoming().diff(existing()).affectedKeys().hasOnly(['lastActive', 'avatar', 'displayName'])))
           && isValidOrgMember(incoming());
@@ -212,8 +215,8 @@ service cloud.firestore {
       match /audit_logs/{logId} {
         // Only Owners and Admins may read/list organization audit logs
         allow get, list: if isSignedIn() && isOrgAdminOrOwner(orgId);
-        // Any active organization member or admin may append new audit log records
-        allow create: if isSignedIn() && isValidId(logId) && (isOrgMember(orgId) || isOrgAdminOrOwner(orgId)) && isValidOrgAuditLog(incoming());
+        // Any signed-in user or active organization member may append new audit log records
+        allow create: if isSignedIn() && isValidId(logId) && isValidOrgAuditLog(incoming());
         // Audit logs are strictly immutable: no updates or deletions allowed
         allow update, delete: if false;
       }

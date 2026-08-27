@@ -466,26 +466,47 @@ export default function TeamCollaboration({
 
   // STEP 4: Direct Acceptance of Pending Invitation for Current User
   const handleAcceptCurrentUserInvite = async () => {
-    if (!userPendingInvitation || !user) return;
+    if (!userPendingInvitation) return;
+
+    const activeUid = user?.uid || localStorage.getItem('user_profile_uid') || `usr-${Date.now().toString(36)}`;
+    const activeEmail = (user?.email || currentUserEmail || effectiveEmail || userPendingInvitation.email).toLowerCase().trim();
+    const activeDisplayName = user?.displayName || localStorage.getItem('user_profile_name') || activeEmail.split('@')[0] || 'Team Member';
+    const activeAvatar = (user as any)?.photoURL || localStorage.getItem('user_profile_avatar') || undefined;
 
     setActionLoadingUid(userPendingInvitation.id);
-    const res = await acceptOrganizationInvitation({
-      orgId: DEFAULT_ORG_ID,
-      tokenOrId: userPendingInvitation.token,
-      user: {
-        uid: user.uid,
-        email: user.email || '',
-        displayName: user.displayName || undefined,
-        photoURL: user.photoURL || undefined
-      }
-    });
-    setActionLoadingUid(null);
+    try {
+      const res = await acceptOrganizationInvitation({
+        orgId: DEFAULT_ORG_ID,
+        tokenOrId: userPendingInvitation.token || userPendingInvitation.id,
+        user: {
+          uid: activeUid,
+          email: activeEmail,
+          displayName: activeDisplayName,
+          photoURL: activeAvatar
+        }
+      });
 
-    if (res.success && res.member) {
-      showToast('success', `Welcome! You have joined the organization as ${res.member.role}.`);
-      setOrgMembers(prev => [res.member!, ...prev.filter(m => m.uid !== user.uid)]);
-    } else {
-      showToast('error', res.error || 'Failed to accept invitation.');
+      if (res.success && res.member) {
+        showToast('success', `Welcome! You have joined ${organization?.name || 'the team'} as ${res.member.role}.`);
+        setOrgMembers(prev => [res.member!, ...prev.filter(m => m.uid !== res.member!.uid && m.email.toLowerCase() !== res.member!.email.toLowerCase())]);
+        setOrgInvitations(prev => prev.map(inv => inv.id === userPendingInvitation.id ? { ...inv, status: 'accepted' as const, acceptedAt: new Date().toISOString(), acceptedByUid: res.member!.uid } : inv));
+        if (onSwitchActiveUser) {
+          onSwitchActiveUser({
+            id: res.member.uid,
+            name: res.member.displayName,
+            email: res.member.email,
+            role: res.member.role,
+            status: 'active',
+            avatar: res.member.avatar
+          });
+        }
+      } else {
+        showToast('error', res.error || 'Failed to accept invitation.');
+      }
+    } catch (err: any) {
+      showToast('error', err?.message || 'Failed to accept invitation.');
+    } finally {
+      setActionLoadingUid(null);
     }
   };
 

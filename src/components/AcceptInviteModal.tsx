@@ -34,7 +34,12 @@ export default function AcceptInviteModal({
     e.preventDefault();
     setErrorMessage(null);
 
-    if (!user) {
+    const activeUid = user?.uid || localStorage.getItem('user_profile_uid') || `usr-${Date.now().toString(36)}`;
+    const activeEmail = (user?.email || localStorage.getItem('user_profile_email') || '').toLowerCase().trim();
+    const activeDisplayName = user?.displayName || localStorage.getItem('user_profile_name') || (activeEmail ? activeEmail.split('@')[0] : 'Team Member');
+    const activeAvatar = user?.photoURL || localStorage.getItem('user_profile_avatar') || undefined;
+
+    if (!activeUid) {
       setErrorMessage('You must be signed in to accept an invitation.');
       return;
     }
@@ -51,10 +56,10 @@ export default function AcceptInviteModal({
         orgId,
         tokenOrId: tokenInput.trim(),
         user: {
-          uid: user.uid,
-          email: user.email || '',
-          displayName: user.displayName || undefined,
-          photoURL: user.photoURL || undefined
+          uid: activeUid,
+          email: activeEmail,
+          displayName: activeDisplayName,
+          photoURL: activeAvatar
         }
       });
 
