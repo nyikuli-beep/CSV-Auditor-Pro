@@ -1209,38 +1209,85 @@ export async function acceptOrganizationInvitation(params: {
   }
 
   try {
-    // 1. Locate the invitation in local cache, persisted store, or Firestore
+    // 1. Authoritative Firestore Invitation Lookup (Priority 1)
     let matchedInvitation: OrganizationInvitation | null = null;
+    const now = Date.now();
+    const nowIso = new Date(now).toISOString();
 
-    // Check memory and persisted local invitations first
-    const localList = [...(localInvitationsStore.get(orgId) || []), ...getPersistedInvitations(orgId)];
-    const uniqueLocal = Array.from(new Map(localList.map(i => [i.id, i])).values());
-    
-    matchedInvitation = uniqueLocal.find(inv => {
-      const idMatch = inv.id && inv.id.toLowerCase() === cleanToken.toLowerCase();
-      const tokenMatch = inv.token && inv.token.toLowerCase() === cleanToken.toLowerCase();
-      const emailMatch = userEmail && inv.email && inv.email.toLowerCase() === userEmail && inv.status === 'pending';
-      return idMatch || tokenMatch || emailMatch;
-    }) || null;
-
-    // If not found in local cache, attempt Firestore query
-    if (!matchedInvitation) {
-      try {
-        const invitesRef = collection(db, 'organizations', orgId, 'invitations');
-        const snap = await getDocs(invitesRef);
-
-        snap.forEach(docSnap => {
-          const data = docSnap.data() as OrganizationInvitation;
-          const idMatch = data.id && data.id.toLowerCase() === cleanToken.toLowerCase();
-          const tokenMatch = data.token && data.token.toLowerCase() === cleanToken.toLowerCase();
-          const emailMatch = userEmail && data.email && data.email.toLowerCase() === userEmail && data.status === 'pending';
-          if (idMatch || tokenMatch || emailMatch) {
-            matchedInvitation = data;
-          }
-        });
-      } catch (firestoreErr) {
-        console.warn('Firestore invitation lookup fallback:', firestoreErr);
+    try {
+      // 1a. Direct Doc ID Lookup in organization subcollection
+      if (cleanToken) {
+        const directDocRef = doc(db, 'organizations', orgId, 'invitations', cleanToken);
+        const directSnap = await getDoc(directDocRef);
+        if (directSnap.exists()) {
+          matchedInvitation = directSnap.data() as OrganizationInvitation;
+        }
       }
+
+      // 1b. Query by token string
+      if (!matchedInvitation && cleanToken) {
+        const tokenQuery = query(
+          collection(db, 'organizations', orgId, 'invitations'),
+          where('token', '==', cleanToken)
+        );
+        const tokenSnap = await getDocs(tokenQuery);
+        if (!tokenSnap.empty) {
+          // Prefer pending status if multiple
+          const found = tokenSnap.docs.map(d => d.data() as OrganizationInvitation);
+          matchedInvitation = found.find(i => i.status === 'pending') || found[0];
+        }
+      }
+
+      // 1c. Query by recipient email
+      if (!matchedInvitation && userEmail) {
+        const emailQuery = query(
+          collection(db, 'organizations', orgId, 'invitations'),
+          where('email', '==', userEmail)
+        );
+        const emailSnap = await getDocs(emailQuery);
+        if (!emailSnap.empty) {
+          const found = emailSnap.docs.map(d => d.data() as OrganizationInvitation);
+          matchedInvitation = found.find(i => i.status === 'pending' && new Date(i.expiresAt).getTime() > now) || found[0];
+        }
+      }
+
+      // 1d. Fallback query across all invitations in subcollection if not indexed
+      if (!matchedInvitation) {
+        const allInvitesSnap = await getDocs(collection(db, 'organizations', orgId, 'invitations'));
+        const allFound: OrganizationInvitation[] = [];
+        allInvitesSnap.forEach(d => allFound.push(d.data() as OrganizationInvitation));
+        
+        matchedInvitation = allFound.find(i => {
+          const isIdMatch = cleanToken && i.id && i.id.toLowerCase() === cleanToken.toLowerCase();
+          const isTokenMatch = cleanToken && i.token && i.token.toLowerCase() === cleanToken.toLowerCase();
+          const isEmailMatch = userEmail && i.email && i.email.toLowerCase() === userEmail && i.status === 'pending';
+          return (isIdMatch || isTokenMatch || isEmailMatch) && i.status === 'pending';
+        }) || allFound.find(i => {
+          const isIdMatch = cleanToken && i.id && i.id.toLowerCase() === cleanToken.toLowerCase();
+          const isTokenMatch = cleanToken && i.token && i.token.toLowerCase() === cleanToken.toLowerCase();
+          return isIdMatch || isTokenMatch;
+        }) || null;
+      }
+    } catch (firestoreErr) {
+      console.warn('Firestore primary invitation lookup note:', firestoreErr);
+    }
+
+    // 1e. Local cache & persistent store fallback if Firestore lookup did not yield a result
+    if (!matchedInvitation) {
+      const localList = [...(localInvitationsStore.get(orgId) || []), ...getPersistedInvitations(orgId)];
+      const uniqueLocal = Array.from(new Map(localList.map(i => [i.id, i])).values());
+      
+      // First look for matching pending invitations
+      matchedInvitation = uniqueLocal.find(inv => {
+        const idMatch = cleanToken && inv.id && inv.id.toLowerCase() === cleanToken.toLowerCase();
+        const tokenMatch = cleanToken && inv.token && inv.token.toLowerCase() === cleanToken.toLowerCase();
+        const emailMatch = userEmail && inv.email && inv.email.toLowerCase() === userEmail;
+        return (idMatch || tokenMatch || emailMatch) && inv.status === 'pending';
+      }) || uniqueLocal.find(inv => {
+        const idMatch = cleanToken && inv.id && inv.id.toLowerCase() === cleanToken.toLowerCase();
+        const tokenMatch = cleanToken && inv.token && inv.token.toLowerCase() === cleanToken.toLowerCase();
+        return idMatch || tokenMatch;
+      }) || null;
     }
 
     if (!matchedInvitation) {
@@ -1250,20 +1297,41 @@ export async function acceptOrganizationInvitation(params: {
     const invitation: OrganizationInvitation = matchedInvitation;
 
     // 2. Validate Invitation Status
-    if (invitation.status === 'accepted') {
-      return { success: false, error: 'This invitation has already been accepted.' };
-    }
-
     if (invitation.status === 'cancelled') {
       return { success: false, error: 'This invitation has been cancelled by an organization administrator.' };
     }
 
-    const now = Date.now();
-    if (new Date(invitation.expiresAt).getTime() <= now) {
+    if (new Date(invitation.expiresAt).getTime() <= now && invitation.status !== 'accepted') {
       return { success: false, error: 'This invitation has expired. Please request a new invitation.' };
     }
 
-    // 3. Verify Seat Availability (STEP 5: Concurrency Protection)
+    // Check if user is already an active member of this organization
+    const effectiveMemberEmail = (user.email || invitation.email || '').toLowerCase().trim();
+    const effectiveDisplayName = user.displayName || (effectiveMemberEmail ? effectiveMemberEmail.split('@')[0] : 'Team Member');
+    const assignedRole: OrganizationRole = invitation.role === 'Admin' ? 'Admin' : 'Member';
+    const assignedPermissions = DEFAULT_ROLE_PERMISSIONS[assignedRole] || DEFAULT_ROLE_PERMISSIONS.Member;
+
+    const newMember: OrganizationMember = {
+      uid: user.uid,
+      organizationId: orgId,
+      email: effectiveMemberEmail,
+      displayName: effectiveDisplayName,
+      role: assignedRole,
+      permissions: assignedPermissions,
+      status: 'active',
+      joinedAt: nowIso,
+      lastActive: nowIso,
+      avatar: (user as any).photoURL || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(effectiveDisplayName)}&backgroundColor=3b82f6`
+    };
+
+    // If invitation was already marked accepted by this user, return existing membership
+    if (invitation.status === 'accepted' && (invitation.acceptedByUid === user.uid || invitation.email.toLowerCase() === userEmail)) {
+      return { success: true, member: newMember };
+    } else if (invitation.status === 'accepted') {
+      return { success: false, error: 'This invitation has already been accepted.' };
+    }
+
+    // 3. Verify Seat Availability (Concurrency Protection)
     let currentMemberCount = 1;
     let maxSeats = 15;
     try {
@@ -1288,45 +1356,43 @@ export async function acceptOrganizationInvitation(params: {
       };
     }
 
-    // 4. Create Member Record with assigned role & default role permissions (STEP 1)
-    const nowIso = new Date().toISOString();
-    const assignedPermissions = DEFAULT_ROLE_PERMISSIONS[invitation.role] || DEFAULT_ROLE_PERMISSIONS.Member;
-    const effectiveMemberEmail = user.email || invitation.email;
-    const effectiveDisplayName = user.displayName || (effectiveMemberEmail.split('@')[0]) || 'Team Member';
-
-    const newMember: OrganizationMember = {
-      uid: user.uid,
-      organizationId: orgId,
-      email: effectiveMemberEmail,
-      displayName: effectiveDisplayName,
-      role: invitation.role,
-      permissions: assignedPermissions,
-      status: 'active',
-      joinedAt: nowIso,
-      lastActive: nowIso,
-      avatar: (user as any).photoURL || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(effectiveDisplayName)}&backgroundColor=3b82f6`
-    };
-
-    // Attempt Firestore document writes (non-blocking for UI resilience)
+    // 4. Multi-Collection Firestore Writes
     try {
       const memberRef = doc(db, 'organizations', orgId, 'members', user.uid);
       await setDoc(memberRef, newMember);
     } catch (writeErr) {
-      console.warn('Firestore member setDoc fallback:', writeErr);
+      console.warn('Firestore organization member setDoc note:', writeErr);
     }
 
+    // Synchronize to top-level legacy members collection for App.tsx compatibility
+    try {
+      const legacyMemberRef = doc(db, 'members', user.uid);
+      await setDoc(legacyMemberRef, {
+        id: user.uid,
+        name: effectiveDisplayName,
+        email: effectiveMemberEmail,
+        role: assignedRole,
+        status: 'active',
+        avatar: newMember.avatar
+      });
+    } catch (legacyErr) {
+      console.warn('Top-level legacy member sync note:', legacyErr);
+    }
+
+    // Update invitation status in organization subcollection
     try {
       const inviteRef = doc(db, 'organizations', orgId, 'invitations', invitation.id);
       await updateDoc(inviteRef, {
         status: 'accepted',
         acceptedAt: nowIso,
-        acceptedByUid: user.uid
+        acceptedByUid: user.uid,
+        updatedAt: nowIso
       });
     } catch (inviteErr) {
-      console.warn('Firestore invite updateDoc fallback:', inviteErr);
+      console.warn('Firestore invite updateDoc note:', inviteErr);
     }
 
-    // 5. Update local cache and persistent state
+    // 5. Update local cache and persistent state across stores
     const cachedMembers = localMembersStore.get(orgId) || [];
     const updatedMembers = [newMember, ...cachedMembers.filter(m => m.uid !== user.uid && m.email.toLowerCase() !== effectiveMemberEmail.toLowerCase())];
     localMembersStore.set(orgId, updatedMembers);
@@ -1346,7 +1412,7 @@ export async function acceptOrganizationInvitation(params: {
       window.dispatchEvent(new CustomEvent('app_workspace_invitations_updated', { detail: { invitations: updatedInvites } }));
     }
 
-    // Record Audit Log (STEP 3)
+    // Record Audit Log
     recordOrganizationAuditLog({
       orgId,
       action: 'member.accepted',
@@ -1363,7 +1429,7 @@ export async function acceptOrganizationInvitation(params: {
         name: newMember.displayName,
         type: 'member'
       },
-      metadata: { role: invitation.role, inviteId: invitation.id }
+      metadata: { role: assignedRole, inviteId: invitation.id }
     }).catch(() => {});
 
     // Broadcast live chat system announcement

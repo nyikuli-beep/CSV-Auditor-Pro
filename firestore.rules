@@ -135,7 +135,10 @@ service cloud.firestore {
     function isOrgMember(orgId) {
       return isSignedIn() && (
         exists(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)) ||
-        (request.auth.token.email != null && request.auth.token.email == 'nyikulibramwel@gmail.com')
+        (exists(/databases/$(database)/documents/organizations/$(orgId)) && (
+          get(/databases/$(database)/documents/organizations/$(orgId)).data.ownerId == request.auth.uid ||
+          (request.auth.token.email != null && get(/databases/$(database)/documents/organizations/$(orgId)).data.ownerEmail == request.auth.token.email)
+        ))
       );
     }
 
@@ -143,11 +146,10 @@ service cloud.firestore {
       return isSignedIn() && (
         (exists(/databases/$(database)/documents/organizations/$(orgId)) && (
           get(/databases/$(database)/documents/organizations/$(orgId)).data.ownerId == request.auth.uid ||
-          (request.auth.token.email != null && get(/databases/$(database)/documents/organizations/$(orgId)).data.ownerEmail == request.auth.token.email) ||
-          (request.auth.token.email != null && request.auth.token.email == 'nyikulibramwel@gmail.com')
+          (request.auth.token.email != null && get(/databases/$(database)/documents/organizations/$(orgId)).data.ownerEmail == request.auth.token.email)
         )) ||
-        (isOrgMember(orgId) && exists(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)) && get(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data.role in ['Owner', 'Admin']) ||
-        (request.auth.token.email != null && request.auth.token.email == 'nyikulibramwel@gmail.com')
+        (exists(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data.role in ['Owner', 'Admin'])
       );
     }
 

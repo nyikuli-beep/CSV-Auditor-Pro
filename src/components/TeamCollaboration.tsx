@@ -490,16 +490,6 @@ export default function TeamCollaboration({
         showToast('success', `Welcome! You have joined ${organization?.name || 'the team'} as ${res.member.role}.`);
         setOrgMembers(prev => [res.member!, ...prev.filter(m => m.uid !== res.member!.uid && m.email.toLowerCase() !== res.member!.email.toLowerCase())]);
         setOrgInvitations(prev => prev.map(inv => inv.id === userPendingInvitation.id ? { ...inv, status: 'accepted' as const, acceptedAt: new Date().toISOString(), acceptedByUid: res.member!.uid } : inv));
-        if (onSwitchActiveUser) {
-          onSwitchActiveUser({
-            id: res.member.uid,
-            name: res.member.displayName,
-            email: res.member.email,
-            role: res.member.role,
-            status: 'active',
-            avatar: res.member.avatar
-          });
-        }
       } else {
         showToast('error', res.error || 'Failed to accept invitation.');
       }
