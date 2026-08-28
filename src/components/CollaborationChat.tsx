@@ -30,7 +30,13 @@ import {
   ChevronDown,
   X,
   XCircle,
-  AlertTriangle
+  AlertTriangle,
+  ThumbsUp,
+  Heart,
+  Flame,
+  Lightbulb,
+  Eye,
+  Bookmark
 } from 'lucide-react';
 import { TeamMember } from '../types';
 import { ChatClient, ChatMessage, TypingUser, PresenceUser, ConnectionStatus } from '../lib/chatClient';
@@ -47,7 +53,58 @@ interface CollaborationChatProps {
   accentClass?: string;
 }
 
-const EMOJI_LIST = ['👍', '❤️', '🔥', '💡', '😂', '🎉', '🚀', '👀'];
+export interface SvgReactionOption {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  color: string;
+}
+
+export const SVG_REACTIONS: SvgReactionOption[] = [
+  { id: 'like', label: 'Like', icon: ThumbsUp, color: 'text-blue-500' },
+  { id: 'approved', label: 'Approved', icon: CheckCircle2, color: 'text-emerald-500' },
+  { id: 'insight', label: 'Insight', icon: Lightbulb, color: 'text-amber-500' },
+  { id: 'priority', label: 'Priority', icon: Flame, color: 'text-rose-500' },
+  { id: 'favorite', label: 'Favorite', icon: Heart, color: 'text-pink-500' },
+  { id: 'review', label: 'Review', icon: AlertTriangle, color: 'text-orange-500' },
+];
+
+export function getReactionConfig(key: string): SvgReactionOption {
+  switch (key) {
+    case 'like':
+    case '👍':
+      return { id: 'like', label: 'Like', icon: ThumbsUp, color: 'text-blue-500' };
+    case 'approved':
+    case '✅':
+    case 'verified':
+      return { id: 'approved', label: 'Approved', icon: CheckCircle2, color: 'text-emerald-500' };
+    case 'insight':
+    case '💡':
+    case 'idea':
+      return { id: 'insight', label: 'Insight', icon: Lightbulb, color: 'text-amber-500' };
+    case 'priority':
+    case '🔥':
+    case 'urgent':
+    case '🚀':
+      return { id: 'priority', label: 'Priority', icon: Flame, color: 'text-rose-500' };
+    case 'favorite':
+    case '❤️':
+    case 'love':
+      return { id: 'favorite', label: 'Favorite', icon: Heart, color: 'text-pink-500' };
+    case 'review':
+    case '⚠️':
+    case 'flag':
+      return { id: 'review', label: 'Review', icon: AlertTriangle, color: 'text-orange-500' };
+    case 'celebrate':
+    case '🎉':
+      return { id: 'celebrate', label: 'Celebrate', icon: Sparkles, color: 'text-purple-500' };
+    case 'noted':
+    case '👀':
+      return { id: 'noted', label: 'Noted', icon: Eye, color: 'text-teal-500' };
+    default:
+      return { id: key, label: key, icon: ThumbsUp, color: 'text-blue-500' };
+  }
+}
 
 export default function CollaborationChat({
   tenantId = 'default-tenant-01',
@@ -119,7 +176,7 @@ export default function CollaborationChat({
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [showPresenceModal, setShowPresenceModal] = useState(false);
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
   const [pinnedCollapsed, setPinnedCollapsed] = useState(false);
 
@@ -245,7 +302,7 @@ export default function CollaborationChat({
         setCellRef('');
         setShowCellRefInput(false);
         setReplyTarget(null);
-        setShowEmojiPicker(false);
+        setShowReactionPicker(false);
 
         // Auto scroll to bottom on own send
         setTimeout(scrollToBottom, 50);
@@ -351,16 +408,18 @@ export default function CollaborationChat({
   };
 
   return (
-    <div className={`flex flex-col h-[500px] rounded-3xl border transition-all overflow-hidden relative ${
-      isDarkMode ? 'bg-slate-900/90 border-slate-800 shadow-2xl text-slate-100' : 'bg-white border-slate-200 shadow-md text-slate-900'
+    <div className={`flex flex-col h-[540px] rounded-2xl border transition-all overflow-hidden relative ${
+      isDarkMode ? 'bg-[#0F172A] border-slate-800 shadow-xl text-slate-100' : 'bg-white border-slate-200 shadow-sm text-slate-900'
     }`}>
       {/* Header Bar */}
       <div className={`p-3.5 border-b flex flex-wrap items-center justify-between gap-2.5 ${
-        isDarkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-slate-50 border-slate-200'
+        isDarkMode ? 'bg-[#1E293B] border-slate-800' : 'bg-[#F8FAFC] border-slate-200'
       }`}>
         <div className="flex items-center gap-2.5">
           <div className="relative">
-            <div className="p-2 bg-blue-500/10 text-blue-500 rounded-2xl border border-blue-500/20">
+            <div className={`p-2 rounded-xl border ${
+              isDarkMode ? 'bg-blue-950/80 text-blue-400 border-blue-800' : 'bg-blue-50 text-blue-600 border-blue-200'
+            }`}>
               <MessageSquare className="w-4.5 h-4.5" />
             </div>
             <span className="absolute -top-1 -right-1 flex h-3 w-3">
@@ -371,16 +430,24 @@ export default function CollaborationChat({
 
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="font-extrabold text-sm tracking-tight">Team Collaboration Chat</h3>
-              <span className="text-[10px] bg-blue-500/10 text-blue-400 font-mono font-bold px-2 py-0.5 rounded border border-blue-500/20 flex items-center gap-1">
+              <h3 className={`font-extrabold text-sm tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                Team Collaboration Chat
+              </h3>
+              <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border flex items-center gap-1 ${
+                isDarkMode ? 'bg-blue-950/80 text-blue-300 border-blue-800' : 'bg-blue-50 text-blue-700 border-blue-200'
+              }`}>
                 <Hash className="w-3 h-3" /> Live RTDB
               </span>
             </div>
-            <div className="flex items-center gap-2 text-[10px] font-mono text-slate-400 mt-0.5">
-              <span className="flex items-center gap-1 text-emerald-400 font-bold">
+            <div className="flex items-center gap-2 text-[10px] font-mono mt-0.5">
+              <span className={`flex items-center gap-1 font-bold ${isDarkMode ? 'text-emerald-400' : 'text-emerald-700'}`}>
                 <ShieldCheck className="w-3 h-3" /> Room:
               </span>
-              <span className="truncate max-w-[180px] bg-slate-900/60 px-1.5 py-0.5 rounded border border-slate-800 text-slate-300">
+              <span className={`truncate max-w-[180px] px-1.5 py-0.5 rounded border font-semibold ${
+                isDarkMode 
+                  ? 'bg-slate-900 text-slate-200 border-slate-700' 
+                  : 'bg-white text-slate-800 border-slate-300 shadow-2xs'
+              }`}>
                 {activeFileName}
               </span>
             </div>
@@ -395,8 +462,8 @@ export default function CollaborationChat({
             onClick={() => setShowSearch(prev => !prev)}
             className={`p-1.5 rounded-xl border text-xs transition-all cursor-pointer ${
               showSearch || searchQuery
-                ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                : isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white' : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900'
+                ? isDarkMode ? 'bg-blue-950 text-blue-300 border-blue-800' : 'bg-blue-50 text-blue-700 border-blue-300'
+                : isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-300 hover:text-white' : 'bg-white border-slate-300 text-slate-700 hover:text-slate-900 shadow-2xs'
             }`}
             title="Search message history"
           >
@@ -408,10 +475,12 @@ export default function CollaborationChat({
             type="button"
             onClick={() => setShowPresenceModal(prev => !prev)}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold border cursor-pointer transition-all ${
-              isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+              isDarkMode 
+                ? 'bg-slate-900 border-slate-700 text-slate-200 hover:bg-slate-800' 
+                : 'bg-white border-slate-300 text-slate-800 hover:bg-slate-50 shadow-2xs'
             }`}
           >
-            <Users className="w-3.5 h-3.5 text-blue-400" />
+            <Users className={`w-3.5 h-3.5 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
             <span className="text-[11px] font-bold font-mono">
               {presenceUsers.filter(u => u.online && members.some(m => m.id === u.userId || m.email.toLowerCase().trim() === u.userEmail.toLowerCase().trim())).length || (members.length > 0 ? 1 : 0)} Online
             </span>
@@ -420,10 +489,10 @@ export default function CollaborationChat({
           {/* Connection Status Badge */}
           <div className={`px-2.5 py-1 rounded-full text-[10px] font-bold font-mono flex items-center gap-1.5 border ${
             connectionStatus === 'connected'
-              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+              ? isDarkMode ? 'bg-emerald-950/80 text-emerald-300 border-emerald-800' : 'bg-emerald-50 text-emerald-800 border-emerald-300'
               : connectionStatus === 'connecting'
-              ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-              : 'bg-slate-800 text-slate-400 border-slate-700'
+              ? isDarkMode ? 'bg-amber-950/80 text-amber-300 border-amber-800' : 'bg-amber-50 text-amber-800 border-amber-300'
+              : isDarkMode ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-slate-100 text-slate-700 border-slate-300'
           }`}>
             {connectionStatus === 'connected' ? (
               <>
@@ -432,12 +501,12 @@ export default function CollaborationChat({
               </>
             ) : connectionStatus === 'connecting' ? (
               <>
-                <RefreshCw className="w-3 h-3 animate-spin text-amber-400" />
+                <RefreshCw className={`w-3 h-3 animate-spin ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`} />
                 <span>Syncing...</span>
               </>
             ) : (
               <>
-                <WifiOff className="w-3 h-3 text-slate-400" />
+                <WifiOff className="w-3 h-3" />
                 <span>Offline</span>
               </>
             )}
@@ -448,23 +517,25 @@ export default function CollaborationChat({
       {/* Search Bar Overlay */}
       {showSearch && (
         <div className={`p-2.5 border-b flex items-center gap-2 animate-fadeIn ${
-          isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-100 border-slate-200'
+          isDarkMode ? 'bg-[#0F172A] border-slate-800 text-slate-100' : 'bg-[#F1F5F9] border-slate-300 text-slate-900'
         }`}>
-          <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+          <Search className={`w-3.5 h-3.5 shrink-0 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search messages, users, or cell references..."
             className={`w-full text-xs bg-transparent focus:outline-none ${
-              isDarkMode ? 'text-slate-100 placeholder-slate-500' : 'text-slate-900 placeholder-slate-400'
+              isDarkMode ? 'text-slate-100 placeholder:text-slate-500' : 'text-slate-900 placeholder:text-slate-500'
             }`}
             autoFocus
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="text-xs text-slate-400 hover:text-slate-200 cursor-pointer px-1"
+              className={`text-xs cursor-pointer px-1 ${
+                isDarkMode ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900'
+              }`}
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -475,20 +546,22 @@ export default function CollaborationChat({
       {/* Pinned Messages Collapsible Banner */}
       {pinnedMessages.length > 0 && (
         <div className={`border-b text-xs px-3.5 py-2 flex items-center justify-between ${
-          isDarkMode ? 'bg-blue-950/40 border-blue-900/50 text-blue-200' : 'bg-blue-50 border-blue-200 text-blue-900'
+          isDarkMode ? 'bg-blue-950/80 border-blue-900 text-blue-200' : 'bg-blue-50 border-blue-200 text-blue-900'
         }`}>
           <div className="flex items-center gap-2 truncate">
-            <Pin className="w-3.5 h-3.5 text-amber-400 shrink-0 fill-amber-400/20" />
+            <Pin className={`w-3.5 h-3.5 shrink-0 ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`} />
             <span className="font-bold text-[11px] uppercase tracking-wide">
               {pinnedMessages.length} Pinned {pinnedMessages.length === 1 ? 'Message' : 'Messages'}:
             </span>
-            <span className="truncate italic opacity-90 text-[11px]">
+            <span className={`truncate italic text-[11px] ${isDarkMode ? 'text-blue-200' : 'text-blue-800 font-medium'}`}>
               "{pinnedMessages[0].text}"
             </span>
           </div>
           <button
             onClick={() => setPinnedCollapsed(p => !p)}
-            className="p-1 hover:bg-blue-500/20 rounded cursor-pointer shrink-0"
+            className={`p-1 rounded cursor-pointer shrink-0 ${
+              isDarkMode ? 'hover:bg-blue-900/50 text-blue-300' : 'hover:bg-blue-100 text-blue-700'
+            }`}
           >
             <ChevronDown className={`w-3.5 h-3.5 transition-transform ${pinnedCollapsed ? 'rotate-180' : ''}`} />
           </button>
@@ -499,15 +572,21 @@ export default function CollaborationChat({
       <div 
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex-1 p-4 overflow-y-auto space-y-4 relative"
+        className={`flex-1 p-4 overflow-y-auto space-y-4 relative ${
+          isDarkMode ? 'bg-[#0B1120]' : 'bg-[#F8FAFC]'
+        }`}
       >
         {filteredMessages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
-            <MessageSquare className="w-10 h-10 mb-2 opacity-30 text-blue-500" />
-            <p className="text-xs font-semibold">
+          <div className="h-full flex flex-col items-center justify-center text-center p-6">
+            <div className={`p-3 rounded-2xl mb-2.5 ${
+              isDarkMode ? 'bg-slate-900 text-blue-400 border border-slate-800' : 'bg-white text-blue-600 border border-slate-200 shadow-2xs'
+            }`}>
+              <MessageSquare className="w-8 h-8 opacity-80" />
+            </div>
+            <p className={`text-xs font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
               {searchQuery ? 'No matching messages found.' : 'No messages in this room yet.'}
             </p>
-            <p className="text-[10px] mt-1 text-slate-500 max-w-xs">
+            <p className={`text-[11px] mt-1 max-w-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
               {searchQuery ? 'Try searching for a different keyword or cell tag.' : 'All authenticated collaborators will instantly receive your messages in real time.'}
             </p>
           </div>
@@ -516,13 +595,13 @@ export default function CollaborationChat({
             <div key={dateHeader} className="space-y-4">
               {/* Date Separator Pill */}
               <div className="flex items-center my-2">
-                <div className="flex-1 border-t border-slate-700/40"></div>
-                <span className={`px-2.5 py-0.5 text-[9px] font-mono font-bold rounded-full border uppercase tracking-wider ${
-                  isDarkMode ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-100 text-slate-500 border-slate-200'
+                <div className={`flex-1 border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-300'}`}></div>
+                <span className={`px-2.5 py-0.5 text-[9px] font-mono font-bold rounded-full border uppercase tracking-wider mx-2 ${
+                  isDarkMode ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-white text-slate-700 border-slate-300 shadow-2xs'
                 }`}>
                   {dateHeader}
                 </span>
-                <div className="flex-1 border-t border-slate-700/40"></div>
+                <div className={`flex-1 border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-300'}`}></div>
               </div>
 
               {groupedMessages[dateHeader].map((msg) => {
@@ -530,11 +609,11 @@ export default function CollaborationChat({
                   return (
                     <div key={msg.id} className="flex justify-center my-2">
                       <div className={`px-3.5 py-1.5 rounded-xl border text-[11px] font-medium flex items-center gap-2 max-w-[92%] shadow-2xs ${
-                        isDarkMode ? 'bg-slate-800/90 border-slate-700/80 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-700'
+                        isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-200' : 'bg-white border-slate-300 text-slate-800'
                       }`}>
-                        <ShieldCheck className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                        <ShieldCheck className={`w-3.5 h-3.5 shrink-0 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
                         <span className="leading-snug">{msg.text}</span>
-                        <span className="text-[9px] font-mono text-slate-400 ml-auto shrink-0">{msg.timeFormatted}</span>
+                        <span className={`text-[9px] font-mono ml-auto shrink-0 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{msg.timeFormatted}</span>
                       </div>
                     </div>
                   );
@@ -552,50 +631,74 @@ export default function CollaborationChat({
                     <img
                       src={resolvedAvatar(msg.userEmail, msg.userAvatar, msg.userName)}
                       alt={msg.userName}
-                      className="w-7 h-7 rounded-full object-cover shrink-0 mt-1 border border-slate-700 shadow-xs"
+                      className={`w-7 h-7 rounded-full object-cover shrink-0 mt-1 border shadow-2xs ${
+                        isDarkMode ? 'border-slate-700' : 'border-slate-300'
+                      }`}
                     />
 
                     <div className="space-y-1 max-w-full">
                       {/* Author Header Info */}
                       <div className={`flex items-center gap-2 text-[10px] ${mine ? 'justify-end' : 'justify-start'}`}>
-                        <span className="font-bold text-slate-300">{mine ? 'You' : msg.userName}</span>
+                        <span className={`font-bold ${
+                          mine 
+                            ? isDarkMode ? 'text-blue-300' : 'text-blue-700' 
+                            : isDarkMode ? 'text-slate-200' : 'text-slate-800'
+                        }`}>
+                          {mine ? 'You' : msg.userName}
+                        </span>
                         {msg.userRole && (
-                          <span className={`px-1.5 py-0.2 rounded text-[8px] font-bold uppercase ${
-                            msg.userRole === 'Owner' ? 'bg-violet-500/20 text-violet-300' : 'bg-blue-500/20 text-blue-300'
+                          <span className={`px-1.5 py-0.2 rounded text-[8px] font-bold uppercase border ${
+                            msg.userRole === 'Owner' 
+                              ? isDarkMode ? 'bg-purple-950 text-purple-300 border-purple-800' : 'bg-purple-50 text-purple-800 border-purple-200'
+                              : msg.userRole === 'Admin'
+                              ? isDarkMode ? 'bg-blue-950 text-blue-300 border-blue-800' : 'bg-blue-50 text-blue-800 border-blue-200'
+                              : isDarkMode ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-slate-100 text-slate-700 border-slate-300'
                           }`}>
                             {msg.userRole}
                           </span>
                         )}
-                        <span className="text-slate-500 font-mono">{msg.timeFormatted}</span>
-                        {msg.edited && <span className="text-[9px] text-slate-500 italic">(edited)</span>}
-                        {msg.pinned && <Pin className="w-3 h-3 text-amber-400 fill-amber-400/20" />}
+                        <span className={`font-mono ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{msg.timeFormatted}</span>
+                        {msg.edited && <span className={`text-[9px] italic ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>(edited)</span>}
+                        {msg.pinned && <Pin className={`w-3 h-3 ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`} />}
                       </div>
 
                       {/* Quoted Parent Reply preview */}
                       {msg.replyTo && (
-                        <div className={`p-2 rounded-xl text-[10px] border border-l-4 border-l-blue-500 mb-1 ${
-                          isDarkMode ? 'bg-slate-800/80 border-slate-700 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-700'
+                        <div className={`p-2 rounded-xl text-[10px] border-l-4 mb-1.5 ${
+                          mine
+                            ? 'bg-blue-700/80 border-l-white text-blue-100'
+                            : isDarkMode
+                            ? 'bg-slate-900/90 border-slate-700 border-l-blue-400 text-slate-200'
+                            : 'bg-slate-50 border-slate-200 border-l-blue-600 text-slate-700'
                         }`}>
-                          <span className="font-bold text-blue-400 block">Replying to {msg.replyTo.userName}:</span>
-                          <span className="truncate block italic">"{msg.replyTo.text}"</span>
+                          <span className={`font-bold block ${mine ? 'text-white' : isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}>
+                            Replying to {msg.replyTo.userName}:
+                          </span>
+                          <span className="truncate block italic opacity-90">"{msg.replyTo.text}"</span>
                         </div>
                       )}
 
                       {/* Bubble Container */}
                       <div className="relative group">
-                        <div className={`p-3 rounded-2xl text-xs leading-relaxed transition-all ${
+                        <div className={`p-3 rounded-2xl text-xs leading-relaxed transition-all shadow-xs ${
                           msg.deleted
-                            ? 'bg-slate-800/50 text-slate-400 italic border border-slate-700/40 rounded-tl-none'
+                            ? isDarkMode 
+                              ? 'bg-slate-900/70 text-slate-400 italic border border-slate-800 rounded-tl-none' 
+                              : 'bg-slate-100 text-slate-500 italic border border-slate-300 rounded-tl-none'
                             : mine
-                            ? 'bg-blue-600 text-white rounded-tr-none shadow-sm'
+                            ? 'bg-blue-600 text-white rounded-tr-none border border-blue-500'
                             : isDarkMode
-                            ? 'bg-slate-800 text-slate-100 rounded-tl-none border border-slate-700/60'
-                            : 'bg-slate-100 text-slate-900 rounded-tl-none border border-slate-200'
+                            ? 'bg-[#1E293B] text-slate-100 rounded-tl-none border border-slate-700'
+                            : 'bg-white text-slate-900 rounded-tl-none border border-slate-200'
                         }`}>
                           {/* Cell Tag Reference Badge */}
                           {msg.cellRef && (
-                            <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold mb-1.5 ${
-                              mine ? 'bg-blue-700/80 text-blue-100' : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                            <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold mb-1.5 border ${
+                              mine 
+                                ? 'bg-blue-700 text-blue-100 border-blue-500' 
+                                : isDarkMode 
+                                ? 'bg-blue-950 text-blue-300 border-blue-800' 
+                                : 'bg-blue-50 text-blue-800 border-blue-200'
                             }`}>
                               <Tag className="w-3 h-3" />
                               <span>Cell: {msg.cellRef}</span>
@@ -609,21 +712,27 @@ export default function CollaborationChat({
                                 type="text"
                                 value={editText}
                                 onChange={(e) => setEditText(e.target.value)}
-                                className="w-full text-xs px-2 py-1 rounded bg-slate-900 border border-blue-400 text-white focus:outline-none"
+                                className={`w-full text-xs px-2.5 py-1.5 rounded border focus:outline-none ${
+                                  isDarkMode 
+                                    ? 'bg-[#0F172A] border-blue-400 text-white' 
+                                    : 'bg-white border-blue-600 text-slate-900'
+                                }`}
                                 autoFocus
                               />
                               <div className="flex gap-2 justify-end">
                                 <button
                                   type="button"
                                   onClick={() => setEditingMsgId(null)}
-                                  className="text-[10px] px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-200"
+                                  className={`text-[10px] px-2.5 py-1 rounded cursor-pointer ${
+                                    isDarkMode ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-slate-200 hover:bg-slate-300 text-slate-800'
+                                  }`}
                                 >
                                   Cancel
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => handleSaveEdit(msg.id)}
-                                  className="text-[10px] px-2 py-0.5 rounded bg-blue-500 hover:bg-blue-400 text-white font-bold"
+                                  className="text-[10px] px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-bold cursor-pointer"
                                 >
                                   Save
                                 </button>
@@ -635,18 +744,18 @@ export default function CollaborationChat({
 
                           {/* Sent Status Ticks for User's Own Messages */}
                           {mine && !msg.deleted && (
-                            <div className="flex items-center justify-end gap-1 text-[9px] font-mono text-blue-200 mt-1">
+                            <div className="flex items-center justify-end gap-1 text-[9px] font-mono text-blue-100 mt-1">
                               {msg.status === 'sending' ? (
                                 <RefreshCw className="w-3 h-3 animate-spin text-blue-200" />
                               ) : msg.status === 'failed' ? (
                                 <button
                                   onClick={() => handleRetrySend(msg)}
-                                  className="flex items-center gap-1 text-red-300 font-bold bg-red-500/30 px-1.5 py-0.5 rounded cursor-pointer"
+                                  className="flex items-center gap-1 text-white font-bold bg-rose-700/80 px-1.5 py-0.5 rounded cursor-pointer"
                                 >
                                   <AlertCircle className="w-3 h-3" /> Failed - Retry
                                 </button>
                               ) : (
-                                <CheckCheck className="w-3.5 h-3.5 text-blue-200" />
+                                <CheckCheck className="w-3.5 h-3.5 text-blue-100" />
                               )}
                             </div>
                           )}
@@ -656,58 +765,80 @@ export default function CollaborationChat({
                         {!msg.deleted && !isEditingThis && (
                           <div className={`absolute top-0 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 p-1 rounded-xl shadow-lg border z-10 ${
                             mine ? 'right-0' : 'left-0'
-                          } ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
-                            {/* Emoji Reactions */}
-                            {EMOJI_LIST.slice(0, 4).map(emoji => (
-                              <button
-                                key={emoji}
-                                onClick={() => handleReact(msg.id, emoji)}
-                                className="p-1 hover:bg-slate-700/40 rounded text-xs cursor-pointer transition-transform hover:scale-125"
-                                title={`React with ${emoji}`}
-                              >
-                                {emoji}
-                              </button>
-                            ))}
+                          } ${isDarkMode ? 'bg-[#1E293B] border-slate-700' : 'bg-white border-slate-300'}`}>
+                            {/* SVG Reactions */}
+                            {SVG_REACTIONS.slice(0, 5).map(reaction => {
+                              const Icon = reaction.icon;
+                              return (
+                                <button
+                                  key={reaction.id}
+                                  type="button"
+                                  onClick={() => handleReact(msg.id, reaction.id)}
+                                  className={`p-1.5 rounded cursor-pointer transition-transform hover:scale-110 flex items-center justify-center ${
+                                    isDarkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-100'
+                                  }`}
+                                  title={reaction.label}
+                                >
+                                  <Icon className={`w-3.5 h-3.5 ${reaction.color}`} />
+                                </button>
+                              );
+                            })}
+                            <div className={`w-[1px] h-3.5 mx-0.5 ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`} />
                             {/* Reply */}
                             <button
+                              type="button"
                               onClick={() => setReplyTarget(msg)}
-                              className="p-1 hover:bg-slate-700/40 rounded text-slate-400 hover:text-blue-400 cursor-pointer"
+                              className={`p-1.5 rounded cursor-pointer ${
+                                isDarkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-blue-300' : 'hover:bg-slate-100 text-slate-500 hover:text-blue-600'
+                              }`}
                               title="Reply"
                             >
-                              <CornerUpLeft className="w-3 h-3" />
+                              <CornerUpLeft className="w-3.5 h-3.5" />
                             </button>
                             {/* Copy */}
                             <button
+                              type="button"
                               onClick={() => handleCopyText(msg)}
-                              className="p-1 hover:bg-slate-700/40 rounded text-slate-400 hover:text-emerald-400 cursor-pointer"
+                              className={`p-1.5 rounded cursor-pointer ${
+                                isDarkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-emerald-300' : 'hover:bg-slate-100 text-slate-500 hover:text-emerald-600'
+                              }`}
                               title="Copy text"
                             >
-                              {copiedMsgId === msg.id ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                              {copiedMsgId === msg.id ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                             </button>
                             {/* Pin */}
                             <button
+                              type="button"
                               onClick={() => handleTogglePin(msg.id)}
-                              className="p-1 hover:bg-slate-700/40 rounded text-slate-400 hover:text-amber-400 cursor-pointer"
+                              className={`p-1.5 rounded cursor-pointer ${
+                                isDarkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-amber-300' : 'hover:bg-slate-100 text-slate-500 hover:text-amber-600'
+                              }`}
                               title={msg.pinned ? "Unpin message" : "Pin message"}
                             >
-                              <Pin className="w-3 h-3" />
+                              <Pin className="w-3.5 h-3.5" />
                             </button>
                             {/* Edit / Delete (Owner/Self) */}
                             {mine && (
                               <>
                                 <button
+                                  type="button"
                                   onClick={() => handleStartEdit(msg)}
-                                  className="p-1 hover:bg-slate-700/40 rounded text-slate-400 hover:text-blue-400 cursor-pointer"
+                                  className={`p-1.5 rounded cursor-pointer ${
+                                    isDarkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-blue-300' : 'hover:bg-slate-100 text-slate-500 hover:text-blue-600'
+                                  }`}
                                   title="Edit message"
                                 >
-                                  <Edit2 className="w-3 h-3" />
+                                  <Edit2 className="w-3.5 h-3.5" />
                                 </button>
                                 <button
+                                  type="button"
                                   onClick={() => handleDelete(msg.id)}
-                                  className="p-1 hover:bg-slate-700/40 rounded text-slate-400 hover:text-rose-400 cursor-pointer"
+                                  className={`p-1.5 rounded cursor-pointer ${
+                                    isDarkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-rose-300' : 'hover:bg-slate-100 text-slate-500 hover:text-rose-600'
+                                  }`}
                                   title="Delete message"
                                 >
-                                  <Trash2 className="w-3 h-3" />
+                                  <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                               </>
                             )}
@@ -715,25 +846,34 @@ export default function CollaborationChat({
                         )}
                       </div>
 
-                      {/* Displayed Emoji Reaction Pills */}
+                      {/* Displayed SVG Reaction Pills */}
                       {msg.reactions && Object.keys(msg.reactions).length > 0 && (
-                        <div className={`flex flex-wrap gap-1 mt-1 ${mine ? 'justify-end' : 'justify-start'}`}>
-                          {Object.keys(msg.reactions).map(emoji => {
-                            const uList = msg.reactions![emoji] || [];
+                        <div className={`flex flex-wrap gap-1 mt-1.5 ${mine ? 'justify-end' : 'justify-start'}`}>
+                          {Object.keys(msg.reactions).map(reactionKey => {
+                            const uList = msg.reactions![reactionKey] || [];
                             if (uList.length === 0) return null;
                             const reactedByMe = uList.includes(currentMember.id);
+                            const config = getReactionConfig(reactionKey);
+                            const ReactionIcon = config.icon;
                             return (
                               <button
-                                key={emoji}
-                                onClick={() => handleReact(msg.id, emoji)}
-                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] border cursor-pointer font-bold transition-all ${
+                                key={reactionKey}
+                                type="button"
+                                onClick={() => handleReact(msg.id, reactionKey)}
+                                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] border cursor-pointer font-bold transition-all ${
                                   reactedByMe
-                                    ? 'bg-blue-500/20 border-blue-500/40 text-blue-300'
-                                    : 'bg-slate-800/80 border-slate-700 text-slate-300'
+                                    ? isDarkMode
+                                      ? 'bg-blue-950 text-blue-300 border-blue-700 shadow-xs'
+                                      : 'bg-blue-50 text-blue-800 border-blue-300 shadow-xs'
+                                    : isDarkMode
+                                      ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-750'
+                                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50 shadow-2xs'
                                 }`}
+                                title={`${uList.length} ${config.label}`}
                               >
-                                <span>{emoji}</span>
-                                <span className="font-mono text-[9px]">{uList.length}</span>
+                                <ReactionIcon className={`w-3 h-3 ${config.color}`} />
+                                <span className="font-semibold">{config.label}</span>
+                                <span className="font-mono text-[9px] opacity-80">{uList.length}</span>
                               </button>
                             );
                           })}
@@ -783,16 +923,19 @@ export default function CollaborationChat({
       {/* Quoted Reply Preview Bar */}
       {replyTarget && (
         <div className={`px-4 py-2 border-t flex items-center justify-between text-xs ${
-          isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-slate-100 border-slate-200 text-slate-800'
+          isDarkMode ? 'bg-[#1E293B] border-slate-800 text-slate-200' : 'bg-[#F1F5F9] border-slate-300 text-slate-800'
         }`}>
           <div className="flex items-center gap-2 truncate">
-            <CornerUpLeft className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-            <span className="font-bold text-blue-400">Replying to {replyTarget.userName}:</span>
-            <span className="truncate italic text-slate-400">"{replyTarget.text}"</span>
+            <CornerUpLeft className={`w-3.5 h-3.5 shrink-0 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
+            <span className={`font-bold ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}>Replying to {replyTarget.userName}:</span>
+            <span className={`truncate italic ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>"{replyTarget.text}"</span>
           </div>
           <button
+            type="button"
             onClick={() => setReplyTarget(null)}
-            className="p-1 hover:text-slate-100 text-slate-400 cursor-pointer"
+            className={`p-1 rounded cursor-pointer ${
+              isDarkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-500 hover:text-slate-900'
+            }`}
           >
             <X className="w-4 h-4" />
           </button>
@@ -802,64 +945,81 @@ export default function CollaborationChat({
       {/* Cell Reference Bar */}
       {showCellRefInput && (
         <div className={`px-4 py-2 border-t flex items-center gap-2 ${
-          isDarkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-slate-50 border-slate-200'
+          isDarkMode ? 'bg-[#1E293B] border-slate-800' : 'bg-[#F8FAFC] border-slate-300'
         }`}>
-          <Tag className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-          <span className="text-[10px] font-mono font-bold text-slate-400 uppercase">Attach Cell Tag:</span>
+          <Tag className={`w-3.5 h-3.5 shrink-0 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
+          <span className={`text-[10px] font-mono font-bold uppercase ${
+            isDarkMode ? 'text-slate-300' : 'text-slate-700'
+          }`}>Attach Cell Tag:</span>
           <input
             type="text"
             value={cellRef}
             onChange={(e) => setCellRef(e.target.value)}
             placeholder="e.g. C4 or Rows 12-20"
             className={`text-xs px-2.5 py-1 rounded-lg border w-48 focus:outline-none ${
-              isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-white border-slate-300 text-slate-900'
+              isDarkMode 
+                ? 'bg-[#0F172A] border-slate-700 text-slate-200 focus:border-blue-500' 
+                : 'bg-white border-slate-300 text-slate-900 focus:border-blue-600 shadow-2xs'
             }`}
           />
           <button
             type="button"
             onClick={() => setShowCellRefInput(false)}
-            className="text-[10px] text-slate-400 hover:text-slate-200 cursor-pointer ml-auto font-mono"
+            className={`text-[10px] cursor-pointer ml-auto font-mono ${
+              isDarkMode ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
+            }`}
           >
             Clear
           </button>
         </div>
       )}
 
-      {/* Quick Emoji Bar Toggle */}
-      {showEmojiPicker && (
-        <div className={`px-3 py-2 border-t flex items-center gap-2 ${
-          isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'
+      {/* Quick SVG Reactions Bar */}
+      {showReactionPicker && (
+        <div className={`px-3 py-2 border-t flex items-center gap-2 flex-wrap ${
+          isDarkMode ? 'bg-[#1E293B] border-slate-800' : 'bg-[#F1F5F9] border-slate-300'
         }`}>
-          <span className="text-[10px] font-mono text-slate-400">Quick Emojis:</span>
-          {EMOJI_LIST.map(e => (
-            <button
-              key={e}
-              type="button"
-              onClick={() => {
-                setInputText(prev => prev + e);
-                setShowEmojiPicker(false);
-              }}
-              className="text-base hover:scale-125 transition-transform p-1 cursor-pointer"
-            >
-              {e}
-            </button>
-          ))}
+          <span className={`text-[10px] font-mono font-bold ${
+            isDarkMode ? 'text-slate-300' : 'text-slate-700'
+          }`}>Quick Reactions:</span>
+          {SVG_REACTIONS.map(reaction => {
+            const ReactionIcon = reaction.icon;
+            return (
+              <button
+                key={reaction.id}
+                type="button"
+                onClick={() => {
+                  setInputText(prev => prev + (prev && !prev.endsWith(' ') ? ' ' : '') + `:${reaction.id}: `);
+                  setShowReactionPicker(false);
+                }}
+                className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-semibold cursor-pointer transition-all hover:scale-105 ${
+                  isDarkMode 
+                    ? 'bg-slate-900 border-slate-700 text-slate-200 hover:bg-slate-800' 
+                    : 'bg-white border-slate-300 text-slate-800 hover:bg-slate-50 shadow-2xs'
+                }`}
+                title={`Insert ${reaction.label}`}
+              >
+                <ReactionIcon className={`w-3.5 h-3.5 ${reaction.color}`} />
+                <span className="text-[11px]">{reaction.label}</span>
+              </button>
+            );
+          })}
         </div>
       )}
 
       {/* Message Input Footer or Access Revoked Alert */}
       {isCurrentMemberRevoked ? (
         <div className={`p-3.5 border-t flex items-center gap-3 ${
-          isDarkMode ? 'bg-rose-950/40 border-rose-900/50 text-rose-300' : 'bg-rose-50 border-rose-200 text-rose-700'
+          isDarkMode ? 'bg-rose-950/80 border-rose-900 text-rose-200' : 'bg-rose-50 border-rose-300 text-rose-900'
         }`}>
-          <AlertTriangle className="w-4.5 h-4.5 shrink-0 text-rose-400" />
+          <AlertTriangle className={`w-4.5 h-4.5 shrink-0 ${isDarkMode ? 'text-rose-400' : 'text-rose-600'}`} />
           <div className="text-xs">
             <span className="font-bold">Workspace Access Revoked:</span> You are no longer an active collaborator in this organization tenancy. Messaging and real-time collaboration have been disabled.
           </div>
         </div>
       ) : (
         <form onSubmit={handleSendMessage} className={`p-3 border-t flex items-center gap-2 ${
-          isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'
+          isDarkMode ? 'bg-[#1E293B] border-slate-800' : 'bg-[#F8FAFC] border-slate-200'
         }`}>
           {/* Cell Reference Tag Toggle */}
           <button
@@ -867,24 +1027,24 @@ export default function CollaborationChat({
             onClick={() => setShowCellRefInput(prev => !prev)}
             className={`p-2 rounded-xl transition-all cursor-pointer border ${
               showCellRefInput || cellRef
-                ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                : isDarkMode ? 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200' : 'bg-white text-slate-600 border-slate-200'
+                ? isDarkMode ? 'bg-blue-950 text-blue-300 border-blue-700' : 'bg-blue-100 text-blue-800 border-blue-300'
+                : isDarkMode ? 'bg-slate-900 text-slate-300 border-slate-700 hover:text-white' : 'bg-white text-slate-700 border-slate-300 hover:text-slate-900 shadow-2xs'
             }`}
             title="Attach CSV cell or row reference tag"
           >
             <Tag className="w-4 h-4" />
           </button>
 
-          {/* Emoji Selector Toggle */}
+          {/* SVG Reaction Picker Toggle */}
           <button
             type="button"
-            onClick={() => setShowEmojiPicker(prev => !prev)}
+            onClick={() => setShowReactionPicker(prev => !prev)}
             className={`p-2 rounded-xl transition-all cursor-pointer border ${
-              showEmojiPicker
-                ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-                : isDarkMode ? 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200' : 'bg-white text-slate-600 border-slate-200'
+              showReactionPicker
+                ? isDarkMode ? 'bg-amber-950 text-amber-300 border-amber-700' : 'bg-amber-100 text-amber-800 border-amber-300'
+                : isDarkMode ? 'bg-slate-900 text-slate-300 border-slate-700 hover:text-white' : 'bg-white text-slate-700 border-slate-300 hover:text-slate-900 shadow-2xs'
             }`}
-            title="Insert emoji"
+            title="Insert quick reaction"
           >
             <Smile className="w-4 h-4" />
           </button>
@@ -895,17 +1055,17 @@ export default function CollaborationChat({
             value={inputText}
             onChange={handleInputChange}
             placeholder={`Message workspace team on ${activeFileName}...`}
-            className={`flex-1 text-xs px-3.5 py-2.5 rounded-2xl border focus:outline-none transition-all ${
+            className={`flex-1 text-xs px-3.5 py-2.5 rounded-xl border focus:outline-none transition-all ${
               isDarkMode 
-                ? 'bg-slate-900 border-slate-800 text-slate-100 placeholder-slate-500 focus:border-blue-500/60' 
-                : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400 focus:border-blue-500'
+                ? 'bg-[#0F172A] border-slate-700 text-slate-100 placeholder:text-slate-500 focus:border-blue-500' 
+                : 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-500 focus:border-blue-600 shadow-2xs'
             }`}
           />
 
           <button
             type="submit"
             disabled={!inputText.trim()}
-            className="p-2.5 rounded-2xl bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 transition-all cursor-pointer shrink-0 shadow-xs flex items-center justify-center"
+            className="p-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 transition-all cursor-pointer shrink-0 shadow-xs flex items-center justify-center"
             title="Send real-time message"
           >
             <Send className="w-4 h-4" />
@@ -915,17 +1075,21 @@ export default function CollaborationChat({
 
       {/* Presence Slide-Over Modal */}
       {showPresenceModal && (
-        <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-xs z-30 flex justify-end animate-fadeIn">
-          <div className={`w-72 h-full p-4 border-l flex flex-col ${
-            isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
+        <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-xs z-30 flex justify-end animate-fadeIn">
+          <div className={`w-80 h-full p-4 border-l flex flex-col shadow-2xl ${
+            isDarkMode ? 'bg-[#0F172A] border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
           }`}>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-700/50">
+            <div className={`flex items-center justify-between pb-3 border-b ${
+              isDarkMode ? 'border-slate-800' : 'border-slate-200'
+            }`}>
               <h4 className="font-extrabold text-xs tracking-tight flex items-center gap-2">
-                <Users className="w-4 h-4 text-blue-400" /> Active Workspace Team
+                <Users className={`w-4 h-4 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} /> Active Workspace Team
               </h4>
               <button
                 onClick={() => setShowPresenceModal(false)}
-                className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white cursor-pointer"
+                className={`p-1 rounded cursor-pointer ${
+                  isDarkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'
+                }`}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -937,25 +1101,36 @@ export default function CollaborationChat({
                 const isOnline = pInfo ? pInfo.online : true;
 
                 return (
-                  <div key={m.id} className="flex items-center justify-between p-2 rounded-xl bg-slate-800/30 border border-slate-700/30">
+                  <div 
+                    key={m.id} 
+                    className={`flex items-center justify-between p-2.5 rounded-xl border ${
+                      isDarkMode 
+                        ? 'bg-[#1E293B] border-slate-700/80 text-slate-200' 
+                        : 'bg-white border-slate-200 shadow-2xs text-slate-800'
+                    }`}
+                  >
                     <div className="flex items-center gap-2.5">
                       <div className="relative">
                         <img
                           src={resolvedAvatar(m.email, m.avatar, m.name)}
                           alt={m.name}
-                          className="w-7 h-7 rounded-full object-cover"
+                          className={`w-7 h-7 rounded-full object-cover border ${
+                            isDarkMode ? 'border-slate-700' : 'border-slate-300'
+                          }`}
                         />
-                        <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-slate-900 ${
-                          isOnline ? 'bg-emerald-500' : 'bg-slate-500'
-                        }`}></span>
+                        <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 ${
+                          isDarkMode ? 'border-slate-900' : 'border-white'
+                        } ${isOnline ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
                       </div>
                       <div>
-                        <p className="text-xs font-bold leading-none">{m.name}</p>
-                        <p className="text-[10px] text-slate-400 font-mono mt-0.5">{m.role}</p>
+                        <p className={`text-xs font-bold leading-none ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>{m.name}</p>
+                        <p className={`text-[10px] font-mono mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{m.role}</p>
                       </div>
                     </div>
-                    <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded flex items-center gap-1 ${
-                      isOnline ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-700 text-slate-400'
+                    <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded-full flex items-center gap-1 border ${
+                      isOnline 
+                        ? isDarkMode ? 'bg-emerald-950 text-emerald-300 border-emerald-800' : 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                        : isDarkMode ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-slate-100 text-slate-700 border-slate-300'
                     }`}>
                       <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-slate-400'}`} />
                       <span>{isOnline ? 'Online' : 'Offline'}</span>
