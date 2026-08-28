@@ -678,6 +678,24 @@ export function subscribeToOrganizationMembers(
   orgId: string,
   callback: (members: OrganizationMember[]) => void
 ): () => void {
+  // Immediately emit cached/persisted members if available to eliminate blank states
+  const initial = localMembersStore.get(orgId) || [];
+  if (initial.length > 0) {
+    callback(initial);
+  }
+
+  // Cross-component sync handler
+  const handleCustomSync = (e: any) => {
+    if (e.detail?.members) {
+      localMembersStore.set(orgId, e.detail.members);
+      callback(e.detail.members);
+    }
+  };
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('app_workspace_members_updated', handleCustomSync);
+  }
+
   try {
     const membersRef = collection(db, 'organizations', orgId, 'members');
     const unsubscribe = onSnapshot(
@@ -699,10 +717,19 @@ export function subscribeToOrganizationMembers(
         callback(localMembersStore.get(orgId) || []);
       }
     );
-    return unsubscribe;
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('app_workspace_members_updated', handleCustomSync);
+      }
+      unsubscribe();
+    };
   } catch (e) {
     callback(localMembersStore.get(orgId) || []);
-    return () => {};
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('app_workspace_members_updated', handleCustomSync);
+      }
+    };
   }
 }
 
@@ -1110,6 +1137,10 @@ export async function resendOrganizationInvitation(
     localInvitationsStore.set(orgId, updated);
     savePersistedInvitations(orgId, updated);
 
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('app_workspace_invitations_updated', { detail: { invitations: updated } }));
+    }
+
     // Record audit log
     if (actorUid && actorEmail) {
       recordOrganizationAuditLog({
@@ -1164,6 +1195,10 @@ export async function cancelOrganizationInvitation(
     });
     localInvitationsStore.set(orgId, updated);
     savePersistedInvitations(orgId, updated);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('app_workspace_invitations_updated', { detail: { invitations: updated } }));
+    }
 
     // Record audit log
     if (actorUid && actorEmail) {
@@ -1561,12 +1596,20 @@ export async function removeOrganizationMember(params: {
       text: `${actorName || actorEmail?.split('@')[0] || 'Admin'} revoked workspace access for ${memberName || memberEmail || 'team collaborator'}.`
     }).catch(() => {});
 
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('app_workspace_members_updated', { detail: { members: localMembersStore.get(orgId) || [] } }));
+    }
+
     return { success: true };
   } catch (err: any) {
     console.error('Firestore removeOrganizationMember error:', err);
     // Ensure local store and localStorage are updated even if remote call had error
     const cached = localMembersStore.get(orgId) || [];
-    localMembersStore.set(orgId, cached.filter(m => m.uid !== memberUid && (!memberEmail || m.email.toLowerCase() !== memberEmail.toLowerCase())));
+    const updated = cached.filter(m => m.uid !== memberUid && (!memberEmail || m.email.toLowerCase() !== memberEmail.toLowerCase()));
+    localMembersStore.set(orgId, updated);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('app_workspace_members_updated', { detail: { members: updated } }));
+    }
     return { success: true };
   }
 }
@@ -1610,8 +1653,17 @@ export async function updateOrganizationMemberRole(params: {
       lastActive: new Date().toISOString()
     });
 
+    try {
+      await updateDoc(doc(db, 'members', memberUid), { role: newRole });
+    } catch {}
+
     const cached = localMembersStore.get(orgId) || [];
-    localMembersStore.set(orgId, cached.map(m => m.uid === memberUid ? { ...m, role: newRole, permissions: defaultPerms } : m));
+    const updatedMembers = cached.map(m => m.uid === memberUid ? { ...m, role: newRole, permissions: defaultPerms } : m);
+    localMembersStore.set(orgId, updatedMembers);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('app_workspace_members_updated', { detail: { members: updatedMembers } }));
+    }
 
     // Record Audit Log (STEP 3)
     if (actorEmail) {
@@ -1683,7 +1735,12 @@ export async function updateOrganizationMemberPermissions(params: {
     });
 
     const cached = localMembersStore.get(orgId) || [];
-    localMembersStore.set(orgId, cached.map(m => m.uid === memberUid ? { ...m, permissions } : m));
+    const updatedMembers = cached.map(m => m.uid === memberUid ? { ...m, permissions } : m);
+    localMembersStore.set(orgId, updatedMembers);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('app_workspace_members_updated', { detail: { members: updatedMembers } }));
+    }
 
     // Record Audit Log (STEP 3)
     if (actorEmail) {

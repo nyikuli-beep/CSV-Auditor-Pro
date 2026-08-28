@@ -504,7 +504,6 @@ export default function OrganizationAuditLogsTab({
                 <div className={`p-2.5 rounded-lg border font-mono text-[11px] ${
                   isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'
                 }`}>
-                  <p>UID: {selectedLogForDetails.actor.uid}</p>
                   <p>Email: {selectedLogForDetails.actor.email}</p>
                   <p>Name: {selectedLogForDetails.actor.displayName || 'N/A'}</p>
                   <p>Role: {selectedLogForDetails.actor.role}</p>
@@ -517,7 +516,10 @@ export default function OrganizationAuditLogsTab({
                   <div className={`p-2.5 rounded-lg border font-mono text-[11px] ${
                     isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'
                   }`}>
-                    <pre>{JSON.stringify(selectedLogForDetails.target, null, 2)}</pre>
+                    {selectedLogForDetails.target.name && <p>Name: {selectedLogForDetails.target.name}</p>}
+                    {selectedLogForDetails.target.email && <p>Email: {selectedLogForDetails.target.email}</p>}
+                    {selectedLogForDetails.target.type && <p>Type: {selectedLogForDetails.target.type}</p>}
+                    {selectedLogForDetails.target.id && <p>Reference: {selectedLogForDetails.target.id}</p>}
                   </div>
                 </div>
               )}

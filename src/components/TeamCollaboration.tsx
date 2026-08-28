@@ -78,6 +78,7 @@ import {
   getOrganizationAuditLogs,
   updateOrganizationDetails,
   getOrCreateDefaultOrganization,
+  createOrganizationInvitation,
   calculateSeatMetrics,
   resendOrganizationInvitation,
   cancelOrganizationInvitation,
@@ -162,6 +163,9 @@ export default function TeamCollaboration({
 
   // Modals state
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [isInviteLoading, setIsInviteLoading] = useState(false);
+  const [inviteEmailInput, setInviteEmailInput] = useState('');
+  const [inviteRoleInput, setInviteRoleInput] = useState<'Admin' | 'Member'>('Member');
   const [isAcceptModalOpen, setIsAcceptModalOpen] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<OrganizationMember | null>(null);
   const [permissionsMemberToEdit, setPermissionsMemberToEdit] = useState<OrganizationMember | null>(null);
@@ -252,31 +256,65 @@ export default function TeamCollaboration({
   const currentMemberRecord = orgMembers.find(m => m.uid === user?.uid || m.email.toLowerCase() === effectiveEmail);
   const currentRole: OrganizationRole = isPrimaryEnterpriseOwner 
     ? 'Owner' 
-    : (currentMemberRecord?.role || (currentUserRole === 'Admin' ? 'Admin' : (currentUserRole === 'Owner' ? 'Owner' : 'Member')));
+    : (currentMemberRecord?.role === 'Admin' || currentUserRole === 'Admin' ? 'Admin' : 'Member');
 
   const isOwnerOrAdmin = isOrganizationAdmin(currentRole) || isPrimaryEnterpriseOwner;
 
-  // Resolve combined member list from authoritative Firestore org members
+  // Resolve combined member list from authoritative Firestore org members and synced members
   const combinedMembers: OrganizationMember[] = useMemo(() => {
-    const list: OrganizationMember[] = [...orgMembers];
-    
-    // Ensure primary owner is always present
-    if (!list.some(m => m.email.toLowerCase() === 'nyikulibramwel@gmail.com')) {
-      list.unshift({
-        uid: organization?.ownerId || 'usr-owner-root',
-        organizationId: DEFAULT_ORG_ID,
-        email: organization?.ownerEmail || 'nyikulibramwel@gmail.com',
-        displayName: 'Nyikuli Bramwel',
-        role: 'Owner',
-        status: 'active',
-        joinedAt: organization?.createdAt || new Date().toISOString(),
-        lastActive: 'Active now',
-        avatar: 'https://api.dicebear.com/7.x/initials/svg?seed=Nyikuli&backgroundColor=3b82f6'
+    const map = new Map<string, OrganizationMember>();
+
+    // 1. Ingest from props.members (synced from App.tsx top-level Firestore collection)
+    if (members && Array.isArray(members)) {
+      members.forEach(m => {
+        if (!m || !m.email) return;
+        const emailLower = m.email.toLowerCase().trim();
+        const isOwner = emailLower === 'nyikulibramwel@gmail.com';
+        map.set(emailLower, {
+          uid: m.id || `usr-${emailLower}`,
+          organizationId: DEFAULT_ORG_ID,
+          email: emailLower,
+          displayName: m.name || emailLower.split('@')[0],
+          role: isOwner ? 'Owner' : (m.role === 'Admin' ? 'Admin' : 'Member'),
+          status: (m.status === 'denied' || (m as any).accessDenied) ? 'suspended' : 'active',
+          joinedAt: new Date().toISOString(),
+          lastActive: 'Active recently',
+          avatar: m.avatar
+        });
       });
     }
 
-    return list;
-  }, [orgMembers, organization]);
+    // 2. Ingest / override with authoritative orgMembers (from organizations/{orgId}/members)
+    orgMembers.forEach(m => {
+      if (!m || !m.email) return;
+      const emailLower = m.email.toLowerCase().trim();
+      const isOwner = emailLower === 'nyikulibramwel@gmail.com';
+      const existing = map.get(emailLower);
+      map.set(emailLower, {
+        ...existing,
+        ...m,
+        email: emailLower,
+        role: isOwner ? 'Owner' : (m.role === 'Admin' ? 'Admin' : 'Member')
+      });
+    });
+
+    // 3. Ensure primary owner is always present and strictly 'Owner'
+    const primaryOwnerEmail = 'nyikulibramwel@gmail.com';
+    const ownerRecord: OrganizationMember = {
+      uid: organization?.ownerId || 'usr-owner-root',
+      organizationId: DEFAULT_ORG_ID,
+      email: primaryOwnerEmail,
+      displayName: 'Nyikuli Bramwel',
+      role: 'Owner',
+      status: 'active',
+      joinedAt: organization?.createdAt || new Date().toISOString(),
+      lastActive: 'Active now',
+      avatar: 'https://api.dicebear.com/7.x/initials/svg?seed=Nyikuli&backgroundColor=3b82f6'
+    };
+    map.set(primaryOwnerEmail, ownerRecord);
+
+    return Array.from(map.values());
+  }, [orgMembers, members, organization]);
 
   // Dynamically mapped active workspace members for live collaboration chat synchronization
   const liveChatMembers: TeamMember[] = useMemo(() => {
@@ -360,21 +398,25 @@ export default function TeamCollaboration({
     setActionLoadingUid(targetMember.uid);
     setActiveMenuMemberUid(null);
 
-    const res = await updateOrganizationMemberRole({
-      orgId: DEFAULT_ORG_ID,
-      memberUid: targetMember.uid,
-      newRole,
-      actorUid: user?.uid || 'usr-actor',
-      actorRole: currentRole
-    });
+    try {
+      const res = await updateOrganizationMemberRole({
+        orgId: DEFAULT_ORG_ID,
+        memberUid: targetMember.uid,
+        newRole,
+        actorUid: user?.uid || 'usr-actor',
+        actorRole: currentRole
+      });
 
-    setActionLoadingUid(null);
-
-    if (res.success) {
-      showToast('success', `Updated ${targetMember.displayName}'s role to ${newRole}.`);
-      setOrgMembers(prev => prev.map(m => m.uid === targetMember.uid ? { ...m, role: newRole } : m));
-    } else {
-      showToast('error', res.error || 'Failed to update member role.');
+      if (res.success) {
+        showToast('success', `Updated ${targetMember.displayName}'s role to ${newRole}.`);
+        setOrgMembers(prev => prev.map(m => m.uid === targetMember.uid ? { ...m, role: newRole } : m));
+      } else {
+        showToast('error', res.error || 'Failed to update member role.');
+      }
+    } catch (err: any) {
+      showToast('error', err?.message || 'Failed to update member role.');
+    } finally {
+      setActionLoadingUid(null);
     }
   };
 
@@ -404,6 +446,92 @@ export default function TeamCollaboration({
     return res;
   };
 
+  // STEP 3: Handle Invitation Submission (Async Firestore write)
+  const handleSendInvite = async (
+    target?: string | React.FormEvent | { email: string; role?: 'Admin' | 'Member' },
+    maybeRole?: 'Admin' | 'Member'
+  ): Promise<{ success: boolean; error?: string; invitation?: OrganizationInvitation }> => {
+    if (target && typeof (target as any).preventDefault === 'function') {
+      (target as React.FormEvent).preventDefault();
+    }
+
+    if (!canManageMembers(currentRole)) {
+      const errMsg = 'You do not have permission to invite team members.';
+      showToast('error', errMsg);
+      return { success: false, error: errMsg };
+    }
+
+    let targetEmail = '';
+    let targetRole: 'Admin' | 'Member' = maybeRole || 'Member';
+
+    if (typeof target === 'string') {
+      targetEmail = target;
+      if (maybeRole) targetRole = maybeRole;
+    } else if (target && typeof target === 'object' && 'email' in target) {
+      targetEmail = (target as any).email;
+      if ((target as any).role) targetRole = (target as any).role;
+    } else {
+      targetEmail = inviteEmailInput;
+      targetRole = inviteRoleInput;
+    }
+
+    const emailTrimmed = (targetEmail || '').trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailTrimmed || !emailRegex.test(emailTrimmed)) {
+      const errMsg = 'Please enter a valid email address.';
+      showToast('error', errMsg);
+      return { success: false, error: errMsg };
+    }
+
+    if (seatMetrics.availableSeats <= 0) {
+      const errMsg = `Organization seat limit reached (${seatMetrics.maxSeats} seats). Please upgrade seats before inviting more members.`;
+      showToast('error', errMsg);
+      return { success: false, error: errMsg };
+    }
+
+    setIsInviteLoading(true);
+
+    try {
+      const res = await createOrganizationInvitation({
+        orgId: DEFAULT_ORG_ID,
+        orgName: organization?.name,
+        email: emailTrimmed,
+        role: targetRole,
+        inviterUid: user?.uid || 'usr-actor',
+        inviterEmail: effectiveEmail,
+        inviterName: user?.displayName || effectiveEmail.split('@')[0],
+        inviterRole: currentRole,
+        currentMembers: combinedMembers,
+        currentInvitations: orgInvitations,
+        maxSeats: seatMetrics.maxSeats,
+        billing
+      });
+
+      if (res.success && res.invitation) {
+        showToast('success', `Invitation successfully sent to ${res.invitation.email} as ${res.invitation.role}.`);
+        setOrgInvitations(prev => [res.invitation!, ...prev.filter(i => i.id !== res.invitation!.id)]);
+        setInviteEmailInput('');
+        return { success: true, invitation: res.invitation };
+      } else {
+        const errMsg = res.error || 'Failed to send invitation. Please try again.';
+        showToast('error', errMsg);
+        return { success: false, error: errMsg };
+      }
+    } catch (err: any) {
+      const errMsg = err?.message || 'An unexpected error occurred while sending the invitation. Please try again.';
+      showToast('error', errMsg);
+      return { success: false, error: errMsg };
+    } finally {
+      setIsInviteLoading(false);
+    }
+  };
+
+  // Aliases for compatibility across handler naming conventions
+  const handleSubmitInvite = handleSendInvite;
+  const handleInviteSubmit = handleSendInvite;
+  const handleCreateInvitation = handleSendInvite;
+  const handleInviteMember = handleSendInvite;
+
   // STEP 5: Handle Resend Invitation
   const handleResendInvite = async (invitation: OrganizationInvitation) => {
     if (!canManageMembers(currentRole)) {
@@ -412,21 +540,26 @@ export default function TeamCollaboration({
     }
 
     setActionLoadingUid(invitation.id);
-    const res = await resendOrganizationInvitation(
-      DEFAULT_ORG_ID, 
-      invitation.id, 
-      currentRole,
-      user?.uid || 'usr-actor',
-      effectiveEmail,
-      user?.displayName || effectiveEmail.split('@')[0]
-    );
-    setActionLoadingUid(null);
+    try {
+      const res = await resendOrganizationInvitation(
+        DEFAULT_ORG_ID, 
+        invitation.id, 
+        currentRole,
+        user?.uid || 'usr-actor',
+        effectiveEmail,
+        user?.displayName || effectiveEmail.split('@')[0]
+      );
 
-    if (res.success) {
-      showToast('success', `Renewed invitation for ${invitation.email} for 7 days.`);
-      setOrgInvitations(prev => prev.map(inv => inv.id === invitation.id ? { ...inv, status: 'pending', expiresAt: new Date(Date.now() + 7 * 86400000).toISOString() } : inv));
-    } else {
-      showToast('error', res.error || 'Failed to resend invitation.');
+      if (res.success) {
+        showToast('success', `Renewed invitation for ${invitation.email} for 7 days.`);
+        setOrgInvitations(prev => prev.map(inv => inv.id === invitation.id ? { ...inv, status: 'pending', expiresAt: new Date(Date.now() + 7 * 86400000).toISOString() } : inv));
+      } else {
+        showToast('error', res.error || 'Failed to resend invitation.');
+      }
+    } catch (err: any) {
+      showToast('error', err?.message || 'Failed to resend invitation.');
+    } finally {
+      setActionLoadingUid(null);
     }
   };
 
@@ -438,21 +571,26 @@ export default function TeamCollaboration({
     }
 
     setActionLoadingUid(invitation.id);
-    const res = await cancelOrganizationInvitation(
-      DEFAULT_ORG_ID, 
-      invitation.id, 
-      currentRole,
-      user?.uid || 'usr-actor',
-      effectiveEmail,
-      user?.displayName || effectiveEmail.split('@')[0]
-    );
-    setActionLoadingUid(null);
+    try {
+      const res = await cancelOrganizationInvitation(
+        DEFAULT_ORG_ID, 
+        invitation.id, 
+        currentRole,
+        user?.uid || 'usr-actor',
+        effectiveEmail,
+        user?.displayName || effectiveEmail.split('@')[0]
+      );
 
-    if (res.success) {
-      showToast('success', `Cancelled invitation for ${invitation.email}.`);
-      setOrgInvitations(prev => prev.map(inv => inv.id === invitation.id ? { ...inv, status: 'cancelled' } : inv));
-    } else {
-      showToast('error', res.error || 'Failed to cancel invitation.');
+      if (res.success) {
+        showToast('success', `Cancelled invitation for ${invitation.email}.`);
+        setOrgInvitations(prev => prev.map(inv => inv.id === invitation.id ? { ...inv, status: 'cancelled' } : inv));
+      } else {
+        showToast('error', res.error || 'Failed to cancel invitation.');
+      }
+    } catch (err: any) {
+      showToast('error', err?.message || 'Failed to cancel invitation.');
+    } finally {
+      setActionLoadingUid(null);
     }
   };
 
@@ -1195,7 +1333,6 @@ export default function TeamCollaboration({
                   isDarkMode ? 'border-slate-800 text-slate-300 bg-[#0F172A]' : 'border-slate-200 text-slate-700 bg-slate-100'
                 }`}>
                   <th className="py-3 px-4 rounded-l-xl">Member & Identity</th>
-                  <th className="py-3 px-3">Firebase UID</th>
                   <th className="py-3 px-3">Role</th>
                   <th className="py-3 px-3">Permissions</th>
                   <th className="py-3 px-3">Status</th>
@@ -1245,15 +1382,6 @@ export default function TeamCollaboration({
                             </span>
                           </div>
                         </div>
-                      </td>
-
-                      {/* Firebase UID */}
-                      <td className="py-3.5 px-3 font-mono text-[10px]">
-                        <span className={`px-2 py-1 rounded border inline-block max-w-[130px] truncate ${
-                          isDarkMode ? 'bg-[#0F172A] border-slate-800 text-slate-300' : 'bg-slate-100 border-slate-300 text-slate-700'
-                        }`} title={member.uid}>
-                          {member.uid}
-                        </span>
                       </td>
 
                       {/* Role */}
@@ -1446,6 +1574,62 @@ export default function TeamCollaboration({
               )}
             </div>
           </div>
+
+          {/* Quick Invite Form for Admins & Owners */}
+          {isOwnerOrAdmin && (
+            <form
+              onSubmit={(e) => handleSendInvite(e)}
+              className={`p-3.5 rounded-xl border flex flex-col sm:flex-row items-stretch sm:items-center gap-3 ${
+                isDarkMode ? 'bg-[#0F172A] border-slate-800' : 'bg-slate-50 border-slate-200'
+              }`}
+            >
+              <div className={`flex-1 flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs ${
+                isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-slate-300 text-slate-900'
+              }`}>
+                <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <input
+                  type="email"
+                  value={inviteEmailInput}
+                  onChange={(e) => setInviteEmailInput(e.target.value)}
+                  placeholder="name@company.com"
+                  className="w-full bg-transparent border-none outline-hidden text-xs placeholder:text-slate-500"
+                  disabled={isInviteLoading}
+                />
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <select
+                  value={inviteRoleInput}
+                  onChange={(e) => setInviteRoleInput(e.target.value as 'Admin' | 'Member')}
+                  disabled={isInviteLoading}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer ${
+                    isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-white border-slate-300 text-slate-700'
+                  }`}
+                >
+                  <option value="Member">Role: Member</option>
+                  <option value="Admin">Role: Admin</option>
+                </select>
+                <button
+                  type="submit"
+                  disabled={isInviteLoading || !inviteEmailInput.trim()}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer text-white bg-blue-600 ${
+                    isInviteLoading || !inviteEmailInput.trim() ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-500 shadow-xs'
+                  }`}
+                >
+                  {isInviteLoading ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Sending...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Send Invite</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          )}
 
           {/* Invitations Table */}
           {filteredInvitations.length > 0 ? (
@@ -1721,8 +1905,9 @@ export default function TeamCollaboration({
         maxSeats={seatMetrics.maxSeats}
         availableSeats={seatMetrics.availableSeats}
         isDarkMode={isDarkMode}
+        isLoading={isInviteLoading}
+        onSubmitInvite={(email, role) => handleSendInvite(email, role)}
         onInvitationCreated={(newInv) => {
-          showToast('success', `Created invitation for ${newInv.email}.`);
           setOrgInvitations(prev => [newInv, ...prev.filter(i => i.id !== newInv.id)]);
         }}
       />

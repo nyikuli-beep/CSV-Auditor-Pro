@@ -29,6 +29,8 @@ interface InviteMemberModalProps {
   availableSeats: number;
   isDarkMode: boolean;
   onInvitationCreated?: (invitation: OrganizationInvitation) => void;
+  onSubmitInvite?: (email: string, role: 'Admin' | 'Member') => Promise<{ success: boolean; error?: string; invitation?: OrganizationInvitation }>;
+  isLoading?: boolean;
 }
 
 export default function InviteMemberModal({
@@ -45,11 +47,14 @@ export default function InviteMemberModal({
   maxSeats,
   availableSeats,
   isDarkMode,
-  onInvitationCreated
+  onInvitationCreated,
+  onSubmitInvite,
+  isLoading: externalLoading = false
 }: InviteMemberModalProps) {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'Admin' | 'Member'>('Member');
   const [isLoading, setIsLoading] = useState(false);
+  const isActionLoading = externalLoading || isLoading;
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [createdInvite, setCreatedInvite] = useState<OrganizationInvitation | null>(null);
   const [copiedToken, setCopiedToken] = useState(false);
@@ -68,19 +73,25 @@ export default function InviteMemberModal({
     setIsLoading(true);
 
     try {
-      const res = await createOrganizationInvitation({
-        orgId,
-        orgName,
-        email,
-        role,
-        inviterUid: currentUserUid,
-        inviterEmail: currentUserEmail,
-        inviterName: currentUserName,
-        inviterRole: currentUserRole,
-        currentMembers,
-        currentInvitations,
-        maxSeats
-      });
+      let res: { success: boolean; error?: string; invitation?: OrganizationInvitation };
+
+      if (onSubmitInvite) {
+        res = await onSubmitInvite(email, role);
+      } else {
+        res = await createOrganizationInvitation({
+          orgId,
+          orgName,
+          email,
+          role,
+          inviterUid: currentUserUid,
+          inviterEmail: currentUserEmail,
+          inviterName: currentUserName,
+          inviterRole: currentUserRole,
+          currentMembers,
+          currentInvitations,
+          maxSeats
+        });
+      }
 
       if (res.success && res.invitation) {
         setCreatedInvite(res.invitation);
@@ -309,12 +320,12 @@ export default function InviteMemberModal({
                 </button>
                 <button
                   type="submit"
-                  disabled={isLoading || availableSeats <= 0}
+                  disabled={isActionLoading || availableSeats <= 0}
                   className={`px-5 py-2 rounded-xl text-xs font-bold bg-blue-600 text-white transition-all flex items-center gap-2 cursor-pointer ${
-                    isLoading || availableSeats <= 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-500 shadow-sm'
+                    isActionLoading || availableSeats <= 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-500 shadow-sm'
                   }`}
                 >
-                  {isLoading ? (
+                  {isActionLoading ? (
                     <>
                       <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       <span>Creating Invitation...</span>

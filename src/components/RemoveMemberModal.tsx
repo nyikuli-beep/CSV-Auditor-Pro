@@ -118,9 +118,6 @@ export default function RemoveMemberModal({
               <span className={`text-[11px] font-mono block truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                 {member.email}
               </span>
-              <span className="text-[9px] font-mono text-slate-500 block mt-0.5 truncate">
-                UID: {member.uid}
-              </span>
             </div>
           </div>
 
