@@ -3087,33 +3087,54 @@ export default function CleaningCenter({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Actions panel */}
         <div className="lg:col-span-4 space-y-6">
-          <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-sm'}`}>
-            <h3 className="font-bold text-sm uppercase tracking-wider text-slate-400 mb-5">Automated Actions</h3>
+          <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-[#0F172A] border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className={`font-bold text-xs uppercase tracking-wider ${isDarkMode ? 'text-slate-300' : 'text-[#163A5F]'}`}>Automated Actions</h3>
+              <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded border ${isDarkMode ? 'bg-[#163A5F]/40 text-[#93C5FD] border-[#163A5F]' : 'bg-[#F3F7FA] text-[#163A5F] border-[#D5E0EA]'}`}>Enterprise Quality Engine</span>
+            </div>
             
-            <div className="space-y-4">
+            <div className="space-y-3.5">
               {/* AI Smart Data Correction */}
               <button
                 onClick={handleRunAiCorrectionScan}
                 disabled={isViewer}
-                className={`w-full p-4 rounded-xl border text-left transition-all hover:scale-[1.01] flex gap-3.5 items-start cursor-pointer hover:bg-blue-500/5 hover:border-blue-500/30 group disabled:opacity-50 ${isDarkMode ? 'bg-slate-950/80 border-blue-500/30' : 'bg-blue-50/50 border-blue-200'}`}
+                className={`w-full p-3.5 rounded-xl border text-left transition-all flex gap-3 items-start cursor-pointer group disabled:opacity-50 ${
+                  isDarkMode 
+                    ? 'bg-[#0B1523] border-[#1E3A5A] hover:bg-[#16283C] hover:border-[#3B82F6]' 
+                    : 'bg-[#F3F7FA] border-[#D5E0EA] hover:bg-[#EAEFF4] hover:border-[#163A5F]'
+                }`}
               >
-                <div className="p-2 bg-blue-600 text-white rounded-lg shadow shrink-0"><Sparkles className="w-4 h-4" /></div>
-                <div className="flex-1">
+                <div className={`p-2 rounded-lg shrink-0 transition-colors ${
+                  isDarkMode 
+                    ? 'bg-[#163A5F]/40 text-[#93C5FD] border border-[#163A5F]/60 group-hover:bg-[#163A5F]/60' 
+                    : 'bg-[#163A5F]/10 text-[#163A5F] border border-[#163A5F]/15 group-hover:bg-[#163A5F]/15'
+                }`}>
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1.5">
                     <div className="flex items-center gap-1.5">
-                      <h4 className="font-bold text-xs text-blue-500">AI Smart Data Correction</h4>
-                      <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">AI Pro</span>
+                      <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-[#163A5F]'}`}>AI Smart Data Correction</h4>
+                      <span className={`px-1.5 py-0.2 text-[9px] font-mono font-bold rounded ${
+                        isDarkMode 
+                          ? 'bg-[#163A5F]/40 text-[#93C5FD] border border-[#163A5F]/60' 
+                          : 'bg-[#163A5F]/10 text-[#163A5F] border border-[#163A5F]/20'
+                      }`}>AI Pro</span>
                     </div>
                     {plan === 'free' && (
                       <span 
                         onClick={(e) => { e.stopPropagation(); triggerUnlockModal('AI Smart Data Correction', 'pro'); }}
-                        className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1 shadow-xs cursor-pointer shrink-0"
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 shadow-2xs cursor-pointer shrink-0 transition-colors ${
+                          isDarkMode 
+                            ? 'bg-[#163A5F] hover:bg-[#1E4E80] text-white border border-[#2B5A8A]' 
+                            : 'bg-[#163A5F] hover:bg-[#0F2D4A] text-white'
+                        }`}
                       >
                         <Zap className="w-3 h-3" /> Upgrade
                       </span>
                     )}
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Spelling fixes, city/country standardizations, and abbreviation expansions.</p>
+                  <p className={`text-[10px] mt-1 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Spelling fixes, city/country standardizations, and abbreviation expansions.</p>
                 </div>
               </button>
 
@@ -3121,25 +3142,43 @@ export default function CleaningCenter({
               <button
                 onClick={handleRunMissingPredictionScan}
                 disabled={isViewer}
-                className={`w-full p-4 rounded-xl border text-left transition-all hover:scale-[1.01] flex gap-3.5 items-start cursor-pointer hover:bg-indigo-500/5 hover:border-indigo-500/30 group disabled:opacity-50 ${isDarkMode ? 'bg-slate-950/80 border-indigo-500/30' : 'bg-indigo-50/50 border-indigo-200'}`}
+                className={`w-full p-3.5 rounded-xl border text-left transition-all flex gap-3 items-start cursor-pointer group disabled:opacity-50 ${
+                  isDarkMode 
+                    ? 'bg-[#0B1523] border-[#1E3A5A] hover:bg-[#16283C] hover:border-[#3B82F6]' 
+                    : 'bg-[#F3F7FA] border-[#D5E0EA] hover:bg-[#EAEFF4] hover:border-[#163A5F]'
+                }`}
               >
-                <div className="p-2 bg-indigo-600 text-white rounded-lg shadow shrink-0"><Zap className="w-4 h-4" /></div>
-                <div className="flex-1">
+                <div className={`p-2 rounded-lg shrink-0 transition-colors ${
+                  isDarkMode 
+                    ? 'bg-[#163A5F]/40 text-[#93C5FD] border border-[#163A5F]/60 group-hover:bg-[#163A5F]/60' 
+                    : 'bg-[#163A5F]/10 text-[#163A5F] border border-[#163A5F]/15 group-hover:bg-[#163A5F]/15'
+                }`}>
+                  <Zap className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1.5">
                     <div className="flex items-center gap-1.5">
-                      <h4 className="font-bold text-xs text-indigo-400">AI Missing Value Imputation</h4>
-                      <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">AI Pro</span>
+                      <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-[#163A5F]'}`}>AI Missing Value Imputation</h4>
+                      <span className={`px-1.5 py-0.2 text-[9px] font-mono font-bold rounded ${
+                        isDarkMode 
+                          ? 'bg-[#163A5F]/40 text-[#93C5FD] border border-[#163A5F]/60' 
+                          : 'bg-[#163A5F]/10 text-[#163A5F] border border-[#163A5F]/20'
+                      }`}>AI Pro</span>
                     </div>
                     {plan === 'free' && (
                       <span 
                         onClick={(e) => { e.stopPropagation(); triggerUnlockModal('AI Missing Value Imputation', 'pro'); }}
-                        className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1 shadow-xs cursor-pointer shrink-0"
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 shadow-2xs cursor-pointer shrink-0 transition-colors ${
+                          isDarkMode 
+                            ? 'bg-[#163A5F] hover:bg-[#1E4E80] text-white border border-[#2B5A8A]' 
+                            : 'bg-[#163A5F] hover:bg-[#0F2D4A] text-white'
+                        }`}
                       >
                         <Zap className="w-3 h-3" /> Upgrade
                       </span>
                     )}
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Predicts missing metrics & categories from cross-column relational patterns.</p>
+                  <p className={`text-[10px] mt-1 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Predicts missing metrics & categories from cross-column relational patterns.</p>
                 </div>
               </button>
 
@@ -3147,25 +3186,43 @@ export default function CleaningCenter({
               <button
                 onClick={handleRunFuzzyDuplicateScan}
                 disabled={isViewer}
-                className={`w-full p-4 rounded-xl border text-left transition-all hover:scale-[1.01] flex gap-3.5 items-start cursor-pointer hover:bg-purple-500/5 hover:border-purple-500/30 group disabled:opacity-50 ${isDarkMode ? 'bg-slate-950/80 border-purple-500/30' : 'bg-purple-50/50 border-purple-200'}`}
+                className={`w-full p-3.5 rounded-xl border text-left transition-all flex gap-3 items-start cursor-pointer group disabled:opacity-50 ${
+                  isDarkMode 
+                    ? 'bg-[#0B1523] border-[#1E3A5A] hover:bg-[#16283C] hover:border-[#3B82F6]' 
+                    : 'bg-[#F3F7FA] border-[#D5E0EA] hover:bg-[#EAEFF4] hover:border-[#163A5F]'
+                }`}
               >
-                <div className="p-2 bg-purple-600 text-white rounded-lg shadow shrink-0"><GitMerge className="w-4 h-4" /></div>
-                <div className="flex-1">
+                <div className={`p-2 rounded-lg shrink-0 transition-colors ${
+                  isDarkMode 
+                    ? 'bg-[#163A5F]/40 text-[#93C5FD] border border-[#163A5F]/60 group-hover:bg-[#163A5F]/60' 
+                    : 'bg-[#163A5F]/10 text-[#163A5F] border border-[#163A5F]/15 group-hover:bg-[#163A5F]/15'
+                }`}>
+                  <GitMerge className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1.5">
                     <div className="flex items-center gap-1.5">
-                      <h4 className="font-bold text-xs text-purple-400">Fuzzy Duplicate Resolution</h4>
-                      <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">ML Pro</span>
+                      <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-[#163A5F]'}`}>Fuzzy Duplicate Resolution</h4>
+                      <span className={`px-1.5 py-0.2 text-[9px] font-mono font-bold rounded ${
+                        isDarkMode 
+                          ? 'bg-[#163A5F]/40 text-[#93C5FD] border border-[#163A5F]/60' 
+                          : 'bg-[#163A5F]/10 text-[#163A5F] border border-[#163A5F]/20'
+                      }`}>ML Pro</span>
                     </div>
                     {plan === 'free' && (
                       <span 
                         onClick={(e) => { e.stopPropagation(); triggerUnlockModal('Fuzzy Duplicate Resolution', 'pro'); }}
-                        className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-1 shadow-xs cursor-pointer shrink-0"
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 shadow-2xs cursor-pointer shrink-0 transition-colors ${
+                          isDarkMode 
+                            ? 'bg-[#163A5F] hover:bg-[#1E4E80] text-white border border-[#2B5A8A]' 
+                            : 'bg-[#163A5F] hover:bg-[#0F2D4A] text-white'
+                        }`}
                       >
                         <Zap className="w-3 h-3" /> Upgrade
                       </span>
                     )}
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Similarity matching using Levenshtein distance & side-by-side merging.</p>
+                  <p className={`text-[10px] mt-1 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Similarity matching using Levenshtein distance & side-by-side merging.</p>
                 </div>
               </button>
 
@@ -3173,25 +3230,43 @@ export default function CleaningCenter({
               <button
                 onClick={handleRunInvisibleCharCleaner}
                 disabled={isViewer}
-                className={`w-full p-4 rounded-xl border text-left transition-all hover:scale-[1.01] flex gap-3.5 items-start cursor-pointer hover:bg-emerald-500/5 hover:border-emerald-500/30 group disabled:opacity-50 ${isDarkMode ? 'bg-slate-950/60 border-slate-800/80' : 'bg-slate-50 border-slate-100'}`}
+                className={`w-full p-3.5 rounded-xl border text-left transition-all flex gap-3 items-start cursor-pointer group disabled:opacity-50 ${
+                  isDarkMode 
+                    ? 'bg-[#0B1523] border-[#1E3A5A] hover:bg-[#16283C] hover:border-[#3B82F6]' 
+                    : 'bg-[#F3F7FA] border-[#D5E0EA] hover:bg-[#EAEFF4] hover:border-[#163A5F]'
+                }`}
               >
-                <div className="p-2 bg-emerald-500/10 text-emerald-500 rounded-lg group-hover:bg-emerald-500/20"><Code className="w-4 h-4" /></div>
-                <div className="flex-1">
+                <div className={`p-2 rounded-lg shrink-0 transition-colors ${
+                  isDarkMode 
+                    ? 'bg-[#163A5F]/40 text-[#93C5FD] border border-[#163A5F]/60 group-hover:bg-[#163A5F]/60' 
+                    : 'bg-[#163A5F]/10 text-[#163A5F] border border-[#163A5F]/15 group-hover:bg-[#163A5F]/15'
+                }`}>
+                  <Code className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1.5">
                     <div className="flex items-center gap-1.5">
-                      <h4 className="font-bold text-xs">Invisible Character Cleaner</h4>
-                      <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Pro</span>
+                      <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-[#163A5F]'}`}>Invisible Character Cleaner</h4>
+                      <span className={`px-1.5 py-0.2 text-[9px] font-mono font-bold rounded ${
+                        isDarkMode 
+                          ? 'bg-[#163A5F]/40 text-[#93C5FD] border border-[#163A5F]/60' 
+                          : 'bg-[#163A5F]/10 text-[#163A5F] border border-[#163A5F]/20'
+                      }`}>Pro</span>
                     </div>
                     {plan === 'free' && (
                       <span 
                         onClick={(e) => { e.stopPropagation(); triggerUnlockModal('Invisible Character Cleaner', 'pro'); }}
-                        className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 shadow-xs cursor-pointer shrink-0"
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 shadow-2xs cursor-pointer shrink-0 transition-colors ${
+                          isDarkMode 
+                            ? 'bg-[#163A5F] hover:bg-[#1E4E80] text-white border border-[#2B5A8A]' 
+                            : 'bg-[#163A5F] hover:bg-[#0F2D4A] text-white'
+                        }`}
                       >
                         <Zap className="w-3 h-3" /> Upgrade
                       </span>
                     )}
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Strips zero-width spaces (\u200B), non-breaking spaces, and ASCII control codes.</p>
+                  <p className={`text-[10px] mt-1 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Strips zero-width spaces (\u200B), non-breaking spaces, and ASCII control codes.</p>
                 </div>
               </button>
 
@@ -3207,25 +3282,43 @@ export default function CleaningCenter({
                   pushState(res.updatedRows, res.summary);
                 }}
                 disabled={isViewer}
-                className={`w-full p-4 rounded-xl border text-left transition-all hover:scale-[1.01] flex gap-3.5 items-start cursor-pointer hover:bg-amber-500/5 hover:border-amber-500/30 group disabled:opacity-50 ${isDarkMode ? 'bg-slate-950/60 border-slate-800/80' : 'bg-slate-50 border-slate-100'}`}
+                className={`w-full p-3.5 rounded-xl border text-left transition-all flex gap-3 items-start cursor-pointer group disabled:opacity-50 ${
+                  isDarkMode 
+                    ? 'bg-[#0B1523] border-[#1E3A5A] hover:bg-[#16283C] hover:border-[#3B82F6]' 
+                    : 'bg-[#F3F7FA] border-[#D5E0EA] hover:bg-[#EAEFF4] hover:border-[#163A5F]'
+                }`}
               >
-                <div className="p-2 bg-amber-500/10 text-amber-500 rounded-lg group-hover:bg-amber-500/20"><Shield className="w-4 h-4" /></div>
-                <div className="flex-1">
+                <div className={`p-2 rounded-lg shrink-0 transition-colors ${
+                  isDarkMode 
+                    ? 'bg-[#163A5F]/40 text-[#93C5FD] border border-[#163A5F]/60 group-hover:bg-[#163A5F]/60' 
+                    : 'bg-[#163A5F]/10 text-[#163A5F] border border-[#163A5F]/15 group-hover:bg-[#163A5F]/15'
+                }`}>
+                  <Shield className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1.5">
                     <div className="flex items-center gap-1.5">
-                      <h4 className="font-bold text-xs">PII Masking & Encryption</h4>
-                      <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-amber-500/10 text-amber-500 border border-amber-500/20">Enterprise</span>
+                      <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-[#163A5F]'}`}>PII Masking & Encryption</h4>
+                      <span className={`px-1.5 py-0.2 text-[9px] font-mono font-bold rounded ${
+                        isDarkMode 
+                          ? 'bg-[#163A5F]/60 text-[#BAE6FD] border border-[#38BDF8]/40' 
+                          : 'bg-[#163A5F]/15 text-[#163A5F] border border-[#163A5F]/35'
+                      }`}>Enterprise</span>
                     </div>
                     {plan !== 'enterprise' && (
                       <span 
                         onClick={(e) => { e.stopPropagation(); triggerUnlockModal('PII Masking & Encryption', 'enterprise'); }}
-                        className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-1 shadow-xs cursor-pointer shrink-0"
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 shadow-2xs cursor-pointer shrink-0 transition-colors ${
+                          isDarkMode 
+                            ? 'bg-[#163A5F] hover:bg-[#1E4E80] text-white border border-[#2B5A8A]' 
+                            : 'bg-[#163A5F] hover:bg-[#0F2D4A] text-white'
+                        }`}
                       >
                         <Shield className="w-3 h-3" /> Upgrade
                       </span>
                     )}
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Protects emails, phone numbers, and SSNs for GDPR / HIPAA compliance.</p>
+                  <p className={`text-[10px] mt-1 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Protects emails, phone numbers, and SSNs for GDPR / HIPAA compliance.</p>
                 </div>
               </button>
 
@@ -3233,25 +3326,43 @@ export default function CleaningCenter({
               <button
                 onClick={handleRunFormulaProtect}
                 disabled={isViewer}
-                className={`w-full p-4 rounded-xl border text-left transition-all hover:scale-[1.01] flex gap-3.5 items-start cursor-pointer hover:bg-rose-500/5 hover:border-rose-500/30 group disabled:opacity-50 ${isDarkMode ? 'bg-slate-950/60 border-slate-800/80' : 'bg-slate-50 border-slate-100'}`}
+                className={`w-full p-3.5 rounded-xl border text-left transition-all flex gap-3 items-start cursor-pointer group disabled:opacity-50 ${
+                  isDarkMode 
+                    ? 'bg-[#0B1523] border-[#1E3A5A] hover:bg-[#16283C] hover:border-[#3B82F6]' 
+                    : 'bg-[#F3F7FA] border-[#D5E0EA] hover:bg-[#EAEFF4] hover:border-[#163A5F]'
+                }`}
               >
-                <div className="p-2 bg-rose-500/10 text-rose-500 rounded-lg group-hover:bg-rose-500/20"><Lock className="w-4 h-4" /></div>
-                <div className="flex-1">
+                <div className={`p-2 rounded-lg shrink-0 transition-colors ${
+                  isDarkMode 
+                    ? 'bg-[#163A5F]/40 text-[#93C5FD] border border-[#163A5F]/60 group-hover:bg-[#163A5F]/60' 
+                    : 'bg-[#163A5F]/10 text-[#163A5F] border border-[#163A5F]/15 group-hover:bg-[#163A5F]/15'
+                }`}>
+                  <Lock className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1.5">
                     <div className="flex items-center gap-1.5">
-                      <h4 className="font-bold text-xs">CSV Injection Shield</h4>
-                      <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-rose-500/10 text-rose-500 border border-rose-500/20">Pro</span>
+                      <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-[#163A5F]'}`}>CSV Injection Shield</h4>
+                      <span className={`px-1.5 py-0.2 text-[9px] font-mono font-bold rounded ${
+                        isDarkMode 
+                          ? 'bg-[#163A5F]/40 text-[#93C5FD] border border-[#163A5F]/60' 
+                          : 'bg-[#163A5F]/10 text-[#163A5F] border border-[#163A5F]/20'
+                      }`}>Pro</span>
                     </div>
                     {plan === 'free' && (
                       <span 
                         onClick={(e) => { e.stopPropagation(); triggerUnlockModal('CSV Injection Shield', 'pro'); }}
-                        className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1 shadow-xs cursor-pointer shrink-0"
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 shadow-2xs cursor-pointer shrink-0 transition-colors ${
+                          isDarkMode 
+                            ? 'bg-[#163A5F] hover:bg-[#1E4E80] text-white border border-[#2B5A8A]' 
+                            : 'bg-[#163A5F] hover:bg-[#0F2D4A] text-white'
+                        }`}
                       >
                         <Zap className="w-3 h-3" /> Upgrade
                       </span>
                     )}
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Escapes executable cells starting with =, +, -, @ to block Excel exploit macros.</p>
+                  <p className={`text-[10px] mt-1 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Escapes executable cells starting with =, +, -, @ to block Excel exploit macros.</p>
                 </div>
               </button>
 
@@ -3259,15 +3370,29 @@ export default function CleaningCenter({
               <button
                 onClick={removeDuplicates}
                 disabled={isViewer}
-                className={`w-full p-4 rounded-xl border text-left transition-all hover:scale-[1.01] flex gap-3.5 items-start cursor-pointer hover:bg-rose-500/5 hover:border-rose-500/30 group disabled:opacity-50 disabled:pointer-events-none ${isDarkMode ? 'bg-slate-950/60 border-slate-800/80' : 'bg-slate-50 border-slate-100'}`}
+                className={`w-full p-3.5 rounded-xl border text-left transition-all flex gap-3 items-start cursor-pointer group disabled:opacity-50 disabled:pointer-events-none ${
+                  isDarkMode 
+                    ? 'bg-[#0B1523] border-[#1E3A5A] hover:bg-[#16283C] hover:border-[#3B82F6]' 
+                    : 'bg-[#F3F7FA] border-[#D5E0EA] hover:bg-[#EAEFF4] hover:border-[#163A5F]'
+                }`}
               >
-                <div className="p-2 bg-rose-500/10 text-rose-500 rounded-lg group-hover:bg-rose-500/20"><Trash2 className="w-4 h-4" /></div>
-                <div className="flex-1">
+                <div className={`p-2 rounded-lg shrink-0 transition-colors ${
+                  isDarkMode 
+                    ? 'bg-[#163A5F]/40 text-[#93C5FD] border border-[#163A5F]/60 group-hover:bg-[#163A5F]/60' 
+                    : 'bg-[#163A5F]/10 text-[#163A5F] border border-[#163A5F]/15 group-hover:bg-[#163A5F]/15'
+                }`}>
+                  <Trash2 className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1.5">
-                    <h4 className="font-bold text-xs">Remove Duplicate Records</h4>
-                    <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Free</span>
+                    <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-[#163A5F]'}`}>Remove Duplicate Records</h4>
+                    <span className={`px-1.5 py-0.2 text-[9px] font-mono font-bold rounded ${
+                      isDarkMode 
+                        ? 'bg-slate-800 text-slate-300 border border-slate-700' 
+                        : 'bg-[#E2E8F0] text-slate-700 border border-slate-300'
+                    }`}>Free</span>
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Isolate unique rows by purging identical records in primary column sets.</p>
+                  <p className={`text-[10px] mt-1 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Isolate unique rows by purging identical records in primary column sets.</p>
                 </div>
               </button>
 
@@ -3275,15 +3400,29 @@ export default function CleaningCenter({
               <button
                 onClick={standardizeDates}
                 disabled={isViewer}
-                className={`w-full p-4 rounded-xl border text-left transition-all hover:scale-[1.01] flex gap-3.5 items-start cursor-pointer hover:bg-blue-500/5 hover:border-blue-500/30 group disabled:opacity-50 disabled:pointer-events-none ${isDarkMode ? 'bg-slate-950/60 border-slate-800/80' : 'bg-slate-50 border-slate-100'}`}
+                className={`w-full p-3.5 rounded-xl border text-left transition-all flex gap-3 items-start cursor-pointer group disabled:opacity-50 disabled:pointer-events-none ${
+                  isDarkMode 
+                    ? 'bg-[#0B1523] border-[#1E3A5A] hover:bg-[#16283C] hover:border-[#3B82F6]' 
+                    : 'bg-[#F3F7FA] border-[#D5E0EA] hover:bg-[#EAEFF4] hover:border-[#163A5F]'
+                }`}
               >
-                <div className="p-2 bg-blue-500/10 text-blue-500 rounded-lg group-hover:bg-blue-500/20"><Calendar className="w-4 h-4" /></div>
-                <div className="flex-1">
+                <div className={`p-2 rounded-lg shrink-0 transition-colors ${
+                  isDarkMode 
+                    ? 'bg-[#163A5F]/40 text-[#93C5FD] border border-[#163A5F]/60 group-hover:bg-[#163A5F]/60' 
+                    : 'bg-[#163A5F]/10 text-[#163A5F] border border-[#163A5F]/15 group-hover:bg-[#163A5F]/15'
+                }`}>
+                  <Calendar className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1.5">
-                    <h4 className="font-bold text-xs">Standardize Date Formats</h4>
-                    <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Free</span>
+                    <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-[#163A5F]'}`}>Standardize Date Formats</h4>
+                    <span className={`px-1.5 py-0.2 text-[9px] font-mono font-bold rounded ${
+                      isDarkMode 
+                        ? 'bg-slate-800 text-slate-300 border border-slate-700' 
+                        : 'bg-[#E2E8F0] text-slate-700 border border-slate-300'
+                    }`}>Free</span>
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Normalize messy dates (e.g. slashes/raw keys) into standard YYYY-MM-DD.</p>
+                  <p className={`text-[10px] mt-1 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Normalize messy dates (e.g. slashes/raw keys) into standard YYYY-MM-DD.</p>
                 </div>
               </button>
 
@@ -3291,15 +3430,29 @@ export default function CleaningCenter({
               <button
                 onClick={fillMissingValues}
                 disabled={isViewer}
-                className={`w-full p-4 rounded-xl border text-left transition-all hover:scale-[1.01] flex gap-3.5 items-start cursor-pointer hover:bg-amber-500/5 hover:border-amber-500/30 group disabled:opacity-50 disabled:pointer-events-none ${isDarkMode ? 'bg-slate-950/60 border-slate-800/80' : 'bg-slate-50 border-slate-100'}`}
+                className={`w-full p-3.5 rounded-xl border text-left transition-all flex gap-3 items-start cursor-pointer group disabled:opacity-50 disabled:pointer-events-none ${
+                  isDarkMode 
+                    ? 'bg-[#0B1523] border-[#1E3A5A] hover:bg-[#16283C] hover:border-[#3B82F6]' 
+                    : 'bg-[#F3F7FA] border-[#D5E0EA] hover:bg-[#EAEFF4] hover:border-[#163A5F]'
+                }`}
               >
-                <div className="p-2 bg-amber-500/10 text-amber-500 rounded-lg group-hover:bg-amber-500/20"><PenTool className="w-4 h-4" /></div>
-                <div className="flex-1">
+                <div className={`p-2 rounded-lg shrink-0 transition-colors ${
+                  isDarkMode 
+                    ? 'bg-[#163A5F]/40 text-[#93C5FD] border border-[#163A5F]/60 group-hover:bg-[#163A5F]/60' 
+                    : 'bg-[#163A5F]/10 text-[#163A5F] border border-[#163A5F]/15 group-hover:bg-[#163A5F]/15'
+                }`}>
+                  <PenTool className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1.5">
-                    <h4 className="font-bold text-xs">Fill Missing Blank Cells</h4>
-                    <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Free</span>
+                    <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-[#163A5F]'}`}>Fill Missing Blank Cells</h4>
+                    <span className={`px-1.5 py-0.2 text-[9px] font-mono font-bold rounded ${
+                      isDarkMode 
+                        ? 'bg-slate-800 text-slate-300 border border-slate-700' 
+                        : 'bg-[#E2E8F0] text-slate-700 border border-slate-300'
+                    }`}>Free</span>
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Impute empty metrics and categories with default placeholders securely.</p>
+                  <p className={`text-[10px] mt-1 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Impute empty metrics and categories with default placeholders securely.</p>
                 </div>
               </button>
 
@@ -3307,23 +3460,37 @@ export default function CleaningCenter({
               <button
                 onClick={correctCasing}
                 disabled={isViewer}
-                className={`w-full p-4 rounded-xl border text-left transition-all hover:scale-[1.01] flex gap-3.5 items-start cursor-pointer hover:bg-emerald-500/5 hover:border-emerald-500/30 group disabled:opacity-50 disabled:pointer-events-none ${isDarkMode ? 'bg-slate-950/60 border-slate-800/80' : 'bg-slate-50 border-slate-100'}`}
+                className={`w-full p-3.5 rounded-xl border text-left transition-all flex gap-3 items-start cursor-pointer group disabled:opacity-50 disabled:pointer-events-none ${
+                  isDarkMode 
+                    ? 'bg-[#0B1523] border-[#1E3A5A] hover:bg-[#16283C] hover:border-[#3B82F6]' 
+                    : 'bg-[#F3F7FA] border-[#D5E0EA] hover:bg-[#EAEFF4] hover:border-[#163A5F]'
+                }`}
               >
-                <div className="p-2 bg-emerald-500/10 text-emerald-500 rounded-lg group-hover:bg-emerald-500/20"><CheckCircle2 className="w-4 h-4" /></div>
-                <div className="flex-1">
+                <div className={`p-2 rounded-lg shrink-0 transition-colors ${
+                  isDarkMode 
+                    ? 'bg-[#163A5F]/40 text-[#93C5FD] border border-[#163A5F]/60 group-hover:bg-[#163A5F]/60' 
+                    : 'bg-[#163A5F]/10 text-[#163A5F] border border-[#163A5F]/15 group-hover:bg-[#163A5F]/15'
+                }`}>
+                  <CheckCircle2 className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1.5">
-                    <h4 className="font-bold text-xs">Standardize Text Case</h4>
-                    <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Free</span>
+                    <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-[#163A5F]'}`}>Standardize Text Case</h4>
+                    <span className={`px-1.5 py-0.2 text-[9px] font-mono font-bold rounded ${
+                      isDarkMode 
+                        ? 'bg-slate-800 text-slate-300 border border-slate-700' 
+                        : 'bg-[#E2E8F0] text-slate-700 border border-slate-300'
+                    }`}>Free</span>
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Enforce uniform casing matching Sentence Case or uppercase country codes.</p>
+                  <p className={`text-[10px] mt-1 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Enforce uniform casing matching Sentence Case or uppercase country codes.</p>
                 </div>
               </button>
 
               {/* Conditional Column Splitter Accordion */}
               <div className={`rounded-xl border transition-all ${
                 isSplitterOpen 
-                  ? 'border-blue-500/40 bg-blue-500/5 shadow-xs' 
-                  : isDarkMode ? 'hover:bg-blue-500/5 hover:border-blue-500/30 border-slate-800/80 bg-slate-950/60' : 'hover:bg-blue-500/5 hover:border-blue-500/30 border-slate-200 bg-slate-50'
+                  ? isDarkMode ? 'border-[#3B82F6] bg-[#16283C]/70 shadow-2xs' : 'border-[#163A5F] bg-[#EAEFF4] shadow-2xs'
+                  : isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] hover:bg-[#16283C] hover:border-[#3B82F6]' : 'bg-[#F3F7FA] border-[#D5E0EA] hover:bg-[#EAEFF4] hover:border-[#163A5F]'
               }`}>
                 <button
                   type="button"
@@ -3332,42 +3499,58 @@ export default function CleaningCenter({
                     setIsValidationOpen(false);
                   }}
                   disabled={isViewer}
-                  className="w-full p-4 text-left flex gap-3.5 items-start cursor-pointer group disabled:opacity-50"
+                  className="w-full p-3.5 text-left flex gap-3 items-start cursor-pointer group disabled:opacity-50"
                 >
-                  <div className="p-2 bg-blue-500/10 text-blue-500 rounded-lg group-hover:bg-blue-500/20">
+                  <div className={`p-2 rounded-lg shrink-0 transition-colors ${
+                    isDarkMode 
+                      ? 'bg-[#163A5F]/40 text-[#93C5FD] border border-[#163A5F]/60 group-hover:bg-[#163A5F]/60' 
+                      : 'bg-[#163A5F]/10 text-[#163A5F] border border-[#163A5F]/15 group-hover:bg-[#163A5F]/15'
+                  }`}>
                     <Columns className="w-4 h-4" />
                   </div>
-                  <div className="flex-1">
-                    <div className="flex justify-between items-center">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-center gap-1.5">
                       <div className="flex items-center gap-1.5">
-                        <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Conditional Column Splitter</h4>
-                        <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">Pro</span>
+                        <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-[#163A5F]'}`}>Conditional Column Splitter</h4>
+                        <span className={`px-1.5 py-0.2 text-[9px] font-mono font-bold rounded ${
+                          isDarkMode 
+                            ? 'bg-[#163A5F]/40 text-[#93C5FD] border border-[#163A5F]/60' 
+                            : 'bg-[#163A5F]/10 text-[#163A5F] border border-[#163A5F]/20'
+                        }`}>Pro</span>
                       </div>
                       <div className="flex items-center gap-2">
                         {plan === 'free' && (
                           <span 
                             onClick={(e) => { e.stopPropagation(); triggerUnlockModal('Conditional Column Splitter', 'pro'); }}
-                            className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1 shadow-xs cursor-pointer"
+                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 shadow-2xs cursor-pointer shrink-0 transition-colors ${
+                              isDarkMode 
+                                ? 'bg-[#163A5F] hover:bg-[#1E4E80] text-white border border-[#2B5A8A]' 
+                                : 'bg-[#163A5F] hover:bg-[#0F2D4A] text-white'
+                            }`}
                           >
                             <Zap className="w-3 h-3" /> Upgrade
                           </span>
                         )}
-                        <ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isSplitterOpen ? 'rotate-90 text-blue-400' : ''}`} />
+                        <ChevronRight className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                          isSplitterOpen 
+                            ? isDarkMode ? 'rotate-90 text-[#93C5FD]' : 'rotate-90 text-[#163A5F]' 
+                            : isDarkMode ? 'text-slate-400' : 'text-[#64748B]'
+                        }`} />
                       </div>
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Divide a column into multiple sub-columns using delimiter rules conditionally.</p>
+                    <p className={`text-[10px] mt-1 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Divide a column into multiple sub-columns using delimiter rules conditionally.</p>
                   </div>
                 </button>
 
                 {isSplitterOpen && (
-                  <div className={`p-4 border-t px-5 space-y-4 text-xs ${isDarkMode ? 'border-slate-800/80 text-slate-200' : 'border-slate-150 text-slate-700'}`}>
+                  <div className={`p-4 border-t px-5 space-y-4 text-xs ${isDarkMode ? 'border-[#1E3A5A] text-slate-200' : 'border-[#D5E0EA] text-slate-700'}`}>
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Target Column</label>
                       <select
                         value={splitColumn}
                         onChange={(e) => setSplitColumn(e.target.value)}
-                        className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                          isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                        className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#163A5F] ${
+                          isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] text-slate-100 border' : 'bg-white border-[#D5E0EA] text-slate-900 border'
                         }`}
                       >
                         <option value="">-- Select Column --</option>
@@ -3383,8 +3566,8 @@ export default function CleaningCenter({
                         <select
                           value={splitDelimiter}
                           onChange={(e) => setSplitDelimiter(e.target.value)}
-                          className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                            isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                          className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#163A5F] ${
+                            isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] text-slate-100 border' : 'bg-white border-[#D5E0EA] text-slate-900 border'
                           }`}
                         >
                           <option value="space">Space (" ")</option>
@@ -3401,8 +3584,8 @@ export default function CleaningCenter({
                         <select
                           value={splitCondition}
                           onChange={(e) => setSplitCondition(e.target.value)}
-                          className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                            isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                          className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#163A5F] ${
+                            isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] text-slate-100 border' : 'bg-white border-[#D5E0EA] text-slate-900 border'
                           }`}
                         >
                           <option value="always">Always Split</option>
@@ -3419,8 +3602,8 @@ export default function CleaningCenter({
                           value={customDelimiter}
                           onChange={(e) => setCustomDelimiter(e.target.value)}
                           placeholder="e.g. @@ or |"
-                          className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                            isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                          className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#163A5F] ${
+                            isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] text-slate-100 border' : 'bg-white border-[#D5E0EA] text-slate-900 border'
                           }`}
                         />
                       </div>
@@ -3433,8 +3616,8 @@ export default function CleaningCenter({
                         value={splitColNames}
                         onChange={(e) => setSplitColNames(e.target.value)}
                         placeholder="e.g. First Name, Last Name (Optional)"
-                        className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                          isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                        className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#163A5F] ${
+                          isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] text-slate-100 border' : 'bg-white border-[#D5E0EA] text-slate-900 border'
                         }`}
                       />
                     </div>
@@ -3443,7 +3626,9 @@ export default function CleaningCenter({
                       type="button"
                       onClick={runColumnSplitter}
                       disabled={!splitColumn}
-                      className={`w-full py-2 rounded-lg text-xs font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-1 shadow-md ${accentClass} disabled:opacity-50 disabled:cursor-not-allowed`}
+                      className={`w-full py-2.5 rounded-lg text-xs font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md ${
+                        isDarkMode ? 'bg-[#163A5F] hover:bg-[#1E4E80] border border-[#2B5A8A]' : 'bg-[#163A5F] hover:bg-[#0F2D4A]'
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
                       <Sparkles className="w-3.5 h-3.5" /> Execute Column Split
                     </button>
@@ -3454,8 +3639,8 @@ export default function CleaningCenter({
               {/* Merge Columns Accordion */}
               <div className={`rounded-xl border transition-all ${
                 isMergerOpen 
-                  ? 'border-indigo-500/40 bg-indigo-500/5 shadow-xs' 
-                  : isDarkMode ? 'hover:bg-indigo-500/5 hover:border-indigo-500/30 border-slate-800/80 bg-slate-950/60' : 'hover:bg-indigo-500/5 hover:border-indigo-500/30 border-slate-200 bg-slate-50'
+                  ? isDarkMode ? 'border-[#3B82F6] bg-[#16283C]/70 shadow-2xs' : 'border-[#163A5F] bg-[#EAEFF4] shadow-2xs'
+                  : isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] hover:bg-[#16283C] hover:border-[#3B82F6]' : 'bg-[#F3F7FA] border-[#D5E0EA] hover:bg-[#EAEFF4] hover:border-[#163A5F]'
               }`}>
                 <button
                   type="button"
@@ -3467,35 +3652,51 @@ export default function CleaningCenter({
                     setIsMappingOpen(false);
                   }}
                   disabled={isViewer}
-                  className="w-full p-4 text-left flex gap-3.5 items-start cursor-pointer group disabled:opacity-50"
+                  className="w-full p-3.5 text-left flex gap-3 items-start cursor-pointer group disabled:opacity-50"
                 >
-                  <div className="p-2 bg-indigo-500/10 text-indigo-500 rounded-lg group-hover:bg-indigo-500/20">
+                  <div className={`p-2 rounded-lg shrink-0 transition-colors ${
+                    isDarkMode 
+                      ? 'bg-[#163A5F]/40 text-[#93C5FD] border border-[#163A5F]/60 group-hover:bg-[#163A5F]/60' 
+                      : 'bg-[#163A5F]/10 text-[#163A5F] border border-[#163A5F]/15 group-hover:bg-[#163A5F]/15'
+                  }`}>
                     <GitMerge className="w-4 h-4" />
                   </div>
-                  <div className="flex-1">
-                    <div className="flex justify-between items-center">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-center gap-1.5">
                       <div className="flex items-center gap-1.5">
-                        <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Merge Columns (Same Data Type)</h4>
-                        <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Pro</span>
+                        <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-[#163A5F]'}`}>Merge Columns (Same Data Type)</h4>
+                        <span className={`px-1.5 py-0.2 text-[9px] font-mono font-bold rounded ${
+                          isDarkMode 
+                            ? 'bg-[#163A5F]/40 text-[#93C5FD] border border-[#163A5F]/60' 
+                            : 'bg-[#163A5F]/10 text-[#163A5F] border border-[#163A5F]/20'
+                        }`}>Pro</span>
                       </div>
                       <div className="flex items-center gap-2">
                         {plan === 'free' && (
                           <span 
                             onClick={(e) => { e.stopPropagation(); triggerUnlockModal('Column Merger', 'pro'); }}
-                            className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1 shadow-xs cursor-pointer"
+                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 shadow-2xs cursor-pointer shrink-0 transition-colors ${
+                              isDarkMode 
+                                ? 'bg-[#163A5F] hover:bg-[#1E4E80] text-white border border-[#2B5A8A]' 
+                                : 'bg-[#163A5F] hover:bg-[#0F2D4A] text-white'
+                            }`}
                           >
                             <Zap className="w-3 h-3" /> Upgrade
                           </span>
                         )}
-                        <ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isMergerOpen ? 'rotate-90 text-indigo-400' : ''}`} />
+                        <ChevronRight className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                          isMergerOpen 
+                            ? isDarkMode ? 'rotate-90 text-[#93C5FD]' : 'rotate-90 text-[#163A5F]' 
+                            : isDarkMode ? 'text-slate-400' : 'text-[#64748B]'
+                        }`} />
                       </div>
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Combine two columns sharing identical data types into a single merged column.</p>
+                    <p className={`text-[10px] mt-1 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Combine two columns sharing identical data types into a single merged column.</p>
                   </div>
                 </button>
 
                 {isMergerOpen && (
-                  <div className={`p-4 border-t px-5 space-y-4 text-xs ${isDarkMode ? 'border-slate-800/80 text-slate-200' : 'border-slate-150 text-slate-700'}`}>
+                  <div className={`p-4 border-t px-5 space-y-4 text-xs ${isDarkMode ? 'border-[#1E3A5A] text-slate-200' : 'border-[#D5E0EA] text-slate-700'}`}>
                     {/* First and Second Column Selectors */}
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
@@ -3503,8 +3704,8 @@ export default function CleaningCenter({
                         <select
                           value={mergeCol1}
                           onChange={(e) => setMergeCol1(e.target.value)}
-                          className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500 ${
-                            isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                          className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#163A5F] ${
+                            isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] text-slate-100 border' : 'bg-white border-[#D5E0EA] text-slate-900 border'
                           }`}
                         >
                           <option value="">-- First Column --</option>
@@ -3519,8 +3720,8 @@ export default function CleaningCenter({
                         <select
                           value={mergeCol2}
                           onChange={(e) => setMergeCol2(e.target.value)}
-                          className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500 ${
-                            isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                          className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#163A5F] ${
+                            isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] text-slate-100 border' : 'bg-white border-[#D5E0EA] text-slate-900 border'
                           }`}
                         >
                           <option value="">-- Second Column --</option>
@@ -3576,8 +3777,8 @@ export default function CleaningCenter({
                         value={targetMergedColName}
                         onChange={(e) => setTargetMergedColName(e.target.value)}
                         placeholder="e.g. Full_Name or Combined_Total"
-                        className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500 ${
-                          isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                        className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#163A5F] ${
+                          isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] text-slate-100 border' : 'bg-white border-[#D5E0EA] text-slate-900 border'
                         }`}
                       />
                     </div>
@@ -3589,8 +3790,8 @@ export default function CleaningCenter({
                         <select
                           value={mergeDelimiter}
                           onChange={(e) => setMergeDelimiter(e.target.value)}
-                          className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500 ${
-                            isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                          className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#163A5F] ${
+                            isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] text-slate-100 border' : 'bg-white border-[#D5E0EA] text-slate-900 border'
                           }`}
                         >
                           <option value="space">Space (" ")</option>
@@ -3610,7 +3811,7 @@ export default function CleaningCenter({
                             type="checkbox"
                             checked={keepOriginalCols}
                             onChange={(e) => setKeepOriginalCols(e.target.checked)}
-                            className={`rounded text-indigo-600 focus:ring-0 cursor-pointer ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-300'}`}
+                            className={`rounded text-[#163A5F] focus:ring-0 cursor-pointer ${isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A]' : 'bg-white border-[#D5E0EA]'}`}
                           />
                           <span>Keep original columns</span>
                         </label>
@@ -3625,8 +3826,8 @@ export default function CleaningCenter({
                           value={customMergeDelimiter}
                           onChange={(e) => setCustomMergeDelimiter(e.target.value)}
                           placeholder="e.g. :: or |"
-                          className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500 ${
-                            isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                          className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#163A5F] ${
+                            isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] text-slate-100 border' : 'bg-white border-[#D5E0EA] text-slate-900 border'
                           }`}
                         />
                       </div>
@@ -3642,25 +3843,31 @@ export default function CleaningCenter({
                         mergeCol1 === mergeCol2 || 
                         inferColumnType(mergeCol1) !== inferColumnType(mergeCol2)
                       }
-                      className={`w-full py-2.5 rounded-lg text-xs font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed`}
+                      className={`w-full py-2.5 rounded-lg text-xs font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md ${
+                        isDarkMode ? 'bg-[#163A5F] hover:bg-[#1E4E80] border border-[#2B5A8A]' : 'bg-[#163A5F] hover:bg-[#0F2D4A]'
+                      } disabled:opacity-40 disabled:cursor-not-allowed`}
                     >
                       <GitMerge className="w-3.5 h-3.5" /> Execute Column Merge
                     </button>
 
                     {/* Column Merge Action History & Revert Log */}
                     {mergeActionsHistory.length > 0 && (
-                      <div className="pt-3 border-t border-slate-800/60 space-y-2.5">
+                      <div className={`pt-3 border-t space-y-2.5 ${isDarkMode ? 'border-[#1E3A5A]' : 'border-[#D5E0EA]'}`}>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <GitMerge className="w-3.5 h-3.5 text-indigo-400" />
-                            <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+                            <GitMerge className={`w-3.5 h-3.5 ${isDarkMode ? 'text-[#93C5FD]' : 'text-[#163A5F]'}`} />
+                            <span className={`text-[11px] font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-300' : 'text-[#163A5F]'}`}>
                               Merge History ({mergeActionsHistory.length})
                             </span>
                           </div>
                           <button
                             type="button"
                             onClick={() => handleUndoMerge()}
-                            className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/20 transition-all flex items-center gap-1 cursor-pointer"
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-1 cursor-pointer ${
+                              isDarkMode 
+                                ? 'bg-[#163A5F]/30 border-[#1E3A5A] text-[#93C5FD] hover:bg-[#163A5F]/50' 
+                                : 'bg-[#163A5F]/10 border-[#D5E0EA] text-[#163A5F] hover:bg-[#163A5F]/15'
+                            }`}
                           >
                             <RotateCcw className="w-3 h-3" />
                             <span>Undo Latest Merge</span>
@@ -3672,19 +3879,23 @@ export default function CleaningCenter({
                             <div 
                               key={rec.id}
                               className={`p-2.5 rounded-lg border flex items-center justify-between gap-2 text-xs transition-colors ${
-                                isDarkMode ? 'bg-slate-950/80 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                                isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A]' : 'bg-white border-[#D5E0EA]'
                               }`}
                             >
                               <div className="space-y-0.5 truncate pr-2">
                                 <div className="flex items-center gap-1.5 font-bold text-[11px]">
-                                  <span className="text-slate-300 truncate">{rec.col1}</span>
-                                  <span className="text-indigo-400 font-mono">+</span>
-                                  <span className="text-slate-300 truncate">{rec.col2}</span>
-                                  <ArrowRight className="w-3 h-3 text-slate-500 shrink-0" />
-                                  <span className="text-emerald-400 font-mono truncate">{rec.targetCol}</span>
+                                  <span className={`truncate ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>{rec.col1}</span>
+                                  <span className={`${isDarkMode ? 'text-[#93C5FD]' : 'text-[#163A5F]'} font-mono`}>+</span>
+                                  <span className={`truncate ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>{rec.col2}</span>
+                                  <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
+                                  <span className={`${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'} font-mono truncate`}>{rec.targetCol}</span>
                                 </div>
                                 <div className="flex items-center gap-2 text-[10px] text-slate-400">
-                                  <span className="px-1.5 py-0.2 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-mono font-bold">
+                                  <span className={`px-1.5 py-0.2 rounded border font-mono font-bold ${
+                                    isDarkMode 
+                                      ? 'bg-[#163A5F]/40 border-[#163A5F]/60 text-[#93C5FD]' 
+                                      : 'bg-[#163A5F]/10 border-[#163A5F]/20 text-[#163A5F]'
+                                  }`}>
                                     {rec.dataType}
                                   </span>
                                   <span>{rec.timestamp}</span>
@@ -3698,7 +3909,7 @@ export default function CleaningCenter({
                                 type="button"
                                 onClick={() => handleUndoMerge(rec.id)}
                                 title={`Revert merge into "${rec.targetCol}"`}
-                                className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 transition-all flex items-center gap-1 shrink-0 cursor-pointer"
+                                className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-rose-500/10 border border-rose-500/20 text-rose-500 hover:bg-rose-500/20 transition-all flex items-center gap-1 shrink-0 cursor-pointer"
                               >
                                 <RotateCcw className="w-3 h-3" />
                                 <span>Undo</span>
@@ -3715,8 +3926,8 @@ export default function CleaningCenter({
               {/* Column Validation Engine Accordion */}
               <div className={`rounded-xl border transition-all ${
                 isValidationOpen 
-                  ? 'border-emerald-500/40 bg-emerald-500/5 shadow-xs' 
-                  : isDarkMode ? 'hover:bg-emerald-500/5 hover:border-emerald-500/30 border-slate-800/80 bg-slate-950/60' : 'hover:bg-emerald-500/5 hover:border-emerald-500/30 border-slate-200 bg-slate-50'
+                  ? isDarkMode ? 'border-[#3B82F6] bg-[#16283C]/70 shadow-2xs' : 'border-[#163A5F] bg-[#EAEFF4] shadow-2xs'
+                  : isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] hover:bg-[#16283C] hover:border-[#3B82F6]' : 'bg-[#F3F7FA] border-[#D5E0EA] hover:bg-[#EAEFF4] hover:border-[#163A5F]'
               }`}>
                 <button
                   type="button"
@@ -3725,42 +3936,58 @@ export default function CleaningCenter({
                     setIsSplitterOpen(false);
                   }}
                   disabled={isViewer}
-                  className="w-full p-4 text-left flex gap-3.5 items-start cursor-pointer group disabled:opacity-50"
+                  className="w-full p-3.5 text-left flex gap-3 items-start cursor-pointer group disabled:opacity-50"
                 >
-                  <div className="p-2 bg-emerald-500/10 text-emerald-500 rounded-lg group-hover:bg-emerald-500/20">
+                  <div className={`p-2 rounded-lg shrink-0 transition-colors ${
+                    isDarkMode 
+                      ? 'bg-[#163A5F]/40 text-[#93C5FD] border border-[#163A5F]/60 group-hover:bg-[#163A5F]/60' 
+                      : 'bg-[#163A5F]/10 text-[#163A5F] border border-[#163A5F]/15 group-hover:bg-[#163A5F]/15'
+                  }`}>
                     <CheckCircle2 className="w-4 h-4" />
                   </div>
-                  <div className="flex-1">
-                    <div className="flex justify-between items-center">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-center gap-1.5">
                       <div className="flex items-center gap-1.5">
-                        <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Smart Validation Engine</h4>
-                        <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Pro</span>
+                        <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-[#163A5F]'}`}>Smart Validation Engine</h4>
+                        <span className={`px-1.5 py-0.2 text-[9px] font-mono font-bold rounded ${
+                          isDarkMode 
+                            ? 'bg-[#163A5F]/40 text-[#93C5FD] border border-[#163A5F]/60' 
+                            : 'bg-[#163A5F]/10 text-[#163A5F] border border-[#163A5F]/20'
+                        }`}>Pro</span>
                       </div>
                       <div className="flex items-center gap-2">
                         {plan === 'free' && (
                           <span 
                             onClick={(e) => { e.stopPropagation(); triggerUnlockModal('Smart Validation Engine', 'pro'); }}
-                            className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 shadow-xs cursor-pointer"
+                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 shadow-2xs cursor-pointer shrink-0 transition-colors ${
+                              isDarkMode 
+                                ? 'bg-[#163A5F] hover:bg-[#1E4E80] text-white border border-[#2B5A8A]' 
+                                : 'bg-[#163A5F] hover:bg-[#0F2D4A] text-white'
+                            }`}
                           >
                             <Zap className="w-3 h-3" /> Upgrade
                           </span>
                         )}
-                        <ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isValidationOpen ? 'rotate-90 text-emerald-400' : ''}`} />
+                        <ChevronRight className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                          isValidationOpen 
+                            ? isDarkMode ? 'rotate-90 text-[#93C5FD]' : 'rotate-90 text-[#163A5F]' 
+                            : isDarkMode ? 'text-slate-400' : 'text-[#64748B]'
+                        }`} />
                       </div>
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Establish field assertions, flag formatting violations, or auto-coerce raw anomalies.</p>
+                    <p className={`text-[10px] mt-1 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Establish field assertions, flag formatting violations, or auto-coerce raw anomalies.</p>
                   </div>
                 </button>
 
                 {isValidationOpen && (
-                  <div className={`p-4 border-t px-5 space-y-4 text-xs ${isDarkMode ? 'border-slate-800/80 text-slate-200' : 'border-slate-150 text-slate-700'}`}>
+                  <div className={`p-4 border-t px-5 space-y-4 text-xs ${isDarkMode ? 'border-[#1E3A5A] text-slate-200' : 'border-[#D5E0EA] text-slate-700'}`}>
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Target Column</label>
                       <select
                         value={validateColumn}
                         onChange={(e) => setValidateColumn(e.target.value)}
-                        className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                          isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                        className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#163A5F] ${
+                          isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] text-slate-100 border' : 'bg-white border-[#D5E0EA] text-slate-900 border'
                         }`}
                       >
                         <option value="">-- Select Column --</option>
@@ -3775,8 +4002,8 @@ export default function CleaningCenter({
                       <select
                         value={validationRule}
                         onChange={(e) => setValidationRule(e.target.value)}
-                        className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                          isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                        className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#163A5F] ${
+                          isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] text-slate-100 border' : 'bg-white border-[#D5E0EA] text-slate-900 border'
                         }`}
                       >
                         <option value="email">Valid Email Format</option>
@@ -3797,8 +4024,8 @@ export default function CleaningCenter({
                             value={minVal}
                             onChange={(e) => setMinVal(e.target.value)}
                             placeholder="-Infinity"
-                            className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                              isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                            className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#163A5F] ${
+                              isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] text-slate-100 border' : 'bg-white border-[#D5E0EA] text-slate-900 border'
                             }`}
                           />
                         </div>
@@ -3809,8 +4036,8 @@ export default function CleaningCenter({
                             value={maxVal}
                             onChange={(e) => setMaxVal(e.target.value)}
                             placeholder="Infinity"
-                            className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                              isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                            className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#163A5F] ${
+                              isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] text-slate-100 border' : 'bg-white border-[#D5E0EA] text-slate-900 border'
                             }`}
                           />
                         </div>
@@ -3826,8 +4053,8 @@ export default function CleaningCenter({
                             value={minLen}
                             onChange={(e) => setMinLen(e.target.value)}
                             placeholder="0"
-                            className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                              isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                            className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#163A5F] ${
+                              isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] text-slate-100 border' : 'bg-white border-[#D5E0EA] text-slate-900 border'
                             }`}
                           />
                         </div>
@@ -3838,8 +4065,8 @@ export default function CleaningCenter({
                             value={maxLen}
                             onChange={(e) => setMaxLen(e.target.value)}
                             placeholder="Infinity"
-                            className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                              isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                            className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#163A5F] ${
+                              isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] text-slate-100 border' : 'bg-white border-[#D5E0EA] text-slate-900 border'
                             }`}
                           />
                         </div>
@@ -3854,8 +4081,8 @@ export default function CleaningCenter({
                           value={customSubstring}
                           onChange={(e) => setCustomSubstring(e.target.value)}
                           placeholder="e.g. USD, invoice, @company.com"
-                          className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                            isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                          className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#163A5F] ${
+                            isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] text-slate-100 border' : 'bg-white border-[#D5E0EA] text-slate-900 border'
                           }`}
                         />
                       </div>
@@ -3871,14 +4098,16 @@ export default function CleaningCenter({
                               value={customRegex}
                               onChange={(e) => setCustomRegex(e.target.value)}
                               placeholder="e.g. [A-Z]{3}-\d{4}"
-                              className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                                isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                              className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold font-mono focus:outline-none focus:ring-1 focus:ring-[#163A5F] ${
+                                isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] text-slate-100 border' : 'bg-white border-[#D5E0EA] text-slate-900 border'
                               }`}
                             />
                             <button
                               type="button"
                               onClick={() => setShowValidationRegexBuilder(!showValidationRegexBuilder)}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-bold shrink-0 cursor-pointer text-white bg-indigo-600 hover:bg-indigo-500 transition-all flex items-center gap-1 shadow-sm`}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold shrink-0 cursor-pointer text-white transition-all flex items-center gap-1 shadow-sm ${
+                                isDarkMode ? 'bg-[#163A5F] hover:bg-[#1E4E80] border border-[#2B5A8A]' : 'bg-[#163A5F] hover:bg-[#0F2D4A]'
+                              }`}
                             >
                               <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
                               {showValidationRegexBuilder ? 'Close Builder' : 'Build Visually'}
@@ -3909,8 +4138,8 @@ export default function CleaningCenter({
                         <select
                           value={validationFailAction}
                           onChange={(e) => setValidationFailAction(e.target.value)}
-                          className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                            isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                          className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#163A5F] ${
+                            isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] text-slate-100 border' : 'bg-white border-[#D5E0EA] text-slate-900 border'
                           }`}
                         >
                           <option value="flag">Flag Issue & Report</option>
@@ -3927,8 +4156,8 @@ export default function CleaningCenter({
                             value={validationFallback}
                             onChange={(e) => setValidationFallback(e.target.value)}
                             placeholder="e.g. N/A or 0.00"
-                            className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                              isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                            className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#163A5F] ${
+                              isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] text-slate-100 border' : 'bg-white border-[#D5E0EA] text-slate-900 border'
                             }`}
                           />
                         </div>
@@ -3945,7 +4174,9 @@ export default function CleaningCenter({
                       type="button"
                       onClick={runValidationRule}
                       disabled={!validateColumn || (validationRule === 'regex' && !customRegex)}
-                      className={`w-full py-2 rounded-lg text-xs font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-1 shadow-md ${accentClass} disabled:opacity-50 disabled:cursor-not-allowed`}
+                      className={`w-full py-2.5 rounded-lg text-xs font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md ${
+                        isDarkMode ? 'bg-[#163A5F] hover:bg-[#1E4E80] border border-[#2B5A8A]' : 'bg-[#163A5F] hover:bg-[#0F2D4A]'
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" /> Execute Validation Audit
                     </button>
@@ -3956,8 +4187,8 @@ export default function CleaningCenter({
               {/* Pattern Recognition & Sanitization Engine Accordion */}
               <div className={`rounded-xl border transition-all ${
                 isPatternOpen 
-                  ? 'border-indigo-500/40 bg-indigo-500/5 shadow-xs' 
-                  : isDarkMode ? 'hover:bg-indigo-500/5 hover:border-indigo-500/30 border-slate-800/80 bg-slate-950/60' : 'hover:bg-indigo-500/5 hover:border-indigo-500/30 border-slate-200 bg-slate-50'
+                  ? isDarkMode ? 'border-[#3B82F6] bg-[#16283C]/70 shadow-2xs' : 'border-[#163A5F] bg-[#EAEFF4] shadow-2xs'
+                  : isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] hover:bg-[#16283C] hover:border-[#3B82F6]' : 'bg-[#F3F7FA] border-[#D5E0EA] hover:bg-[#EAEFF4] hover:border-[#163A5F]'
               }`}>
                 <button
                   type="button"
@@ -3967,42 +4198,58 @@ export default function CleaningCenter({
                     setIsSplitterOpen(false);
                   }}
                   disabled={isViewer}
-                  className="w-full p-4 text-left flex gap-3.5 items-start cursor-pointer group disabled:opacity-50"
+                  className="w-full p-3.5 text-left flex gap-3 items-start cursor-pointer group disabled:opacity-50"
                 >
-                  <div className="p-2 bg-indigo-500/10 text-indigo-400 rounded-lg group-hover:bg-indigo-500/20">
-                    <Sparkles className="w-4 h-4 text-indigo-400" />
+                  <div className={`p-2 rounded-lg shrink-0 transition-colors ${
+                    isDarkMode 
+                      ? 'bg-[#163A5F]/40 text-[#93C5FD] border border-[#163A5F]/60 group-hover:bg-[#163A5F]/60' 
+                      : 'bg-[#163A5F]/10 text-[#163A5F] border border-[#163A5F]/15 group-hover:bg-[#163A5F]/15'
+                  }`}>
+                    <Sparkles className="w-4 h-4" />
                   </div>
-                  <div className="flex-1">
-                    <div className="flex justify-between items-center">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-center gap-1.5">
                       <div className="flex items-center gap-1.5">
-                        <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Pattern Sanitization Engine</h4>
-                        <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Pro</span>
+                        <h4 className={`font-bold text-xs ${isDarkMode ? 'text-slate-100' : 'text-[#163A5F]'}`}>Pattern Sanitization Engine</h4>
+                        <span className={`px-1.5 py-0.2 text-[9px] font-mono font-bold rounded ${
+                          isDarkMode 
+                            ? 'bg-[#163A5F]/40 text-[#93C5FD] border border-[#163A5F]/60' 
+                            : 'bg-[#163A5F]/10 text-[#163A5F] border border-[#163A5F]/20'
+                        }`}>Pro</span>
                       </div>
                       <div className="flex items-center gap-2">
                         {plan === 'free' && (
                           <span 
                             onClick={(e) => { e.stopPropagation(); triggerUnlockModal('Pattern Sanitization Engine', 'pro'); }}
-                            className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1 shadow-xs cursor-pointer"
+                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 shadow-2xs cursor-pointer shrink-0 transition-colors ${
+                              isDarkMode 
+                                ? 'bg-[#163A5F] hover:bg-[#1E4E80] text-white border border-[#2B5A8A]' 
+                                : 'bg-[#163A5F] hover:bg-[#0F2D4A] text-white'
+                            }`}
                           >
                             <Zap className="w-3 h-3" /> Upgrade
                           </span>
                         )}
-                        <ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isPatternOpen ? 'rotate-90 text-indigo-400' : ''}`} />
+                        <ChevronRight className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                          isPatternOpen 
+                            ? isDarkMode ? 'rotate-90 text-[#93C5FD]' : 'rotate-90 text-[#163A5F]' 
+                            : isDarkMode ? 'text-slate-400' : 'text-[#64748B]'
+                        }`} />
                       </div>
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Recognize nested patterns (Emails, Phones, Custom Regex) and isolate or split them into clean streams.</p>
+                    <p className={`text-[10px] mt-1 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Recognize nested patterns (Emails, Phones, Custom Regex) and isolate or split them into clean streams.</p>
                   </div>
                 </button>
 
                 {isPatternOpen && (
-                  <div className={`p-4 border-t px-5 space-y-4 text-xs ${isDarkMode ? 'border-slate-800/80 text-slate-200' : 'border-slate-150 text-slate-700'}`}>
+                  <div className={`p-4 border-t px-5 space-y-4 text-xs ${isDarkMode ? 'border-[#1E3A5A] text-slate-200' : 'border-[#D5E0EA] text-slate-700'}`}>
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Target Column</label>
                       <select
                         value={patternColumn}
                         onChange={(e) => setPatternColumn(e.target.value)}
-                        className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                          isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                        className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#163A5F] ${
+                          isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] text-slate-100 border' : 'bg-white border-[#D5E0EA] text-slate-900 border'
                         }`}
                       >
                         <option value="">-- Select Column --</option>
@@ -4017,8 +4264,8 @@ export default function CleaningCenter({
                       <select
                         value={patternPreset}
                         onChange={(e) => setPatternPreset(e.target.value)}
-                        className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                          isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                        className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#163A5F] ${
+                          isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] text-slate-100 border' : 'bg-white border-[#D5E0EA] text-slate-900 border'
                         }`}
                       >
                         <option value="email">Email Addresses (Regex)</option>
@@ -4038,14 +4285,16 @@ export default function CleaningCenter({
                               value={customRegex}
                               onChange={(e) => setCustomRegex(e.target.value)}
                               placeholder="e.g. [A-Z]{3}-\d{4}"
-                              className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                                isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                              className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold font-mono focus:outline-none focus:ring-1 focus:ring-[#163A5F] ${
+                                isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] text-slate-100 border' : 'bg-white border-[#D5E0EA] text-slate-900 border'
                               }`}
                             />
                             <button
                               type="button"
                               onClick={() => setShowPatternRegexBuilder(!showPatternRegexBuilder)}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-bold shrink-0 cursor-pointer text-white bg-indigo-600 hover:bg-indigo-500 transition-all flex items-center gap-1 shadow-sm`}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold shrink-0 cursor-pointer text-white transition-all flex items-center gap-1 shadow-sm ${
+                                isDarkMode ? 'bg-[#163A5F] hover:bg-[#1E4E80] border border-[#2B5A8A]' : 'bg-[#163A5F] hover:bg-[#0F2D4A]'
+                              }`}
                             >
                               <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
                               {showPatternRegexBuilder ? 'Close Builder' : 'Build Visually'}
@@ -4075,8 +4324,8 @@ export default function CleaningCenter({
                       <select
                         value={patternAction}
                         onChange={(e) => setPatternAction(e.target.value)}
-                        className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                          isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                        className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#163A5F] ${
+                          isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] text-slate-100 border' : 'bg-white border-[#D5E0EA] text-slate-900 border'
                         }`}
                       >
                         <option value="remove">Remove matched pattern (Keep remainder)</option>
@@ -4093,8 +4342,8 @@ export default function CleaningCenter({
                           value={newColName}
                           onChange={(e) => setNewColName(e.target.value)}
                           placeholder={patternColumn ? `${patternColumn}_extracted` : 'e.g. Extracted_Email'}
-                          className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                            isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                          className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#163A5F] ${
+                            isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] text-slate-100 border' : 'bg-white border-[#D5E0EA] text-slate-900 border'
                           }`}
                         />
                         <p className="text-[9px] text-slate-400">This column will capture the matched strings. The original column will keep the residual text.</p>
@@ -4105,9 +4354,11 @@ export default function CleaningCenter({
                       type="button"
                       onClick={runPatternSanitization}
                       disabled={!patternColumn || (patternPreset === 'custom' && !customRegex)}
-                      className={`w-full py-2.5 rounded-lg text-xs font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed`}
+                      className={`w-full py-2.5 rounded-lg text-xs font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md ${
+                        isDarkMode ? 'bg-[#163A5F] hover:bg-[#1E4E80] border border-[#2B5A8A]' : 'bg-[#163A5F] hover:bg-[#0F2D4A]'
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
-                      <Sparkles className="w-3.5 h-3.5 text-yellow-300" /> Execute Pattern Sanitize
+                      <Sparkles className="w-3.5 h-3.5" /> Execute Pattern Sanitize
                     </button>
                   </div>
                 )}
@@ -4116,8 +4367,8 @@ export default function CleaningCenter({
               {/* AI Column Mapping Accordion */}
               <div className={`rounded-xl border transition-all ${
                 isMappingOpen 
-                  ? 'border-purple-500/40 bg-purple-500/5 shadow-xs' 
-                  : isDarkMode ? 'hover:bg-purple-500/5 hover:border-purple-500/30 border-slate-800/80 bg-slate-950/60' : 'hover:bg-purple-500/5 hover:border-purple-500/30 border-slate-200 bg-slate-50'
+                  ? isDarkMode ? 'border-[#3B82F6] bg-[#16283C]/70 shadow-2xs' : 'border-[#163A5F] bg-[#EAEFF4] shadow-2xs'
+                  : isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] hover:bg-[#16283C] hover:border-[#3B82F6]' : 'bg-[#F3F7FA] border-[#D5E0EA] hover:bg-[#EAEFF4] hover:border-[#163A5F]'
               }`}>
                 <button
                   type="button"
@@ -4128,25 +4379,33 @@ export default function CleaningCenter({
                     setIsPatternOpen(false);
                   }}
                   disabled={isViewer}
-                  className="w-full p-4 text-left flex gap-3.5 items-start cursor-pointer group disabled:opacity-50"
+                  className="w-full p-3.5 text-left flex gap-3 items-start cursor-pointer group disabled:opacity-50"
                 >
-                  <div className="p-2 bg-purple-500/10 text-purple-400 rounded-lg group-hover:bg-purple-500/20">
+                  <div className={`p-2 rounded-lg shrink-0 transition-colors ${
+                    isDarkMode 
+                      ? 'bg-[#163A5F]/40 text-[#93C5FD] border border-[#163A5F]/60 group-hover:bg-[#163A5F]/60' 
+                      : 'bg-[#163A5F]/10 text-[#163A5F] border border-[#163A5F]/15 group-hover:bg-[#163A5F]/15'
+                  }`}>
                     <Database className="w-4 h-4" />
                   </div>
-                  <div className="flex-1">
-                    <div className="flex justify-between items-center">
-                      <h4 className={`font-bold text-xs flex items-center gap-1.5 ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-center gap-1.5">
+                      <h4 className={`font-bold text-xs flex items-center gap-1.5 ${isDarkMode ? 'text-slate-100' : 'text-[#163A5F]'}`}>
                         AI Column Mapping Standardizer
-                        <Sparkles className="w-3 h-3 text-purple-400 animate-pulse" />
+                        <Sparkles className={`w-3 h-3 ${isDarkMode ? 'text-[#93C5FD]' : 'text-[#163A5F]'}`} />
                       </h4>
-                      <ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isMappingOpen ? 'rotate-90 text-purple-400' : ''}`} />
+                      <ChevronRight className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                        isMappingOpen 
+                          ? isDarkMode ? 'rotate-90 text-[#93C5FD]' : 'rotate-90 text-[#163A5F]' 
+                          : isDarkMode ? 'text-slate-400' : 'text-[#64748B]'
+                      }`} />
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">Map messy header names (e.g., usr_email) to database snake_case, camelCase, or Canonical standards using AI.</p>
+                    <p className={`text-[10px] mt-1 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Map messy header names (e.g., usr_email) to database snake_case, camelCase, or Canonical standards using AI.</p>
                   </div>
                 </button>
 
                 {isMappingOpen && (
-                  <div className={`p-4 border-t px-5 space-y-4 text-xs ${isDarkMode ? 'border-slate-800/80 text-slate-200' : 'border-slate-150 text-slate-700'}`}>
+                  <div className={`p-4 border-t px-5 space-y-4 text-xs ${isDarkMode ? 'border-[#1E3A5A] text-slate-200' : 'border-[#D5E0EA] text-slate-700'}`}>
                     
                     {/* Convention Style Select */}
                     <div className="space-y-1.5">
@@ -4154,8 +4413,8 @@ export default function CleaningCenter({
                       <select
                         value={mappingStyle}
                         onChange={(e) => setMappingStyle(e.target.value as any)}
-                        className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-purple-500 ${
-                          isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900 border'
+                        className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#163A5F] ${
+                          isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] text-slate-100 border' : 'bg-white border-[#D5E0EA] text-slate-900 border'
                         }`}
                       >
                         <option value="database">Database Style (snake_case - e.g. customer_id)</option>
@@ -4170,7 +4429,9 @@ export default function CleaningCenter({
                       type="button"
                       onClick={fetchMappingSuggestions}
                       disabled={isMappingLoading}
-                      className={`w-full py-2 rounded-lg text-xs font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md bg-purple-600 hover:bg-purple-500 disabled:opacity-50`}
+                      className={`w-full py-2.5 rounded-lg text-xs font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md ${
+                        isDarkMode ? 'bg-[#163A5F] hover:bg-[#1E4E80] border border-[#2B5A8A]' : 'bg-[#163A5F] hover:bg-[#0F2D4A]'
+                      } disabled:opacity-50`}
                     >
                       {isMappingLoading ? (
                         <>
@@ -4187,7 +4448,7 @@ export default function CleaningCenter({
 
                     {/* Mapping List / Output Table */}
                     {Object.keys(mappingSuggestions).length > 0 && (
-                      <div className="space-y-3.5 pt-2 border-t border-slate-800/60 animate-slideDown">
+                      <div className={`space-y-3.5 pt-2 border-t ${isDarkMode ? 'border-[#1E3A5A]' : 'border-[#D5E0EA]'} animate-slideDown`}>
                         <div className="flex justify-between items-center">
                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">AI Suggested Mappings</label>
                           <button
@@ -4200,7 +4461,7 @@ export default function CleaningCenter({
                               });
                               setSelectedMappings(nextSelected);
                             }}
-                            className="text-[9px] font-bold text-purple-400 hover:underline cursor-pointer"
+                            className={`text-[9px] font-bold hover:underline cursor-pointer ${isDarkMode ? 'text-[#93C5FD]' : 'text-[#163A5F]'}`}
                           >
                             Toggle All
                           </button>
@@ -4209,7 +4470,6 @@ export default function CleaningCenter({
                         <div className="max-h-[300px] overflow-y-auto pr-1 space-y-2.5">
                           {currentHeaders.map((header) => {
                             const suggested = editableMappings[header] || '';
-                            const originalSuggested = mappingSuggestions[header] || '';
                             const explanation = mappingExplanations[header] || 'Standardized heading name.';
                             const isSelected = !!selectedMappings[header];
                             const isChanged = suggested !== header;
@@ -4219,8 +4479,8 @@ export default function CleaningCenter({
                                 key={header}
                                 className={`p-2.5 rounded-lg border transition-all ${
                                   isSelected 
-                                    ? 'bg-purple-500/5 border-purple-500/20' 
-                                    : 'bg-slate-950/20 border-slate-800/40'
+                                    ? isDarkMode ? 'bg-[#163A5F]/20 border-[#1E3A5A]' : 'bg-[#163A5F]/5 border-[#163A5F]/20'
+                                    : isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A]' : 'bg-white border-[#D5E0EA]'
                                 }`}
                               >
                                 <div className="flex items-start gap-2">
@@ -4229,23 +4489,27 @@ export default function CleaningCenter({
                                     type="checkbox"
                                     checked={isSelected}
                                     onChange={(e) => setSelectedMappings(prev => ({ ...prev, [header]: e.target.checked }))}
-                                    className="mt-0.5 rounded border-slate-700 text-purple-600 focus:ring-purple-500/40 cursor-pointer h-3.5 w-3.5 bg-slate-900"
+                                    className={`mt-0.5 rounded cursor-pointer h-3.5 w-3.5 text-[#163A5F] focus:ring-[#163A5F] ${
+                                      isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A]' : 'bg-white border-[#D5E0EA]'
+                                    }`}
                                   />
                                   <div className="flex-1 min-w-0">
                                     {/* Compare display */}
                                     <div className="flex items-center gap-1.5 flex-wrap">
-                                      <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 truncate max-w-[120px]">
+                                      <span className={`font-mono text-[10px] px-1.5 py-0.5 rounded truncate max-w-[120px] ${
+                                        isDarkMode ? 'bg-[#163A5F]/40 border border-[#163A5F]/60 text-[#93C5FD]' : 'bg-[#163A5F]/10 border border-[#163A5F]/15 text-[#163A5F]'
+                                      }`}>
                                         {header}
                                       </span>
-                                      <ArrowRight className="w-3 h-3 text-slate-500" />
+                                      <ArrowRight className="w-3 h-3 text-slate-400" />
                                       <input
                                         type="text"
                                         value={suggested}
                                         onChange={(e) => setEditableMappings(prev => ({ ...prev, [header]: e.target.value }))}
-                                        className={`px-2 py-0.5 rounded text-[10px] font-semibold w-full sm:w-auto font-mono max-w-[140px] focus:outline-none focus:ring-1 focus:ring-purple-500 ${
+                                        className={`px-2 py-0.5 rounded text-[10px] font-semibold w-full sm:w-auto font-mono max-w-[140px] focus:outline-none focus:ring-1 focus:ring-[#163A5F] ${
                                           isChanged 
-                                            ? 'bg-purple-500/10 text-purple-300 border border-purple-500/30' 
-                                            : 'bg-slate-900 border border-slate-800 text-slate-400'
+                                            ? isDarkMode ? 'bg-[#163A5F]/30 text-[#93C5FD] border border-[#3B82F6]' : 'bg-[#163A5F]/10 text-[#163A5F] border border-[#163A5F]/30'
+                                            : isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] text-slate-300' : 'bg-slate-50 border-[#D5E0EA] text-slate-700'
                                         }`}
                                       />
                                     </div>
@@ -4264,7 +4528,9 @@ export default function CleaningCenter({
                           <button
                             type="button"
                             onClick={applyColumnMappings}
-                            className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+                            className={`w-full py-2.5 text-white rounded-lg text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer ${
+                              isDarkMode ? 'bg-[#163A5F] hover:bg-[#1E4E80] border border-[#2B5A8A]' : 'bg-[#163A5F] hover:bg-[#0F2D4A]'
+                            }`}
                           >
                             <Check className="w-3.5 h-3.5 text-white" />
                             Apply Selected Column Renaming
