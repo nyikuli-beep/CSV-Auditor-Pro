@@ -31,6 +31,7 @@ import {
 import { validateFilePreFlight, checkUserUploadPermission, checkUploadRateLimit } from '../lib/csvSecurityValidator';
 import { useBilling } from '../context/BillingContext';
 import { useUserQuota } from '../hooks/useUserQuota';
+import { useAuth } from '../hooks/useAuth';
 import { auth } from '../firebase';
 
 export interface BatchFileStatusItem {
@@ -65,6 +66,8 @@ export default function BatchValidationPanel({
   accentClass,
   userRole
 }: BatchValidationPanelProps) {
+  const { user: authUser } = useAuth();
+  const isOwner = (userRole === 'Owner' || userRole === 'Admin') || (authUser?.email?.toLowerCase().trim() === 'nyikulibramwel@gmail.com');
   const { plan, usage, recordUsage, resetInfo, openProCheckout, hasProAccess, checkAuditLimit } = useBilling();
   const { uploadsRemaining, isExhausted: isQuotaExhausted, consumeUpload } = useUserQuota();
   const isFreemiumLimitReached = !hasProAccess && plan === 'free' && (
@@ -73,6 +76,13 @@ export default function BatchValidationPanel({
     !checkAuditLimit() ||
     (usage?.auditCount || 0) >= 5
   );
+
+  const getQuotaLimitMsg = () => {
+    if (isOwner) {
+      return `Monthly upload quota reached: Freemium users are restricted to 5 uploads per month (${uploadsRemaining}/5 remaining). Multi-device real-time sync updated your balance. Upgrade to Pro for unlimited uploads.`;
+    }
+    return `Workspace monthly upload quota reached: Your team has used all 5 freemium monthly uploads. Please ask your Workspace Owner (nyikulibramwel@gmail.com) to upgrade your team plan for unlimited uploads.`;
+  };
 
   // Selection state for workspace files
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>(() => files.map(f => f.id));
@@ -130,7 +140,7 @@ export default function BatchValidationPanel({
     setBatchDragActive(false);
 
     if (isFreemiumLimitReached || uploadsRemaining <= 0) {
-      setValidationError(`Monthly upload limit reached (${uploadsRemaining}/5 remaining). Raw file queuing is locked until quota resets on ${resetInfo.nextResetDate}.`);
+      setValidationError(getQuotaLimitMsg());
       return;
     }
 
@@ -146,7 +156,7 @@ export default function BatchValidationPanel({
 
   const handleBatchFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (isFreemiumLimitReached || uploadsRemaining <= 0) {
-      setValidationError(`Monthly upload limit reached (${uploadsRemaining}/5 remaining). Raw file queuing is locked until quota resets on ${resetInfo.nextResetDate}.`);
+      setValidationError(getQuotaLimitMsg());
       if (e.target) {
         e.target.value = '';
       }
@@ -195,11 +205,15 @@ export default function BatchValidationPanel({
     // Freemium 5 uploads monthly limit check for new raw files
     if (plan === 'free' && !hasProAccess && queuedRawFiles.length > 0) {
       if (uploadsRemaining <= 0 || isQuotaExhausted || !checkAuditLimit()) {
-        setValidationError(`Monthly upload limit reached: Freemium users are restricted to 5 uploads per month (${uploadsRemaining}/5 remaining). Multi-device real-time sync updated your balance. Upgrade to Pro for unlimited uploads or wait for quota reset on ${resetInfo.nextResetDate}.`);
+        setValidationError(getQuotaLimitMsg());
         return;
       }
       if (queuedRawFiles.length > uploadsRemaining) {
-        setValidationError(`Queueing ${queuedRawFiles.length} new files exceeds your remaining quota of ${uploadsRemaining} uploads on Freemium. Please reduce files or upgrade to Pro.`);
+        setValidationError(
+          isOwner 
+            ? `Queueing ${queuedRawFiles.length} new files exceeds your remaining quota of ${uploadsRemaining} uploads on Freemium. Please reduce files or upgrade to Pro.`
+            : `Queueing ${queuedRawFiles.length} new files exceeds the workspace remaining quota of ${uploadsRemaining} uploads. Please reduce files or ask the workspace owner to upgrade.`
+        );
         return;
       }
     }
@@ -599,13 +613,13 @@ export default function BatchValidationPanel({
             className={`border-2 border-dashed rounded-xl p-5 text-center transition-all relative ${
               isFreemiumLimitReached
                 ? isDarkMode 
-                  ? 'border-[#334155] bg-[#0b101d] opacity-80 cursor-not-allowed select-none' 
-                  : 'border-[#CBD5E1] bg-[#F1F5F9] opacity-80 cursor-not-allowed select-none'
+                  ? 'border-[#451A20] bg-[#140B0E] text-[#F8FAFC] opacity-95 cursor-not-allowed select-none' 
+                  : 'border-[#FCA5A5] bg-[#FFF5F5] text-[#0F172A] opacity-95 cursor-not-allowed select-none'
                 : batchDragActive 
-                  ? 'border-blue-500 bg-blue-500/10 cursor-pointer' 
+                  ? 'border-[#163A5F] bg-[#163A5F]/10 cursor-pointer' 
                   : isDarkMode 
-                    ? 'border-slate-800 bg-[#0f172a] hover:border-slate-700 cursor-pointer' 
-                    : 'border-slate-200 bg-slate-50/50 hover:border-slate-300 cursor-pointer'
+                    ? 'border-[#1E3A5A] bg-[#0B1523] hover:border-[#2B5A8A] cursor-pointer' 
+                    : 'border-[#CBD5E1] bg-[#FFFFFF] hover:border-[#94A3B8] cursor-pointer'
             }`}
             onClick={() => {
               if (!isFreemiumLimitReached) {
@@ -625,18 +639,27 @@ export default function BatchValidationPanel({
               className="hidden"
             />
             {isFreemiumLimitReached ? (
-              <div className="space-y-1.5 py-1">
-                <Lock className="w-5 h-5 text-[#DC2626] dark:text-[#F87171] mx-auto mb-1" />
-                <p className="text-xs font-bold text-[#DC2626] dark:text-[#F87171]">Raw Uploads Locked (5/5 Used)</p>
-                <p className="text-[10px] text-slate-400">
-                  Read-only mode. Resets on {resetInfo.nextResetDate}
+              <div className="space-y-2 py-1">
+                <div className={`mx-auto p-2 rounded-full w-fit ${isDarkMode ? 'bg-[#450A0A] text-[#F87171] border border-[#991B1B]' : 'bg-[#FEE2E2] text-[#DC2626] border border-[#FECACA]'}`}>
+                  <Lock className="w-4 h-4 text-[#DC2626] dark:text-[#F87171]" />
+                </div>
+                <p className={`text-xs font-bold ${isDarkMode ? 'text-[#FCA5A5]' : 'text-[#991B1B]'}`}>
+                  {isOwner ? 'Raw Uploads Locked (5/5 Used)' : 'Workspace Uploads Locked (5/5 Used)'}
+                </p>
+                <p className={`text-[10px] ${isDarkMode ? 'text-[#CBD5E1]' : 'text-[#475569]'}`}>
+                  {isOwner 
+                    ? `Read-only mode. Resets on ${resetInfo.nextResetDate}` 
+                    : `Contact Workspace Owner to upgrade. Resets ${resetInfo.nextResetDate}`
+                  }
                 </p>
               </div>
             ) : (
               <>
-                <Upload className="w-5 h-5 text-blue-500 mx-auto mb-1.5 animate-bounce" />
-                <p className="text-xs font-bold">Drag & drop files to queue</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">Click to browse local .CSV spreadsheets</p>
+                <div className={`mx-auto p-2 rounded-full w-fit mb-1.5 ${isDarkMode ? 'bg-[#163A5F]/30 text-[#93C5FD] border border-[#2B5A8A]' : 'bg-[#EAEFF4] text-[#163A5F] border border-[#D5E0EA]'}`}>
+                  <Upload className="w-5 h-5 text-[#163A5F] dark:text-[#93C5FD]" />
+                </div>
+                <p className={`text-xs font-bold ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>Drag & drop files to queue</p>
+                <p className={`text-[10px] ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'} mt-0.5`}>Click to browse local .CSV spreadsheets</p>
               </>
             )}
           </div>

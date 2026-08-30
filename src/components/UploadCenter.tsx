@@ -31,7 +31,10 @@ import {
   Monitor,
   Smartphone,
   RefreshCw,
-  ShieldCheck
+  ShieldCheck,
+  Mail,
+  UserCheck,
+  Shield
 } from 'lucide-react';
 import { CSVFile, AuditIssue, Severity, IssueType, CustomValidationRule } from '../types';
 import { detectCSVFormats } from '../lib/formatDetector';
@@ -55,6 +58,7 @@ import { RetentionUploadSelector } from './RetentionPolicySelector';
 import { createDefaultRetentionPolicy, RetentionPeriodOption } from '../lib/retentionService';
 import { useBilling } from '../context/BillingContext';
 import { useUserQuota } from '../hooks/useUserQuota';
+import { useAuth } from '../hooks/useAuth';
 import PlanFeatureLock from './PlanFeatureLock';
 import UnlockPremiumModal from './UnlockPremiumModal';
 
@@ -67,6 +71,10 @@ interface UploadCenterProps {
 }
 
 export default function UploadCenter({ onFileUpload, files = [], isDarkMode, accentClass, userRole }: UploadCenterProps) {
+  const { user: authUser } = useAuth();
+  const isOwner = (userRole === 'Owner' || userRole === 'Admin') || (authUser?.email?.toLowerCase().trim() === 'nyikulibramwel@gmail.com');
+  const [ownerNotified, setOwnerNotified] = useState(false);
+
   const { 
     plan, 
     usage, 
@@ -103,6 +111,20 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     !checkAuditLimit() ||
     currentUploadsCount >= 5
   );
+
+  const getQuotaLimitMsg = () => {
+    if (isOwner) {
+      return `Monthly upload quota reached: Freemium users are restricted to 5 uploads per month (${uploadsRemaining}/5 remaining). Multi-device real-time sync updated your balance. Upgrade to Pro for unlimited uploads.`;
+    }
+    return `Workspace monthly upload quota reached: Freemium team limit of 5 monthly uploads has been reached (${uploadsRemaining}/5 remaining). As a team ${userRole || 'Member'}, please contact the Workspace Owner (nyikulibramwel@gmail.com) to upgrade your workspace plan for unlimited team uploads.`;
+  };
+
+  const getBatchExceedMsg = (count: number) => {
+    if (isOwner) {
+      return `Uploading ${count} files would exceed your remaining quota of ${uploadsRemaining} uploads on Freemium. Please select fewer files or upgrade to Pro for unlimited uploads.`;
+    }
+    return `Uploading ${count} files would exceed your team's remaining quota of ${uploadsRemaining} uploads on Freemium. Please select fewer files or ask the Workspace Owner (nyikulibramwel@gmail.com) to upgrade the workspace plan.`;
+  };
 
   const [isResettingQuota, setIsResettingQuota] = useState(false);
   const [quotaFeedbackMsg, setQuotaFeedbackMsg] = useState<string | null>(null);
@@ -299,7 +321,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     const currentUploadsCount = usage?.auditCount || 0;
     if (plan === 'free' && !hasProAccess) {
       if ((!quotaLoading && uploadsRemaining <= 0) || isQuotaExhausted || !checkAuditLimit() || currentUploadsCount >= 5) {
-        const msg = `Monthly upload quota reached: Freemium users are restricted to 5 uploads per month (${uploadsRemaining}/5 remaining). Multi-device real-time sync updated your balance. Upgrade to Pro for unlimited uploads.`;
+        const msg = getQuotaLimitMsg();
         setErrorMsg(msg);
         triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro');
         return;
@@ -362,13 +384,13 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     const currentUploadsCount = usage?.auditCount || 0;
     if (plan === 'free' && !hasProAccess) {
       if ((!quotaLoading && uploadsRemaining <= 0) || isQuotaExhausted || !checkAuditLimit() || currentUploadsCount >= 5) {
-        const msg = `Monthly upload quota reached: Freemium users are restricted to 5 uploads per month (${uploadsRemaining}/5 remaining). Multi-device real-time sync updated your balance. Upgrade to Pro for unlimited uploads.`;
+        const msg = getQuotaLimitMsg();
         setErrorMsg(msg);
         triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro');
         return;
       }
       if (filesList.length > uploadsRemaining) {
-        const msg = `Uploading ${filesList.length} files would exceed your remaining quota of ${uploadsRemaining} uploads on Freemium. Please select fewer files or upgrade to Pro for unlimited uploads.`;
+        const msg = getBatchExceedMsg(filesList.length);
         setErrorMsg(msg);
         triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro');
         return;
@@ -427,7 +449,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     const currentUploadsCount = usage?.auditCount || 0;
     if (plan === 'free' && !hasProAccess) {
       if ((!quotaLoading && uploadsRemaining <= 0) || isQuotaExhausted || !checkAuditLimit() || currentUploadsCount >= 5) {
-        const msg = `Monthly upload quota reached: Freemium users are restricted to 5 uploads per month (${uploadsRemaining}/5 remaining). Multi-device real-time sync updated your balance. Upgrade to Pro for unlimited uploads.`;
+        const msg = getQuotaLimitMsg();
         setErrorMsg(msg);
         triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro');
         setFileToConfigure(null);
@@ -1582,7 +1604,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     const currentUploadsCount = usage?.auditCount || 0;
     if (plan === 'free' && !hasProAccess) {
       if ((!quotaLoading && uploadsRemaining <= 0) || isQuotaExhausted || !checkAuditLimit() || currentUploadsCount >= 5) {
-        const msg = `Monthly upload quota reached: Freemium users are restricted to 5 uploads per month (${uploadsRemaining}/5 remaining). Multi-device real-time sync updated your balance. Upgrade to Pro for unlimited uploads.`;
+        const msg = getQuotaLimitMsg();
         setErrorMsg(msg);
         triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro');
         return;
@@ -2028,7 +2050,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     setDragActive(false);
 
     if (isFreemiumLimitReached) {
-      const msg = `Monthly upload quota reached: Freemium users are restricted to 5 uploads per month (${currentUploadsCount}/5 used). Upload center is in read-only mode until your quota resets on ${resetInfo.nextResetDate}, or upgrade to Pro for unlimited uploads.`;
+      const msg = getQuotaLimitMsg();
       setErrorMsg(msg);
       triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro');
       return;
@@ -2045,7 +2067,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
 
   const handleBrowse = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (isFreemiumLimitReached) {
-      const msg = `Monthly upload quota reached: Freemium users are restricted to 5 uploads per month (${currentUploadsCount}/5 used). Upload center is in read-only mode until your quota resets on ${resetInfo.nextResetDate}, or upgrade to Pro for unlimited uploads.`;
+      const msg = getQuotaLimitMsg();
       setErrorMsg(msg);
       triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro');
       if (e.target) {
@@ -3067,40 +3089,50 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
 
           {/* Plan Tier Limits Status Banner */}
           <div className={`p-3.5 rounded-xl border text-xs flex flex-wrap items-center justify-between gap-3 ${
-            isDarkMode ? 'bg-[#131b2e] border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-700 shadow-sm'
+            isDarkMode ? 'bg-[#0B1523] border-[#1E3A5A] text-[#F8FAFC]' : 'bg-[#FFFFFF] border-[#CBD5E1] text-[#0F172A] shadow-sm'
           }`}>
             <div className="flex flex-wrap items-center gap-2.5">
-              <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${
+              <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${
                 plan === 'enterprise'
-                  ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20'
+                  ? isDarkMode ? 'bg-[#3B0764] text-[#E9D5FF] border-[#6B21A8]' : 'bg-[#F3E8FF] text-[#6B21A8] border-[#D8B4FE]'
                   : plan === 'pro'
-                  ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20'
-                  : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                  ? isDarkMode ? 'bg-[#163A5F] text-[#93C5FD] border-[#2B5A8A]' : 'bg-[#EAEFF4] text-[#163A5F] border-[#D5E0EA]'
+                  : isDarkMode ? 'bg-[#450A0A] text-[#FCA5A5] border-[#991B1B]' : 'bg-[#FEE2E2] text-[#991B1B] border-[#FECACA]'
               }`}>
                 {plan} Tier
               </span>
               <span className="font-semibold">
-                File Size Limit: <span className="font-bold text-blue-600 dark:text-blue-400">{plan === 'enterprise' ? '50 MB' : plan === 'pro' ? '25 MB' : '5 MB'}</span>
+                File Size Limit: <span className="font-bold text-[#163A5F] dark:text-[#93C5FD]">{plan === 'enterprise' ? '50 MB' : plan === 'pro' ? '25 MB' : '5 MB'}</span>
               </span>
-              <span className="text-slate-300 dark:text-slate-700">&bull;</span>
+              <span className="text-slate-400 dark:text-slate-600">&bull;</span>
               <span className="font-semibold">
-                Monthly Uploads Remaining: <span className={`font-bold ${plan === 'free' && !hasProAccess && uploadsRemaining <= 0 ? 'text-rose-500' : 'text-blue-600 dark:text-blue-400'}`}>
+                Monthly Uploads Remaining: <span className={`font-bold ${plan === 'free' && !hasProAccess && uploadsRemaining <= 0 ? 'text-[#DC2626] dark:text-[#F87171]' : 'text-[#163A5F] dark:text-[#93C5FD]'}`}>
                   {plan === 'free' && !hasProAccess ? `${uploadsRemaining} / 5 remaining` : 'Unlimited'}
                 </span>
               </span>
             </div>
             {plan === 'free' && !hasProAccess && (
-              <button
-                onClick={() => triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro')}
-                className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:text-blue-500 hover:underline cursor-pointer flex items-center gap-1 shrink-0"
-              >
-                Upgrade to Pro (Unlimited Uploads) &rarr;
-              </button>
+              isOwner ? (
+                <button
+                  onClick={() => triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro')}
+                  className="text-[11px] font-bold text-[#163A5F] dark:text-[#93C5FD] hover:underline cursor-pointer flex items-center gap-1 shrink-0"
+                >
+                  Upgrade to Pro (Unlimited Uploads) &rarr;
+                </button>
+              ) : (
+                <button
+                  onClick={() => triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro')}
+                  className="text-[11px] font-bold text-[#163A5F] dark:text-[#93C5FD] hover:underline cursor-pointer flex items-center gap-1.5 shrink-0"
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>Request Upgrade from Owner &rarr;</span>
+                </button>
+              )
             )}
             {plan === 'pro' && (
               <button
                 onClick={() => triggerUnlockModal('50MB File Size Limit', 'enterprise')}
-                className="text-[11px] font-bold text-purple-600 dark:text-purple-400 hover:text-purple-500 hover:underline cursor-pointer flex items-center gap-1 shrink-0"
+                className="text-[11px] font-bold text-[#7E22CE] dark:text-[#C084FC] hover:underline cursor-pointer flex items-center gap-1 shrink-0"
               >
                 Upgrade to Enterprise (50MB) &rarr;
               </button>
@@ -3109,25 +3141,65 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
 
           {/* Freemium Quota Exceeded Notice Card */}
           {plan === 'free' && !hasProAccess && uploadsRemaining <= 0 && (
-            <div className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-              isDarkMode ? 'bg-rose-950/30 border-rose-800/60 text-rose-200' : 'bg-rose-50 border-rose-200 text-rose-900 shadow-sm'
+            <div className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+              isDarkMode ? 'bg-[#1A0C10] border-[#5C1D24] text-[#FCA5A5]' : 'bg-[#FEF2F2] border-[#FECACA] text-[#991B1B] shadow-sm'
             }`}>
               <div className="flex items-start gap-3">
-                <div className="p-2 rounded-lg bg-rose-500/20 text-rose-500 shrink-0 mt-0.5">
+                <div className={`p-2 rounded-lg shrink-0 mt-0.5 ${
+                  isDarkMode ? 'bg-[#7F1D1D]/40 text-[#F87171] border border-[#991B1B]/50' : 'bg-[#FEE2E2] text-[#DC2626] border border-[#FECACA]'
+                }`}>
                   <AlertCircle className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="font-bold text-xs">Monthly Upload Limit Reached (0/5 Remaining)</h4>
-                  <p className="text-[11px] opacity-90 mt-0.5 leading-relaxed">
-                    You have reached the free tier limit of 5 uploads across all synchronized devices. Upgrade to Pro for unlimited spreadsheet uploads, or use the "Reset Quota" button to test multi-device synchronization.
+                  <h4 className={`font-bold text-xs ${isDarkMode ? 'text-[#FEE2E2]' : 'text-[#7F1D1D]'}`}>
+                    {isOwner ? 'Monthly Upload Limit Reached (0/5 Remaining)' : 'Workspace Monthly Upload Limit Reached (0/5 Remaining)'}
+                  </h4>
+                  <p className={`text-[11px] mt-0.5 leading-relaxed ${isDarkMode ? 'text-[#FCA5A5]' : 'text-[#7F1D1D]'}`}>
+                    {isOwner 
+                      ? 'You have reached the free tier limit of 5 uploads across all synchronized devices. Upgrade to Pro for unlimited spreadsheet uploads, or use the "Reset Quota" button to test multi-device synchronization.'
+                      : `Your team workspace has reached the free tier limit of 5 monthly uploads. As a team ${userRole || 'Member'}, please contact the Workspace Owner (nyikulibramwel@gmail.com) to upgrade your workspace plan for unlimited team uploads.`
+                    }
                   </p>
                 </div>
               </div>
+              {isOwner ? (
+                <button
+                  onClick={() => triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro')}
+                  className="px-4 py-2 rounded-lg text-xs font-bold text-white bg-[#163A5F] hover:bg-[#0F2D4A] border border-[#2B5A8A] shadow-sm transition-all shrink-0 cursor-pointer text-center"
+                >
+                  Upgrade to Pro ($49/mo)
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    setOwnerNotified(true);
+                    setTimeout(() => setOwnerNotified(false), 6000);
+                  }}
+                  className="px-4 py-2 rounded-lg text-xs font-bold text-white bg-[#163A5F] hover:bg-[#0F2D4A] border border-[#2B5A8A] shadow-sm transition-all shrink-0 cursor-pointer text-center flex items-center justify-center gap-1.5"
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>Request Upgrade</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Owner Notified Toast Confirmation */}
+          {ownerNotified && (
+            <div className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 ${
+              isDarkMode ? 'bg-[#0B1E17] border-[#065F46] text-[#A7F3D0]' : 'bg-[#ECFDF5] border-[#A7F3D0] text-[#065F46] shadow-sm'
+            }`}>
+              <div className="flex items-center gap-2.5">
+                <CheckCircle2 className="w-4 h-4 text-[#10B981] shrink-0" />
+                <span className="text-xs font-semibold">
+                  Upgrade request sent to workspace owner (<strong>nyikulibramwel@gmail.com</strong>).
+                </span>
+              </div>
               <button
-                onClick={() => triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro')}
-                className="px-4 py-2 rounded-lg text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-all shrink-0 cursor-pointer text-center"
+                onClick={() => setOwnerNotified(false)}
+                className="text-xs font-bold hover:underline cursor-pointer"
               >
-                Upgrade to Pro ($49/mo)
+                Dismiss
               </button>
             </div>
           )}
@@ -3146,13 +3218,13 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
             className={`border-2 border-dashed rounded-xl p-8 text-center transition-all relative ${
               isFreemiumLimitReached
                 ? isDarkMode 
-                  ? 'border-[#334155] bg-[#0b101d] opacity-90 cursor-pointer select-none' 
-                  : 'border-[#CBD5E1] bg-[#F1F5F9] opacity-90 cursor-pointer select-none'
+                  ? 'border-[#451A20] bg-[#140B0E] text-[#F8FAFC] opacity-95 cursor-pointer select-none shadow-sm' 
+                  : 'border-[#FCA5A5] bg-[#FFF5F5] text-[#0F172A] opacity-95 cursor-pointer select-none shadow-sm'
                 : dragActive 
-                  ? 'border-[#2563EB] bg-[#2563EB]/5' 
+                  ? 'border-[#163A5F] bg-[#163A5F]/10' 
                   : isDarkMode 
-                    ? 'border-slate-800 bg-[#131b2e]/60 hover:border-slate-700 hover:bg-[#131b2e]' 
-                    : 'border-slate-200 bg-white hover:border-slate-300'
+                    ? 'border-[#1E3A5A] bg-[#0B1523] hover:border-[#2B5A8A] hover:bg-[#101F33]' 
+                    : 'border-[#CBD5E1] bg-[#FFFFFF] hover:border-[#94A3B8]'
             }`}
           >
             <input 
@@ -3171,19 +3243,28 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
             
             {isFreemiumLimitReached ? (
               <div className="max-w-md mx-auto space-y-4 py-2">
-                <div className={`mx-auto p-3.5 rounded-full w-fit ${isDarkMode ? 'bg-[#450A0A]/50 text-[#F87171] border border-[#991B1B]/40' : 'bg-[#FEE2E2] text-[#DC2626] border border-[#FECACA]'}`}>
+                <div className={`mx-auto p-3.5 rounded-full w-fit ${isDarkMode ? 'bg-[#450A0A] text-[#F87171] border border-[#991B1B]' : 'bg-[#FEE2E2] text-[#DC2626] border border-[#FECACA]'}`}>
                   <Lock className="w-6 h-6 text-[#DC2626] dark:text-[#F87171]" />
                 </div>
 
-                <div className="space-y-1.5">
-                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-[#DC2626]/10 text-[#DC2626] dark:text-[#F87171] border border-[#DC2626]/20">
+                <div className="space-y-2">
+                  <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${
+                    isDarkMode ? 'bg-[#450A0A] text-[#FCA5A5] border-[#991B1B]' : 'bg-[#FEE2E2] text-[#991B1B] border-[#FECACA]'
+                  }`}>
                     <Lock className="w-3 h-3" />
                     <span>Upload Center Read-Only ({5 - Math.max(0, uploadsRemaining)}/5 Used &bull; {uploadsRemaining} Remaining)</span>
                   </div>
 
-                  <h3 className="font-bold text-sm">Monthly Upload Quota Reached</h3>
-                  <p className={`text-xs max-w-sm mx-auto leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                    Drag & drop and local file browsing are locked. Interactivity will automatically restore when your free monthly limit resets on <strong className="text-slate-200 dark:text-slate-100">{resetInfo.nextResetDate}</strong> (in {resetInfo.daysRemaining} {resetInfo.daysRemaining === 1 ? 'day' : 'days'}).
+                  <h3 className={`font-bold text-sm ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
+                    {isOwner ? 'Monthly Upload Quota Reached' : 'Workspace Monthly Upload Quota Reached'}
+                  </h3>
+                  <p className={`text-xs max-w-sm mx-auto leading-relaxed ${isDarkMode ? 'text-[#CBD5E1]' : 'text-[#334155]'}`}>
+                    Drag & drop and local file browsing are locked. {isOwner 
+                      ? 'Interactivity will automatically restore when your free monthly limit resets on ' 
+                      : 'Uploads will automatically unlock when your workspace monthly quota resets on '
+                    }
+                    <strong className={isDarkMode ? 'text-[#FFFFFF] font-bold' : 'text-[#0F172A] font-bold'}>{resetInfo.nextResetDate}</strong> (in {resetInfo.daysRemaining} {resetInfo.daysRemaining === 1 ? 'day' : 'days'})
+                    {!isOwner ? ', or when the Workspace Owner upgrades the organization subscription.' : '.'}
                   </p>
                 </div>
 
@@ -3192,36 +3273,55 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
                     id="browse-files-button-locked"
                     type="button"
                     onClick={() => triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro')}
-                    className="w-full sm:w-auto px-4 py-2 text-xs font-bold text-slate-300 dark:text-slate-400 bg-slate-800/60 dark:bg-slate-900 border border-slate-700/50 rounded-lg hover:border-slate-600 flex items-center justify-center gap-1.5 shadow-none cursor-pointer"
+                    className={`w-full sm:w-auto px-4 py-2 text-xs font-bold rounded-lg border flex items-center justify-center gap-1.5 cursor-pointer ${
+                      isDarkMode 
+                        ? 'bg-[#1E293B] border-[#334155] text-[#94A3B8] hover:text-[#FFFFFF]' 
+                        : 'bg-[#F1F5F9] border-[#CBD5E1] text-[#475569] hover:text-[#0F172A]'
+                    }`}
                   >
-                    <Lock className="w-3.5 h-3.5 text-slate-400" />
+                    <Lock className="w-3.5 h-3.5" />
                     <span>Browse local files (Locked)</span>
                   </button>
 
-                  <button
-                    id="unlock-quota-action-button"
-                    type="button"
-                    onClick={() => triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro')}
-                    className="w-full sm:w-auto px-4 py-2 text-xs font-bold text-white rounded-lg bg-[#2563EB] hover:bg-[#1D4ED8] shadow-sm hover:scale-[1.01] transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    <Zap className="w-3.5 h-3.5" />
-                    <span>{!trialUsed ? 'Start 14-Day Free Trial' : 'Upgrade to Pro'}</span>
-                  </button>
+                  {isOwner ? (
+                    <button
+                      id="unlock-quota-action-button"
+                      type="button"
+                      onClick={() => triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro')}
+                      className="w-full sm:w-auto px-4 py-2 text-xs font-bold text-white rounded-lg bg-[#163A5F] hover:bg-[#0F2D4A] border border-[#2B5A8A] shadow-sm transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <Zap className="w-3.5 h-3.5" />
+                      <span>{!trialUsed ? 'Start 14-Day Free Trial' : 'Upgrade to Pro ($49/mo)'}</span>
+                    </button>
+                  ) : (
+                    <button
+                      id="unlock-quota-action-button"
+                      type="button"
+                      onClick={() => {
+                        setOwnerNotified(true);
+                        setTimeout(() => setOwnerNotified(false), 6000);
+                      }}
+                      className="w-full sm:w-auto px-4 py-2 text-xs font-bold text-white rounded-lg bg-[#163A5F] hover:bg-[#0F2D4A] border border-[#2B5A8A] shadow-sm transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <Mail className="w-3.5 h-3.5" />
+                      <span>Request Upgrade from Owner</span>
+                    </button>
+                  )}
                 </div>
               </div>
             ) : (
               <div className="max-w-md mx-auto space-y-3">
-                <div className={`mx-auto p-3.5 rounded-full w-fit ${isDarkMode ? 'bg-slate-950 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
-                  <Upload className="w-6 h-6 animate-pulse" />
+                <div className={`mx-auto p-3.5 rounded-full w-fit ${isDarkMode ? 'bg-[#163A5F]/30 text-[#93C5FD] border border-[#2B5A8A]' : 'bg-[#EAEFF4] text-[#163A5F] border border-[#D5E0EA]'}`}>
+                  <Upload className="w-6 h-6" />
                 </div>
 
                 <div>
-                  <h3 className="font-bold text-sm mb-1">Drag and drop your spreadsheet</h3>
-                  <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                    Supports standard comma-delimited <span className="font-bold text-blue-700 dark:text-blue-400">.CSV</span> files up to <span className="font-bold text-blue-600 dark:text-blue-400">{plan === 'enterprise' ? '50MB' : plan === 'pro' ? '25MB' : '5MB'}</span>.
+                  <h3 className={`font-bold text-sm mb-1 ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>Drag and drop your spreadsheet</h3>
+                  <p className={`text-xs ${isDarkMode ? 'text-[#CBD5E1]' : 'text-[#475569]'}`}>
+                    Supports standard comma-delimited <span className="font-bold text-[#163A5F] dark:text-[#93C5FD]">.CSV</span> files up to <span className="font-bold text-[#163A5F] dark:text-[#93C5FD]">{plan === 'enterprise' ? '50MB' : plan === 'pro' ? '25MB' : '5MB'}</span>.
                   </p>
                   {plan === 'free' && (
-                    <p className="text-[11px] font-medium text-amber-600 dark:text-amber-400 mt-1">
+                    <p className={`text-[11px] font-medium mt-1 ${isDarkMode ? 'text-[#FCA5A5]' : 'text-[#B91C1C]'}`}>
                       Freemium Tier: 5MB file size limit &bull; 5 uploads per month max ({usage?.auditCount || 0}/5 used)
                     </p>
                   )}
@@ -3232,7 +3332,7 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
                     id="browse-local-files-btn"
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="px-4 py-1.5 text-xs font-bold text-white rounded-lg cursor-pointer bg-[#2563EB] hover:bg-[#1D4ED8] shadow-sm hover:scale-[1.01] transition-all"
+                    className="px-4 py-1.5 text-xs font-bold text-white rounded-lg cursor-pointer bg-[#163A5F] hover:bg-[#0F2D4A] border border-[#2B5A8A] shadow-sm transition-all"
                   >
                     Browse local files
                   </button>
@@ -3712,6 +3812,8 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
         currentUsageCount={usage?.auditCount || 0}
         resetDate={resetInfo.nextResetDate}
         daysRemaining={resetInfo.daysRemaining}
+        userRole={userRole}
+        isOwner={isOwner}
       />
     </div>
   );
