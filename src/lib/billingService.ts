@@ -124,7 +124,8 @@ export function getEntitlements(plan: UserPlan, status: string, trialEndsAt?: st
 
 // Initialize usage for current month with cross-storage synchronization
 export function getUserUsage(userId: string, plan: string): UsageMetrics {
-  const currentMonth = new Date().toISOString().substring(0, 7); // 'YYYY-MM'
+  const now = new Date();
+  const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
   const cleanId = (userId || 'freemium_user').toLowerCase().trim();
   const storageKey = `app_user_usage_${cleanId}_${currentMonth}`;
   
@@ -205,14 +206,19 @@ export interface MonthlyResetInfo {
 
 export function getNextMonthlyResetInfo(): MonthlyResetInfo {
   const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  const currentMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
-  const nextMonthDate = new Date(year, month + 1, 1, 0, 0, 0, 0);
-  const diffMs = nextMonthDate.getTime() - now.getTime();
+  const utcYear = now.getUTCFullYear();
+  const utcMonth = now.getUTCMonth(); // 0 to 11
+  const currentMonth = `${utcYear}-${String(utcMonth + 1).padStart(2, '0')}`;
+  
+  // First millisecond of the next calendar month in UTC
+  const nextMonthUtcTime = Date.UTC(utcMonth === 11 ? utcYear + 1 : utcYear, (utcMonth + 1) % 12, 1, 0, 0, 0, 0);
+  const diffMs = Math.max(0, nextMonthUtcTime - now.getTime());
   const daysRemaining = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
   const hoursRemaining = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60)));
-  const nextResetDate = nextMonthDate.toLocaleDateString(undefined, {
+
+  const nextMonthDate = new Date(nextMonthUtcTime);
+  const nextResetDate = nextMonthDate.toLocaleDateString('en-US', {
+    timeZone: 'UTC',
     month: 'short',
     day: 'numeric',
     year: 'numeric'

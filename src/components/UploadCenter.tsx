@@ -319,14 +319,11 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     }
 
     // 1b. Check Freemium 5 Uploads Per Month Limit & Multi-Device Real-Time Quota
-    const currentUploadsCount = usage?.auditCount || 0;
-    if (plan === 'free' && !hasProAccess) {
-      if ((!quotaLoading && uploadsRemaining <= 0) || isQuotaExhausted || !checkAuditLimit() || currentUploadsCount >= 5) {
-        const msg = getQuotaLimitMsg();
-        setErrorMsg(msg);
-        triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro');
-        return;
-      }
+    if (isFreePlan && isFreemiumLimitReached) {
+      const msg = getQuotaLimitMsg();
+      setErrorMsg(msg);
+      triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro');
+      return;
     }
 
     // 2. Check Rate Limit
@@ -382,9 +379,8 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     }
 
     // 1b. Check Freemium 5 Uploads Per Month Limit & Multi-Device Real-Time Quota
-    const currentUploadsCount = usage?.auditCount || 0;
-    if (plan === 'free' && !hasProAccess) {
-      if ((!quotaLoading && uploadsRemaining <= 0) || isQuotaExhausted || !checkAuditLimit() || currentUploadsCount >= 5) {
+    if (isFreePlan) {
+      if (isFreemiumLimitReached) {
         const msg = getQuotaLimitMsg();
         setErrorMsg(msg);
         triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro');
@@ -447,17 +443,14 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     if (!fileToConfigure) return;
     
     // Check Freemium 5 Uploads Per Month Limit & Multi-Device Real-Time Quota
-    const currentUploadsCount = usage?.auditCount || 0;
-    if (plan === 'free' && !hasProAccess) {
-      if ((!quotaLoading && uploadsRemaining <= 0) || isQuotaExhausted || !checkAuditLimit() || currentUploadsCount >= 5) {
-        const msg = getQuotaLimitMsg();
-        setErrorMsg(msg);
-        triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro');
-        setFileToConfigure(null);
-        setMultipleFilesToConfigure([]);
-        setDelimiterPreviewLines([]);
-        return;
-      }
+    if (isFreePlan && isFreemiumLimitReached) {
+      const msg = getQuotaLimitMsg();
+      setErrorMsg(msg);
+      triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro');
+      setFileToConfigure(null);
+      setMultipleFilesToConfigure([]);
+      setDelimiterPreviewLines([]);
+      return;
     }
 
     const file = fileToConfigure;
@@ -1602,14 +1595,11 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     }
 
     // 1b. Check Freemium 5 Uploads Per Month Limit & Real-time multi-device quota
-    const currentUploadsCount = usage?.auditCount || 0;
-    if (plan === 'free' && !hasProAccess) {
-      if ((!quotaLoading && uploadsRemaining <= 0) || isQuotaExhausted || !checkAuditLimit() || currentUploadsCount >= 5) {
-        const msg = getQuotaLimitMsg();
-        setErrorMsg(msg);
-        triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro');
-        return;
-      }
+    if (isFreePlan && isFreemiumLimitReached) {
+      const msg = getQuotaLimitMsg();
+      setErrorMsg(msg);
+      triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro');
+      return;
     }
 
     // 2. Upload Rate Limit Check (5/min, 50/hour)
@@ -1851,14 +1841,11 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     }
 
     // Check Freemium 5 Uploads Per Month Limit & Multi-Device Quota
-    const currentUploadsCount = usage?.auditCount || 0;
-    if (plan === 'free' && !hasProAccess) {
-      if ((!quotaLoading && uploadsRemaining <= 0) || isQuotaExhausted || !checkAuditLimit() || currentUploadsCount >= 5) {
-        const msg = `Monthly upload quota reached: Freemium users are restricted to 5 uploads per month (${uploadsRemaining}/5 remaining). Upgrade to Pro for unlimited uploads or wait until quota resets on ${resetInfo.nextResetDate}.`;
-        setErrorMsg(msg);
-        triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro');
-        return;
-      }
+    if (isFreePlan && isFreemiumLimitReached) {
+      const msg = `Monthly upload limit reached. Your Free plan upload allowance resets on the next calendar month (${resetInfo.nextResetDate}).`;
+      setErrorMsg(msg);
+      triggerUnlockModal('Upgrade Required: Monthly Upload Limit Reached', 'pro');
+      return;
     }
 
     // Check Rate Limit
@@ -3057,13 +3044,13 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
               </div>
 
               <div className={`p-2.5 rounded-lg border ${isDarkMode ? 'bg-[#0b101d] border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
-                <div className="text-[10px] uppercase font-bold text-slate-400">Usage</div>
+                <div className="text-[10px] uppercase font-bold text-slate-400">Uploads this month</div>
                 <div className="flex items-baseline gap-1.5 mt-0.5">
                   <span className="text-lg font-black text-slate-700 dark:text-slate-200">
-                    {quotaLoading ? '...' : (plan === 'free' && !hasProAccess ? uploadsUsed : '0')}
+                    {quotaLoading ? '...' : (plan === 'free' && !hasProAccess ? `${uploadsUsed}/${maxUploads}` : '0')}
                   </span>
                   <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                    {plan === 'free' && !hasProAccess ? `/ ${maxUploads} used` : 'Used (Pro)'}
+                    {plan === 'free' && !hasProAccess ? `(${uploadsRemaining} remaining)` : 'Used (Pro)'}
                   </span>
                 </div>
               </div>
@@ -3119,8 +3106,8 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
               </span>
               <span className="text-slate-400 dark:text-slate-600">&bull;</span>
               <span className="font-semibold">
-                Monthly Uploads Remaining: <span className={`font-bold ${plan === 'free' && !hasProAccess && uploadsRemaining <= 0 ? 'text-[#DC2626] dark:text-[#F87171]' : 'text-[#163A5F] dark:text-[#93C5FD]'}`}>
-                  {plan === 'free' && !hasProAccess ? `${quotaLoading ? '...' : uploadsRemaining} / ${maxUploads} remaining` : 'Unlimited'}
+                Uploads this month: <span className={`font-bold ${plan === 'free' && !hasProAccess && uploadsRemaining <= 0 ? 'text-[#DC2626] dark:text-[#F87171]' : 'text-[#163A5F] dark:text-[#93C5FD]'}`}>
+                  {plan === 'free' && !hasProAccess ? `${quotaLoading ? '...' : `${uploadsUsed}/${maxUploads}`}` : 'Unlimited'}
                 </span>
               </span>
             </div>
@@ -3165,13 +3152,10 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
                 </div>
                 <div>
                   <h4 className={`font-bold text-xs ${isDarkMode ? 'text-[#FEE2E2]' : 'text-[#7F1D1D]'}`}>
-                    {isOwner ? 'Monthly Upload Limit Reached (0/5 Remaining)' : 'Workspace Monthly Upload Limit Reached (0/5 Remaining)'}
+                    Monthly upload limit reached ({uploadsUsed}/{maxUploads} used)
                   </h4>
                   <p className={`text-[11px] mt-0.5 leading-relaxed ${isDarkMode ? 'text-[#FCA5A5]' : 'text-[#7F1D1D]'}`}>
-                    {isOwner 
-                      ? 'You have reached the free tier limit of 5 uploads across all synchronized devices. Upgrade to Pro for unlimited spreadsheet uploads, or use the "Reset Quota" button to test multi-device synchronization.'
-                      : `Your team workspace has reached the free tier limit of 5 monthly uploads. As a team ${userRole || 'Member'}, please contact the Workspace Owner (nyikulibramwel@gmail.com) to upgrade your workspace plan for unlimited team uploads.`
-                    }
+                    Your Free plan upload allowance resets on the next calendar month ({resetInfo.nextResetDate}).
                   </p>
                 </div>
               </div>
@@ -3265,19 +3249,14 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
                     isDarkMode ? 'bg-[#450A0A] text-[#FCA5A5] border-[#991B1B]' : 'bg-[#FEE2E2] text-[#991B1B] border-[#FECACA]'
                   }`}>
                     <Lock className="w-3 h-3" />
-                    <span>Upload Center Read-Only ({uploadsUsed}/{maxUploads} used &bull; {uploadsRemaining} remaining)</span>
+                    <span>Uploads this month: {uploadsUsed}/{maxUploads} &bull; Monthly limit reached</span>
                   </div>
 
                   <h3 className={`font-bold text-sm ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
-                    {isOwner ? 'Monthly Upload Quota Reached' : 'Workspace Monthly Upload Quota Reached'}
+                    Monthly upload limit reached.
                   </h3>
                   <p className={`text-xs max-w-sm mx-auto leading-relaxed ${isDarkMode ? 'text-[#CBD5E1]' : 'text-[#334155]'}`}>
-                    Drag & drop and local file browsing are locked. {isOwner 
-                      ? 'Interactivity will automatically restore when your free monthly limit resets on ' 
-                      : 'Uploads will automatically unlock when your workspace monthly quota resets on '
-                    }
-                    <strong className={isDarkMode ? 'text-[#FFFFFF] font-bold' : 'text-[#0F172A] font-bold'}>{resetInfo.nextResetDate}</strong> (in {resetInfo.daysRemaining} {resetInfo.daysRemaining === 1 ? 'day' : 'days'})
-                    {!isOwner ? ', or when the Workspace Owner upgrades the organization subscription.' : '.'}
+                    Your Free plan upload allowance resets on the next calendar month (<strong className={isDarkMode ? 'text-[#FFFFFF] font-bold' : 'text-[#0F172A] font-bold'}>{resetInfo.nextResetDate}</strong>).
                   </p>
                 </div>
 

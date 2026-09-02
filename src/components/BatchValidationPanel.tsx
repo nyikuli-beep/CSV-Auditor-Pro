@@ -203,7 +203,7 @@ export default function BatchValidationPanel({
 
     // Freemium 5 uploads monthly limit check for new raw files
     if (plan === 'free' && !hasProAccess && queuedRawFiles.length > 0) {
-      if (uploadsRemaining <= 0 || isQuotaExhausted || !checkAuditLimit()) {
+      if (isFreemiumLimitReached) {
         setValidationError(getQuotaLimitMsg());
         return;
       }

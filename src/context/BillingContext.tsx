@@ -108,13 +108,20 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const unsubscribe = onSnapshot(userRef, (snap) => {
         if (snap.exists()) {
           const data = snap.data();
-          const maxUploads = typeof data?.maxUploads === 'number' && data.maxUploads > 0 ? data.maxUploads : 5;
-          const currentPeriod = new Date().toISOString().substring(0, 7);
-          const docPeriod = typeof data?.quotaPeriod === 'string' ? data.quotaPeriod : currentPeriod;
+          const now = new Date();
+          const currentPeriod = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+          const maxUploads = typeof data?.monthlyUploadLimit === 'number' && data.monthlyUploadLimit > 0
+            ? data.monthlyUploadLimit
+            : (typeof data?.maxUploads === 'number' && data.maxUploads > 0 ? data.maxUploads : 5);
+          const docPeriod = (typeof data?.quotaMonth === 'string' && data.quotaMonth.trim()) ||
+                            (typeof data?.quotaPeriod === 'string' && data.quotaPeriod.trim()) ||
+                            '';
 
           let used = 0;
           if (docPeriod !== currentPeriod) {
             used = 0;
+          } else if (typeof data?.monthlyUploadsUsed === 'number') {
+            used = Math.max(0, Math.min(maxUploads, data.monthlyUploadsUsed));
           } else if (typeof data?.uploadsUsed === 'number') {
             used = Math.max(0, Math.min(maxUploads, data.uploadsUsed));
           } else if (typeof data?.uploadsRemaining === 'number') {
@@ -378,11 +385,13 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const checkAuditLimit = (): boolean => {
     const currentPlan = billing?.plan || 'free';
     if (currentPlan === 'free') {
-      if (cloudQuotaRemaining !== null && cloudQuotaRemaining <= 0) {
-        return false;
+      if (cloudQuotaRemaining !== null) {
+        return cloudQuotaRemaining > 0;
       }
+      const now = new Date();
+      const currentPeriod = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
       const currentUsage = usage || getUserUsage(userEmail, 'free');
-      if (currentUsage.auditCount >= 5) {
+      if (currentUsage.periodMonth === currentPeriod && currentUsage.auditCount >= 5) {
         return false;
       }
     }

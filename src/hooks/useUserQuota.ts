@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from './useAuth';
 import { 
@@ -14,9 +14,12 @@ import {
 
 export interface UserQuotaState {
   uploadsUsed: number;
+  monthlyUploadsUsed: number;
   uploadsRemaining: number;
   maxUploads: number;
+  monthlyUploadLimit: number;
   quotaPeriod: string;
+  quotaMonth: string;
   updatedAt: string | null;
   email: string | null;
   role: string | null;
@@ -100,15 +103,31 @@ export function useUserQuota(): UserQuotaState {
       (snapshot) => {
         if (snapshot.exists()) {
           const data = snapshot.data();
-          const docMax = typeof data?.maxUploads === 'number' && data.maxUploads > 0 
-            ? data.maxUploads 
-            : DEFAULT_MAX_UPLOADS;
-          const docPeriod = typeof data?.quotaPeriod === 'string' ? data.quotaPeriod : currentPeriod;
+          const docMax = typeof data?.monthlyUploadLimit === 'number' && data.monthlyUploadLimit > 0
+            ? data.monthlyUploadLimit
+            : (typeof data?.maxUploads === 'number' && data.maxUploads > 0 ? data.maxUploads : DEFAULT_MAX_UPLOADS);
+          
+          const docPeriod = (typeof data?.quotaMonth === 'string' && data.quotaMonth.trim()) ||
+                            (typeof data?.quotaPeriod === 'string' && data.quotaPeriod.trim()) ||
+                            '';
 
           let used = 0;
-          // TASK 7 & 10: Check monthly reset or legacy migration
+          // Stored quotaMonth !== currentMonth -> automatic calendar-month reset
           if (docPeriod !== currentPeriod) {
             used = 0;
+            // Proactively reconcile Firestore in the background for multi-device sync
+            updateDoc(userDocRef, {
+              monthlyUploadsUsed: 0,
+              uploadsUsed: 0,
+              monthlyUploadLimit: docMax,
+              maxUploads: docMax,
+              uploadsRemaining: docMax,
+              quotaMonth: currentPeriod,
+              quotaPeriod: currentPeriod,
+              updatedAt: new Date().toISOString()
+            }).catch(err => console.warn('[useUserQuota] Background month reset notice:', err));
+          } else if (typeof data?.monthlyUploadsUsed === 'number') {
+            used = Math.max(0, Math.min(docMax, data.monthlyUploadsUsed));
           } else if (typeof data?.uploadsUsed === 'number') {
             used = Math.max(0, Math.min(docMax, data.uploadsUsed));
           } else if (typeof data?.uploadsRemaining === 'number') {
@@ -219,9 +238,12 @@ export function useUserQuota(): UserQuotaState {
 
   return {
     uploadsUsed,
+    monthlyUploadsUsed: uploadsUsed,
     uploadsRemaining,
     maxUploads,
+    monthlyUploadLimit: maxUploads,
     quotaPeriod,
+    quotaMonth: quotaPeriod,
     updatedAt,
     email,
     role,

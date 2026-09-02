@@ -10,8 +10,11 @@ export interface UserProfileDocument {
   email: string;
   uploadsRemaining: number;
   uploadsUsed?: number;
+  monthlyUploadsUsed?: number;
   maxUploads?: number;
+  monthlyUploadLimit?: number;
   quotaPeriod?: string;
+  quotaMonth?: string;
   updatedAt: string;
   photoURL?: string;
   avatar?: string;
@@ -52,22 +55,27 @@ export async function syncUserProfileToFirestore(
     
     const displayName = customData?.displayName || user.displayName || email.split('@')[0] || 'User';
     const photoURL = user.photoURL || undefined;
-    const nowIso = new Date().toISOString();
+    const now = new Date();
+    const nowIso = now.toISOString();
     const assignedRole: 'Owner' | 'Admin' | 'Editor' | 'Viewer' = isOwnerEmail ? 'Owner' : (customData?.role || 'Editor');
 
-    const currentPeriod = nowIso.substring(0, 7);
+    const currentPeriod = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
 
     if (!existingSnap.exists()) {
       // Create new profile document with default authoritative quota: 0 used, 5 remaining
+      const defaultLimit = isOwnerEmail ? 999999 : 5;
       const newProfile: UserProfileDocument = {
         uid: user.uid,
         id: user.uid,
         displayName,
         name: displayName,
         email,
-        maxUploads: 5,
+        monthlyUploadLimit: defaultLimit,
+        maxUploads: defaultLimit,
+        monthlyUploadsUsed: 0,
         uploadsUsed: 0,
-        uploadsRemaining: 5,
+        uploadsRemaining: defaultLimit,
+        quotaMonth: currentPeriod,
         quotaPeriod: currentPeriod,
         updatedAt: nowIso,
         photoURL,
@@ -85,14 +93,19 @@ export async function syncUserProfileToFirestore(
       // Update existing document while preserving valid usage and checking monthly rollover
       const existingData = existingSnap.data();
       const currentRole = isOwnerEmail ? 'Owner' : (existingData?.role || assignedRole);
-      const maxUploads = typeof existingData?.maxUploads === 'number' && existingData.maxUploads > 0 
-        ? existingData.maxUploads 
-        : 5;
-      const docPeriod = typeof existingData?.quotaPeriod === 'string' ? existingData.quotaPeriod : currentPeriod;
+      const maxUploads = typeof existingData?.monthlyUploadLimit === 'number' && existingData.monthlyUploadLimit > 0
+        ? existingData.monthlyUploadLimit
+        : (typeof existingData?.maxUploads === 'number' && existingData.maxUploads > 0 ? existingData.maxUploads : (isOwnerEmail ? 999999 : 5));
+      
+      const docPeriod = (typeof existingData?.quotaMonth === 'string' && existingData.quotaMonth.trim()) ||
+                        (typeof existingData?.quotaPeriod === 'string' && existingData.quotaPeriod.trim()) ||
+                        '';
 
       let uploadsUsed = 0;
       if (docPeriod !== currentPeriod) {
         uploadsUsed = 0;
+      } else if (typeof existingData?.monthlyUploadsUsed === 'number') {
+        uploadsUsed = Math.max(0, Math.min(maxUploads, existingData.monthlyUploadsUsed));
       } else if (typeof existingData?.uploadsUsed === 'number') {
         uploadsUsed = Math.max(0, Math.min(maxUploads, existingData.uploadsUsed));
       } else if (typeof existingData?.uploadsRemaining === 'number') {
@@ -105,9 +118,12 @@ export async function syncUserProfileToFirestore(
         lastLogin: nowIso,
         updatedAt: nowIso,
         email: email || existingData?.email || '',
+        monthlyUploadLimit: maxUploads,
         maxUploads,
+        monthlyUploadsUsed: uploadsUsed,
         uploadsUsed,
         uploadsRemaining,
+        quotaMonth: currentPeriod,
         quotaPeriod: currentPeriod,
         emailVerified: user.emailVerified,
         displayName: displayName || existingData?.displayName || 'User',
