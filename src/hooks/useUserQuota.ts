@@ -2,10 +2,21 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from './useAuth';
-import { checkAndDecrementUploadQuota, resetUserUploadQuota, QuotaCheckResult, UploadMetadata } from '../lib/quotaService';
+import { 
+  checkAndDecrementUploadQuota, 
+  resetUserUploadQuota, 
+  getOrCreateUserQuota,
+  getCurrentQuotaPeriod,
+  DEFAULT_MAX_UPLOADS,
+  QuotaCheckResult, 
+  UploadMetadata 
+} from '../lib/quotaService';
 
 export interface UserQuotaState {
+  uploadsUsed: number;
   uploadsRemaining: number;
+  maxUploads: number;
+  quotaPeriod: string;
   updatedAt: string | null;
   email: string | null;
   role: string | null;
@@ -19,12 +30,10 @@ export interface UserQuotaState {
   lastUploadTimestamp: string | null;
   deviceId: string;
   consumeUpload: (metadata?: UploadMetadata) => Promise<QuotaCheckResult>;
-  resetQuota: (amount?: number) => Promise<{ success: boolean; uploadsRemaining: number }>;
+  resetQuota: (amount?: number) => Promise<{ success: boolean; uploadsUsed: number; uploadsRemaining: number }>;
 }
 
-const DEFAULT_QUOTA = 5;
-
-// Generate or retrieve a persistent client device identifier for multi-device testing
+// Generate or retrieve a persistent client device identifier for multi-device sync diagnostics
 function getClientDeviceId(): string {
   if (typeof window === 'undefined') return 'server';
   let id = sessionStorage.getItem('csv_auditor_device_id');
@@ -37,13 +46,17 @@ function getClientDeviceId(): string {
 }
 
 /**
- * Real-Time Client Synchronization Hook (onSnapshot):
+ * Authoritative Real-Time User Quota Hook:
  * Subscribes to changes on the user document in Firestore.
- * Automatically synchronizes remaining upload quota and state across Device A and Device B in real-time.
+ * Automatically synchronizes remaining upload quota and consumption across Device A and Device B in real-time.
+ * Strictly derives remaining quota as: uploadsRemaining = maxUploads - uploadsUsed.
  */
 export function useUserQuota(): UserQuotaState {
-  const { user } = useAuth();
-  const [uploadsRemaining, setUploadsRemaining] = useState<number>(DEFAULT_QUOTA);
+  const { user, loading: authLoading } = useAuth();
+  const [uploadsUsed, setUploadsUsed] = useState<number>(0);
+  const [uploadsRemaining, setUploadsRemaining] = useState<number>(DEFAULT_MAX_UPLOADS);
+  const [maxUploads, setMaxUploads] = useState<number>(DEFAULT_MAX_UPLOADS);
+  const [quotaPeriod, setQuotaPeriod] = useState<string>(getCurrentQuotaPeriod());
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(user?.email || null);
   const [role, setRole] = useState<string | null>(null);
@@ -57,12 +70,20 @@ export function useUserQuota(): UserQuotaState {
 
   const deviceIdRef = useRef<string>(getClientDeviceId());
 
-  const activeUserId = user?.uid || auth?.currentUser?.uid || (typeof window !== 'undefined' ? localStorage.getItem('user_profile_uid') : null) || 'usr-nyikuli';
+  const activeUserId = user?.uid || auth?.currentUser?.uid || (typeof window !== 'undefined' ? localStorage.getItem('user_profile_uid') : null);
 
   useEffect(() => {
+    // TASK 6: Wait for authentication resolution; avoid early default overwriting
+    if (authLoading) {
+      setLoading(true);
+      return;
+    }
+
     if (!activeUserId) {
       setLoading(false);
-      setUploadsRemaining(DEFAULT_QUOTA);
+      setUploadsUsed(0);
+      setUploadsRemaining(DEFAULT_MAX_UPLOADS);
+      setMaxUploads(DEFAULT_MAX_UPLOADS);
       return;
     }
 
@@ -71,6 +92,7 @@ export function useUserQuota(): UserQuotaState {
 
     const userDocRef = doc(db, 'users', activeUserId);
     const docPath = `users/${activeUserId}`;
+    const currentPeriod = getCurrentQuotaPeriod();
 
     // Attach real-time snapshot listener on Firestore
     const unsubscribe = onSnapshot(
@@ -78,9 +100,30 @@ export function useUserQuota(): UserQuotaState {
       (snapshot) => {
         if (snapshot.exists()) {
           const data = snapshot.data();
-          const quota = typeof data?.uploadsRemaining === 'number' ? data.uploadsRemaining : DEFAULT_QUOTA;
-          
-          setUploadsRemaining(quota);
+          const docMax = typeof data?.maxUploads === 'number' && data.maxUploads > 0 
+            ? data.maxUploads 
+            : DEFAULT_MAX_UPLOADS;
+          const docPeriod = typeof data?.quotaPeriod === 'string' ? data.quotaPeriod : currentPeriod;
+
+          let used = 0;
+          // TASK 7 & 10: Check monthly reset or legacy migration
+          if (docPeriod !== currentPeriod) {
+            used = 0;
+          } else if (typeof data?.uploadsUsed === 'number') {
+            used = Math.max(0, Math.min(docMax, data.uploadsUsed));
+          } else if (typeof data?.uploadsRemaining === 'number') {
+            used = Math.max(0, Math.min(docMax, docMax - data.uploadsRemaining));
+          } else {
+            used = 0;
+          }
+
+          // TASK 3: Strictly derive remaining = max - used
+          const remaining = Math.max(0, docMax - used);
+
+          setUploadsUsed(used);
+          setUploadsRemaining(remaining);
+          setMaxUploads(docMax);
+          setQuotaPeriod(currentPeriod);
           setUpdatedAt(data?.updatedAt || null);
           setEmail(data?.email || user?.email || auth?.currentUser?.email || null);
           setRole(data?.role || 'Editor');
@@ -91,34 +134,32 @@ export function useUserQuota(): UserQuotaState {
           setSyncTimestamp(Date.now());
           setError(null);
           setLoading(false);
-        } else {
-          // If primary user document does not exist yet, check fallback document
-          if (activeUserId !== 'usr-nyikuli') {
-            const fallbackRef = doc(db, 'users', 'usr-nyikuli');
-            onSnapshot(fallbackRef, (fallbackSnap) => {
-              if (fallbackSnap.exists()) {
-                const fbData = fallbackSnap.data();
-                const quota = typeof fbData?.uploadsRemaining === 'number' ? fbData.uploadsRemaining : DEFAULT_QUOTA;
-                setUploadsRemaining(quota);
-                setUpdatedAt(fbData?.updatedAt || null);
-                setLastUploadedFile(fbData?.lastUploadedFile || null);
-                setLastUploadDeviceId(fbData?.lastUploadDeviceId || null);
-                setLastUploadTimestamp(fbData?.lastUploadTimestamp || null);
-                setSyncTimestamp(Date.now());
-              } else {
-                setUploadsRemaining(DEFAULT_QUOTA);
-                setUpdatedAt(null);
-              }
-              setLoading(false);
-            }, () => {
-              setUploadsRemaining(DEFAULT_QUOTA);
-              setLoading(false);
+
+          // TASK 12: Diagnostic Logging
+          if (typeof window !== 'undefined' && (window as any).__DEBUG_QUOTA__) {
+            console.log('[useUserQuota Diagnostic]', {
+              authenticatedUID: activeUserId,
+              quotaDocumentPath: docPath,
+              maxUploads: docMax,
+              uploadsUsed: used,
+              uploadsRemaining: remaining,
+              quotaPeriod: currentPeriod,
+              currentDeviceId: deviceIdRef.current,
+              sourceOfState: 'Firestore'
             });
-          } else {
-            setUploadsRemaining(DEFAULT_QUOTA);
-            setUpdatedAt(null);
-            setLoading(false);
           }
+        } else {
+          // Document does not exist yet. Safe initialization without overwriting
+          setUploadsUsed(0);
+          setUploadsRemaining(DEFAULT_MAX_UPLOADS);
+          setMaxUploads(DEFAULT_MAX_UPLOADS);
+          setQuotaPeriod(currentPeriod);
+          setLoading(false);
+
+          // Deterministically create default record in background
+          getOrCreateUserQuota(activeUserId, user?.email || undefined).catch((err) => {
+            console.warn('[useUserQuota] Background initial doc creation notice:', err);
+          });
         }
       },
       (err) => {
@@ -135,13 +176,15 @@ export function useUserQuota(): UserQuotaState {
     return () => {
       unsubscribe();
     };
-  }, [activeUserId, user?.email]);
+  }, [activeUserId, authLoading, user?.email]);
 
   const consumeUpload = useCallback(async (metadata?: UploadMetadata): Promise<QuotaCheckResult> => {
     if (!activeUserId) {
       return {
         allowed: false,
-        uploadsRemaining: 0,
+        uploadsUsed,
+        uploadsRemaining,
+        maxUploads,
         error: 'Authentication required. Please log in before uploading CSV files.'
       };
     }
@@ -152,33 +195,40 @@ export function useUserQuota(): UserQuotaState {
     });
 
     if (res.allowed) {
+      setUploadsUsed(res.uploadsUsed);
       setUploadsRemaining(res.uploadsRemaining);
+      setMaxUploads(res.maxUploads);
       setUpdatedAt(res.updatedAt || new Date().toISOString());
       setSyncTimestamp(Date.now());
     }
 
     return res;
-  }, [activeUserId]);
+  }, [activeUserId, uploadsUsed, uploadsRemaining, maxUploads]);
 
-  const resetQuota = useCallback(async (amount: number = DEFAULT_QUOTA) => {
-    if (!activeUserId) return { success: false, uploadsRemaining: 0 };
+  const resetQuota = useCallback(async (amount: number = DEFAULT_MAX_UPLOADS) => {
+    if (!activeUserId) return { success: false, uploadsUsed: 0, uploadsRemaining: 0 };
     const res = await resetUserUploadQuota(activeUserId, amount);
     if (res.success) {
+      setUploadsUsed(0);
       setUploadsRemaining(res.uploadsRemaining);
+      setMaxUploads(amount);
       setSyncTimestamp(Date.now());
     }
     return res;
   }, [activeUserId]);
 
   return {
+    uploadsUsed,
     uploadsRemaining,
+    maxUploads,
+    quotaPeriod,
     updatedAt,
     email,
     role,
     plan,
     loading,
     error,
-    isExhausted: uploadsRemaining <= 0,
+    isExhausted: uploadsRemaining <= 0 || uploadsUsed >= maxUploads,
     syncTimestamp,
     lastUploadedFile,
     lastUploadDeviceId,

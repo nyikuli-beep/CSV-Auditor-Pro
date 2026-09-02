@@ -9,6 +9,9 @@ export interface UserProfileDocument {
   name: string;
   email: string;
   uploadsRemaining: number;
+  uploadsUsed?: number;
+  maxUploads?: number;
+  quotaPeriod?: string;
   updatedAt: string;
   photoURL?: string;
   avatar?: string;
@@ -52,27 +55,20 @@ export async function syncUserProfileToFirestore(
     const nowIso = new Date().toISOString();
     const assignedRole: 'Owner' | 'Admin' | 'Editor' | 'Viewer' = isOwnerEmail ? 'Owner' : (customData?.role || 'Editor');
 
-    if (!existingSnap.exists()) {
-      // Check if there is an existing fallback quota to preserve cross-device testing state
-      let initialUploadsRemaining = 5;
-      try {
-        const fallbackRef = doc(db, 'users', 'usr-nyikuli');
-        const fallbackSnap = await getDoc(fallbackRef);
-        if (fallbackSnap.exists() && typeof fallbackSnap.data()?.uploadsRemaining === 'number') {
-          initialUploadsRemaining = fallbackSnap.data().uploadsRemaining;
-        }
-      } catch (e) {
-        // use default 5
-      }
+    const currentPeriod = nowIso.substring(0, 7);
 
-      // Create new profile document with default fields: email, uploadsRemaining, updatedAt
+    if (!existingSnap.exists()) {
+      // Create new profile document with default authoritative quota: 0 used, 5 remaining
       const newProfile: UserProfileDocument = {
         uid: user.uid,
         id: user.uid,
         displayName,
         name: displayName,
         email,
-        uploadsRemaining: initialUploadsRemaining,
+        maxUploads: 5,
+        uploadsUsed: 0,
+        uploadsRemaining: 5,
+        quotaPeriod: currentPeriod,
         updatedAt: nowIso,
         photoURL,
         avatar: photoURL,
@@ -86,18 +82,33 @@ export async function syncUserProfileToFirestore(
 
       await setDoc(userRef, newProfile);
     } else {
-      // Update existing document while preserving uploadsRemaining (or setting to 5 if undefined)
+      // Update existing document while preserving valid usage and checking monthly rollover
       const existingData = existingSnap.data();
       const currentRole = isOwnerEmail ? 'Owner' : (existingData?.role || assignedRole);
-      const currentUploadsRemaining = typeof existingData?.uploadsRemaining === 'number' 
-        ? existingData.uploadsRemaining 
+      const maxUploads = typeof existingData?.maxUploads === 'number' && existingData.maxUploads > 0 
+        ? existingData.maxUploads 
         : 5;
+      const docPeriod = typeof existingData?.quotaPeriod === 'string' ? existingData.quotaPeriod : currentPeriod;
+
+      let uploadsUsed = 0;
+      if (docPeriod !== currentPeriod) {
+        uploadsUsed = 0;
+      } else if (typeof existingData?.uploadsUsed === 'number') {
+        uploadsUsed = Math.max(0, Math.min(maxUploads, existingData.uploadsUsed));
+      } else if (typeof existingData?.uploadsRemaining === 'number') {
+        uploadsUsed = Math.max(0, Math.min(maxUploads, maxUploads - existingData.uploadsRemaining));
+      }
+
+      const uploadsRemaining = Math.max(0, maxUploads - uploadsUsed);
 
       await updateDoc(userRef, {
         lastLogin: nowIso,
         updatedAt: nowIso,
         email: email || existingData?.email || '',
-        uploadsRemaining: currentUploadsRemaining,
+        maxUploads,
+        uploadsUsed,
+        uploadsRemaining,
+        quotaPeriod: currentPeriod,
         emailVerified: user.emailVerified,
         displayName: displayName || existingData?.displayName || 'User',
         name: displayName || existingData?.name || 'User',

@@ -34,6 +34,9 @@ service cloud.firestore {
       return (('id' in data && data.id is string) || ('uid' in data && data.uid is string))
         && data.email is string && data.email.size() <= 200
         && (!('uploadsRemaining' in data) || (data.uploadsRemaining is number && data.uploadsRemaining >= 0))
+        && (!('uploadsUsed' in data) || (data.uploadsUsed is number && data.uploadsUsed >= 0))
+        && (!('maxUploads' in data) || (data.maxUploads is number && data.maxUploads >= 0))
+        && (!('quotaPeriod' in data) || (data.quotaPeriod is string && data.quotaPeriod.size() <= 32))
         && (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 128))
         && (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 128))
         && (!('lastLogin' in data) || (data.lastLogin is string && data.lastLogin.size() <= 128))

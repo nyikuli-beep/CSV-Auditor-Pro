@@ -1,9 +1,12 @@
-import { doc, getDoc, setDoc, updateDoc, increment, runTransaction } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, runTransaction } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 
 export interface QuotaCheckResult {
   allowed: boolean;
+  uploadsUsed: number;
   uploadsRemaining: number;
+  maxUploads: number;
+  quotaPeriod?: string;
   updatedAt?: string;
   error?: string;
   isFreemiumExhausted?: boolean;
@@ -17,30 +20,52 @@ export interface UploadMetadata {
   deviceLabel?: string;
 }
 
+export interface UserQuotaRecord {
+  uploadsUsed: number;
+  uploadsRemaining: number;
+  maxUploads: number;
+  quotaPeriod: string;
+  updatedAt: string;
+}
+
 const USERS_COLLECTION = 'users';
-const DEFAULT_INITIAL_QUOTA = 5;
+export const DEFAULT_MAX_UPLOADS = 5;
 
 /**
- * Ensures a user document exists in Firestore and returns current quota.
- * Keyed by user's UID.
+ * Returns the current calendar period key: 'YYYY-MM'
  */
-export async function getOrCreateUserQuota(userId: string, email?: string): Promise<{ uploadsRemaining: number; updatedAt: string }> {
+export function getCurrentQuotaPeriod(): string {
+  return new Date().toISOString().substring(0, 7);
+}
+
+/**
+ * Ensures a user document exists in Firestore and returns the authoritative quota.
+ * Keyed strictly by the user's authentic Firebase UID.
+ */
+export async function getOrCreateUserQuota(
+  userId: string, 
+  email?: string
+): Promise<UserQuotaRecord> {
   if (!userId) {
     throw new Error('User ID is required to fetch or create user quota.');
   }
 
   const userDocRef = doc(db, USERS_COLLECTION, userId);
+  const nowIso = new Date().toISOString();
+  const currentPeriod = getCurrentQuotaPeriod();
 
   try {
     const snap = await getDoc(userDocRef);
-    const nowIso = new Date().toISOString();
 
     if (!snap.exists()) {
       const initialData = {
         id: userId,
         uid: userId,
         email: email || auth.currentUser?.email || '',
-        uploadsRemaining: DEFAULT_INITIAL_QUOTA,
+        maxUploads: DEFAULT_MAX_UPLOADS,
+        uploadsUsed: 0,
+        uploadsRemaining: DEFAULT_MAX_UPLOADS,
+        quotaPeriod: currentPeriod,
         updatedAt: nowIso,
         createdAt: nowIso,
         lastLogin: nowIso,
@@ -48,25 +73,69 @@ export async function getOrCreateUserQuota(userId: string, email?: string): Prom
         plan: 'Free'
       };
       await setDoc(userDocRef, initialData);
-      return { uploadsRemaining: DEFAULT_INITIAL_QUOTA, updatedAt: nowIso };
+      return { 
+        uploadsUsed: 0, 
+        uploadsRemaining: DEFAULT_MAX_UPLOADS, 
+        maxUploads: DEFAULT_MAX_UPLOADS, 
+        quotaPeriod: currentPeriod, 
+        updatedAt: nowIso 
+      };
     }
 
     const data = snap.data();
-    const uploadsRemaining = typeof data?.uploadsRemaining === 'number' ? data.uploadsRemaining : DEFAULT_INITIAL_QUOTA;
+    const maxUploads = typeof data?.maxUploads === 'number' && data.maxUploads > 0 
+      ? data.maxUploads 
+      : DEFAULT_MAX_UPLOADS;
+    const docPeriod = typeof data?.quotaPeriod === 'string' ? data.quotaPeriod : currentPeriod;
+
+    let uploadsUsed = 0;
+    // TASK 7 & 10: Check monthly reset or legacy migration
+    if (docPeriod !== currentPeriod) {
+      // Month rolled over -> reset usage to 0
+      uploadsUsed = 0;
+      await updateDoc(userDocRef, {
+        uploadsUsed: 0,
+        uploadsRemaining: maxUploads,
+        quotaPeriod: currentPeriod,
+        updatedAt: nowIso
+      }).catch(err => console.warn('[QuotaService] Monthly rollover update notice:', err));
+    } else if (typeof data?.uploadsUsed === 'number') {
+      uploadsUsed = Math.max(0, Math.min(maxUploads, data.uploadsUsed));
+    } else if (typeof data?.uploadsRemaining === 'number') {
+      // Safe migration for legacy documents storing only uploadsRemaining
+      uploadsUsed = Math.max(0, Math.min(maxUploads, maxUploads - data.uploadsRemaining));
+      await updateDoc(userDocRef, {
+        uploadsUsed,
+        quotaPeriod: currentPeriod,
+        maxUploads,
+        updatedAt: nowIso
+      }).catch(err => console.warn('[QuotaService] Legacy migration notice:', err));
+    } else {
+      uploadsUsed = 0;
+    }
+
+    const uploadsRemaining = Math.max(0, maxUploads - uploadsUsed);
     const updatedAt = data?.updatedAt || nowIso;
 
-    return { uploadsRemaining, updatedAt };
+    return { uploadsUsed, uploadsRemaining, maxUploads, quotaPeriod: currentPeriod, updatedAt };
   } catch (error) {
     handleFirestoreError(error, OperationType.GET, `${USERS_COLLECTION}/${userId}`);
-    return { uploadsRemaining: DEFAULT_INITIAL_QUOTA, updatedAt: new Date().toISOString() };
+    return {
+      uploadsUsed: 0,
+      uploadsRemaining: DEFAULT_MAX_UPLOADS,
+      maxUploads: DEFAULT_MAX_UPLOADS,
+      quotaPeriod: currentPeriod,
+      updatedAt: nowIso
+    };
   }
 }
 
 /**
  * Atomic Quota Check & Decrement Logic:
- * 1. Fetches the user's document from Firestore.
- * 2. Verifies if uploadsRemaining > 0. If not, returns error message.
- * 3. If allowed, atomically decrements uploadsRemaining using increment(-1) and updates updatedAt.
+ * 1. Executes in a Firestore transaction to prevent race conditions across devices.
+ * 2. Verifies current uploadsUsed < maxUploads for the active month.
+ * 3. Atomically increments uploadsUsed and derives uploadsRemaining.
+ * 4. Strictly isolated per authenticated user ID; no cross-user pollution.
  */
 export async function checkAndDecrementUploadQuota(
   userId: string,
@@ -75,26 +144,31 @@ export async function checkAndDecrementUploadQuota(
   if (!userId) {
     return {
       allowed: false,
+      uploadsUsed: 0,
       uploadsRemaining: 0,
+      maxUploads: DEFAULT_MAX_UPLOADS,
       error: 'Authentication required. Please sign in to upload CSV files.'
     };
   }
 
   const userDocRef = doc(db, USERS_COLLECTION, userId);
   const nowIso = new Date().toISOString();
+  const currentPeriod = getCurrentQuotaPeriod();
 
   try {
-    // Perform transactional or atomic check to prevent race conditions across multiple devices
     const result = await runTransaction(db, async (transaction) => {
       const userSnapshot = await transaction.get(userDocRef);
 
       if (!userSnapshot.exists()) {
-        // Initialize if doc doesn't exist
+        // Deterministically create user quota doc with 1 upload consumed
         const initialDoc = {
           id: userId,
           uid: userId,
           email: auth.currentUser?.email || '',
-          uploadsRemaining: DEFAULT_INITIAL_QUOTA - 1, // First upload used
+          maxUploads: DEFAULT_MAX_UPLOADS,
+          uploadsUsed: 1,
+          uploadsRemaining: DEFAULT_MAX_UPLOADS - 1,
+          quotaPeriod: currentPeriod,
           updatedAt: nowIso,
           createdAt: nowIso,
           lastLogin: nowIso,
@@ -107,140 +181,108 @@ export async function checkAndDecrementUploadQuota(
         transaction.set(userDocRef, initialDoc);
         return {
           allowed: true,
-          uploadsRemaining: DEFAULT_INITIAL_QUOTA - 1,
+          uploadsUsed: 1,
+          uploadsRemaining: DEFAULT_MAX_UPLOADS - 1,
+          maxUploads: DEFAULT_MAX_UPLOADS,
+          quotaPeriod: currentPeriod,
           updatedAt: nowIso
         };
       }
 
       const userData = userSnapshot.data();
-      const currentQuota = typeof userData?.uploadsRemaining === 'number' 
-        ? userData.uploadsRemaining 
-        : DEFAULT_INITIAL_QUOTA;
+      const maxUploads = typeof userData?.maxUploads === 'number' && userData.maxUploads > 0 
+        ? userData.maxUploads 
+        : DEFAULT_MAX_UPLOADS;
+      const docPeriod = typeof userData?.quotaPeriod === 'string' ? userData.quotaPeriod : currentPeriod;
 
-      if (currentQuota <= 0) {
+      let currentUsed = 0;
+      if (docPeriod !== currentPeriod) {
+        // Month has rolled over; reset usage for this new period
+        currentUsed = 0;
+      } else if (typeof userData?.uploadsUsed === 'number') {
+        currentUsed = Math.max(0, Math.min(maxUploads, userData.uploadsUsed));
+      } else if (typeof userData?.uploadsRemaining === 'number') {
+        currentUsed = Math.max(0, Math.min(maxUploads, maxUploads - userData.uploadsRemaining));
+      } else {
+        currentUsed = 0;
+      }
+
+      // Check quota exhaustion
+      if (currentUsed >= maxUploads) {
         return {
           allowed: false,
+          uploadsUsed: currentUsed,
           uploadsRemaining: 0,
+          maxUploads,
+          quotaPeriod: currentPeriod,
           isFreemiumExhausted: true,
-          error: 'Upload limit reached. You have 0 remaining CSV audit uploads on your free tier.'
+          error: `Monthly upload quota reached (${currentUsed} / ${maxUploads} uploads used). Freemium users are restricted to ${maxUploads} uploads per month.`
         };
       }
 
-      const newQuota = currentQuota - 1;
+      const newUploadsUsed = currentUsed + 1;
+      const newUploadsRemaining = Math.max(0, maxUploads - newUploadsUsed);
+
       transaction.update(userDocRef, {
-        uploadsRemaining: increment(-1),
+        uploadsUsed: newUploadsUsed,
+        uploadsRemaining: newUploadsRemaining,
+        maxUploads,
+        quotaPeriod: currentPeriod,
         updatedAt: nowIso,
         lastUploadedFile: metadata?.fileName || userData?.lastUploadedFile || 'file.csv',
         lastUploadDeviceId: metadata?.deviceId || 'device-primary',
         lastUploadTimestamp: nowIso
       });
 
-      // Synchronize linked documents if applicable
-      try {
-        if (userId !== 'usr-nyikuli') {
-          const fallbackRef = doc(db, USERS_COLLECTION, 'usr-nyikuli');
-          transaction.set(fallbackRef, {
-            id: 'usr-nyikuli',
-            uid: 'usr-nyikuli',
-            uploadsRemaining: newQuota,
-            updatedAt: nowIso,
-            lastUploadedFile: metadata?.fileName || userData?.lastUploadedFile || 'file.csv',
-            lastUploadDeviceId: metadata?.deviceId || 'device-primary',
-            lastUploadTimestamp: nowIso
-          }, { merge: true });
-        } else if (auth.currentUser?.uid && auth.currentUser.uid !== 'usr-nyikuli') {
-          const authUserRef = doc(db, USERS_COLLECTION, auth.currentUser.uid);
-          transaction.set(authUserRef, {
-            uploadsRemaining: newQuota,
-            updatedAt: nowIso,
-            lastUploadedFile: metadata?.fileName || userData?.lastUploadedFile || 'file.csv',
-            lastUploadDeviceId: metadata?.deviceId || 'device-primary',
-            lastUploadTimestamp: nowIso
-          }, { merge: true });
-        }
-      } catch (mirrorErr) {
-        // non-blocking
-      }
-
       return {
         allowed: true,
-        uploadsRemaining: newQuota,
+        uploadsUsed: newUploadsUsed,
+        uploadsRemaining: newUploadsRemaining,
+        maxUploads,
+        quotaPeriod: currentPeriod,
         updatedAt: nowIso
       };
     });
 
     return result;
   } catch (error: any) {
-    // If transaction failed or offline fallback, try direct atomic updateDoc
-    try {
-      const snap = await getDoc(userDocRef);
-      if (snap.exists()) {
-        const data = snap.data();
-        const currentQuota = typeof data?.uploadsRemaining === 'number' ? data.uploadsRemaining : DEFAULT_INITIAL_QUOTA;
-        if (currentQuota <= 0) {
-          return {
-            allowed: false,
-            uploadsRemaining: 0,
-            isFreemiumExhausted: true,
-            error: 'Upload limit reached. You have 0 remaining CSV audit uploads on your free tier.'
-          };
-        }
-        await updateDoc(userDocRef, {
-          uploadsRemaining: increment(-1),
-          updatedAt: nowIso,
-          lastUploadedFile: metadata?.fileName || 'file.csv',
-          lastUploadTimestamp: nowIso
-        });
-        return {
-          allowed: true,
-          uploadsRemaining: currentQuota - 1,
-          updatedAt: nowIso
-        };
-      }
-    } catch (innerError) {
-      handleFirestoreError(innerError, OperationType.WRITE, `${USERS_COLLECTION}/${userId}`);
-    }
-
+    console.error('[checkAndDecrementUploadQuota] Transaction failed:', error);
     return {
       allowed: false,
+      uploadsUsed: 0,
       uploadsRemaining: 0,
+      maxUploads: DEFAULT_MAX_UPLOADS,
       error: error?.message || 'Failed to update upload quota in Firestore.'
     };
   }
 }
 
 /**
- * Resets user's upload quota back to default (5) or custom amount.
- * Used for plan upgrades, multi-device testing, or admin reset actions.
+ * Resets user's upload quota back to default (0 used, 5 remaining).
+ * Triggered ONLY by explicit user interaction via "Reset Quota (Test Sync)".
  */
 export async function resetUserUploadQuota(
   userId: string,
-  quotaAmount: number = DEFAULT_INITIAL_QUOTA
-): Promise<{ success: boolean; uploadsRemaining: number }> {
+  quotaAmount: number = DEFAULT_MAX_UPLOADS
+): Promise<{ success: boolean; uploadsUsed: number; uploadsRemaining: number }> {
   if (!userId) throw new Error('User ID is required');
 
   const userDocRef = doc(db, USERS_COLLECTION, userId);
   const nowIso = new Date().toISOString();
+  const currentPeriod = getCurrentQuotaPeriod();
 
   try {
     await updateDoc(userDocRef, {
+      uploadsUsed: 0,
       uploadsRemaining: quotaAmount,
+      maxUploads: quotaAmount,
+      quotaPeriod: currentPeriod,
       updatedAt: nowIso
     });
 
-    if (userId !== 'usr-nyikuli') {
-      try {
-        const fallbackRef = doc(db, USERS_COLLECTION, 'usr-nyikuli');
-        await updateDoc(fallbackRef, {
-          uploadsRemaining: quotaAmount,
-          updatedAt: nowIso
-        });
-      } catch (e) {}
-    }
-
-    return { success: true, uploadsRemaining: quotaAmount };
+    return { success: true, uploadsUsed: 0, uploadsRemaining: quotaAmount };
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `${USERS_COLLECTION}/${userId}`);
-    return { success: false, uploadsRemaining: 0 };
+    return { success: false, uploadsUsed: 0, uploadsRemaining: 0 };
   }
 }

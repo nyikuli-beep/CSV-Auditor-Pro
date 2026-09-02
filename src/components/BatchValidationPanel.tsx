@@ -69,19 +69,18 @@ export default function BatchValidationPanel({
   const { user: authUser } = useAuth();
   const isOwner = (userRole === 'Owner' || userRole === 'Admin') || (authUser?.email?.toLowerCase().trim() === 'nyikulibramwel@gmail.com');
   const { plan, usage, recordUsage, resetInfo, openProCheckout, hasProAccess, checkAuditLimit } = useBilling();
-  const { uploadsRemaining, isExhausted: isQuotaExhausted, consumeUpload } = useUserQuota();
-  const isFreemiumLimitReached = !hasProAccess && plan === 'free' && (
+  const { uploadsRemaining, uploadsUsed, maxUploads, loading: quotaLoading, isExhausted: isQuotaExhausted, consumeUpload } = useUserQuota();
+  const isFreemiumLimitReached = !hasProAccess && plan === 'free' && !quotaLoading && (
     uploadsRemaining <= 0 ||
-    isQuotaExhausted ||
-    !checkAuditLimit() ||
-    (usage?.auditCount || 0) >= 5
+    uploadsUsed >= maxUploads ||
+    isQuotaExhausted
   );
 
   const getQuotaLimitMsg = () => {
     if (isOwner) {
-      return `Monthly upload quota reached: Freemium users are restricted to 5 uploads per month (${uploadsRemaining}/5 remaining). Multi-device real-time sync updated your balance. Upgrade to Pro for unlimited uploads.`;
+      return `Monthly upload quota reached: Freemium users are restricted to ${maxUploads} uploads per month (${uploadsRemaining}/${maxUploads} remaining). Multi-device real-time sync updated your balance. Upgrade to Pro for unlimited uploads.`;
     }
-    return `Workspace monthly upload quota reached: Your team has used all 5 freemium monthly uploads. Please ask your Workspace Owner (nyikulibramwel@gmail.com) to upgrade your team plan for unlimited uploads.`;
+    return `Workspace monthly upload quota reached: Your team has used all ${maxUploads} freemium monthly uploads (${uploadsRemaining}/${maxUploads} remaining). Please ask your Workspace Owner (nyikulibramwel@gmail.com) to upgrade your team plan for unlimited uploads.`;
   };
 
   // Selection state for workspace files
@@ -340,18 +339,6 @@ export default function BatchValidationPanel({
           throw new Error(preFlight.errorMessage || 'Invalid file format or size limit exceeded.');
         }
 
-        // Multi-device Freemium Atomic Quota Check & Decrement
-        if (plan === 'free' && !hasProAccess) {
-          const quotaCheck = await consumeUpload({
-            fileName: rawFile.name,
-            fileSize: rawFile.size
-          });
-          if (!quotaCheck.allowed) {
-            throw new Error(quotaCheck.error || 'Monthly upload limit depleted across connected devices.');
-          }
-          await recordUsage({ auditAdd: 1, bytesAdd: rawFile.size });
-        }
-
         const rawText = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = (e) => resolve(e.target?.result as string || '');
@@ -360,6 +347,19 @@ export default function BatchValidationPanel({
         });
 
         const validatedFile = validateRawCSVContent(rawText, rawFile.name, rawFile.size, customRules);
+
+        // Multi-device Freemium Atomic Quota Check & Decrement: consume ONLY after spreadsheet is accepted
+        if (plan === 'free' && !hasProAccess) {
+          const quotaCheck = await consumeUpload({
+            fileName: rawFile.name,
+            fileSize: rawFile.size,
+            rowCount: validatedFile.rows.length
+          });
+          if (!quotaCheck.allowed) {
+            throw new Error(quotaCheck.error || 'Monthly upload limit depleted across connected devices.');
+          }
+        }
+
         onFileUpload(validatedFile);
 
         const criticalCount = validatedFile.issues.filter(issue => issue.severity === 'critical').length;
@@ -436,7 +436,7 @@ export default function BatchValidationPanel({
     if (queuedRawFiles.length > 0) {
       const rawCompletedItems = completedResults.filter(item => item.id.startsWith('raw-queued-'));
       recordUsage({
-        auditAdd: queuedRawFiles.length,
+        auditAdd: 0,
         rowsAdd: rawCompletedItems.reduce((acc, item) => acc + item.rowsCount, 0),
         bytesAdd: queuedRawFiles.reduce((acc, f) => acc + f.size, 0)
       }).catch(err => console.warn('Batch usage record error:', err));
@@ -644,7 +644,7 @@ export default function BatchValidationPanel({
                   <Lock className="w-4 h-4 text-[#DC2626] dark:text-[#F87171]" />
                 </div>
                 <p className={`text-xs font-bold ${isDarkMode ? 'text-[#FCA5A5]' : 'text-[#991B1B]'}`}>
-                  {isOwner ? 'Raw Uploads Locked (5/5 Used)' : 'Workspace Uploads Locked (5/5 Used)'}
+                  {isOwner ? `Raw Uploads Locked (${uploadsUsed}/${maxUploads} used)` : `Workspace Uploads Locked (${uploadsUsed}/${maxUploads} used)`}
                 </p>
                 <p className={`text-[10px] ${isDarkMode ? 'text-[#CBD5E1]' : 'text-[#475569]'}`}>
                   {isOwner 

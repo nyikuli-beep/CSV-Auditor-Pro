@@ -98,7 +98,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const [cloudQuotaRemaining, setCloudQuotaRemaining] = useState<number | null>(null);
 
-  const activeUserId = user?.uid || auth?.currentUser?.uid || (typeof window !== 'undefined' ? localStorage.getItem('user_profile_uid') : null) || 'usr-nyikuli';
+  const activeUserId = user?.uid || auth?.currentUser?.uid || (typeof window !== 'undefined' ? localStorage.getItem('user_profile_uid') : null);
 
   // Sync real-time Firestore user quota into Billing state
   useEffect(() => {
@@ -108,37 +108,29 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const unsubscribe = onSnapshot(userRef, (snap) => {
         if (snap.exists()) {
           const data = snap.data();
-          if (typeof data?.uploadsRemaining === 'number') {
-            const quota = data.uploadsRemaining;
-            setCloudQuotaRemaining(quota);
-            const cloudUsed = Math.max(0, 5 - quota);
-            setUsage(prev => {
-              const current = prev || getUserUsage(userEmail, billing?.plan || 'free');
-              return {
-                ...current,
-                auditCount: Math.max(current.auditCount, cloudUsed)
-              };
-            });
+          const maxUploads = typeof data?.maxUploads === 'number' && data.maxUploads > 0 ? data.maxUploads : 5;
+          const currentPeriod = new Date().toISOString().substring(0, 7);
+          const docPeriod = typeof data?.quotaPeriod === 'string' ? data.quotaPeriod : currentPeriod;
+
+          let used = 0;
+          if (docPeriod !== currentPeriod) {
+            used = 0;
+          } else if (typeof data?.uploadsUsed === 'number') {
+            used = Math.max(0, Math.min(maxUploads, data.uploadsUsed));
+          } else if (typeof data?.uploadsRemaining === 'number') {
+            used = Math.max(0, Math.min(maxUploads, maxUploads - data.uploadsRemaining));
           }
-        } else if (activeUserId !== 'usr-nyikuli') {
-          // Check fallback
-          const fallbackRef = doc(db, 'users', 'usr-nyikuli');
-          onSnapshot(fallbackRef, (fallbackSnap) => {
-            if (fallbackSnap.exists()) {
-              const fbData = fallbackSnap.data();
-              if (typeof fbData?.uploadsRemaining === 'number') {
-                const quota = fbData.uploadsRemaining;
-                setCloudQuotaRemaining(quota);
-                const cloudUsed = Math.max(0, 5 - quota);
-                setUsage(prev => {
-                  const current = prev || getUserUsage(userEmail, billing?.plan || 'free');
-                  return {
-                    ...current,
-                    auditCount: Math.max(current.auditCount, cloudUsed)
-                  };
-                });
-              }
-            }
+
+          const remaining = Math.max(0, maxUploads - used);
+          setCloudQuotaRemaining(remaining);
+          setUsage(prev => {
+            const current = prev || getUserUsage(userEmail, billing?.plan || 'free');
+            return {
+              ...current,
+              auditCount: used,
+              maxAudits: billing?.plan === 'free' ? maxUploads : 'unlimited',
+              periodMonth: currentPeriod
+            };
           });
         }
       }, (err) => {
@@ -312,7 +304,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }): Promise<{ allowed: boolean; limitReached?: boolean; usage: UsageMetrics }> => {
     const currentPlan = billing?.plan || 'free';
     const currentUsage = usage || getUserUsage(userEmail, currentPlan);
-    const auditIncrement = params.auditAdd !== undefined ? params.auditAdd : 1;
+    const auditIncrement = params.auditAdd !== undefined ? params.auditAdd : 0;
 
     // Check Freemium monthly quota limit (max 5 uploads per month for free plan)
     if (currentPlan === 'free' && currentUsage.auditCount >= 5 && auditIncrement > 0) {

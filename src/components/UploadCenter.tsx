@@ -90,7 +90,10 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
   } = useBilling();
 
   const {
+    uploadsUsed,
     uploadsRemaining,
+    maxUploads,
+    quotaPeriod,
     updatedAt: quotaUpdatedAt,
     isExhausted: isQuotaExhausted,
     loading: quotaLoading,
@@ -102,21 +105,19 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
     syncTimestamp
   } = useUserQuota();
   
-  // Calculate if freemium upload limit is reached (5 uploads per month for free plan)
-  const currentUploadsCount = usage?.auditCount || 0;
+  // Calculate if freemium upload limit is reached (authoritative Firestore state)
   const isFreePlan = !hasProAccess || plan?.toLowerCase() === 'free' || plan === 'free';
-  const isFreemiumLimitReached = isFreePlan && (
+  const isFreemiumLimitReached = isFreePlan && !quotaLoading && (
     uploadsRemaining <= 0 ||
-    isQuotaExhausted ||
-    !checkAuditLimit() ||
-    currentUploadsCount >= 5
+    uploadsUsed >= maxUploads ||
+    isQuotaExhausted
   );
 
   const getQuotaLimitMsg = () => {
     if (isOwner) {
-      return `Monthly upload quota reached: Freemium users are restricted to 5 uploads per month (${uploadsRemaining}/5 remaining). Multi-device real-time sync updated your balance. Upgrade to Pro for unlimited uploads.`;
+      return `Monthly upload quota reached: Freemium users are restricted to ${maxUploads} uploads per month (${uploadsRemaining}/${maxUploads} remaining). Multi-device real-time sync updated your balance. Upgrade to Pro for unlimited uploads.`;
     }
-    return `Workspace monthly upload quota reached: Freemium team limit of 5 monthly uploads has been reached (${uploadsRemaining}/5 remaining). As a team ${userRole || 'Member'}, please contact the Workspace Owner (nyikulibramwel@gmail.com) to upgrade your workspace plan for unlimited team uploads.`;
+    return `Workspace monthly upload quota reached: Freemium team limit of ${maxUploads} monthly uploads has been reached (${uploadsRemaining}/${maxUploads} remaining). As a team ${userRole || 'Member'}, please contact the Workspace Owner (nyikulibramwel@gmail.com) to upgrade your workspace plan for unlimited team uploads.`;
   };
 
   const getBatchExceedMsg = (count: number) => {
@@ -1771,9 +1772,9 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
           setProcessingStageMessage('Completed successfully.');
           setUploadProgress(100);
 
-          // Track & increment usage synchronously in billing engine and update UI immediately
+          // Track non-audit metrics (rows, bytes) in billing engine; quota audits handled authoritatively by consumeUpload
           recordUsage({
-            auditAdd: 1,
+            auditAdd: 0,
             rowsAdd: scanResult.sanitizedRows.length,
             bytesAdd: file.size
           }).catch(err => console.warn('Usage tracking error:', err));
@@ -1974,7 +1975,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
       }
 
       recordUsage({
-        auditAdd: parsedFiles.length,
+        auditAdd: 0,
         rowsAdd: parsedFiles.reduce((acc, f) => acc + (f.totalRowsCount || 0), 0),
         bytesAdd: parsedFiles.reduce((acc, f) => acc + (f.size || 0), 0)
       }).catch(err => console.warn('Batch usage tracking error:', err));
@@ -3040,17 +3041,29 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
               </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3 pt-1">
               <div className={`p-2.5 rounded-lg border ${isDarkMode ? 'bg-[#0b101d] border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
                 <div className="text-[10px] uppercase font-bold text-slate-400">Remaining Quota</div>
                 <div className="flex items-baseline gap-1.5 mt-0.5">
                   <span className={`text-lg font-black ${
                     plan === 'free' && !hasProAccess && uploadsRemaining <= 0 ? 'text-rose-500' : 'text-blue-600 dark:text-blue-400'
                   }`}>
-                    {plan === 'free' && !hasProAccess ? uploadsRemaining : '∞'}
+                    {quotaLoading ? '...' : (plan === 'free' && !hasProAccess ? uploadsRemaining : '∞')}
                   </span>
                   <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                    {plan === 'free' && !hasProAccess ? '/ 5 uploads left' : 'Unlimited (Pro)'}
+                    {plan === 'free' && !hasProAccess ? `/ ${maxUploads} uploads left` : 'Unlimited (Pro)'}
+                  </span>
+                </div>
+              </div>
+
+              <div className={`p-2.5 rounded-lg border ${isDarkMode ? 'bg-[#0b101d] border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                <div className="text-[10px] uppercase font-bold text-slate-400">Usage</div>
+                <div className="flex items-baseline gap-1.5 mt-0.5">
+                  <span className="text-lg font-black text-slate-700 dark:text-slate-200">
+                    {quotaLoading ? '...' : (plan === 'free' && !hasProAccess ? uploadsUsed : '0')}
+                  </span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                    {plan === 'free' && !hasProAccess ? `/ ${maxUploads} used` : 'Used (Pro)'}
                   </span>
                 </div>
               </div>
@@ -3107,7 +3120,7 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
               <span className="text-slate-400 dark:text-slate-600">&bull;</span>
               <span className="font-semibold">
                 Monthly Uploads Remaining: <span className={`font-bold ${plan === 'free' && !hasProAccess && uploadsRemaining <= 0 ? 'text-[#DC2626] dark:text-[#F87171]' : 'text-[#163A5F] dark:text-[#93C5FD]'}`}>
-                  {plan === 'free' && !hasProAccess ? `${uploadsRemaining} / 5 remaining` : 'Unlimited'}
+                  {plan === 'free' && !hasProAccess ? `${quotaLoading ? '...' : uploadsRemaining} / ${maxUploads} remaining` : 'Unlimited'}
                 </span>
               </span>
             </div>
@@ -3252,7 +3265,7 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
                     isDarkMode ? 'bg-[#450A0A] text-[#FCA5A5] border-[#991B1B]' : 'bg-[#FEE2E2] text-[#991B1B] border-[#FECACA]'
                   }`}>
                     <Lock className="w-3 h-3" />
-                    <span>Upload Center Read-Only ({5 - Math.max(0, uploadsRemaining)}/5 Used &bull; {uploadsRemaining} Remaining)</span>
+                    <span>Upload Center Read-Only ({uploadsUsed}/{maxUploads} used &bull; {uploadsRemaining} remaining)</span>
                   </div>
 
                   <h3 className={`font-bold text-sm ${isDarkMode ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>
@@ -3322,7 +3335,7 @@ TXN-1007,2026-06-09,E-Corp Ltd,890.00,,France`;
                   </p>
                   {plan === 'free' && (
                     <p className={`text-[11px] font-medium mt-1 ${isDarkMode ? 'text-[#FCA5A5]' : 'text-[#B91C1C]'}`}>
-                      Freemium Tier: 5MB file size limit &bull; 5 uploads per month max ({usage?.auditCount || 0}/5 used)
+                      Freemium Tier: 5MB file size limit &bull; {maxUploads} uploads per month max ({uploadsUsed}/{maxUploads} used)
                     </p>
                   )}
                 </div>
