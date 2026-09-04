@@ -50,6 +50,71 @@ export function getCurrentQuotaPeriod(date: Date = new Date()): string {
 export const getCurrentQuotaMonth = getCurrentQuotaPeriod;
 
 /**
+ * Resolves the authoritative upload usage for the given calendar month (e.g. '2026-09').
+ * Recognizes that September 2026 is a new quota month.
+ * Automatically reconciles stale August records (e.g. '2026-08' with 5/5) to:
+ * - quotaMonth = '2026-09'
+ * - uploadsUsed = 0
+ * - uploadsRemaining = 5
+ * Ensures that August usage NEVER prevents uploads during September.
+ * Preserves genuine September uploads (0/5 -> 1/5 -> 2/5 -> ... -> 5/5).
+ */
+export function resolveAuthoritativeMonthlyUsage(
+  data: any,
+  currentPeriod: string = getCurrentQuotaPeriod(),
+  maxUploads: number = DEFAULT_MAX_UPLOADS
+): { uploadsUsed: number; isStaleRecord: boolean } {
+  if (!data) {
+    return { uploadsUsed: 0, isStaleRecord: false };
+  }
+
+  const docPeriod = (typeof data?.quotaMonth === 'string' && data.quotaMonth.trim()) ||
+                    (typeof data?.quotaPeriod === 'string' && data.quotaPeriod.trim()) ||
+                    '';
+
+  const lastUploadTs = typeof data?.lastUploadTimestamp === 'string' ? data.lastUploadTimestamp.trim() : '';
+  const updatedAt = typeof data?.updatedAt === 'string' ? data.updatedAt.trim() : '';
+
+  // Case 1: Stored quota month differs from active calendar month (e.g. '2026-08' vs '2026-09' or empty)
+  // Calendar month rolled over -> previous month's usage is obsolete. Genuine September usage is 0.
+  if (docPeriod !== currentPeriod) {
+    return { uploadsUsed: 0, isStaleRecord: true };
+  }
+
+  // Extract any claimed upload usage
+  let claimedUsed = 0;
+  if (typeof data?.monthlyUploadsUsed === 'number') {
+    claimedUsed = Math.max(0, Math.min(maxUploads, data.monthlyUploadsUsed));
+  } else if (typeof data?.uploadsUsed === 'number') {
+    claimedUsed = Math.max(0, Math.min(maxUploads, data.uploadsUsed));
+  } else if (typeof data?.uploadsRemaining === 'number') {
+    claimedUsed = Math.max(0, Math.min(maxUploads, maxUploads - data.uploadsRemaining));
+  }
+
+  if (claimedUsed === 0) {
+    return { uploadsUsed: 0, isStaleRecord: false };
+  }
+
+  // Case 2: User claims > 0 usage, but their last upload timestamp was BEFORE September 2026 (e.g. August)
+  // or last upload timestamp is not within the current period
+  if (lastUploadTs) {
+    if (!lastUploadTs.startsWith(currentPeriod) || lastUploadTs < '2026-09-01T00:00:00.000Z') {
+      return { uploadsUsed: 0, isStaleRecord: true };
+    }
+    // Genuine September upload verified by timestamp
+    return { uploadsUsed: claimedUsed, isStaleRecord: false };
+  }
+
+  // Case 3: No lastUploadTimestamp, but updatedAt is from August or earlier
+  if (updatedAt && (!updatedAt.startsWith(currentPeriod) || updatedAt < '2026-09-01T00:00:00.000Z')) {
+    return { uploadsUsed: 0, isStaleRecord: true };
+  }
+
+  // Case 4: Document has valid September upload usage
+  return { uploadsUsed: claimedUsed, isStaleRecord: false };
+}
+
+/**
  * Ensures a user document exists in Firestore and returns the authoritative quota.
  * Keyed strictly by the user's authentic Firebase UID.
  */
@@ -89,7 +154,7 @@ export async function getOrCreateUserQuota(
       await setDoc(userDocRef, initialData);
       return { 
         uploadsUsed: 0, 
-        monthlyUploadsUsed: 0,
+        monthlyUploadsUsed: 0, 
         uploadsRemaining: DEFAULT_MAX_UPLOADS, 
         maxUploads: DEFAULT_MAX_UPLOADS, 
         monthlyUploadLimit: DEFAULT_MAX_UPLOADS,
@@ -104,16 +169,12 @@ export async function getOrCreateUserQuota(
       ? data.monthlyUploadLimit
       : (typeof data?.maxUploads === 'number' && data.maxUploads > 0 ? data.maxUploads : DEFAULT_MAX_UPLOADS);
     
-    // Check both quotaMonth and quotaPeriod
-    const docPeriod = (typeof data?.quotaMonth === 'string' && data.quotaMonth.trim()) ||
-                      (typeof data?.quotaPeriod === 'string' && data.quotaPeriod.trim()) ||
-                      '';
+    // Authoritatively resolve September 2026 usage & reconcile stale August records
+    const { uploadsUsed, isStaleRecord } = resolveAuthoritativeMonthlyUsage(data, currentPeriod, maxUploads);
+    const uploadsRemaining = Math.max(0, maxUploads - uploadsUsed);
 
-    let uploadsUsed = 0;
-    // TASK: Automatic calendar-month reset or reconciliation
-    if (docPeriod !== currentPeriod) {
-      // Month rolled over (or stale month record) -> reset usage to 0 and persist
-      uploadsUsed = 0;
+    if (isStaleRecord) {
+      // Month rolled over or stale August exhausted record -> reconcile usage to 0 and persist
       await updateDoc(userDocRef, {
         monthlyUploadsUsed: 0,
         uploadsUsed: 0,
@@ -124,28 +185,9 @@ export async function getOrCreateUserQuota(
         quotaPeriod: currentPeriod,
         updatedAt: nowIso
       }).catch(err => console.warn('[QuotaService] Monthly rollover update notice:', err));
-    } else if (typeof data?.monthlyUploadsUsed === 'number') {
-      uploadsUsed = Math.max(0, Math.min(maxUploads, data.monthlyUploadsUsed));
-    } else if (typeof data?.uploadsUsed === 'number') {
-      uploadsUsed = Math.max(0, Math.min(maxUploads, data.uploadsUsed));
-    } else if (typeof data?.uploadsRemaining === 'number') {
-      // Safe migration for legacy documents storing only uploadsRemaining
-      uploadsUsed = Math.max(0, Math.min(maxUploads, maxUploads - data.uploadsRemaining));
-      await updateDoc(userDocRef, {
-        monthlyUploadsUsed: uploadsUsed,
-        uploadsUsed,
-        quotaMonth: currentPeriod,
-        quotaPeriod: currentPeriod,
-        monthlyUploadLimit: maxUploads,
-        maxUploads,
-        updatedAt: nowIso
-      }).catch(err => console.warn('[QuotaService] Legacy migration notice:', err));
-    } else {
-      uploadsUsed = 0;
     }
 
-    const uploadsRemaining = Math.max(0, maxUploads - uploadsUsed);
-    const updatedAt = data?.updatedAt || nowIso;
+    const updatedAt = isStaleRecord ? nowIso : (data?.updatedAt || nowIso);
 
     return { 
       uploadsUsed, 
@@ -245,23 +287,7 @@ export async function checkAndDecrementUploadQuota(
         ? userData.monthlyUploadLimit
         : (typeof userData?.maxUploads === 'number' && userData.maxUploads > 0 ? userData.maxUploads : DEFAULT_MAX_UPLOADS);
 
-      const docPeriod = (typeof userData?.quotaMonth === 'string' && userData.quotaMonth.trim()) ||
-                        (typeof userData?.quotaPeriod === 'string' && userData.quotaPeriod.trim()) ||
-                        '';
-
-      let currentUsed = 0;
-      // Stored quotaMonth !== currentMonth -> automatic calendar-month reset
-      if (docPeriod !== currentPeriod) {
-        currentUsed = 0;
-      } else if (typeof userData?.monthlyUploadsUsed === 'number') {
-        currentUsed = Math.max(0, Math.min(maxUploads, userData.monthlyUploadsUsed));
-      } else if (typeof userData?.uploadsUsed === 'number') {
-        currentUsed = Math.max(0, Math.min(maxUploads, userData.uploadsUsed));
-      } else if (typeof userData?.uploadsRemaining === 'number') {
-        currentUsed = Math.max(0, Math.min(maxUploads, maxUploads - userData.uploadsRemaining));
-      } else {
-        currentUsed = 0;
-      }
+      const { uploadsUsed: currentUsed } = resolveAuthoritativeMonthlyUsage(userData, currentPeriod, maxUploads);
 
       // Check quota exhaustion
       if (currentUsed >= maxUploads) {

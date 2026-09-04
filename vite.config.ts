@@ -12,7 +12,7 @@ export default defineConfig(() => {
         'path': path.resolve(__dirname, 'src/utils/pathPolyfill.ts'),
         'node:path': path.resolve(__dirname, 'src/utils/pathPolyfill.ts'),
       },
-      dedupe: ['react', 'react-dom', 'react-router-dom', 'motion'],
+      dedupe: ['react', 'react-dom', 'react-router', 'react-router-dom', 'motion'],
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.

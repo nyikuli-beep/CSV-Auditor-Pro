@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { UserPlan, UserBillingInfo, PlanEntitlements, UsageMetrics } from '../types';
 import { getEntitlements, getOrCreateUserBilling, getUserUsage, incrementUserUsage, getNextMonthlyResetInfo, MonthlyResetInfo } from '../lib/billingService';
+import { resolveAuthoritativeMonthlyUsage } from '../lib/quotaService';
 import { openPaddleCheckout } from '../lib/paddle';
 import { useAuth } from './AuthProvider';
 
@@ -113,19 +114,21 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           const maxUploads = typeof data?.monthlyUploadLimit === 'number' && data.monthlyUploadLimit > 0
             ? data.monthlyUploadLimit
             : (typeof data?.maxUploads === 'number' && data.maxUploads > 0 ? data.maxUploads : 5);
-          const docPeriod = (typeof data?.quotaMonth === 'string' && data.quotaMonth.trim()) ||
-                            (typeof data?.quotaPeriod === 'string' && data.quotaPeriod.trim()) ||
-                            '';
 
-          let used = 0;
-          if (docPeriod !== currentPeriod) {
-            used = 0;
-          } else if (typeof data?.monthlyUploadsUsed === 'number') {
-            used = Math.max(0, Math.min(maxUploads, data.monthlyUploadsUsed));
-          } else if (typeof data?.uploadsUsed === 'number') {
-            used = Math.max(0, Math.min(maxUploads, data.uploadsUsed));
-          } else if (typeof data?.uploadsRemaining === 'number') {
-            used = Math.max(0, Math.min(maxUploads, maxUploads - data.uploadsRemaining));
+          // Authoritatively resolve September 2026 usage & reconcile stale August records
+          const { uploadsUsed: used, isStaleRecord } = resolveAuthoritativeMonthlyUsage(data, currentPeriod, maxUploads);
+
+          if (isStaleRecord) {
+            updateDoc(userRef, {
+              monthlyUploadsUsed: 0,
+              uploadsUsed: 0,
+              monthlyUploadLimit: maxUploads,
+              maxUploads: maxUploads,
+              uploadsRemaining: maxUploads,
+              quotaMonth: currentPeriod,
+              quotaPeriod: currentPeriod,
+              updatedAt: new Date().toISOString()
+            }).catch(err => console.warn('BillingContext month reset notice:', err));
           }
 
           const remaining = Math.max(0, maxUploads - used);

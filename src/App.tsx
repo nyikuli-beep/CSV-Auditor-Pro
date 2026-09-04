@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, useLocation, useInRouterContext, BrowserRouter } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from './hooks/useAuth';
 import { useTime } from './context/TimeContext';
@@ -3370,7 +3370,7 @@ export function WorkspaceContent({ initialTab = 'dashboard' }: { initialTab?: st
   );
 }
 
-export default function App() {
+function AppRoutes() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [isDarkMode, setIsDarkMode] = useState(true);
@@ -3454,4 +3454,18 @@ export default function App() {
       </AssistantProvider>
     </GlobalErrorBoundary>
   );
+}
+
+export default function App() {
+  const inRouter = useInRouterContext();
+
+  if (!inRouter) {
+    return (
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    );
+  }
+
+  return <AppRoutes />;
 }

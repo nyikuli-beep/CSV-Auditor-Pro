@@ -106,7 +106,7 @@ export default function UploadCenter({ onFileUpload, files = [], isDarkMode, acc
   } = useUserQuota();
   
   // Calculate if freemium upload limit is reached (authoritative Firestore state)
-  const isFreePlan = !hasProAccess || plan?.toLowerCase() === 'free' || plan === 'free';
+  const isFreePlan = !hasProAccess && (plan?.toLowerCase() === 'free' || !plan);
   const isFreemiumLimitReached = isFreePlan && !quotaLoading && (
     uploadsRemaining <= 0 ||
     uploadsUsed >= maxUploads ||

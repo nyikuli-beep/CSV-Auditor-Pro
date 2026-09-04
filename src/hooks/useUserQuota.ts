@@ -7,6 +7,7 @@ import {
   resetUserUploadQuota, 
   getOrCreateUserQuota,
   getCurrentQuotaPeriod,
+  resolveAuthoritativeMonthlyUsage,
   DEFAULT_MAX_UPLOADS,
   QuotaCheckResult, 
   UploadMetadata 
@@ -107,14 +108,10 @@ export function useUserQuota(): UserQuotaState {
             ? data.monthlyUploadLimit
             : (typeof data?.maxUploads === 'number' && data.maxUploads > 0 ? data.maxUploads : DEFAULT_MAX_UPLOADS);
           
-          const docPeriod = (typeof data?.quotaMonth === 'string' && data.quotaMonth.trim()) ||
-                            (typeof data?.quotaPeriod === 'string' && data.quotaPeriod.trim()) ||
-                            '';
+          // Authoritatively resolve September 2026 usage & reconcile stale August records
+          const { uploadsUsed: used, isStaleRecord } = resolveAuthoritativeMonthlyUsage(data, currentPeriod, docMax);
 
-          let used = 0;
-          // Stored quotaMonth !== currentMonth -> automatic calendar-month reset
-          if (docPeriod !== currentPeriod) {
-            used = 0;
+          if (isStaleRecord) {
             // Proactively reconcile Firestore in the background for multi-device sync
             updateDoc(userDocRef, {
               monthlyUploadsUsed: 0,
@@ -126,17 +123,9 @@ export function useUserQuota(): UserQuotaState {
               quotaPeriod: currentPeriod,
               updatedAt: new Date().toISOString()
             }).catch(err => console.warn('[useUserQuota] Background month reset notice:', err));
-          } else if (typeof data?.monthlyUploadsUsed === 'number') {
-            used = Math.max(0, Math.min(docMax, data.monthlyUploadsUsed));
-          } else if (typeof data?.uploadsUsed === 'number') {
-            used = Math.max(0, Math.min(docMax, data.uploadsUsed));
-          } else if (typeof data?.uploadsRemaining === 'number') {
-            used = Math.max(0, Math.min(docMax, docMax - data.uploadsRemaining));
-          } else {
-            used = 0;
           }
 
-          // TASK 3: Strictly derive remaining = max - used
+          // Strictly derive remaining = max - used
           const remaining = Math.max(0, docMax - used);
 
           setUploadsUsed(used);

@@ -1,6 +1,7 @@
 import { User } from 'firebase/auth';
 import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/firebase';
+import { resolveAuthoritativeMonthlyUsage } from '../lib/quotaService';
 
 export interface UserProfileDocument {
   uid: string;
@@ -97,21 +98,8 @@ export async function syncUserProfileToFirestore(
         ? existingData.monthlyUploadLimit
         : (typeof existingData?.maxUploads === 'number' && existingData.maxUploads > 0 ? existingData.maxUploads : (isOwnerEmail ? 999999 : 5));
       
-      const docPeriod = (typeof existingData?.quotaMonth === 'string' && existingData.quotaMonth.trim()) ||
-                        (typeof existingData?.quotaPeriod === 'string' && existingData.quotaPeriod.trim()) ||
-                        '';
-
-      let uploadsUsed = 0;
-      if (docPeriod !== currentPeriod) {
-        uploadsUsed = 0;
-      } else if (typeof existingData?.monthlyUploadsUsed === 'number') {
-        uploadsUsed = Math.max(0, Math.min(maxUploads, existingData.monthlyUploadsUsed));
-      } else if (typeof existingData?.uploadsUsed === 'number') {
-        uploadsUsed = Math.max(0, Math.min(maxUploads, existingData.uploadsUsed));
-      } else if (typeof existingData?.uploadsRemaining === 'number') {
-        uploadsUsed = Math.max(0, Math.min(maxUploads, maxUploads - existingData.uploadsRemaining));
-      }
-
+      // Authoritatively resolve September 2026 usage & reconcile stale August records
+      const { uploadsUsed } = resolveAuthoritativeMonthlyUsage(existingData, currentPeriod, maxUploads);
       const uploadsRemaining = Math.max(0, maxUploads - uploadsUsed);
 
       await updateDoc(userRef, {

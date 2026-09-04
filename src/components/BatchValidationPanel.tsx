@@ -70,7 +70,7 @@ export default function BatchValidationPanel({
   const isOwner = (userRole === 'Owner' || userRole === 'Admin') || (authUser?.email?.toLowerCase().trim() === 'nyikulibramwel@gmail.com');
   const { plan, usage, recordUsage, resetInfo, openProCheckout, hasProAccess, checkAuditLimit } = useBilling();
   const { uploadsRemaining, uploadsUsed, maxUploads, loading: quotaLoading, isExhausted: isQuotaExhausted, consumeUpload } = useUserQuota();
-  const isFreemiumLimitReached = !hasProAccess && plan === 'free' && !quotaLoading && (
+  const isFreemiumLimitReached = !hasProAccess && (plan?.toLowerCase() === 'free' || !plan) && !quotaLoading && (
     uploadsRemaining <= 0 ||
     uploadsUsed >= maxUploads ||
     isQuotaExhausted
